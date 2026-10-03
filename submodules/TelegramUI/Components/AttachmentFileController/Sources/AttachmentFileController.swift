@@ -733,7 +733,7 @@ public func makeAttachmentFileControllerImpl(
             if case .audio(.chat) = mode, bannedSendMedia == nil, canSendAsVoiceImpl(), !convertingAudio,
                message.media.contains(where: { ($0 as? TelegramMediaFile)?.isMusic == true }) {
                 items.append(.action(ContextMenuActionItem(text: dgLocalized("Отправить как голосовое", languageCode: presentationData.strings.primaryComponent.languageCode), icon: { theme in
-                    UIImage(systemName: "waveform", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20.0, weight: .regular))?.withTintColor(theme.contextMenu.primaryColor, renderingMode: .alwaysOriginal)
+                    generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/VoiceChat"), color: theme.contextMenu.primaryColor)
                 }, action: { c, _ in
                     c?.dismiss(completion: {})
                     guard !convertingAudio, canSendAsVoiceImpl(), let file = message.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile else { return }

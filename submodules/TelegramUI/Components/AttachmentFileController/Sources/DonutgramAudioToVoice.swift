@@ -13,9 +13,14 @@ private enum AudioToVoiceError: Error { case failed }
 
 func donutgramAudioToVoice(context: AccountContext, reference: AnyMediaReference) -> Signal<TelegramMediaFile?, NoError> {
     guard let file = reference.media as? TelegramMediaFile else { return .single(nil) }
+    // MediaBox's raw cache path has no extension. AVFoundation needs the original format hint,
+    // especially for music fetched from the profile rather than a local file picker.
+    let originalExtension = file.fileName.map { ($0 as NSString).pathExtension.lowercased() } ?? ""
+    let fallbackExtensions = ["audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/flac": "flac", "audio/x-flac": "flac", "audio/wav": "wav", "audio/x-wav": "wav", "audio/aac": "aac", "audio/ogg": "ogg"]
+    let pathExtension = originalExtension.isEmpty ? fallbackExtensions[file.mimeType.lowercased()] : originalExtension
     let resourceData = Signal<MediaResourceData, AudioToVoiceError> { subscriber in
         let fetch = fetchedMediaResource(mediaBox: context.account.postbox.mediaBox, userLocation: .other, userContentType: MediaResourceUserContentType(file: file), reference: reference.resourceReference(file.resource)).start(error: { _ in subscriber.putError(.failed) })
-        let data = (context.account.postbox.mediaBox.resourceData(file.resource, option: .complete(waitUntilFetchStatus: true)) |> filter { $0.complete } |> take(1)).start(next: { data in
+        let data = (context.account.postbox.mediaBox.resourceData(file.resource, pathExtension: pathExtension, option: .complete(waitUntilFetchStatus: true)) |> filter { $0.complete } |> take(1)).start(next: { data in
             subscriber.putNext(data)
             subscriber.putCompletion()
         })
@@ -43,7 +48,7 @@ func donutgramAudioToVoice(context: AccountContext, reference: AnyMediaReference
 private func encodeVoice(path: String, cancelled: Atomic<Bool>) -> (data: Data, duration: Int, waveform: Data)? {
     let asset = AVURLAsset(url: URL(fileURLWithPath: path))
     guard let track = asset.tracks(withMediaType: .audio).first, let reader = try? AVAssetReader(asset: asset) else { return nil }
-    let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+    let output = AVAssetReaderAudioMixOutput(audioTracks: [track], audioSettings: [
         AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 48000, AVNumberOfChannelsKey: 1,
         AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false,
         AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false
@@ -77,13 +82,18 @@ private func encodeVoice(path: String, cancelled: Atomic<Bool>) -> (data: Data, 
     while reader.status == .reading {
         if cancelled.with({ $0 }) { return nil }
         let chunk: Data? = autoreleasepool {
-            guard let sample = output.copyNextSampleBuffer(), let buffer = CMSampleBufferGetDataBuffer(sample) else { return nil }
-            var chunk = Data(count: CMBlockBufferGetDataLength(buffer))
-            guard !chunk.isEmpty else { return Data() }
-            let status = chunk.withUnsafeMutableBytes { bytes in
-                CMBlockBufferCopyDataBytes(buffer, atOffset: 0, dataLength: bytes.count, destination: bytes.baseAddress!)
-            }
-            return status == kCMBlockBufferNoErr ? chunk : nil
+            guard let sample = output.copyNextSampleBuffer() else { return nil }
+            // Use the audio buffers, as the native recording tone decoder does. A decoded
+            // audio CMSampleBuffer need not expose a CMBlockBuffer via GetDataBuffer.
+            var audioBuffers = AudioBufferList()
+            var retainedBlockBuffer: CMBlockBuffer?
+            let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(sample, bufferListSizeNeededOut: nil, bufferListOut: &audioBuffers, bufferListSize: MemoryLayout<AudioBufferList>.size, blockBufferAllocator: nil, blockBufferMemoryAllocator: nil, flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment, blockBufferOut: &retainedBlockBuffer)
+            guard status == noErr, audioBuffers.mNumberBuffers == 1 else { return nil }
+            let count = CMSampleBufferGetNumSamples(sample) * MemoryLayout<Int16>.size
+            guard count > 0 else { return Data() }
+            guard let bytes = audioBuffers.mBuffers.mData, Int(audioBuffers.mBuffers.mDataByteSize) >= count else { return nil }
+            // Keep the retained buffer alive until its PCM bytes have been copied.
+            return withExtendedLifetime(retainedBlockBuffer) { Data(bytes: bytes, count: count) }
         }
         guard let chunk else { break }
         totalBytes += chunk.count
