@@ -55,9 +55,13 @@ private func donutgramReadDialogPage(postbox: Postbox, network: Network, stateMa
                 nextOffset = (timestamp, data.topMessage, inputPeer, peerId)
             }
             let markedUnread = data.flags & (1 << 3) != 0
-            guard data.unreadCount > 0 || data.readInboxMaxId < data.topMessage || markedUnread else { continue }
+            let needsReadHistory = data.unreadCount > 0 || data.readInboxMaxId < data.topMessage
+            guard needsReadHistory || markedUnread else { continue }
             let readHistory: Signal<Bool, NoError>
-            if let inputChannel = apiInputChannel(peer) {
+            if !needsReadHistory {
+                // A manually marked dialog with no unread messages only needs markDialogUnread.
+                readHistory = .single(true)
+            } else if let inputChannel = apiInputChannel(peer) {
                 readHistory = network.request(Api.functions.channels.readHistory(channel: inputChannel, maxId: data.topMessage))
                 |> map { result in if case .boolTrue = result { return true }; return false }
                 |> `catch` { _ in .single(false) }
@@ -83,18 +87,14 @@ private func donutgramReadDialogPage(postbox: Postbox, network: Network, stateMa
                 clearUnreadMark |> mapToSignal { markSucceeded -> Signal<Bool, NoError> in
                     return postbox.transaction { transaction -> Bool in
                         // Apply only successful server acknowledgements, and never read messages arriving after the snapshot.
-                        if readSucceeded { transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: data.topMessage)) }
+                        if needsReadHistory && readSucceeded { transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: data.topMessage)) }
                         if markSucceeded { transaction.applyMarkUnread(peerId: peerId, namespace: Namespaces.Message.Cloud, value: false, interactive: false) }
                         return readSucceeded && markSucceeded
                     }
                 }
             })
         }
-        // Sequential requests avoid a burst of hundreds of readHistory RPCs on large accounts.
-        var resultSignal: Signal<Bool, NoError> = .single(true)
-        for signal in readSignals {
-            resultSignal = resultSignal |> mapToSignal { succeeded in signal |> map { succeeded && $0 } }
-        }
+        let resultSignal = donutgramReadDialogBatches(readSignals)
         guard hasMore else { return resultSignal }
         guard let nextOffset, nextOffset.id != offsetId || nextOffset.date != offsetDate || nextOffset.peerId != offsetPeerId else {
             return resultSignal |> map { _ in false }
@@ -104,4 +104,21 @@ private func donutgramReadDialogPage(postbox: Postbox, network: Network, stateMa
             |> map { succeeded && $0 }
         }
     }
+}
+
+private func donutgramReadDialogBatches(_ signals: [Signal<Bool, NoError>]) -> Signal<Bool, NoError> {
+    // Each dialog executes its RPCs sequentially. Run at most four dialogs at once,
+    // so large accounts do not wait for a separate round trip for every chat.
+    let batchSize = 4
+    var result: Signal<Bool, NoError> = .single(true)
+    for offset in stride(from: 0, to: signals.count, by: batchSize) {
+        let batch = Array(signals[offset ..< min(offset + batchSize, signals.count)])
+        let batchResult: Signal<Bool, NoError> = combineLatest(batch)
+        |> map { values in values.allSatisfy { $0 } }
+        result = result |> mapToSignal { succeeded in
+            // A failed dialog must not prevent the remaining batches from being read.
+            batchResult |> map { succeeded && $0 }
+        }
+    }
+    return result
 }
