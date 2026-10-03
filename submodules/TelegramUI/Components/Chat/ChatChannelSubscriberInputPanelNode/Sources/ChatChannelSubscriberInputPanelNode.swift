@@ -1,4 +1,6 @@
 import Foundation
+import DGSimpleSettings
+import Postbox
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -33,6 +35,7 @@ private enum SubscriberAction: Equatable, Hashable {
     case openChannel
     case openGroup
     case openChat
+    case discuss
 }
 
 private func titleAndColorForAction(_ action: SubscriberAction, theme: PresentationTheme, strings: PresentationStrings) -> (String, UIColor) {
@@ -59,6 +62,8 @@ private func titleAndColorForAction(_ action: SubscriberAction, theme: Presentat
             return (strings.SavedMessages_OpenGroup, theme.chat.inputPanel.panelControlAccentColor)
         case .openChat:
             return (strings.SavedMessages_OpenChat, theme.chat.inputPanel.panelControlAccentColor)
+        case .discuss:
+            return (dgLocalized("Обсудить", languageCode: strings.primaryComponent.languageCode), theme.chat.inputPanel.panelControlAccentColor)
     }
 }
 
@@ -126,6 +131,10 @@ private func actionForPeer(context: AccountContext, peer: EnginePeer, interfaceS
                         return .join
                     }
                 case .member:
+                    if case let .broadcast(info) = channel.info, case .peer = interfaceState.chatLocation,
+                       info.flags.contains(.hasDiscussionGroup), DGSimpleSettings.shared.channelBottomButton == .discuss {
+                        return .discuss
+                    }
                     if isMuted {
                         return .unmuteNotifications
                     } else {
@@ -298,6 +307,18 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             if let context = self.context, let presentationInterfaceState = self.presentationInterfaceState, let peer = presentationInterfaceState.renderedPeer?.peer {
                 self.actionDisposable.set(context.engine.peers.togglePeerMuted(peerId: peer.id, threadId: nil).startStrict())
             }
+        case .discuss:
+            self.actionDisposable.set((context.account.postbox.transaction { transaction -> PeerId? in
+                guard let cachedData = transaction.getPeerCachedData(peerId: peer.id) as? CachedChannelData,
+                      case let .known(discussionPeerId) = cachedData.linkedDiscussionPeerId else {
+                    return nil
+                }
+                return discussionPeerId
+            } |> deliverOnMainQueue).start(next: { [weak self] peerId in
+                if let peerId {
+                    self?.interfaceInteraction?.navigateToChat(peerId)
+                }
+            }))
         case .hidePinnedMessages, .unpinMessages:
             self.interfaceInteraction?.unpinAllMessages()
         case .openChannel, .openGroup, .openChat:

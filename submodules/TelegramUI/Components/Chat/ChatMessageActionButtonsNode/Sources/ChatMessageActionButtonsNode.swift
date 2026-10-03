@@ -150,6 +150,7 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
         
         let longTapRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.longTapGesture(_:)))
         longTapRecognizer.minimumPressDuration = 0.3
+        longTapRecognizer.cancelsTouchesInView = true
         buttonView.addGestureRecognizer(longTapRecognizer)
         self.longTapRecognizer = longTapRecognizer
     }
@@ -351,12 +352,8 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                     node.wallpaperBackgroundNode = backgroundNode
                     node.button = button
                     
-                    switch button.action {
-                    case .url:
-                        node.longTapRecognizer?.isEnabled = true
-                    default:
-                        node.longTapRecognizer?.isEnabled = false
-                    }
+                    // All bot buttons expose their title; callback buttons also expose their data.
+                    node.longTapRecognizer?.isEnabled = customInfo == nil
                     
                     if node.backgroundBlurView == nil {
                         if let backgroundBlurView = backgroundNode?.makeFreeBackground() {

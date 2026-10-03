@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -141,8 +142,8 @@ public func donutgramMessagePreviewItem(context: AccountContext, sectionId: Item
         dateTimeFormat: current.dateTimeFormat,
         nameDisplayOrder: current.nameDisplayOrder,
         messageItems: [
-            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", "Настройки сообщений"), text: "Так будет выглядеть входящее сообщение", timestamp: 66000, edited: false, nameColor: .preset(.red), backgroundEmojiId: nil),
-            ChatPreviewMessageItem(outgoing: true, reply: nil, text: "И исходящее сообщение", timestamp: 66000, edited: true, nameColor: .preset(.blue), backgroundEmojiId: nil)
+            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Настройки сообщений", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Так будет выглядеть входящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: false, nameColor: .preset(.red), backgroundEmojiId: nil),
+            ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("И исходящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: true, nameColor: .preset(.blue), backgroundEmojiId: nil)
         ]
     )
 }
@@ -162,9 +163,9 @@ public func donutgramStickerPreviewItem(context: AccountContext, sectionId: Item
         dateTimeFormat: current.dateTimeFormat,
         nameDisplayOrder: current.nameDisplayOrder,
         messageItems: [
-            ChatPreviewMessageItem(outgoing: false, reply: nil, text: "Вау!", nameColor: .preset(.blue), backgroundEmojiId: nil),
+            ChatPreviewMessageItem(outgoing: false, reply: nil, text: dgLocalized("Вау!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil),
             ChatPreviewMessageItem(outgoing: true, reply: nil, text: sticker == nil ? current.strings.Channel_NotificationLoading : "", nameColor: .preset(.blue), backgroundEmojiId: nil, sticker: sticker),
-            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", "Стикер"), text: "Ого, какой милый!", nameColor: .preset(.blue), backgroundEmojiId: nil, replySticker: sticker)
+            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Стикер", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Ого, какой милый!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil, replySticker: sticker)
         ]
     )
 }

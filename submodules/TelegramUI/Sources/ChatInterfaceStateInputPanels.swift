@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import TelegramCore
@@ -373,6 +374,16 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 if chatPresentationInterfaceState.interfaceState.editMessage != nil, channel.hasPermission(.editAllMessages) {
                     displayInputTextPanel = true
                 } else if !channel.hasPermission(.sendSomething) || !isMember {
+                    if isMember, case .peer = chatPresentationInterfaceState.chatLocation {
+                        let bottomButton = DGSimpleSettings.shared.channelBottomButton
+                        if bottomButton == .hidden {
+                            return (nil, nil)
+                        }
+                        if bottomButton == .discuss, case let .broadcast(info) = channel.info,
+                           !info.flags.contains(.hasDiscussionGroup) {
+                            return (nil, nil)
+                        }
+                    }
                     if let currentPanel = (currentPanel as? ChatChannelSubscriberInputPanelNode) ?? (currentSecondaryPanel as? ChatChannelSubscriberInputPanelNode) {
                         return (currentPanel, nil)
                     } else {

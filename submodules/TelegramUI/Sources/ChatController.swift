@@ -638,6 +638,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var layoutActionOnViewTransitionAction: (() -> Void)?
     
     var lastPostedScheduledMessagesToastTimestamp: Double = 0.0
+    private var donutgramChannelSettingsObserver: NSObjectProtocol?
+    private var donutgramChannelBottomButton = DGSimpleSettings.shared.channelBottomButton
     var postedScheduledMessagesEventsDisposable: Disposable?
     
     var globalControlPanelsContext: GlobalControlPanelsContext?
@@ -6912,6 +6914,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
         })
         
+        self.donutgramChannelSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.donutgramChannelBottomButton != DGSimpleSettings.shared.channelBottomButton else { return }
+            self.donutgramChannelBottomButton = DGSimpleSettings.shared.channelBottomButton
+            if self.isNodeLoaded {
+                self.updateChatPresentationInterfaceState(transition: .immediate, interactive: false, force: true, { $0 })
+            }
+        }
         if case let .messageOptions(_, messageIds, _) = self.subject, messageIds.count > 1 {
             self.updateChatPresentationInterfaceState(interactive: false, { state in
                 return state.updatedInterfaceState({ $0.withUpdatedSelectedMessages(messageIds) })
@@ -6970,6 +6979,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
 
     deinit {
+        if let observer = self.donutgramChannelSettingsObserver { NotificationCenter.default.removeObserver(observer) }
         let _ = ChatControllerCount.modify { value in
             return value - 1
         }

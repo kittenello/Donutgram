@@ -9,12 +9,14 @@ import DGSimpleSettings
 
 final class DGIslandStyleItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
+    let languageCode: String
     let sectionId: ItemListSectionId
     let value: Int
     let updated: (Int) -> Void
 
-    init(theme: PresentationTheme, sectionId: ItemListSectionId, value: Int, updated: @escaping (Int) -> Void) {
+    init(theme: PresentationTheme, languageCode: String, sectionId: ItemListSectionId, value: Int, updated: @escaping (Int) -> Void) {
         self.theme = theme
+        self.languageCode = languageCode
         self.sectionId = sectionId
         self.value = value
         self.updated = updated
@@ -137,6 +139,9 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
         let columns = CGFloat(DGIslandStyleItemNode.columns)
         let cardWidth = floor((blockWidth - sidePadding * 2.0 - spacing * (columns - 1.0)) / columns)
         for (index, button) in self.buttons.enumerated() {
+            let title = dgLocalized(DGSimpleSettings.appMarks[index].title, languageCode: item.languageCode)
+            button.accessibilityLabel = title
+            self.captions[index].text = title
             let isSelected = index == item.value
             let x = blockX + sidePadding + CGFloat(index % DGIslandStyleItemNode.columns) * (cardWidth + spacing)
             let y = DGIslandStyleItemNode.topInset + CGFloat(index / DGIslandStyleItemNode.columns) * DGIslandStyleItemNode.rowHeight

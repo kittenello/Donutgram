@@ -17,6 +17,7 @@ import EmojiStatusComponent
 
 private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNode {
     private(set) var button: ReplyMarkupButton?
+    var longTapped: ((ReplyMarkupButton) -> Void)?
         
     private let backgroundContainerNode: ASDisplayNode
     private let backgroundView: UIImageView
@@ -45,6 +46,10 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
         super.init()
         
         self.accessibilityTraits = [.button]
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(self.longPress(_:)))
+        longPress.minimumPressDuration = 0.3
+        longPress.cancelsTouchesInView = true
+        self.view.addGestureRecognizer(longPress)
         
         self.addSubnode(self.backgroundContainerNode)
         
@@ -67,6 +72,12 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
         }
     }
     
+    @objc private func longPress(_ recognizer: UILongPressGestureRecognizer) {
+        if recognizer.state == .began, let button = self.button {
+            self.longTapped?(button)
+        }
+    }
+
     func update(context: AccountContext, size: CGSize, theme: PresentationTheme, wallpaperBackgroundNode: WallpaperBackgroundNode?, button: ReplyMarkupButton, message: EngineMessage) {
         self.button = button
         
@@ -315,6 +326,10 @@ public final class ChatButtonKeyboardInputNode: ChatInputNode, UIScrollViewDeleg
                         buttonNode = self.buttonNodes[buttonIndex]
                     } else {
                         buttonNode = ChatButtonKeyboardInputButtonNode()
+                        buttonNode.longTapped = { [weak self] button in
+                            guard let self else { return }
+                            presentBotButtonContextMenu(button: button, presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, interaction: self.controllerInteraction, message: self.message?._asMessage())
+                        }
                         buttonNode.titleNode.maximumNumberOfLines = 2
                         buttonNode.addTarget(self, action: #selector(self.buttonPressed(_:)), forControlEvents: [.touchUpInside])
                         self.scrollNode.addSubnode(buttonNode)

@@ -10,6 +10,10 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGSimpleSettings",
+        "//submodules/OpusBinding",
+        "//submodules/AudioWaveform",
+        "//submodules/OverlayStatusController",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",

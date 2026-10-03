@@ -21,12 +21,14 @@ func dgApplyIslandBadge(context: AccountContext) {
 /// «Предпросмотр» on «Иконка и остров»: a status bar with the current island, and the current app icon under it.
 final class DGIconIslandPreviewItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
+    let languageCode: String
     let sectionId: ItemListSectionId
     let icon: DGSimpleSettings.AppMark
     let island: DGSimpleSettings.AppMark
 
-    init(theme: PresentationTheme, sectionId: ItemListSectionId, icon: DGSimpleSettings.AppMark, island: DGSimpleSettings.AppMark) {
+    init(theme: PresentationTheme, languageCode: String, sectionId: ItemListSectionId, icon: DGSimpleSettings.AppMark, island: DGSimpleSettings.AppMark) {
         self.theme = theme
+        self.languageCode = languageCode
         self.sectionId = sectionId
         self.icon = icon
         self.island = island
@@ -146,10 +148,10 @@ private final class DGIconIslandPreviewItemNode: ListViewItemNode {
 
         self.iconView.image = donutgramAppIconThumbnail(iconName: item.icon.iconName, size: 60.0)
         self.iconView.frame = CGRect(x: blockX + floor((blockWidth - 60.0) / 2.0), y: 72.0, width: 60.0, height: 60.0)
-        self.titleLabel.text = item.icon.title
+        self.titleLabel.text = dgLocalized(item.icon.title, languageCode: item.languageCode)
         self.titleLabel.textColor = theme.list.itemPrimaryTextColor
         self.titleLabel.frame = CGRect(x: blockX + 16.0, y: 138.0, width: blockWidth - 32.0, height: 18.0)
 
-        self.view.accessibilityLabel = "Иконка «\(item.icon.title)», остров «\(item.island.title)»"
+        self.view.accessibilityLabel = dgLocalized("Иконка", languageCode: item.languageCode) + ": " + dgLocalized(item.icon.title, languageCode: item.languageCode) + ", " + dgLocalized("Остров", languageCode: item.languageCode) + ": " + dgLocalized(item.island.title, languageCode: item.languageCode)
     }
 }

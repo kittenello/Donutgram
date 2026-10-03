@@ -1,4 +1,7 @@
 import Foundation
+import DGSimpleSettings
+import OverlayStatusController
+import Postbox
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -426,6 +429,7 @@ final class AttachmentFileContext: AttachmentMediaPickerContext {
 
 
 public class AttachmentFileControllerImpl: ItemListController, AttachmentFileController, AttachmentContainable {
+    public var canSendAsVoice: () -> Bool = { true }
     public var requestAttachmentMenuExpansion: () -> Void = {}
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
     public var parentController: () -> ViewController? = {
@@ -595,6 +599,11 @@ public func makeAttachmentFileControllerImpl(
     }
     
     var didPreviewAudio = false
+    var convertingAudio = false
+    weak var voiceProgress: ViewController?
+    var canSendAsVoiceImpl: () -> Bool = { false }
+    let voiceConversionDisposable = MetaDisposable()
+    actionsDisposable.add(voiceConversionDisposable)
     let arguments = AttachmentFileControllerArguments(
         context: context,
         isAudio: isAudio,
@@ -713,11 +722,52 @@ public func makeAttachmentFileControllerImpl(
 
             var items: [ContextMenuItem] = []
             if case .audio = mode {
-                items.append(.action(ContextMenuActionItem(text: "Play", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Play"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
+                items.append(.action(ContextMenuActionItem(text: dgLocalized("Воспроизвести", languageCode: presentationData.strings.primaryComponent.languageCode), icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Play"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
                     c?.dismiss(completion: {})
                     
                     let playlistLocation: PeerMessagesPlaylistLocation = .custom(messages: .single(([message._asMessage()], 0, false)), canReorder: false, at: message.id, loadMore: nil, hidePanel: true)
                     context.sharedContext.mediaManager.setPlaylist((context, PeerMessagesMediaPlaylist(context: context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(.togglePlayPause))
+                })))
+            }
+
+            if case .audio(.chat) = mode, bannedSendMedia == nil, canSendAsVoiceImpl(), !convertingAudio,
+               message.media.contains(where: { ($0 as? TelegramMediaFile)?.isMusic == true }) {
+                items.append(.action(ContextMenuActionItem(text: dgLocalized("Отправить как голосовое", languageCode: presentationData.strings.primaryComponent.languageCode), icon: { theme in
+                    generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/VoiceChat"), color: theme.contextMenu.primaryColor)
+                }, action: { c, _ in
+                    c?.dismiss(completion: {})
+                    guard !convertingAudio, canSendAsVoiceImpl(), let file = message.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile else { return }
+                    convertingAudio = true
+                    let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
+                        voiceConversionDisposable.set(nil)
+                        convertingAudio = false
+                        voiceProgress = nil
+                    }))
+                    voiceProgress = progress
+                    presentInGlobalOverlayImpl?(progress)
+                    let reference: Signal<AnyMediaReference?, NoError>
+                    if message.id.namespace == Namespaces.Message.Local {
+                        reference = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)) |> map { peer in
+                            guard let peer, let peerReference = PeerReference(peer) else { return nil }
+                            return .savedMusic(peer: peerReference, media: file)
+                        }
+                    } else {
+                        reference = .single(.message(message: MessageReference(message._asMessage()), media: file))
+                    }
+                    voiceConversionDisposable.set((reference |> mapToSignal { reference -> Signal<TelegramMediaFile?, NoError> in
+                        guard let reference else { return .single(nil) }
+                        return donutgramAudioToVoice(context: context, reference: reference)
+                    } |> deliverOnMainQueue).start(next: { converted in
+                        progress.dismiss()
+                        voiceProgress = nil
+                        convertingAudio = false
+                        if let converted, canSendAsVoiceImpl() {
+                            send([.standalone(media: converted)], false, nil, nil)
+                            dismissImpl?()
+                        } else {
+                            presentInGlobalOverlayImpl?(textAlertController(context: context, title: nil, text: dgLocalized("Не удалось преобразовать музыку в голосовое сообщение.", languageCode: presentationData.strings.primaryComponent.languageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
+                        }
+                    }))
                 })))
             }
 
@@ -957,6 +1007,7 @@ public func makeAttachmentFileControllerImpl(
     }
 
     let controller = AttachmentFileControllerImpl(context: context, state: signal, hideNavigationBarBackground: true)
+    canSendAsVoiceImpl = { [weak controller] in controller?.canSendAsVoice() ?? false }
     controller.mulitpleCompletion = { sendMode, _, _, caption in
         let _ = stateValue.with({ state in
             if let selectedMessageIds = state.selectedMessageIds {
@@ -1031,6 +1082,10 @@ public func makeAttachmentFileControllerImpl(
         }
     }
     controller.resetForReuseImpl = {
+        voiceConversionDisposable.set(nil)
+        voiceProgress?.dismiss()
+        voiceProgress = nil
+        convertingAudio = false
         updateState { state in
             var updatedState = state
             updatedState.searching = false
@@ -1043,6 +1098,10 @@ public func makeAttachmentFileControllerImpl(
         }
     }
     controller.onDismissImpl = {
+        voiceConversionDisposable.set(nil)
+        voiceProgress?.dismiss()
+        voiceProgress = nil
+        convertingAudio = false
         if didPreviewAudio {
             context.sharedContext.mediaManager.setPlaylist(nil, type: .music, control: .playback(.pause))
         }

@@ -35,6 +35,8 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "spy", "ghost", "options", "offline": return "eye.slash"
     case "chats", "messages", "tails", "replies": return "bubble.left.and.bubble.right"
     case "appearance", "customBackgrounds": return "paintbrush"
+    case "wideChannelPosts": return "rectangle.expand.vertical"
+    case "channelBottomButton": return "rectangle.bottomthird.inset.filled"
     case "glow", "avatarGlow", "reactionGlow": return "sparkles"
     case "support": return "questionmark.circle"
     case "saveDeleted", "transparentDeleted": return "tray.full"
@@ -58,7 +60,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "disableAds": return "xmark.rectangle"
     case "onlyAdded", "recent": return "face.smiling"
     case "reactions": return "heart"
-    case "seconds", "hideStickerTime": return "clock"
+    case "seconds", "hideStickerTime", "forwardDate": return "clock"
     case "hideStickerChecks": return "checkmark"
     case "foldersAtBottom": return "folder"
     case "transcription": return "waveform"
@@ -144,8 +146,23 @@ enum DGListEntry: ItemListNodeEntry {
     }
     static func < (lhs: DGListEntry, rhs: DGListEntry) -> Bool { lhs.stableId < rhs.stableId }
 
+    func localized(languageCode: String) -> DGListEntry {
+        func tr(_ text: String) -> String { dgLocalized(text, languageCode: languageCode) }
+        switch self {
+        case let .header(id, section, title): return .header(id, section, tr(title))
+        case let .toggle(id, section, key, title, value, enabled): return .toggle(id, section, key, tr(title), value, enabled)
+        case let .disclosure(id, section, key, title, label): return .disclosure(id, section, key, tr(title), tr(label))
+        case let .checkbox(id, section, key, title, checked): return .checkbox(id, section, key, tr(title), checked)
+        case let .info(id, section, text): return .info(id, section, tr(text))
+        case let .input(id, section, key, value, placeholder): return .input(id, section, key, value, tr(placeholder))
+        default: return self
+        }
+    }
+
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! DGListArguments
+        let languageCode = presentationData.strings.primaryComponent.languageCode
+        func tr(_ text: String) -> String { dgLocalized(text, languageCode: languageCode) }
         func icon(_ key: String, _ title: String, enabled: Bool = true) -> UIImage? {
             let color = enabled ? presentationData.theme.list.itemPrimaryTextColor : presentationData.theme.list.itemDisabledTextColor
             return PresentationResourcesSettings.donutgramOutlineIcon(dgSettingsSymbol(key: key, title: title), color: color)
@@ -170,24 +187,24 @@ enum DGListEntry: ItemListNodeEntry {
         case .appIcons:
             return donutgramAppIconItem(context: arguments.context, sectionId: self.section, updated: { arguments.select("refreshAppIcon") })
         case let .islandStyles(_, _, value):
-            return DGIslandStyleItem(theme: presentationData.theme, sectionId: self.section, value: value, updated: { arguments.select("islandStyle:\($0)") })
+            return DGIslandStyleItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, value: value, updated: { arguments.select("islandStyle:\($0)") })
         case let .speedSlider(_, _, value):
-            return DGSpeedSliderItem(theme: presentationData.theme, sectionId: self.section, value: value, updated: { arguments.select("downloadAcceleration:\($0)") })
+            return DGSpeedSliderItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, value: value, updated: { arguments.select("downloadAcceleration:\($0)") })
         case let .stickerSizeSlider(_, _, size):
-            return DGStickerAppearanceItem(theme: presentationData.theme, sectionId: self.section, shapePicker: false, size: size, shape: 0, updated: { arguments.select($0) })
+            return DGStickerAppearanceItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, shapePicker: false, size: size, shape: 0, updated: { arguments.select($0) })
         case let .stickerPreview(_, _, _, _, _, _, _, sticker):
             return donutgramStickerPreviewItem(context: arguments.context, sectionId: self.section, sticker: sticker)
         case let .stickerReplies(_, _, options):
             let subItems = [(1, "Цвета"), (2, "Эмодзи"), (4, "Фон")].map { bit, title in
-                ItemListExpandableSwitchItem.SubItem(id: bit, title: title, isSelected: options & bit != 0, isEnabled: true)
+                ItemListExpandableSwitchItem.SubItem(id: bit, title: tr(title), isSelected: options & bit != 0, isEnabled: true)
             }
-            return ItemListExpandableSwitchItem(presentationData: presentationData, systemStyle: .glass, title: "Ответы", value: options != 0, isExpanded: false, subItems: subItems, sectionId: self.section, style: .blocks, updated: { arguments.toggle("stickerReplies", $0) }, selectAction: { arguments.open("stickerReplyOptions") }, subAction: { _ in }, tag: DGSettingItemTag(key: "stickerReplies"))
+            return ItemListExpandableSwitchItem(presentationData: presentationData, systemStyle: .glass, title: tr("Ответы"), value: options != 0, isExpanded: false, subItems: subItems, sectionId: self.section, style: .blocks, updated: { arguments.toggle("stickerReplies", $0) }, selectAction: { arguments.open("stickerReplyOptions") }, subAction: { _ in }, tag: DGSettingItemTag(key: "stickerReplies"))
         case let .stickerShape(_, _, shape):
-            return DGStickerAppearanceItem(theme: presentationData.theme, sectionId: self.section, shapePicker: true, size: DGSimpleSettings.shared.stickerSize, shape: shape, updated: { arguments.select($0) })
+            return DGStickerAppearanceItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, shapePicker: true, size: DGSimpleSettings.shared.stickerSize, shape: shape, updated: { arguments.select($0) })
         case let .iconAndIsland(_, _, iconMark, islandMark):
             return donutgramIconAndIslandItem(presentationData: presentationData, sectionId: self.section, iconName: DGSimpleSettings.appMarks[iconMark].iconName, islandMark: islandMark, action: { arguments.open("iconAndIsland") }, tag: DGSettingItemTag(key: "iconAndIsland"))
         case let .iconIslandPreview(_, _, iconMark, islandMark):
-            return DGIconIslandPreviewItem(theme: presentationData.theme, sectionId: self.section, icon: DGSimpleSettings.appMarks[iconMark], island: DGSimpleSettings.appMarks[islandMark])
+            return DGIconIslandPreviewItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, icon: DGSimpleSettings.appMarks[iconMark], island: DGSimpleSettings.appMarks[islandMark])
         }
     }
 }
@@ -220,8 +237,9 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
     }, textUpdated: { key, value in textUpdated(key, value) })
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), additionalUpdates)
     |> map { presentationData, _, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listEntries = entries()
+        let languageCode = presentationData.strings.primaryComponent.languageCode
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized(title, languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listEntries = entries().map { $0.localized(languageCode: languageCode) }
         // Scroll to a linked row by index: on open the list builds nodes only for the visible area plus 500 pt, and a lookup
         // by tag (ensureVisibleItemTag, itemNode(forTag:)) can't reach rows below that. The list applies this to the first state only.
         // .Down: with .Up, ListView snaps the gap a centered bottom row leaves under the list to the top, scrolling the row away.
@@ -269,7 +287,7 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         controller?.present(UndoOverlayController(
             presentationData: presentationData,
-            content: .info(title: nil, text: "Необходим перезапуск", timeout: 5.0, customUndoText: "Перезапустить сейчас"),
+            content: .info(title: nil, text: dgLocalized("Необходим перезапуск", languageCode: presentationData.strings.primaryComponent.languageCode), timeout: 5.0, customUndoText: dgLocalized("Перезапустить сейчас", languageCode: presentationData.strings.primaryComponent.languageCode)),
             elevatedLayout: false,
             position: .bottom,
             action: { action in

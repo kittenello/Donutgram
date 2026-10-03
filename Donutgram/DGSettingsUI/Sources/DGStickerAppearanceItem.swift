@@ -1,4 +1,5 @@
 import UIKit
+import DGSimpleSettings
 import AsyncDisplayKit
 import Display
 import ItemListUI
@@ -8,14 +9,16 @@ import PresentationDataUtils
 
 final class DGStickerAppearanceItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
+    let languageCode: String
     let sectionId: ItemListSectionId
     let shapePicker: Bool
     let size: Int
     let shape: Int
     let updated: (String) -> Void
 
-    init(theme: PresentationTheme, sectionId: ItemListSectionId, shapePicker: Bool, size: Int, shape: Int, updated: @escaping (String) -> Void) {
+    init(theme: PresentationTheme, languageCode: String, sectionId: ItemListSectionId, shapePicker: Bool, size: Int, shape: Int, updated: @escaping (String) -> Void) {
         self.theme = theme
+        self.languageCode = languageCode
         self.sectionId = sectionId
         self.shapePicker = shapePicker
         self.size = size
@@ -126,7 +129,16 @@ private final class DGStickerAppearanceItemNode: ListViewItemNode, ItemListItemN
             self.mask.image = itemListHasRoundedBlockLayout(params) ? PresentationResourcesItemList.cornersImage(item.theme, top: topCorners, bottom: bottomCorners, glass: true) : nil
             self.mask.frame = self.block.frame
             let accent = item.theme.list.itemAccentColor
-            self.title.text = "Размер стикеров  \(item.size)"
+            self.title.text = dgLocalized("Размер стикеров", languageCode: item.languageCode) + "  \(item.size)"
+            self.small.text = dgLocalized("Маленький", languageCode: item.languageCode)
+            self.large.text = dgLocalized("Большой", languageCode: item.languageCode)
+            self.slider.accessibilityLabel = dgLocalized("Размер стикеров", languageCode: item.languageCode)
+            self.reset.accessibilityLabel = dgLocalized("Сбросить настройки стикеров", languageCode: item.languageCode)
+            for (index, title) in ["По умолчанию", "Закруглённая", "Сообщение"].enumerated() {
+                let text = dgLocalized(title, languageCode: item.languageCode)
+                self.shapeLabels[index].text = text
+                self.shapeButtons[index].accessibilityLabel = text
+            }
             self.title.textColor = accent
             self.title.frame = CGRect(x: 16, y: 10, width: width - 70, height: 24)
             self.reset.frame = CGRect(x: width - 48, y: 6, width: 40, height: 36)

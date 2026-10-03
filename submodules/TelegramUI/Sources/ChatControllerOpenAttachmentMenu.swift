@@ -574,6 +574,16 @@ extension ChatControllerImpl {
                         })
                         if let controller = controller as? AttachmentFileControllerImpl {
                             let _ = currentAudioController.swap(controller)
+                            controller.canSendAsVoice = { [weak self] in
+                                guard let self, self.presentationInterfaceState.voiceMessagesAvailable else { return false }
+                                let bypass = canBypassRestrictions(chatPresentationInterfaceState: self.presentationInterfaceState)
+                                if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel {
+                                    return channel.hasBannedPermission(.banSendVoice, ignoreDefault: bypass) == nil
+                                } else if let group = self.presentationInterfaceState.renderedPeer?.peer as? TelegramGroup {
+                                    return !group.hasBannedPermission(.banSendVoice)
+                                }
+                                return true
+                            }
                             completion(controller, controller.mediaPickerContext)
                         }
                         return true
