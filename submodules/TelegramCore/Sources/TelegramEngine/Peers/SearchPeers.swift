@@ -179,6 +179,14 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
         }
     }
     
+    if let userId = donutgramUserIdFromSearchQuery(query) {
+        return combineLatest(
+            processedSearchResult,
+            donutgramSearchUserById(accountPeerId: accountPeerId, postbox: postbox, network: network, userId: userId, scope: scope)
+        ) |> map { results, user in
+            return donutgramAddingUserIdResult(user, to: results)
+        }
+    }
     return processedSearchResult
 }
 

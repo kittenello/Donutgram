@@ -1,0 +1,26 @@
+name: Notification preservation and user ID tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/DGSimpleSettings/**'
+      - 'Telegram/NotificationService/**'
+      - 'submodules/TelegramCore/Sources/Donutgram/**'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/SearchPeers.swift'
+      - 'submodules/TelegramUI/Sources/AppDelegate.swift'
+      - 'Tests/notification_id_search/**'
+      - '.github/workflows/notification-id-search-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test production retention and ID-search helpers
+        run: python3 Tests/notification_id_search/run.py

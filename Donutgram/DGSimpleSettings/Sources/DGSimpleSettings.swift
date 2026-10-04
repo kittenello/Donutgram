@@ -156,6 +156,18 @@ public final class DGSimpleSettings {
     }
 
     private let defaults: UserDefaults
+    private var preservationSettings: DGMessagePreservationSettings?
+
+    public func configureMessagePreservation(appGroupName: String, isMainApp: Bool) {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupName) else {
+            return
+        }
+        self.preservationSettings = DGMessagePreservationSettings(
+            sharedDefaults: sharedDefaults,
+            legacyDefaults: self.defaults,
+            migrateLegacyValues: isMainApp
+        )
+    }
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -183,10 +195,11 @@ public final class DGSimpleSettings {
 
     public var saveDeletedMessages: Bool {
         get {
-            return self.defaults.bool(forKey: Key.saveDeletedMessages)
+            return self.preservationSettings?.saveDeletedMessages ?? self.defaults.bool(forKey: Key.saveDeletedMessages)
         }
         set {
             self.defaults.set(newValue, forKey: Key.saveDeletedMessages)
+            self.preservationSettings?.saveDeletedMessages = newValue
         }
     }
 
@@ -201,28 +214,31 @@ public final class DGSimpleSettings {
 
     public var saveEditHistory: Bool {
         get {
-            return self.defaults.bool(forKey: Key.saveEditHistory)
+            return self.preservationSettings?.saveEditHistory ?? self.defaults.bool(forKey: Key.saveEditHistory)
         }
         set {
             self.defaults.set(newValue, forKey: Key.saveEditHistory)
+            self.preservationSettings?.saveEditHistory = newValue
         }
     }
 
     public var saveViewOnceMedia: Bool {
         get {
-            return self.defaults.bool(forKey: Key.saveViewOnceMedia)
+            return self.preservationSettings?.saveViewOnceMedia ?? self.defaults.bool(forKey: Key.saveViewOnceMedia)
         }
         set {
             self.defaults.set(newValue, forKey: Key.saveViewOnceMedia)
+            self.preservationSettings?.saveViewOnceMedia = newValue
         }
     }
 
     public var saveInBotChats: Bool {
         get {
-            return self.defaults.bool(forKey: Key.saveInBotChats)
+            return self.preservationSettings?.saveInBotChats ?? self.defaults.bool(forKey: Key.saveInBotChats)
         }
         set {
             self.defaults.set(newValue, forKey: Key.saveInBotChats)
+            self.preservationSettings?.saveInBotChats = newValue
         }
     }
 
