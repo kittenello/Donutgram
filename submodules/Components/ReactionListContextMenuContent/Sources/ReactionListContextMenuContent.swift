@@ -772,13 +772,15 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
         private struct ItemsState {
             let listState: EngineMessageReactionListContext.State
             let readStats: MessageReadStats?
-            
+            let chatPeerId: EnginePeer.Id
+
             let mergedItems: [EngineMessageReactionListContext.Item]
-            
-            init(listState: EngineMessageReactionListContext.State, readStats: MessageReadStats?) {
+
+            init(listState: EngineMessageReactionListContext.State, readStats: MessageReadStats?, chatPeerId: EnginePeer.Id) {
                 self.listState = listState
                 self.readStats = readStats
-                
+                self.chatPeerId = chatPeerId
+
                 var mergedItems: [EngineMessageReactionListContext.Item] = listState.items
                 if !listState.canLoadMore, let readStats = readStats {                    
                     var existingPeers = Set(mergedItems.map(\.peer.id))
@@ -789,7 +791,9 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
                         }
                     }
                 }
-                
+                // Shadow-banned people leave the list; the tab counts stay as the server gives them.
+                mergedItems.removeAll(where: { DonutgramShadowBan.isPeerHidden($0.peer.id, inChat: chatPeerId) })
+
                 self.mergedItems = mergedItems
             }
             
@@ -886,7 +890,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
             self.deleteReaction = deleteReaction
             
             self.listContext = context.engine.messages.messageReactionList(message: message, readStats: readStats, reaction: reaction)
-            self.state = ItemsState(listState: EngineMessageReactionListContext.State(message: message, readStats: readStats, reaction: reaction), readStats: readStats)
+            self.state = ItemsState(listState: EngineMessageReactionListContext.State(message: message, readStats: readStats, reaction: reaction), readStats: readStats, chatPeerId: message.id.peerId)
             
             self.scrollNode = ASScrollNode()
             self.separatorNode = ASDisplayNode()
@@ -917,7 +921,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
                 guard let strongSelf = self else {
                     return
                 }
-                let updatedState = ItemsState(listState: state, readStats: strongSelf.state.readStats)
+                let updatedState = ItemsState(listState: state, readStats: strongSelf.state.readStats, chatPeerId: strongSelf.state.chatPeerId)
                 var animateIn = false
                 if strongSelf.state.item(at: 0) == nil && updatedState.item(at: 0) != nil {
                     animateIn = true

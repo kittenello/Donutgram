@@ -186,7 +186,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                 } else {
                     for recentPeer in reactions.recentPeers {
                         if recentPeer.value == reaction.value {
-                            if let peer = message.peers[recentPeer.peerId] {
+                            if let peer = message.peers[recentPeer.peerId], !DonutgramShadowBan.isPeerHidden(recentPeer.peerId, inChat: message.id.peerId) {
                                 peers.append(EnginePeer(peer))
                             }
                         }

@@ -1015,6 +1015,17 @@ public extension TelegramEngine {
         }
         
         public func storySubscriptions(isHidden: Bool, tempKeepNewlyArchived: Bool = false) -> Signal<EngineStorySubscriptions, NoError> {
+            // Shadow-banned peers leave the story strip, the archive strip and the viewer's peer sequence.
+            return combineLatest(
+                self.donutgramUnfilteredStorySubscriptions(isHidden: isHidden, tempKeepNewlyArchived: tempKeepNewlyArchived),
+                DonutgramShadowBan.stateSignal()
+            )
+            |> map { subscriptions, state -> EngineStorySubscriptions in
+                return DonutgramShadowBan.filteringHidden(subscriptions, state: state)
+            }
+        }
+
+        private func donutgramUnfilteredStorySubscriptions(isHidden: Bool, tempKeepNewlyArchived: Bool) -> Signal<EngineStorySubscriptions, NoError> {
             return `deferred` { () -> Signal<EngineStorySubscriptions, NoError> in
                 let debugTimerSignal: Signal<Bool, NoError>
 #if DEBUG && false
