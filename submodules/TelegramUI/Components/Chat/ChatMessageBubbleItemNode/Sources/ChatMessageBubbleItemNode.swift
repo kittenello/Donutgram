@@ -2609,6 +2609,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     mosaicLimit.width = fittedWidth
                     mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
                 }
+                for _ in 0 ..< 2 {
+                    guard mosaic.1.width > availableMediaWidth else {
+                        break
+                    }
+                    mosaicLimit.width = donutgramChannelMosaicWidthAfterRounding(inputWidth: mosaicLimit.width, measuredWidth: mosaic.1.width, availableWidth: availableMediaWidth)
+                    mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
+                }
             }
             let (innerFramesAndPositions, innerSize) = mosaic
             

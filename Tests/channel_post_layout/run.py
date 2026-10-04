@@ -28,6 +28,7 @@ def check_integration():
     assert "if wideChannelPost && !hideBackground" not in bubble
     assert "mosaicLimit.width = availableMediaWidth" in bubble
     assert "donutgramChannelMosaicWidth(" in bubble
+    assert "donutgramChannelMosaicWidthAfterRounding(" in bubble
     assert "if layoutConstants.wideChannelPost" in media
     assert "donutgramChannelPhotoSizeLimit(" in media
     assert "donutgramChannelPhotoHeight(" in media

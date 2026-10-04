@@ -29,3 +29,9 @@ public func donutgramChannelMosaicWidth(availableWidth: CGFloat, defaultWidth: C
     }
     return min(width, max(defaultWidth, floor(width * maximumHeight / measuredHeight)))
 }
+
+/// The mosaic rounds each tile up; reserve any resulting overflow before refitting.
+public func donutgramChannelMosaicWidthAfterRounding(inputWidth: CGFloat, measuredWidth: CGFloat, availableWidth: CGFloat) -> CGFloat {
+    let overflow = max(0.0, measuredWidth - max(0.0, availableWidth))
+    return max(0.0, floor(inputWidth - overflow))
+}

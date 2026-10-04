@@ -33,19 +33,28 @@ expect(zeroImage == minimumHeight, "missing dimensions must not divide by zero")
 expect(donutgramChannelMosaicWidth(availableWidth: 370, defaultWidth: 300, measuredHeight: 900, maximumHeight: 380) == 300, "tall album refit retains ordinary width")
 expect(donutgramChannelMosaicWidth(availableWidth: 240, defaultWidth: 300, measuredHeight: 900, maximumHeight: 380) == 240, "ordinary width floor cannot exceed a narrow viewport")
 expect(donutgramChannelMosaicWidth(availableWidth: 500, defaultWidth: 300, measuredHeight: 200, maximumHeight: 380) == 500, "short album retains full column width")
+expect(donutgramChannelMosaicWidthAfterRounding(inputWidth: 240, measuredWidth: 243, availableWidth: 240) == 237, "tile rounding overflow is reserved before refitting")
 
 let albums: [[CGSize]] = [
     [.init(width: 600, height: 600), .init(width: 600, height: 600)],
     [.init(width: 1600, height: 900), .init(width: 1600, height: 900)],
     [.init(width: 500, height: 1000), .init(width: 800, height: 600), .init(width: 600, height: 600)],
     Array(repeating: .init(width: 600, height: 600), count: 4),
+    Array(repeating: .init(width: 600, height: 900), count: 5),
+    Array(repeating: .init(width: 600, height: 900), count: 6),
+    Array(repeating: .init(width: 600, height: 900), count: 9),
     Array(repeating: .init(width: 600, height: 900), count: 10),
 ]
 for availableWidth: CGFloat in [240, 370, 500, 820] {
     for images in albums {
         let initial = chatMessageBubbleMosaicLayout(maxSize: CGSize(width: availableWidth, height: normal.height), itemSizes: images)
-        let fittedWidth = donutgramChannelMosaicWidth(availableWidth: availableWidth, defaultWidth: normal.width, measuredHeight: initial.1.height, maximumHeight: normal.height)
-        let result = chatMessageBubbleMosaicLayout(maxSize: CGSize(width: fittedWidth, height: normal.height), itemSizes: images)
+        var fittedWidth = donutgramChannelMosaicWidth(availableWidth: availableWidth, defaultWidth: normal.width, measuredHeight: initial.1.height, maximumHeight: normal.height)
+        var result = chatMessageBubbleMosaicLayout(maxSize: CGSize(width: fittedWidth, height: normal.height), itemSizes: images)
+        for _ in 0 ..< 2 {
+            guard result.1.width > availableWidth else { break }
+            fittedWidth = donutgramChannelMosaicWidthAfterRounding(inputWidth: fittedWidth, measuredWidth: result.1.width, availableWidth: availableWidth)
+            result = chatMessageBubbleMosaicLayout(maxSize: CGSize(width: fittedWidth, height: normal.height), itemSizes: images)
+        }
         expect(result.0.count == images.count, "all album images remain present")
         expect(result.1.width > 0 && result.1.width <= availableWidth + 1, "album width stays within the post column")
         expect(result.1.height.isFinite && result.1.height > 0, "album geometry stays finite")
