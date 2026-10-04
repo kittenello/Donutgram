@@ -879,12 +879,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     
     open func presentMessageButtonContextMenu(button: ReplyMarkupButton) {
         if let item = self.item {
-            switch button.action {
-                case let .url(url):
-                    item.controllerInteraction.longTap(.url(url), ChatControllerInteraction.LongTapParams(message: item.message))
-                default:
-                    break
-            }
+            presentBotButtonContextMenu(button: button, presentationData: item.context.sharedContext.currentPresentationData.with { $0 }, interaction: item.controllerInteraction, message: item.message)
         }
     }
     

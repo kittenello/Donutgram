@@ -187,6 +187,7 @@ enum PeerInfoSettingsSection {
     case businessSetup
     case profile
     case donutgram
+    case donutgramReadAll
     case premiumManagement
     case stars
     case ton

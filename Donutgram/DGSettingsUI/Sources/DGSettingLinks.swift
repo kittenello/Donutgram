@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import ItemListUI
@@ -29,6 +30,7 @@ enum DGSettingsPage: String {
     case iconAndIsland = "icon-and-island"
     case dialogId = "dialog-id"
     case chats
+    case channelBottomButton = "channel-bottom-button"
     case glow
     case stickerReplies = "sticker-replies"
     case chatListAppearance = "chat-list-appearance"
@@ -121,12 +123,12 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
         let actionSheet = ActionSheetController(presentationData: presentationData)
         actionSheet.setItemGroups([ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: "Копировать ссылку", action: { [weak actionSheet, weak controller] in
+            ActionSheetButtonItem(title: dgLocalized("Копировать ссылку", languageCode: presentationData.strings.primaryComponent.languageCode), action: { [weak actionSheet, weak controller] in
                 actionSheet?.dismissAnimated()
                 UIPasteboard.general.string = url.absoluteString
                 controller?.present(UndoOverlayController(presentationData: presentationData, content: .linkCopied(title: nil, text: presentationData.strings.Conversation_LinkCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
             }),
-            ActionSheetButtonItem(title: "Поделиться ссылкой", action: { [weak actionSheet, weak controller] in
+            ActionSheetButtonItem(title: dgLocalized("Поделиться ссылкой", languageCode: presentationData.strings.primaryComponent.languageCode), action: { [weak actionSheet, weak controller] in
                 actionSheet?.dismissAnimated()
                 let share = UIActivityViewController(activityItems: [url.absoluteString], applicationActivities: nil)
                 share.popoverPresentationController?.sourceView = target.view
@@ -134,7 +136,7 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
                 controller?.present(share, animated: true)
             })
         ]), ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: "Отмена", font: .bold, action: { [weak actionSheet] in
+            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, font: .bold, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()
             })
         ])])

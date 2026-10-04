@@ -1609,7 +1609,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         ephemeralBadgeLayout: (TextNodeLayoutArguments) -> (TextNodeLayout, () -> TextNode),
         boostBadgeLayout: (TextNodeLayoutArguments) -> (TextNodeLayout, () -> TextNode),
         threadInfoLayout: (ChatMessageThreadInfoNode.Arguments) -> (CGSize, (Bool) -> ChatMessageThreadInfoNode),
-        forwardInfoLayout: (AccountContext, ChatPresentationData, PresentationStrings, ChatMessageForwardInfoType, EnginePeer?, String?, String?, ChatMessageForwardInfoNode.StoryData?, CGSize) -> (CGSize, (CGFloat) -> ChatMessageForwardInfoNode),
+        forwardInfoLayout: (AccountContext, ChatPresentationData, PresentationStrings, ChatMessageForwardInfoType, EnginePeer?, String?, String?, ChatMessageForwardInfoNode.StoryData?, Int32?, CGSize) -> (CGSize, (CGFloat) -> ChatMessageForwardInfoNode),
         replyInfoLayout: (ChatMessageReplyInfoNode.Arguments) -> (CGSize, (CGSize, Bool, ListViewItemUpdateAnimation) -> ChatMessageReplyInfoNode),
         actionButtonsLayout: (AccountContext, ChatPresentationThemeData, PresentationChatBubbleCorners, PresentationStrings, WallpaperBackgroundNode?, ReplyMarkupMessageAttribute, [EngineMemoryBuffer: ChatMessageActionButtonsNode.CustomInfo], EngineMessage, CGFloat) -> (minWidth: CGFloat, layout: (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation) -> ChatMessageActionButtonsNode)),
         reactionButtonsLayout: (ChatMessageReactionButtonsNode.Arguments) -> (minWidth: CGFloat, layout: (CGFloat) -> (size: CGSize, apply: (ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode)),
@@ -1703,6 +1703,18 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         var allowFullWidth = false
         let chatLocationPeerId: PeerId = item.chatLocation.peerId ?? item.content.firstMessage.id.peerId
+        let wideChannelPost: Bool
+        if DGSimpleSettings.shared.wideChannelPosts, firstMessage.id.peerId == chatLocationPeerId,
+           !firstMessage.media.contains(where: { ($0 as? TelegramMediaFile)?.isInstantVideo == true }),
+           let channel = item.chatLocation.peerId.flatMap({ firstMessage.peers[$0] }) as? TelegramChannel,
+           case .broadcast = channel.info, firstMessage.adAttribute == nil {
+            wideChannelPost = true
+            allowFullWidth = true
+        } else {
+            wideChannelPost = false
+        }
+        var layoutConstants = layoutConstants
+        layoutConstants.wideChannelPost = wideChannelPost
         
         /*let isInlinePage = false
         for attribute in item.message.attributes {
@@ -2009,6 +2021,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         tmpWidth -= deliveryFailedInset
+
+        if wideChannelPost {
+            // A channel post uses the full column, without a reserved side button.
+            needsShareButton = false
+            tmpWidth = max(0.0, baseWidth - deliveryFailedInset)
+        }
         
         let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions) = contentNodeMessagesAndClassesForItem(item)
         
@@ -2573,13 +2591,33 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var mosaicStatusSizeAndApply: (CGSize, (ListViewItemUpdateAnimation) -> ChatMessageDateAndStatusNode)?
         
         if let mosaicRange = mosaicRange {
-            let maxSize = layoutConstants.image.maxDimensions.fittedToWidthOrSmaller(maximumContentWidth - layoutConstants.image.bubbleInsets.left - layoutConstants.image.bubbleInsets.right)
-            let (innerFramesAndPositions, innerSize) = chatMessageBubbleMosaicLayout(maxSize: maxSize, itemSizes: contentPropertiesAndLayouts[mosaicRange].map { item in
+            let availableMediaWidth = max(0.0, maximumContentWidth - layoutConstants.image.bubbleInsets.left - layoutConstants.image.bubbleInsets.right)
+            var mosaicLimit = layoutConstants.image.maxDimensions
+            if wideChannelPost {
+                mosaicLimit.width = availableMediaWidth
+            }
+            let itemSizes = contentPropertiesAndLayouts[mosaicRange].map { item -> CGSize in
                 guard let size = item.0, size.width > 0.0, size.height > 0 else {
                     return CGSize(width: 256.0, height: 256.0)
                 }
                 return size
-            })
+            }
+            var mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
+            if wideChannelPost {
+                let fittedWidth = donutgramChannelMosaicWidth(availableWidth: availableMediaWidth, defaultWidth: layoutConstants.image.maxDimensions.width, measuredHeight: mosaic.1.height, maximumHeight: mosaicLimit.height)
+                if fittedWidth < mosaicLimit.width {
+                    mosaicLimit.width = fittedWidth
+                    mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
+                }
+                for _ in 0 ..< 2 {
+                    guard mosaic.1.width > availableMediaWidth else {
+                        break
+                    }
+                    mosaicLimit.width = donutgramChannelMosaicWidthAfterRounding(inputWidth: mosaicLimit.width, measuredWidth: mosaic.1.width, availableWidth: availableMediaWidth)
+                    mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
+                }
+            }
+            let (innerFramesAndPositions, innerSize) = mosaic
             
             let framesAndPositions = innerFramesAndPositions.map { ($0.0.offsetBy(dx: layoutConstants.image.bubbleInsets.left, dy: layoutConstants.image.bubbleInsets.top), $0.1) }
             
@@ -2932,7 +2970,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         forwardAuthorSignature = forwardInfo.authorSignature
                     }
                 }
-                let sizeAndApply = forwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .bubble(incoming: incoming), forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType, nil, CGSize(width: maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right, height: CGFloat.greatestFiniteMagnitude))
+                let sizeAndApply = forwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .bubble(incoming: incoming), forwardSource.flatMap(EnginePeer.init), forwardAuthorSignature, forwardPsaType, nil, forwardInfo.date, CGSize(width: maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right, height: CGFloat.greatestFiniteMagnitude))
                 forwardInfoSizeApply = (sizeAndApply.0, { width in sizeAndApply.1(width) })
                 
                 headerSize.height += 2.0
@@ -2960,7 +2998,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     }
                 }
                 
-                let sizeAndApply = forwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .bubble(incoming: incoming), forwardSource.flatMap(EnginePeer.init), nil, nil, ChatMessageForwardInfoNode.StoryData(storyType: storyType), CGSize(width: maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right, height: CGFloat.greatestFiniteMagnitude))
+                let sizeAndApply = forwardInfoLayout(item.context, item.presentationData, item.presentationData.strings, .bubble(incoming: incoming), forwardSource.flatMap(EnginePeer.init), nil, nil, ChatMessageForwardInfoNode.StoryData(storyType: storyType), nil, CGSize(width: maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right, height: CGFloat.greatestFiniteMagnitude))
                 forwardInfoSizeApply = (sizeAndApply.0, { width in sizeAndApply.1(width) })
                 
                 if storyType != .regular {

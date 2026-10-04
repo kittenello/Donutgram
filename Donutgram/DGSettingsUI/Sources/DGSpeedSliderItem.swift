@@ -1,4 +1,5 @@
 import UIKit
+import DGSimpleSettings
 import AsyncDisplayKit
 import Display
 import ItemListUI
@@ -7,12 +8,14 @@ import TelegramPresentationData
 
 final class DGSpeedSliderItem: ListViewItem, ItemListItem {
     let theme: PresentationTheme
+    let languageCode: String
     let sectionId: ItemListSectionId
     let value: Int
     let updated: (Int) -> Void
 
-    init(theme: PresentationTheme, sectionId: ItemListSectionId, value: Int, updated: @escaping (Int) -> Void) {
+    init(theme: PresentationTheme, languageCode: String, sectionId: ItemListSectionId, value: Int, updated: @escaping (Int) -> Void) {
         self.theme = theme
+        self.languageCode = languageCode
         self.sectionId = sectionId
         self.value = value
         self.updated = updated
@@ -129,6 +132,7 @@ final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
         slider?.value = Float(item.value)
         slider?.frame = CGRect(x: leftInset + 12, y: 38, width: max(0, layoutWidth - leftInset - rightInset - 24), height: 38)
         for (index, label) in labels.enumerated() {
+            label.text = dgLocalized(["Откл.", "Быстро", "Ультра"][index], languageCode: item.languageCode)
             label.textColor = index == item.value ? item.theme.list.itemAccentColor : item.theme.list.itemSecondaryTextColor
             let x = index == 0 ? leftInset + 12 : (index == 1 ? layoutWidth / 2 - 40 : layoutWidth - rightInset - 92)
             label.frame = CGRect(x: x, y: 10, width: 80, height: 22)

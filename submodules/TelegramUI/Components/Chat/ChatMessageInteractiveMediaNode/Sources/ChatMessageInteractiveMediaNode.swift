@@ -949,6 +949,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
             var isSticker = false
             var maxDimensions = layoutConstants.image.maxDimensions
             var maxHeight = layoutConstants.image.maxDimensions.height
+            var channelPhotoDefaultLimit: CGSize?
             var isStory = false
             var isGift = false
             
@@ -971,6 +972,17 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                 }
             } else if let image = media as? TelegramMediaImage, let dimensions = largestImageRepresentation(image.representations)?.dimensions {
                 unboundSize = CGSize(width: max(10.0, floor(dimensions.cgSize.width * 0.5)), height: max(10.0, floor(dimensions.cgSize.height * 0.5)))
+                if layoutConstants.wideChannelPost {
+                    channelPhotoDefaultLimit = maxDimensions
+                    let availableWidth: CGFloat
+                    switch sizeCalculation {
+                    case let .constrained(size):
+                        availableWidth = size.width
+                    case .unconstrained:
+                        availableWidth = unboundSize.width
+                    }
+                    maxDimensions = donutgramChannelPhotoSizeLimit(defaultLimit: maxDimensions, availableWidth: availableWidth, imageSize: unboundSize, minimumHeight: layoutConstants.image.minDimensions.height, hasCaption: !message.text.isEmpty)
+                }
             } else if let file = media as? TelegramMediaFile, var dimensions = file.dimensions {
                 if let thumbnail = file.previewRepresentations.first {
                     let dimensionsVertical = dimensions.width < dimensions.height
@@ -1199,6 +1211,9 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                                 }
                                 
                                 boundingSize = CGSize(width: boundingWidth, height: filledSize.height).cropped(CGSize(width: CGFloat.greatestFiniteMagnitude, height: maxHeight))
+                                if let channelPhotoDefaultLimit {
+                                    boundingSize.height = donutgramChannelPhotoHeight(proposedHeight: boundingSize.height, imageSize: nativeSize, defaultLimit: channelPhotoDefaultLimit, minimumHeight: layoutConstants.image.minDimensions.height)
+                                }
                                 boundingSize.height = max(boundingSize.height, layoutConstants.image.minDimensions.height)
                                 boundingSize.width = max(boundingSize.width, layoutConstants.image.minDimensions.width)
                                 switch contentMode {

@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import DGSettingsUI
 import UIKit
 import Display
@@ -65,6 +66,22 @@ extension PeerInfoScreenNode {
             ))
         case .donutgram:
             push(dgSettingsController(context: self.context))
+        case .donutgramReadAll:
+            let languageCode = self.presentationData.strings.primaryComponent.languageCode
+            self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: dgLocalized("Прочитать все сообщения?", languageCode: languageCode), actions: [
+                TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak self] in
+                    guard let self else { return }
+                    let progress = OverlayStatusController(theme: self.presentationData.theme, type: .loading(cancelled: nil))
+                    self.controller?.present(progress, in: .window(.root))
+                    let _ = (self.context.engine.messages.donutgramReadAllMessagesOnServer() |> deliverOnMainQueue).startStandalone(next: { [weak self] succeeded in
+                        progress.dismiss()
+                        guard let self else { return }
+                        let text = succeeded ? "Все сообщения прочитаны" : "Не удалось прочитать все сообщения. Попробуйте ещё раз."
+                        self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: dgLocalized(text, languageCode: self.presentationData.strings.primaryComponent.languageCode), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    })
+                })
+            ]), in: .window(.root))
         case .stories:
             push(PeerInfoStoryGridScreen(context: self.context, peerId: self.context.account.peerId, scope: .saved))
         case .savedMessages:

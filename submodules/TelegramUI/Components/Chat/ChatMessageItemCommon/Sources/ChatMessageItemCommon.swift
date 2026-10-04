@@ -105,6 +105,8 @@ public struct ChatMessageItemWallpaperLayoutConstants {
 }
 
 public struct ChatMessageItemLayoutConstants {
+    /// Set by the parent bubble so nested media uses the same channel-post policy.
+    public var wideChannelPost: Bool = false
     public var avatarInset: CGFloat
     public var timestampHeaderHeight: CGFloat
     public var timestampDateAndTopicHeaderHeight: CGFloat

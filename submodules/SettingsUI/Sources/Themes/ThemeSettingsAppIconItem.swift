@@ -137,12 +137,12 @@ public func donutgramIconAndIslandItem(presentationData: ItemListPresentationDat
     // An icon this build no longer has (one picked in an older build) counts as the default one, as for the island.
     let iconMark = DGSimpleSettings.appMarks[DGSimpleSettings.appMarkIndex(iconName: iconName)]
     let icon = donutgramAppIconThumbnail(iconName: iconMark.iconName, size: 30.0)
-    let iconTitle = iconMark.title
+    let iconTitle = dgLocalized(iconMark.title, languageCode: presentationData.strings.primaryComponent.languageCode)
     if DeviceMetrics.deviceHasAppBadge, let island = UIImage(bundleImageName: DGSimpleSettings.appMarks[islandMark].islandAssetName) {
         // Two thirds of the island's 93x22 pt; the caption goes under the title, clear of the island.
-        return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: donutgramIconAndIslandTitle(), label: "", labelStyle: .image(image: island, size: CGSize(width: 62.0, height: 44.0 / 3.0)), additionalDetailLabel: iconTitle, sectionId: sectionId, style: .blocks, disclosureStyle: .arrow, action: action, tag: tag)
+        return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: dgLocalized(donutgramIconAndIslandTitle(), languageCode: presentationData.strings.primaryComponent.languageCode), label: "", labelStyle: .image(image: island, size: CGSize(width: 62.0, height: 44.0 / 3.0)), additionalDetailLabel: iconTitle, sectionId: sectionId, style: .blocks, disclosureStyle: .arrow, action: action, tag: tag)
     } else {
-        return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: donutgramIconAndIslandTitle(), label: iconTitle, sectionId: sectionId, style: .blocks, disclosureStyle: .arrow, action: action, tag: tag)
+        return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: dgLocalized(donutgramIconAndIslandTitle(), languageCode: presentationData.strings.primaryComponent.languageCode), label: iconTitle, sectionId: sectionId, style: .blocks, disclosureStyle: .arrow, action: action, tag: tag)
     }
 }
 
@@ -432,7 +432,7 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                             switch icon.name {
                                 case "BlueIcon":
                                     // Donutgram: the default icon is called as in the island picker and the «Иконка и остров» row.
-                                    name = DGSimpleSettings.appMarks[DGSimpleSettings.appMarkIndex(iconName: nil)].title
+                                    name = dgLocalized(DGSimpleSettings.appMarks[DGSimpleSettings.appMarkIndex(iconName: nil)].title, languageCode: item.strings.primaryComponent.languageCode)
                                 case "BlackIcon":
                                     name = item.strings.Appearance_AppIconDefaultX
                                 case "BlueClassicIcon":
@@ -459,7 +459,7 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                                     name = item.strings.Appearance_AppIconTurbo
                                 default:
                                     // Donutgram's icons take their captions from the same table as their islands.
-                                    name = DGSimpleSettings.appMarks.first(where: { $0.iconName == icon.name })?.title ?? icon.name
+                                    name = dgLocalized(DGSimpleSettings.appMarks.first(where: { $0.iconName == icon.name })?.title ?? icon.name, languageCode: item.strings.primaryComponent.languageCode)
                             }
                         
                             imageNode.setup(theme: item.theme, icon: image, title: NSAttributedString(string: name, font: selected ? selectedTextFont : textFont, textColor: selected  ? item.theme.list.itemAccentColor : item.theme.list.itemPrimaryTextColor, paragraphAlignment: .center), locked: !item.isPremium && icon.isPremium, color: item.theme.list.itemPrimaryTextColor, bordered: bordered, selected: selected, action: {
@@ -484,4 +484,3 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
         self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
     }
 }
-

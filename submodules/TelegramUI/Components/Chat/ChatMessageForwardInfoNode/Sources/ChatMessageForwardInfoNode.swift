@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -278,13 +279,13 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
         }
     }
     
-    public static func asyncLayout(_ maybeNode: ChatMessageForwardInfoNode?) -> (_ context: AccountContext, _ presentationData: ChatPresentationData, _ strings: PresentationStrings, _ type: ChatMessageForwardInfoType, _ peer: EnginePeer?, _ authorName: String?, _ psaType: String?, _ storyData: StoryData?, _ constrainedSize: CGSize) -> (CGSize, (CGFloat) -> ChatMessageForwardInfoNode) {
+    public static func asyncLayout(_ maybeNode: ChatMessageForwardInfoNode?) -> (_ context: AccountContext, _ presentationData: ChatPresentationData, _ strings: PresentationStrings, _ type: ChatMessageForwardInfoType, _ peer: EnginePeer?, _ authorName: String?, _ psaType: String?, _ storyData: StoryData?, _ originalDate: Int32?, _ constrainedSize: CGSize) -> (CGSize, (CGFloat) -> ChatMessageForwardInfoNode) {
         let titleNodeLayout = TextNode.asyncLayout(maybeNode?.titleNode)
         let nameNodeLayout = TextNode.asyncLayout(maybeNode?.nameNode)
         
         let previousPeer = maybeNode?.previousPeer
         
-        return { context, presentationData, strings, type, peer, authorName, psaType, storyData, constrainedSize in
+        return { context, presentationData, strings, type, peer, authorName, psaType, storyData, originalDate, constrainedSize in
             let originalPeer = peer
             let peer = peer ?? previousPeer
             
@@ -405,6 +406,17 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
                 }
             }
             
+            let showForwardDate = DGSimpleSettings.shared.showForwardDate && storyData == nil && psaType == nil && (originalDate ?? 0) > 0
+            if showForwardDate, let originalDate, let author = authorString {
+                // Telegram's forwardInfo.date is the original creation time, not the forwarding time.
+                // Keep the formatter local: message layout may run on concurrent queues.
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current
+                formatter.dateFormat = "dd.MM.yy HH:mm:ss"
+                authorString = author + ", " + formatter.string(from: Date(timeIntervalSince1970: TimeInterval(originalDate)))
+            }
+
             var currentCredibilityIconImage: UIImage?
             var highlight = true
             if let peer = peer {
@@ -472,7 +484,7 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
             
             var nameLayoutAndApply: (TextNodeLayout, () -> TextNode)?
             if let authorString {
-                nameLayoutAndApply = nameNodeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: authorString, font: peer != nil ? peerFont : prefixFont, textColor: titleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: constrainedSize.width - credibilityIconWidth - infoWidth - authorAvatarInset, height: constrainedSize.height), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+                nameLayoutAndApply = nameNodeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: authorString, font: peer != nil ? peerFont : prefixFont, textColor: titleColor), backgroundColor: nil, maximumNumberOfLines: showForwardDate ? 2 : 1, truncationType: .end, constrainedSize: CGSize(width: constrainedSize.width - credibilityIconWidth - infoWidth - authorAvatarInset, height: constrainedSize.height), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             }
             
             let titleAuthorSpacing: CGFloat = 0.0
