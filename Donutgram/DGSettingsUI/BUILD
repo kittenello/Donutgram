@@ -28,6 +28,8 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/SettingsUI:SettingsUI",
         "//submodules/UndoUI:UndoUI",
+        "//submodules/ItemListPeerItem:ItemListPeerItem",
+        "//submodules/ItemListPeerActionItem:ItemListPeerActionItem",
     ],
     visibility = [
         "//visibility:public",

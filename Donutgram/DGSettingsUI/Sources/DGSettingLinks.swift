@@ -44,6 +44,7 @@ enum DGSettingsPage: String {
     case visualRating = "visual-rating"
     case visualUsernames = "visual-usernames"
     case visualPhone = "visual-phone"
+    case shadowBan = "shadow-ban"
     case support
 }
 

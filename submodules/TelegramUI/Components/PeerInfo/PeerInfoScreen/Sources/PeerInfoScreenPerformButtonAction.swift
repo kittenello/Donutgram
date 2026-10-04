@@ -12,6 +12,8 @@ import NotificationExceptionsScreen
 import TranslateUI
 import TelegramNotices
 import AlertComponent
+import DGSimpleSettings
+import DGSettingsUI
 
 extension PeerInfoScreenNode {
     func performButtonAction(key: PeerInfoHeaderButtonKey, buttonNode: PeerInfoHeaderButtonNode?, gesture: ContextGesture?) {
@@ -1264,7 +1266,39 @@ extension PeerInfoScreenNode {
                         }
                     }
                 }
-                
+
+                // Donutgram: «Теневой бан» for people, bots and channels, «Показать скрытые» for chats that hide messages.
+                var shadowBanItems: [ContextMenuItem] = []
+                if DonutgramShadowBan.canBan(peer, accountPeerId: strongSelf.context.account.peerId) {
+                    let isBanned = DGSimpleSettings.shared.isShadowBanned(peer.id.toInt64())
+                    shadowBanItems.append(.action(ContextMenuActionItem(text: isBanned ? "Убрать из теневого бана" : "Теневой бан", icon: { theme in
+                        generateTintedImage(image: UIImage(systemName: isBanned ? "eye" : "eye.slash", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let controller = self.controller else {
+                            return
+                        }
+                        dgToggleShadowBan(context: self.context, peer: peer, present: { [weak controller] toast in
+                            controller?.present(toast, in: .current)
+                        })
+                    })))
+                }
+                if DGSimpleSettings.shared.hasShadowBans && DonutgramShadowBan.appliesToChat(peer) {
+                    let isRevealed = DGSimpleSettings.shared.isShadowBanRevealed(chatPeerId: peer.id.toInt64())
+                    shadowBanItems.append(.action(ContextMenuActionItem(text: isRevealed ? "Спрятать скрытые сообщения" : "Показать скрытые сообщения", icon: { theme in
+                        generateTintedImage(image: UIImage(systemName: isRevealed ? "eye.slash" : "eye", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)), color: theme.contextMenu.primaryColor)
+                    }, action: { _, f in
+                        f(.dismissWithoutContent)
+                        DGSimpleSettings.shared.setShadowBanRevealed(!isRevealed, chatPeerId: peer.id.toInt64())
+                    })))
+                }
+                if !shadowBanItems.isEmpty {
+                    if !items.isEmpty {
+                        items.append(.separator)
+                    }
+                    items.append(contentsOf: shadowBanItems)
+                }
+
                 return .single(items)
             }
             
