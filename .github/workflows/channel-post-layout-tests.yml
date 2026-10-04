@@ -1,0 +1,25 @@
+name: Channel post layout regression tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/**'
+      - 'submodules/TelegramUI/Components/Chat/ChatMessageInteractiveMediaNode/**'
+      - 'submodules/TelegramUI/Components/Chat/ChatMessageItemCommon/**'
+      - 'submodules/MosaicLayout/**'
+      - 'Tests/channel_post_layout/**'
+      - '.github/workflows/channel-post-layout-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  geometry:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test production channel photo sizing and album geometry
+        run: python3 Tests/channel_post_layout/run.py

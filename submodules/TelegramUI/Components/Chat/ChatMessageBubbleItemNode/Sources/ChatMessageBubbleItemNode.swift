@@ -1705,6 +1705,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let chatLocationPeerId: PeerId = item.chatLocation.peerId ?? item.content.firstMessage.id.peerId
         let wideChannelPost: Bool
         if DGSimpleSettings.shared.wideChannelPosts, firstMessage.id.peerId == chatLocationPeerId,
+           !firstMessage.media.contains(where: { ($0 as? TelegramMediaFile)?.isInstantVideo == true }),
            let channel = item.chatLocation.peerId.flatMap({ firstMessage.peers[$0] }) as? TelegramChannel,
            case .broadcast = channel.info, firstMessage.adAttribute == nil {
             wideChannelPost = true
@@ -1712,6 +1713,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         } else {
             wideChannelPost = false
         }
+        var layoutConstants = layoutConstants
+        layoutConstants.wideChannelPost = wideChannelPost
         
         /*let isInlinePage = false
         for attribute in item.message.attributes {
@@ -2018,6 +2021,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         tmpWidth -= deliveryFailedInset
+
+        if wideChannelPost {
+            // A channel post uses the full column, without a reserved side button.
+            needsShareButton = false
+            tmpWidth = max(0.0, baseWidth - deliveryFailedInset)
+        }
         
         let (contentNodeMessagesAndClasses, needSeparateContainers, needReactions) = contentNodeMessagesAndClassesForItem(item)
         
@@ -2582,13 +2591,26 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var mosaicStatusSizeAndApply: (CGSize, (ListViewItemUpdateAnimation) -> ChatMessageDateAndStatusNode)?
         
         if let mosaicRange = mosaicRange {
-            let maxSize = layoutConstants.image.maxDimensions.fittedToWidthOrSmaller(maximumContentWidth - layoutConstants.image.bubbleInsets.left - layoutConstants.image.bubbleInsets.right)
-            let (innerFramesAndPositions, innerSize) = chatMessageBubbleMosaicLayout(maxSize: maxSize, itemSizes: contentPropertiesAndLayouts[mosaicRange].map { item in
+            let availableMediaWidth = max(0.0, maximumContentWidth - layoutConstants.image.bubbleInsets.left - layoutConstants.image.bubbleInsets.right)
+            var mosaicLimit = layoutConstants.image.maxDimensions
+            if wideChannelPost {
+                mosaicLimit.width = availableMediaWidth
+            }
+            let itemSizes = contentPropertiesAndLayouts[mosaicRange].map { item -> CGSize in
                 guard let size = item.0, size.width > 0.0, size.height > 0 else {
                     return CGSize(width: 256.0, height: 256.0)
                 }
                 return size
-            })
+            }
+            var mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
+            if wideChannelPost {
+                let fittedWidth = donutgramChannelMosaicWidth(availableWidth: availableMediaWidth, defaultWidth: layoutConstants.image.maxDimensions.width, measuredHeight: mosaic.1.height, maximumHeight: mosaicLimit.height)
+                if fittedWidth < mosaicLimit.width {
+                    mosaicLimit.width = fittedWidth
+                    mosaic = chatMessageBubbleMosaicLayout(maxSize: mosaicLimit.fittedToWidthOrSmaller(availableMediaWidth), itemSizes: itemSizes)
+                }
+            }
+            let (innerFramesAndPositions, innerSize) = mosaic
             
             let framesAndPositions = innerFramesAndPositions.map { ($0.0.offsetBy(dx: layoutConstants.image.bubbleInsets.left, dy: layoutConstants.image.bubbleInsets.top), $0.1) }
             
@@ -3091,9 +3113,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var contentNodePropertiesAndFinalize: [(ChatMessageBubbleContentProperties, ChatMessageBubbleContentPosition?, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void), UInt32?, Bool?)] = []
         
         var maxContentWidth: CGFloat = headerSize.width
-        if wideChannelPost && !hideBackground && !hasInstantVideo {
-            maxContentWidth = max(maxContentWidth, maximumNodeWidth)
-        }
         
         var actionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageActionButtonsNode))?
         if let additionalContent = item.additionalContent, case let .eventLogGroupedMessages(messages, hasButton) = additionalContent, hasButton {
