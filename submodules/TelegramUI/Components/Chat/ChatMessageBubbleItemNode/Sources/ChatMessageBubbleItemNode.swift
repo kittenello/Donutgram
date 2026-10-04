@@ -2177,7 +2177,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
             }
         }
-        
+
+        // A reply to a shadow-banned message loses its header: the quote would show the hidden message.
+        if DonutgramShadowBan.hidesReplyHeader(in: firstMessage) {
+            replyMessage = nil
+            replyQuote = nil
+            replyForward = nil
+            replyInnerSubject = nil
+        }
+
         if firstMessage.isRestricted(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) {
             replyMarkup = nil
         }

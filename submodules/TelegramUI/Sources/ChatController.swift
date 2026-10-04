@@ -7486,9 +7486,29 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             topPinnedMessage = combineLatest(queue: .mainQueue(),
                 adjustedReplyHistory,
                 topMessage,
-                referenceMessage ?? .single(nil)
+                referenceMessage ?? .single(nil),
+                DonutgramShadowBan.stateSignal()
             )
-            |> map { pinnedMessages, topMessage, referenceMessage -> ChatPinnedMessage? in
+            |> map { pinnedMessages, topMessage, referenceMessage, shadowBanState -> ChatPinnedMessage? in
+                // Shadow-banned pins leave the bar, and the «N of M» count follows the visible ones.
+                var pinnedMessages = pinnedMessages
+                var topMessage = topMessage
+                if !shadowBanState.bannedPeerIds.isEmpty {
+                    var visibleMessages: [PinnedHistory.PinnedMessage] = []
+                    var hiddenBefore = 0
+                    for pinnedMessage in pinnedMessages.messages {
+                        if DonutgramShadowBan.isHidden(pinnedMessage.message, state: shadowBanState) {
+                            hiddenBefore += 1
+                        } else {
+                            visibleMessages.append(PinnedHistory.PinnedMessage(message: pinnedMessage.message, index: pinnedMessage.index - hiddenBefore))
+                        }
+                    }
+                    pinnedMessages = PinnedHistory(messages: visibleMessages, totalCount: max(0, pinnedMessages.totalCount - hiddenBefore))
+                    if let topMessageValue = topMessage, DonutgramShadowBan.isHidden(topMessageValue.message, state: shadowBanState) {
+                        topMessage = nil
+                    }
+                }
+
                 var message: ChatPinnedMessage?
                 
                 let topMessageId: MessageId

@@ -307,6 +307,9 @@ final class AuthorizedApplicationContext {
                     guard let message = item.0.first else {
                         return false
                     }
+                    if DonutgramShadowBan.isHidden(message) {
+                        return false
+                    }
                     if let maybeChatListIndex = chatListIndexMap[message.id.peerId], maybeChatListIndex != nil {
                         return true
                     } else {

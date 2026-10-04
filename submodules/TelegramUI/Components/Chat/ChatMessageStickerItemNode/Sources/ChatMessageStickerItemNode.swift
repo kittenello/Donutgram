@@ -750,7 +750,15 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     replyMarkup = attribute
                 }
             }
-            
+
+            // A reply to a shadow-banned message loses its header: the quote would show the hidden message.
+            if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
+                replyMessage = nil
+                replyQuote = nil
+                replyForward = nil
+                replyInnerSubject = nil
+            }
+
             var hasReply = replyMessage != nil || replyForward != nil || replyStory != nil
             if case let .peer(peerId) = item.chatLocation, (peerId == replyMessage?.id.peerId || item.message.threadId == 1), let peer = item.message.peers[item.message.id.peerId], peer.isForumOrMonoForum, item.message.associatedThreadInfo != nil {
                 if let threadId = item.message.threadId, let replyMessage = replyMessage, Int64(replyMessage.id.id) == threadId {

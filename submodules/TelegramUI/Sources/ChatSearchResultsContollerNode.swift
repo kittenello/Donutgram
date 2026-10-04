@@ -340,6 +340,9 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, ASScrollViewDe
         self.isLoadingMore = true
         
         self.loadMoreDisposable.set((self.context.engine.messages.searchMessages(location: self.location, query: self.searchQuery, state: self.searchState)
+        |> map { result, state -> (SearchMessagesResult, SearchMessagesState) in
+            return (DonutgramShadowBan.filteringHidden(result), state)
+        }
         |> deliverOnMainQueue).startStrict(next: { [weak self] (updatedResult, updatedState) in
             guard let strongSelf = self else {
                 return

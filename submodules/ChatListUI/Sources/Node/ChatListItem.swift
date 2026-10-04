@@ -2490,6 +2490,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                 }
             }
+            // A shadow-banned last message leaves the preview empty, as cleared history does; the row keeps its date and
+            // its tap, which still opens the chat or topic through peerData.messages.
+            if let messageValue = messages.last, DonutgramShadowBan.isHidden(messageValue) {
+                messages = []
+            }
             
             let useChatListLayout: Bool
             if case .chatList = item.chatListLocation {

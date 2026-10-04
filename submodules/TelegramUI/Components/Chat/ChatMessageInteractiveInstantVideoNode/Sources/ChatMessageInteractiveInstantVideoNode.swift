@@ -405,7 +405,15 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         replyStory = attribute.storyId
                     }
                 }
-                
+
+                // A reply to a shadow-banned message loses its header: the quote would show the hidden message.
+                if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
+                    replyMessage = nil
+                    replyQuote = nil
+                    replyForward = nil
+                    replyInnerSubject = nil
+                }
+
                 if replyMessage != nil || replyForward != nil || replyStory != nil {
                     if case let .replyThread(replyThreadMessage) = item.chatLocation, Int32(clamping: replyThreadMessage.threadId) == replyMessage?.id.id {
                     } else {
