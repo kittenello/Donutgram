@@ -52,6 +52,7 @@ func chatHistoryEntriesForView(
     skipViewOnceMedia: Bool,
     pendingUnpinnedAllMessages: Bool,
     pendingRemovedMessages: Set<MessageId>,
+    shadowBan: DonutgramShadowBan.State?,
     associatedData: ChatMessageItemAssociatedData,
     updatingMedia: [MessageId: ChatUpdatingMessageMedia],
     customChannelDiscussionReadState: MessageId?,
@@ -61,11 +62,11 @@ func chatHistoryEntriesForView(
     dynamicAdMessages: [Message],
     isMusicPlaylist: Bool,
     pinToTopStableId: EngineMessage.StableId?
-) -> ([ChatHistoryEntry], ChatHistoryEntriesForViewState) {
+) -> ([ChatHistoryEntry], ChatHistoryEntriesForViewState, Int) {
     var currentState = currentState
-    
+
     if historyAppearsCleared {
-        return ([], currentState)
+        return ([], currentState, 0)
     }
     var entries: [ChatHistoryEntry] = []
     var adminRanks: [PeerId: CachedChannelAdminRank] = [:]
@@ -141,6 +142,8 @@ func chatHistoryEntriesForView(
     }
     
     var count = 0
+    // Shadow-banned messages are skipped before grouping, so a banned author's album goes away whole.
+    var donutgramHiddenCount = 0
     loop: for entry in view.entries {
         var message = entry.message
         var isRead = entry.isRead
@@ -153,7 +156,11 @@ func chatHistoryEntriesForView(
         if pendingRemovedMessages.contains(message.id) {
             continue
         }
-        
+        if let shadowBan, DonutgramShadowBan.isHidden(message, state: shadowBan) {
+            donutgramHiddenCount += 1
+            continue
+        }
+
         if case let .replyThread(replyThreadMessage) = location, replyThreadMessage.isForumPost {
             for media in message.media {
                 if let action = media as? TelegramMediaAction {
@@ -841,15 +848,15 @@ func chatHistoryEntriesForView(
     }
     
     if isMusicPlaylist && entries.count == 1 {
-        return ([], currentState)
+        return ([], currentState, donutgramHiddenCount)
     }
-    
+
     if reverse {
-        return (entries.reversed(), currentState)
+        return (entries.reversed(), currentState, donutgramHiddenCount)
     } else {
 //        #if DEBUG
 //        assert(entries.map(\.stableId) == entries.sorted().map(\.stableId))
 //        #endif
-        return (entries, currentState)
+        return (entries, currentState, donutgramHiddenCount)
     }
 }
