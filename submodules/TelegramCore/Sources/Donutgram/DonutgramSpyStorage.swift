@@ -48,7 +48,7 @@ private func donutgramRevisionCacheId(_ messageId: MessageId) -> ItemCacheEntryI
     )
 }
 
-private func donutgramAllowsSavingInPeer(transaction: Transaction, peerId: PeerId) -> Bool {
+func donutgramAllowsSavingInPeer(transaction: Transaction, peerId: PeerId) -> Bool {
     if peerId.namespace == Namespaces.Peer.SecretChat {
         return false
     }

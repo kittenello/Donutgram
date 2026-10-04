@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UserNotifications
 import SwiftSignalKit
 import Postbox
@@ -760,6 +761,8 @@ private final class NotificationServiceHandler {
         guard let appGroupUrl = maybeAppGroupUrl else {
             return nil
         }
+
+        DGSimpleSettings.shared.configureMessagePreservation(appGroupName: appGroupName, isMainApp: false)
 
         let rootPath = rootPathForBasePath(appGroupUrl.path)
 
@@ -1904,7 +1907,7 @@ private final class NotificationServiceHandler {
                                     }
                                 }
 
-                                let pollSignal: Signal<Never, NoError>
+                                var pollSignal: Signal<Never, NoError>
                                 
                                 if !shouldSynchronizeState {
                                     pollSignal = .complete()
@@ -1938,6 +1941,17 @@ private final class NotificationServiceHandler {
                                         
                                         pollSignal = signal
                                     }
+                                }
+
+                                // Save only a complete API message, before getDifference can
+                                // deliver its deletion. Never synthesize a message from alert.body.
+                                if let messageId {
+                                    pollSignal = donutgramCaptureNotificationMessage(
+                                        accountPeerId: stateManager.accountPeerId,
+                                        postbox: stateManager.postbox,
+                                        network: stateManager.network,
+                                        messageId: messageId
+                                    ) |> then(pollSignal)
                                 }
 
                                 let pollWithUpdatedContent: Signal<(NotificationContent, Media?), NoError>
@@ -2333,7 +2347,7 @@ private final class NotificationServiceHandler {
                             Logger.shared.log("NotificationService \(episode)", "Will delete messages \(ids)")
                             let mediaBox = stateManager.postbox.mediaBox
                             let _ = (stateManager.postbox.transaction { transaction -> Void in
-                                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, deleteMedia: true)
+                                donutgramDeleteMessagesFromNotification(transaction: transaction, mediaBox: mediaBox, ids: ids)
                             }
                             |> deliverOn(strongSelf.queue)).start(completed: {
                                 UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in

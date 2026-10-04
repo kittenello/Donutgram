@@ -7,6 +7,7 @@ swift_library(
         "Sources/*.swift",
     ]),
     deps = [
+        "//Donutgram/DGSimpleSettings",
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/BuildConfig:BuildConfig",

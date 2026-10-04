@@ -533,6 +533,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         let baseAppBundleId = Bundle.main.bundleIdentifier!
         let appGroupName = "group.\(baseAppBundleId)"
+        DGSimpleSettings.shared.configureMessagePreservation(appGroupName: appGroupName, isMainApp: true)
         let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
         
         let buildConfig = BuildConfig(baseAppBundleId: baseAppBundleId)
