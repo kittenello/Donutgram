@@ -22,12 +22,14 @@ public final class NavigationSearchView: UIView {
         let theme: PresentationTheme
         let strings: PresentationStrings
         let isActive: Bool
+        let integrated: Bool
 
-        init(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool) {
+        init(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, integrated: Bool) {
             self.size = size
             self.theme = theme
             self.strings = strings
             self.isActive = isActive
+            self.integrated = integrated
         }
 
         static func ==(lhs: Params, rhs: Params) -> Bool {
@@ -40,6 +42,7 @@ public final class NavigationSearchView: UIView {
             if lhs.strings !== rhs.strings {
                 return false
             }
+            if lhs.integrated != rhs.integrated { return false }
             if lhs.isActive != rhs.isActive {
                 return false
             }
@@ -69,7 +72,7 @@ public final class NavigationSearchView: UIView {
         super.init(frame: CGRect())
 
         self.addSubview(self.backgroundView)
-        self.backgroundView.contentView.addSubview(self.iconView)
+        self.addSubview(self.iconView)
 
         self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
     }
@@ -90,8 +93,8 @@ public final class NavigationSearchView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    public func update(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, transition: ComponentTransition) { 
-        let params = Params(size: size, theme: theme, strings: strings, isActive: isActive)
+    public func update(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, integrated: Bool = false, transition: ComponentTransition) {
+        let params = Params(size: size, theme: theme, strings: strings, isActive: isActive, integrated: integrated)
         if self.params == params {
             return
         }
@@ -107,11 +110,15 @@ public final class NavigationSearchView: UIView {
             backgroundSize = CGSize(width: params.size.width, height: params.size.height)
         }
         
+        self.isAccessibilityElement = !params.isActive
+        self.accessibilityLabel = params.strings.Common_Search
+        self.accessibilityTraits = .button
         let previousBackgroundFrame = self.backgroundView.frame
         
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: backgroundSize))
         let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.25)
 
+        alphaTransition.setAlpha(view: self.backgroundView, alpha: params.integrated && !params.isActive ? 0.0 : 1.0)
         self.backgroundView.update(size: backgroundSize, cornerRadius: backgroundSize.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
 
         if self.iconView.image == nil {
@@ -355,6 +362,7 @@ public final class TabBarComponent: Component {
     public let search: Search?
     public let selectedId: AnyHashable?
     public let outerInsets: UIEdgeInsets
+    public let layout: DGTabBarLayout
     
     public init(
         theme: PresentationTheme,
@@ -364,7 +372,8 @@ public final class TabBarComponent: Component {
         items: [Item],
         search: Search?,
         selectedId: AnyHashable?,
-        outerInsets: UIEdgeInsets
+        outerInsets: UIEdgeInsets,
+        layout: DGTabBarLayout = DGSimpleSettings.shared.tabBarLayout
     ) {
         self.theme = theme
         self.tintSelectedItem = tintSelectedItem
@@ -374,6 +383,7 @@ public final class TabBarComponent: Component {
         self.search = search
         self.selectedId = selectedId
         self.outerInsets = outerInsets
+        self.layout = layout
     }
     
     public static func ==(lhs: TabBarComponent, rhs: TabBarComponent) -> Bool {
@@ -398,6 +408,7 @@ public final class TabBarComponent: Component {
         if lhs.selectedId != rhs.selectedId {
             return false
         }
+        if lhs.layout != rhs.layout { return false }
         if lhs.outerInsets != rhs.outerInsets {
             return false
         }
@@ -456,7 +467,8 @@ public final class TabBarComponent: Component {
                     return false
                 }
                 
-                if let itemId = self.item(at: point) {
+                let tabPoint = self.convert(point, from: self.contextGestureContainerView)
+                if let itemId = self.item(at: tabPoint) {
                     guard let item = component.items.first(where: { $0.id == itemId }) else {
                             return false
                         }
@@ -627,10 +639,11 @@ public final class TabBarComponent: Component {
                 guard let itemView = itemView.view else {
                     continue
                 }
-                if itemView.frame.contains(point) {
+                let frame = self.convert(itemView.bounds, from: itemView)
+                if frame.contains(point) {
                     return id
                 } else {
-                    let distance = abs(point.x - itemView.center.x)
+                    let distance = abs(point.x - frame.midX)
                     if let closestItemValue = closestItem {
                         if closestItemValue.1 > distance {
                             closestItem = (id, distance)
@@ -654,7 +667,7 @@ public final class TabBarComponent: Component {
             let _ = alphaTransition
 
             let innerInset: CGFloat = 4.0
-            let availableSize = CGSize(width: DGSimpleSettings.shared.wideTabBar ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height)
+            let availableSize = CGSize(width: component.layout.wide ? availableSize.width : min(500.0, availableSize.width), height: availableSize.height)
             
             let previousComponent = self.component
             self.component = component
@@ -664,9 +677,12 @@ public final class TabBarComponent: Component {
 
             let barHeight: CGFloat = 56.0 + innerInset * 2.0
 
+            let integratedSearch = component.search != nil && component.layout.integratedSearch && component.search?.isActive != true
+            let searchOnLeft = component.search != nil && component.layout.searchOnLeft && component.search?.isActive != true
+            let searchGap: CGFloat = integratedSearch ? 0.0 : 8.0
             var availableItemsWidth: CGFloat = availableSize.width - innerInset * 2.0
             if component.search != nil {
-                availableItemsWidth -= barHeight + 8.0
+                availableItemsWidth -= barHeight + searchGap
             }
             
             var unboundItemWidths: [CGFloat] = []
@@ -726,11 +742,11 @@ public final class TabBarComponent: Component {
             }
 
             let itemHeight: CGFloat = 56.0
-            let contentWidth: CGFloat = innerInset * 2.0 + totalItemsWidth
+            let contentWidth: CGFloat = innerInset * 2.0 + totalItemsWidth + (integratedSearch ? barHeight : 0.0)
             let tabsSize = CGSize(width: min(availableSize.width, contentWidth), height: itemHeight + innerInset * 2.0)
 
             var selectionFrame: CGRect?
-            var nextItemX: CGFloat = innerInset
+            var nextItemX: CGFloat = innerInset + (integratedSearch && searchOnLeft ? barHeight : 0.0)
             for index in 0 ..< component.items.count {
                 let item = component.items[index]
                 
@@ -856,7 +872,7 @@ public final class TabBarComponent: Component {
                 self.measureItemViews.removeValue(forKey: id)
             }
             
-            var tabsFrame = CGRect(origin: CGPoint(), size: tabsSize)
+            var tabsFrame = CGRect(origin: CGPoint(x: searchOnLeft && !integratedSearch ? barHeight + searchGap : 0.0, y: 0.0), size: tabsSize)
             if let search = component.search, search.isActive {
                 tabsFrame.size = CGSize(width: 48.0, height: 48.0)
                 tabsFrame.origin.y = tabsSize.height - 48.0
@@ -898,8 +914,10 @@ public final class TabBarComponent: Component {
                     searchFrame = CGRect(origin: CGPoint(x: 0.0, y: size.height - searchSize.height), size: searchSize)
                 } else {
                     searchSize = CGSize(width: barHeight, height: barHeight)
-                    size.width += barHeight + 8.0
-                    searchFrame = CGRect(origin: CGPoint(x: availableSize.width - searchSize.width, y: 0.0), size: searchSize)
+                    if !integratedSearch {
+                        size.width += barHeight + searchGap
+                    }
+                    searchFrame = CGRect(origin: CGPoint(x: searchOnLeft ? 0.0 : size.width - searchSize.width, y: 0.0), size: searchSize)
                 }
 
                 let searchView: NavigationSearchView
@@ -926,7 +944,7 @@ public final class TabBarComponent: Component {
                     self.backgroundContainer.contentView.addSubview(searchView)
                     searchView.frame = CGRect(origin: CGPoint(x: availableSize.width + 50.0, y: 0.0), size: searchSize)
                 }
-                searchView.update(size: searchSize, theme: component.theme, strings: component.strings, isActive: search.isActive, transition: searchViewTransition)
+                searchView.update(size: searchSize, theme: component.theme, strings: component.strings, isActive: search.isActive, integrated: integratedSearch, transition: searchViewTransition)
                 transition.setFrame(view: searchView, frame: searchFrame)
             } else {
                 if let searchView = self.searchView {

@@ -326,7 +326,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                                     }
                                 }
-                                if let badge = donutgramBadge(peerId: peer.id) {
+                                if peerView.peerId != self.context.account.peerId, let badge = donutgramBadge(peerId: peer.id) {
                                     titleVerifiedIcon = .verified
                                     donutgramTeamBadge = badge
                                 }
