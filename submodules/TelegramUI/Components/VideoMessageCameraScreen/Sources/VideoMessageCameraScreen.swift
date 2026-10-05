@@ -97,11 +97,23 @@ private struct RoundVideoZoomDetents {
     }
 }
 
-// The expanded state: ticks every eighth of an octave, a longer labeled tick per lens, and a fixed mark in the middle.
+// The whole values the dial labels besides the lenses, as a log ruler does: towards 10× an octave is too short to fit
+// 7 and 9 as well.
+private let roundVideoZoomDialWholeValues: [CGFloat] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+
+// The expanded state: ticks every eighth of an octave, a longer labeled tick per lens and per whole value that has room
+// for its label, and a fixed mark in the middle.
 private final class RoundVideoZoomDialView: UIView {
+    private struct Label {
+        let logValue: CGFloat
+        let text: NSString
+        let size: CGSize
+    }
+
     private let valueLabel = UILabel()
     private let fadeMaskLayer = CAGradientLayer()
-    private let lensLabelFont = Font.with(size: 11.0, design: .round, weight: .medium)
+    private let labelFont = Font.with(size: 11.0, design: .round, weight: .medium)
+    private var labels: [Label] = []
 
     private var lensValues: [CGFloat] = []
     private var minimumValue: CGFloat = 1.0
@@ -136,8 +148,8 @@ private final class RoundVideoZoomDialView: UIView {
     }
 
     func update(lensValues: [CGFloat], minimumValue: CGFloat, maximumValue: CGFloat, value: CGFloat, decimalSeparator: String, controlColor: UIColor, accentColor: UIColor) {
-        var changed = self.lensValues != lensValues || self.minimumValue != minimumValue || self.maximumValue != maximumValue
-        changed = changed || self.value != value || self.decimalSeparator != decimalSeparator
+        let labelsChanged = self.lensValues != lensValues || self.minimumValue != minimumValue || self.maximumValue != maximumValue || self.decimalSeparator != decimalSeparator
+        var changed = labelsChanged || self.value != value
         changed = changed || !self.controlColor.isEqual(controlColor) || !self.accentColor.isEqual(accentColor)
         self.lensValues = lensValues
         self.minimumValue = minimumValue
@@ -148,9 +160,34 @@ private final class RoundVideoZoomDialView: UIView {
         self.accentColor = accentColor
         self.valueLabel.text = roundVideoZoomTitle(value, decimalSeparator: decimalSeparator)
         self.valueLabel.textColor = accentColor
+        if labelsChanged {
+            self.labels = self.placeLabels()
+        }
         if changed {
             self.setNeedsDisplay()
         }
+    }
+
+    // The lenses are placed first, so a whole value equal to a lens, or one whose label would crowd a label already
+    // placed, is the one left out.
+    private func placeLabels() -> [Label] {
+        let attributes: [NSAttributedString.Key: Any] = [.font: self.labelFont]
+        var labels: [Label] = []
+        for value in self.lensValues.sorted() + roundVideoZoomDialWholeValues {
+            if value < self.minimumValue - 0.001 || value > self.maximumValue + 0.001 {
+                continue
+            }
+            let text = roundVideoZoomTitle(value, decimalSeparator: self.decimalSeparator, suffix: false) as NSString
+            let label = Label(logValue: log2(value), text: text, size: text.size(withAttributes: attributes))
+            let isCrowded = labels.contains(where: { placed in
+                let distance = abs(placed.logValue - label.logValue) * roundVideoZoomPointsPerOctave
+                return distance < (placed.size.width + label.size.width) / 2.0 + 6.0
+            })
+            if !isCrowded {
+                labels.append(label)
+            }
+        }
+        return labels
     }
 
     override func layoutSubviews() {
@@ -170,10 +207,8 @@ private final class RoundVideoZoomDialView: UIView {
         let width = self.bounds.width
         let centerX = width / 2.0
         let logValue = log2(min(max(self.value, self.minimumValue), self.maximumValue))
-        let shownLenses = self.lensValues.filter { $0 >= self.minimumValue && $0 <= self.maximumValue }
-        let lensLogs = shownLenses.map { log2($0) }
 
-        // Short ticks every eighth of an octave, none right next to a lens tick, and nothing past the ends of the range.
+        // Short ticks every eighth of an octave, none next to a labeled tick, and nothing past the ends of the range.
         context.setStrokeColor(self.controlColor.withAlphaComponent(0.4).cgColor)
         context.setLineWidth(1.0)
         var step = Int(ceil(log2(self.minimumValue) * 8.0 - 0.001))
@@ -182,7 +217,7 @@ private final class RoundVideoZoomDialView: UIView {
             let logZoom = CGFloat(step) / 8.0
             step += 1
             let x = centerX + (logZoom - logValue) * roundVideoZoomPointsPerOctave
-            if x < 0.0 || x > width || lensLogs.contains(where: { abs($0 - logZoom) < 0.06 }) {
+            if x < 0.0 || x > width || self.labels.contains(where: { abs($0.logValue - logZoom) < 0.06 }) {
                 continue
             }
             context.move(to: CGPoint(x: x, y: 28.0))
@@ -191,22 +226,20 @@ private final class RoundVideoZoomDialView: UIView {
         context.strokePath()
 
         let labelAttributes: [NSAttributedString.Key: Any] = [
-            .font: self.lensLabelFont,
+            .font: self.labelFont,
             .foregroundColor: self.controlColor
         ]
         context.setStrokeColor(self.controlColor.cgColor)
         context.setLineWidth(1.5)
-        for (lens, logLens) in zip(shownLenses, lensLogs) {
-            let x = centerX + (logLens - logValue) * roundVideoZoomPointsPerOctave
+        for label in self.labels {
+            let x = centerX + (label.logValue - logValue) * roundVideoZoomPointsPerOctave
             if x < -20.0 || x > width + 20.0 {
                 continue
             }
             context.move(to: CGPoint(x: x, y: 25.0))
             context.addLine(to: CGPoint(x: x, y: 36.0))
             context.strokePath()
-            let text = roundVideoZoomTitle(lens, decimalSeparator: self.decimalSeparator, suffix: false) as NSString
-            let textSize = text.size(withAttributes: labelAttributes)
-            text.draw(at: CGPoint(x: x - textSize.width / 2.0, y: 38.0), withAttributes: labelAttributes)
+            label.text.draw(at: CGPoint(x: x - label.size.width / 2.0, y: 38.0), withAttributes: labelAttributes)
         }
 
         context.setStrokeColor(self.accentColor.cgColor)
@@ -1180,6 +1213,9 @@ public class VideoMessageCameraScreen: ViewController {
         private var isPanZooming = false
         private let zoomHapticFeedback = HapticFeedback()
         private var displayedZoom: CGFloat = 1.0
+        // What the controls show: it trails `displayedZoom` only while the dial glides along with a ramp of the camera.
+        private var shownZoom: CGFloat = 1.0
+        private var zoomRampAnimator: DisplayLinkAnimator?
         private var minZoom: CGFloat = 1.0
         private var maxZoom: CGFloat = 1.0
         private var zoomPosition: Camera.Position?
@@ -1464,9 +1500,10 @@ public class VideoMessageCameraScreen: ViewController {
                 }
                 self.isPinchZooming = false
                 if !DGSimpleSettings.shared.staticRoundVideoZoom {
-                    // Back to where the pinch started, such as a lens picked with a button, not always to 1×.
-                    // A paused camera has nothing to animate, so it gets the value at once.
-                    self.setDisplayedZoom(self.zoomBeforePinch, rampRate: self.previewState == nil ? 8.0 : nil)
+                    // Back to where the pinch started, such as a lens picked with a button, not always to 1×, and the
+                    // dial glides back along with the picture. A paused camera has nothing to animate, so it gets the
+                    // value at once.
+                    self.setDisplayedZoom(self.zoomBeforePinch, rampRate: self.previewState == nil ? 8.0 : nil, followsRamp: true)
                 }
                 self.endZoomGesture()
             default:
@@ -1521,6 +1558,11 @@ public class VideoMessageCameraScreen: ViewController {
         // A swipe and a pinch both move through `RoundVideoZoomDetents` positions, so they rest on every lens for a moment
         // and tick there.
         private func beginZoomGesture() {
+            // A gesture that catches the dial gliding back takes the zoom from where it is now, so neither the dial nor
+            // the picture jumps to the end of the glide.
+            if self.zoomRampAnimator != nil {
+                self.setDisplayedZoom(self.shownZoom)
+            }
             self.zoomCollapseToken += 1
             self.zoomHapticFeedback.prepareTap()
             let detents = self.zoomDetents()
@@ -1591,10 +1633,37 @@ public class VideoMessageCameraScreen: ViewController {
             self.updateZoomControls(transition: .spring(duration: 0.4))
         }
 
-        private func setDisplayedZoom(_ value: CGFloat, rampRate: CGFloat? = nil, transition: ComponentTransition = .immediate) {
+        // With `followsRamp` the controls glide along with the camera's ramp instead of showing its end at once.
+        // AVFoundation ramps by a constant number of doublings per second, which is an even pace on the dial's log scale.
+        private func setDisplayedZoom(_ value: CGFloat, rampRate: CGFloat? = nil, followsRamp: Bool = false, transition: ComponentTransition = .immediate) {
             self.displayedZoom = min(max(value, self.minZoom), self.maxZoom)
             self.camera?.setZoomFactor(self.displayedZoom, rampRate: rampRate)
-            self.updateZoomControls(transition: transition)
+
+            self.zoomRampAnimator?.invalidate()
+            self.zoomRampAnimator = nil
+            let fromLogValue = log2(self.shownZoom)
+            let toLogValue = log2(self.displayedZoom)
+            if let rampRate, followsRamp, rampRate > 0.0, abs(toLogValue - fromLogValue) > 0.001 {
+                let target = self.displayedZoom
+                self.zoomRampAnimator = DisplayLinkAnimator(duration: Double(abs(toLogValue - fromLogValue) / rampRate), from: fromLogValue, to: toLogValue, update: { [weak self] logValue in
+                    guard let self else {
+                        return
+                    }
+                    self.shownZoom = pow(2.0, logValue)
+                    self.updateZoomControls()
+                }, completion: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.zoomRampAnimator?.invalidate()
+                    self.zoomRampAnimator = nil
+                    self.shownZoom = target
+                    self.updateZoomControls()
+                })
+            } else {
+                self.shownZoom = self.displayedZoom
+                self.updateZoomControls(transition: transition)
+            }
         }
 
         // Each camera has its own zoom, limit and lenses, so a flip starts over at 1×. The limit and the buttons come
@@ -1650,7 +1719,7 @@ public class VideoMessageCameraScreen: ViewController {
                 lensValues: self.zoomLensValues(),
                 minimumValue: self.minZoom,
                 maximumValue: self.maxZoom,
-                value: self.displayedZoom,
+                value: self.shownZoom,
                 isExpanded: extendedZoomEnabled && self.zoomControlsExpanded,
                 theme: self.presentationData.theme,
                 decimalSeparator: decimalSeparator,
