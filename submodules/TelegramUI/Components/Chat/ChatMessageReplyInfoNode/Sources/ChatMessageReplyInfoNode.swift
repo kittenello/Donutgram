@@ -59,7 +59,7 @@ private let groupIcon: UIImage = {
 public class ChatMessageReplyInfoNode: ASDisplayNode {
     /// The tooltip for a tap on the placeholder of a reply to a shadow-banned message.
     public static let donutgramHiddenTooltip = "Сообщение скрыто теневым баном"
-    
+
     public final class TransitionReplyPanel {
         public let titleView: UIView
         public let textView: UIView

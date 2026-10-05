@@ -5881,7 +5881,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                                 item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
                             }, contextMenuOnLongPress: true))
                         }
-                        
+
                         for attribute in item.message.attributes {
                             if let attribute = attribute as? ReplyMessageAttribute {
                                 if let threadId = item.message.threadId, Int32(clamping: threadId) == attribute.messageId.id, let quotedReply = item.message.attributes.first(where: { $0 is QuotedReplyMessageAttribute }) as? QuotedReplyMessageAttribute {
