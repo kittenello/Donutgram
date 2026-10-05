@@ -750,15 +750,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     replyMarkup = attribute
                 }
             }
-
-            // A reply to a shadow-banned message loses its header: the quote would show the hidden message.
-            if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
-                replyMessage = nil
-                replyQuote = nil
-                replyForward = nil
-                replyInnerSubject = nil
-            }
-
+            
             var hasReply = replyMessage != nil || replyForward != nil || replyStory != nil
             if case let .peer(peerId) = item.chatLocation, (peerId == replyMessage?.id.peerId || item.message.threadId == 1), let peer = item.message.peers[item.message.id.peerId], peer.isForumOrMonoForum, item.message.associatedThreadInfo != nil {
                 if let threadId = item.message.threadId, let replyMessage = replyMessage, Int64(replyMessage.id.id) == threadId {
@@ -796,7 +788,8 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     constrainedSize: CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude),
                     animationCache: item.controllerInteraction.presentationContext.animationCache,
                     animationRenderer: item.controllerInteraction.presentationContext.animationRenderer,
-                    associatedData: item.associatedData
+                    associatedData: item.associatedData,
+                    donutgramHidden: DonutgramShadowBan.hidesReplyHeader(in: item.message)
                 ))
             }
             
@@ -1575,6 +1568,12 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                 
                 if let replyInfoNode = self.replyInfoNode, replyInfoNode.frame.contains(location) {
                     if let item = self.item {
+                        // The hidden message is not in the chat, so there is nowhere to go.
+                        if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
+                            return .optionalAction({
+                                item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
+                            })
+                        }
                         for attribute in item.message.attributes {
                             if let attribute = attribute as? ReplyMessageAttribute {
                                 return .optionalAction({

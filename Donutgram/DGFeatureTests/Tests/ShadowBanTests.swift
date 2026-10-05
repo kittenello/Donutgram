@@ -28,7 +28,7 @@ final class ShadowBanTests: XCTestCase {
         return MessageForwardInfo(author: author, source: source, sourceMessageId: nil, date: 0, authorSignature: nil, psaType: nil, flags: [])
     }
 
-    private func message(in chatPeerId: PeerId, chatPeer: Peer? = nil, author: Peer?, incoming: Bool = true, forwardInfo: MessageForwardInfo? = nil, attributes: [MessageAttribute] = [], media: [Media] = []) -> Message {
+    private func message(in chatPeerId: PeerId, chatPeer: Peer? = nil, author: Peer?, id: Int32 = 1, incoming: Bool = true, forwardInfo: MessageForwardInfo? = nil, attributes: [MessageAttribute] = [], media: [Media] = [], associatedMessages: [Message] = []) -> Message {
         var peers = SimpleDictionary<PeerId, Peer>()
         if let chatPeer {
             peers[chatPeer.id] = chatPeer
@@ -36,7 +36,11 @@ final class ShadowBanTests: XCTestCase {
         if let author {
             peers[author.id] = author
         }
-        return Message(stableId: 1, stableVersion: 0, id: MessageId(peerId: chatPeerId, namespace: Namespaces.Message.Cloud, id: 1), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: incoming ? [.Incoming] : [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: forwardInfo, author: author, text: "", attributes: attributes, media: media, peers: peers, associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
+        var associated = SimpleDictionary<MessageId, Message>()
+        for associatedMessage in associatedMessages {
+            associated[associatedMessage.id] = associatedMessage
+        }
+        return Message(stableId: UInt32(id), stableVersion: 0, id: MessageId(peerId: chatPeerId, namespace: Namespaces.Message.Cloud, id: id), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: incoming ? [.Incoming] : [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: forwardInfo, author: author, text: "", attributes: attributes, media: media, peers: peers, associatedMessages: associated, associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
     }
 
     private func state(banned: [PeerId], revealed: [PeerId] = []) -> DonutgramShadowBan.State {
@@ -119,6 +123,26 @@ final class ShadowBanTests: XCTestCase {
         XCTAssertFalse(DonutgramShadowBan.isPeerHidden(self.alice, inChat: self.alice, state: state))
         XCTAssertFalse(DonutgramShadowBan.isPeerHidden(self.alice, inChat: self.bob, state: state))
         XCTAssertFalse(DonutgramShadowBan.isPeerHidden(self.alice, inChat: self.supergroup, state: self.state(banned: [self.alice], revealed: [self.supergroup])))
+    }
+
+    func testReplyToHiddenMessageStaysVisibleWithPlaceholderHeader() {
+        let state = self.state(banned: [self.alice])
+        let hidden = self.message(in: self.supergroup, author: self.user(self.alice))
+        let replyAttribute = ReplyMessageAttribute(messageId: hidden.id, threadMessageId: nil, quote: nil, isQuote: false, innerSubject: nil)
+        let reply = self.message(in: self.supergroup, author: self.user(self.bob), id: 2, attributes: [replyAttribute], associatedMessages: [hidden])
+        XCTAssertFalse(DonutgramShadowBan.isHidden(reply, state: state))
+        XCTAssertTrue(DonutgramShadowBan.hidesReplyHeader(in: reply, state: state))
+        XCTAssertFalse(DonutgramShadowBan.hidesReplyHeader(in: reply, state: self.state(banned: [self.alice], revealed: [self.supergroup])))
+        XCTAssertFalse(DonutgramShadowBan.hidesReplyHeader(in: reply, state: self.state(banned: [])))
+    }
+
+    func testReplyToBannedAuthorInAnotherChatGetsPlaceholderHeader() {
+        let state = self.state(banned: [self.alice])
+        let quoted = QuotedReplyMessageAttribute(peerId: self.alice, authorName: nil, quote: nil, isQuote: false)
+        let reply = self.message(in: self.supergroup, author: self.user(self.bob), attributes: [quoted])
+        XCTAssertFalse(DonutgramShadowBan.isHidden(reply, state: state))
+        XCTAssertTrue(DonutgramShadowBan.hidesReplyHeader(in: reply, state: state))
+        XCTAssertFalse(DonutgramShadowBan.hidesReplyHeader(in: self.message(in: self.bob, author: self.user(self.bob), attributes: [quoted]), state: state))
     }
 
     func testReadIndexMovesOverTrailingHiddenMessages() {

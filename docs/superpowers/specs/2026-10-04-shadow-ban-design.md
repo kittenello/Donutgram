@@ -100,7 +100,7 @@
 6. Иначе не скрыто.
 
 Служебные сообщения от забаненного («закрепил», «вступил») скрываются по п. 5, это его действия.
-Ответы других людей забаненному остаются, у них прячется только цитата (раздел 4).
+Ответы других людей забаненному остаются. Вместо цитаты у них заглушка «Скрытое сообщение» (раздел 4).
 
 ### Примерный интерфейс
 
@@ -204,7 +204,7 @@ public enum DonutgramShadowBan {
 | Превью в списке чатов, темы форума | `ChatListUI/Sources/Node/ChatListItem.swift` L2486–2492, рядом с `.historyCleared` | Если `messages.last` скрыто, `messages = []`. Дата остаётся: она берётся из `peerData.messages.first` (около L3376). |
 | Строка «Архив» | `ChatListUI/Sources/Node/ChatListNodeEntries.swift` около L934 (`groupReference.topMessage`) | Скрытое сообщение не попадает в превью. |
 | Перерисовка списка чатов | `ChatListUI/Sources/Node/ChatListNode.swift` | Наблюдатель `shadowBanDidChangeNotification` пересобирает элементы (образец — `ChatListControllerNode` около L1339). |
-| Цитата в ответе | `ChatMessageBubbleItemNode` (около L2135–2143); сборка шапки ответа в `ChatMessageAnimatedStickerItemNode`, `ChatMessageStickerItemNode`, `ChatMessageInstantVideoItemNode`, `ChatMessageInteractiveInstantVideoNode` | Если исходное сообщение скрыто, `replyMessage`/`replyQuote` = nil и шапки нет. Для ответа на сообщение из другого чата (`QuotedReplyMessageAttribute`, известен только `peerId`) решение принимается по `peerId` автора. Общий помощник живёт в `DonutgramShadowBan`. |
+| Цитата в ответе | `ChatMessageBubbleItemNode` (около L2135–2143); сборка шапки ответа в `ChatMessageAnimatedStickerItemNode`, `ChatMessageStickerItemNode`, `ChatMessageInstantVideoItemNode`, `ChatMessageInteractiveInstantVideoNode` | Если исходное сообщение скрыто, шапка остаётся, но как заглушка. `ChatMessageReplyInfoNode.Arguments(donutgramHidden: true)` отбрасывает исходное сообщение, цитату и автора. Вместо них пишется «Скрытое сообщение» / «Автор в теневом бане». Когда показывать шапку, по-прежнему решает штатный код, так что корень темы и пост в комментариях её не получают. Нажатие показывает подсказку «Сообщение скрыто теневым баном», а не переходит к скрытому сообщению. Для ответа на сообщение из другого чата (`QuotedReplyMessageAttribute`, известен только `peerId`) решение принимается по `peerId` автора. Общий помощник живёт в `DonutgramShadowBan`. |
 | Баннер внутри приложения | `TelegramUI/Sources/ApplicationContext.swift` около L306 (`messageList.filter`) | Скрытые выкидываются до звука и вибрации (около L376–393) и до баннера (около L422). |
 | Глобальный поиск | `ChatListUI/Sources/ChatListSearchListPaneNode.swift` около L3431, а также около L3390 и L3410 (посты) | `continue` для скрытых. |
 | Поиск в чате | `TelegramUI/Sources/ChatControllerUpdateSearch.swift`, `Chat/ChatControllerLoadDisplayNode.swift` около L1199 и L2402–2406, `ChatControllerNode.swift` около L3460 | Фильтруется `SearchMessagesResult.messages`, `totalCount` уменьшается на число выкинутых. |
@@ -317,7 +317,7 @@ public enum DonutgramShadowBan {
 3. Его спам на 50+ сообщений подряд: лента листается вверх без затыка, вместо «нет сообщений» видна
    загрузка.
 4. Скрытое сообщение пришло, пока чат открыт внизу: после выхода у группы нет бейджа.
-5. Ответ ему без цитаты. Нет баннера. Нет в глобальном поиске и поиске по чату. Нет в закрепе.
+5. Ответ ему с заглушкой «Скрытое сообщение» вместо цитаты, нажатие на неё показывает подсказку. Нет баннера. Нет в глобальном поиске и поиске по чату. Нет в закрепе.
 6. Нет его «печатает…» в группе и в списке, его аватарок на реакциях, в «кто поставил» и под
    постами, его сторис в ленте.
 7. «Показать скрытые» вернуло его сообщения полупрозрачными, «Спрятать» снова убрало.

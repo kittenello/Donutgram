@@ -405,15 +405,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         replyStory = attribute.storyId
                     }
                 }
-
-                // A reply to a shadow-banned message loses its header: the quote would show the hidden message.
-                if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
-                    replyMessage = nil
-                    replyQuote = nil
-                    replyForward = nil
-                    replyInnerSubject = nil
-                }
-
+                
                 if replyMessage != nil || replyForward != nil || replyStory != nil {
                     if case let .replyThread(replyThreadMessage) = item.chatLocation, Int32(clamping: replyThreadMessage.threadId) == replyMessage?.id.id {
                     } else {
@@ -432,7 +424,8 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             constrainedSize: CGSize(width: availableWidth, height: CGFloat.greatestFiniteMagnitude),
                             animationCache: item.controllerInteraction.presentationContext.animationCache,
                             animationRenderer: item.controllerInteraction.presentationContext.animationRenderer,
-                            associatedData: item.associatedData
+                            associatedData: item.associatedData,
+                            donutgramHidden: DonutgramShadowBan.hidesReplyHeader(in: item.message)
                         ))
                     }
                 }
@@ -1574,6 +1567,11 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             }
                             if let replyInfoNode = self.replyInfoNode, replyInfoNode.frame.contains(location) {
                                 if let item = self.item {
+                                    // The hidden message is not in the chat, so there is nowhere to go.
+                                    if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
+                                        item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
+                                        return
+                                    }
                                     for attribute in item.message.attributes {
                                         if let attribute = attribute as? ReplyMessageAttribute {
                                             item.controllerInteraction.navigateToMessage(item.message.id, attribute.messageId, NavigateToMessageParams(timestamp: nil, quote: attribute.isQuote ? attribute.quote.flatMap { quote in NavigateToMessageParams.Quote(string: quote.text, offset: quote.offset) } : nil))

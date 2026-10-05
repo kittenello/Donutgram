@@ -124,13 +124,16 @@ public enum DonutgramShadowBan {
         return state.bannedPeerIds.contains(peerId.toInt64())
     }
 
-    /// Whether to drop the reply header of `message`: it quotes a hidden message or, for a reply to another chat where
-    /// only the author is known, a banned author.
+    /// Whether the reply header of `message` must turn into a placeholder: it quotes a hidden message or, for a reply to
+    /// another chat where only the author is known, a banned author. The reply itself stays visible.
     public static func hidesReplyHeader(in message: Message) -> Bool {
         if !DGSimpleSettings.shared.hasShadowBans {
             return false
         }
-        let state = State.current
+        return self.hidesReplyHeader(in: message, state: State.current)
+    }
+
+    public static func hidesReplyHeader(in message: Message, state: State) -> Bool {
         for attribute in message.attributes {
             if let attribute = attribute as? ReplyMessageAttribute {
                 if let replyMessage = message.associatedMessages[attribute.messageId] {
