@@ -1297,7 +1297,8 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     constrainedSize: CGSize(width: availableContentWidth, height: CGFloat.greatestFiniteMagnitude),
                     animationCache: item.controllerInteraction.presentationContext.animationCache,
                     animationRenderer: item.controllerInteraction.presentationContext.animationRenderer,
-                    associatedData: item.associatedData
+                    associatedData: item.associatedData,
+                    donutgramHidden: DonutgramShadowBan.hidesReplyHeader(in: item.message)
                 ))
             }
             
@@ -2355,6 +2356,12 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             
             if let replyInfoNode = self.replyInfoNode, replyInfoNode.frame.contains(location) {
                 if let item = self.item {
+                    // The hidden message is not in the chat, so there is nowhere to go.
+                    if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
+                        return .optionalAction({
+                            item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
+                        })
+                    }
                     for attribute in item.message.attributes {
                         if let attribute = attribute as? ReplyMessageAttribute {
                             return .optionalAction({

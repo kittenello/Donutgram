@@ -3055,7 +3055,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     constrainedSize: CGSize(width: maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right - 6.0, height: CGFloat.greatestFiniteMagnitude),
                     animationCache: item.controllerInteraction.presentationContext.animationCache,
                     animationRenderer: item.controllerInteraction.presentationContext.animationRenderer,
-                    associatedData: item.associatedData
+                    associatedData: item.associatedData,
+                    donutgramHidden: DonutgramShadowBan.hidesReplyHeader(in: firstMessage)
                 ))
                 replyInfoSizeApply = (sizeAndApply.0, { realSize, synchronousLoads, animation in sizeAndApply.1(realSize, synchronousLoads, animation) })
                 
@@ -5912,6 +5913,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                             }))
                         }
                         
+                        // The hidden message is not in the chat, so there is nowhere to go.
+                        if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
+                            return .action(InternalBubbleTapAction.Action({ [weak replyInfoNode] in
+                                item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
+                            }, contextMenuOnLongPress: true))
+                        }
+
                         for attribute in item.message.attributes {
                             if let attribute = attribute as? ReplyMessageAttribute {
                                 if let threadId = item.message.threadId, Int32(clamping: threadId) == attribute.messageId.id, let quotedReply = item.message.attributes.first(where: { $0 is QuotedReplyMessageAttribute }) as? QuotedReplyMessageAttribute {
@@ -6243,7 +6251,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         return .action(InternalBubbleTapAction.Action {})
                     }
                     if let replyInfoNode = self.replyInfoNode, self.item?.controllerInteraction.tapMessage == nil, replyInfoNode.frame.contains(location) {
-                        if self.selectionNode != nil, let attribute = item.message.attributes.first(where: { $0 is ReplyMessageAttribute }) as? ReplyMessageAttribute {
+                        if self.selectionNode != nil, !DonutgramShadowBan.hidesReplyHeader(in: item.message), let attribute = item.message.attributes.first(where: { $0 is ReplyMessageAttribute }) as? ReplyMessageAttribute {
                             return .action(InternalBubbleTapAction.Action({ [weak self] in
                                 guard let self else {
                                     return

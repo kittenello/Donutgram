@@ -3458,6 +3458,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             
                             self.loadMoreSearchResultsDisposable?.dispose()
                             self.loadMoreSearchResultsDisposable = (self.context.engine.messages.searchMessages(location: currentSearchState.location, query: currentSearchState.query, state: currentResultsState.state)
+                            |> map { result, state -> (SearchMessagesResult, SearchMessagesState) in
+                                return (DonutgramShadowBan.filteringHidden(result), state)
+                            }
                             |> deliverOnMainQueue).startStrict(next: { [weak self] results, updatedState in
                                 guard let self, let controller = self.controller else {
                                     return

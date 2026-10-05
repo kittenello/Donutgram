@@ -3401,6 +3401,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 continue
                             }
                             existingPostIds.insert(message.id)
+                            if DonutgramShadowBan.isHidden(message) {
+                                continue
+                            }
 
                             let headerId = listMessageDateHeaderId(timestamp: message.timestamp)
                             if firstHeaderId == nil {
@@ -3431,6 +3434,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 if searchState.deletedMessageIds.contains(message.id) {
                                     continue
                                 } else if message.id.namespace == Namespaces.Message.Cloud && searchState.deletedGlobalMessageIds.contains(message.id.id) {
+                                    continue
+                                } else if DonutgramShadowBan.isHidden(message) {
                                     continue
                                 }
                                 let headerId = listMessageDateHeaderId(timestamp: message.timestamp)

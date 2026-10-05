@@ -39,6 +39,7 @@ import ChatMessageBubbleItemNode
 import AdsInfoScreen
 import AdsReportScreen
 import DGSimpleSettings
+import DGSettingsUI
  
 private struct MessageContextMenuData {
     let starStatus: Bool?
@@ -1947,6 +1948,20 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 interfaceInteraction.blockMessageAuthor(message, controller)
             })))
         }
+
+        // «Теневой бан» bans the sender of an incoming message in a group, channel or comments.
+        if message.flags.contains(.Incoming), DonutgramShadowBan.appliesToChat(message.id.peerId, chatPeer: message.peers[message.id.peerId]), let target = DonutgramShadowBan.banTarget(of: message), target.id != message.id.peerId, DonutgramShadowBan.canBan(EnginePeer(target), accountPeerId: context.account.peerId) {
+            let targetPeer = EnginePeer(target)
+            let isBanned = DGSimpleSettings.shared.isShadowBanned(target.id.toInt64())
+            actions.append(.action(ContextMenuActionItem(text: isBanned ? "Убрать из теневого бана" : "Теневой бан", icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: isBanned ? "eye" : "eye.slash", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                f(.dismissWithoutContent)
+                dgToggleShadowBan(context: context, peer: targetPeer, present: { controller in
+                    controllerInteraction.presentControllerInCurrent(controller, nil)
+                })
+            })))
+        }
         
         var clearCacheAsDelete = false
         var hasViewStats = false
@@ -3761,7 +3776,7 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
             if self.item.message.id.peerId.namespace == Namespaces.Peer.CloudUser || self.item.isEdit {
             } else if let recentPeers = self.item.message.reactionsAttribute?.recentPeers, !recentPeers.isEmpty {
                 for recentPeer in recentPeers {
-                    if let peer = self.item.message.peers[recentPeer.peerId] {
+                    if let peer = self.item.message.peers[recentPeer.peerId], !DonutgramShadowBan.isPeerHidden(recentPeer.peerId, inChat: self.item.message.id.peerId) {
                         if !avatarsPeers.contains(where: { $0.id == peer.id }) {
                             avatarsPeers.append(EnginePeer(peer))
                             if avatarsPeers.count == 3 {
@@ -3771,9 +3786,12 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
                     }
                 }
             } else if let peers = self.currentStats?.peers {
-                for i in 0 ..< min(3, peers.count) {
-                    if !avatarsPeers.contains(where: { $0.id == peers[i].id }) {
-                        avatarsPeers.append(peers[i])
+                for peer in peers where !DonutgramShadowBan.isPeerHidden(peer.id, inChat: self.item.message.id.peerId) {
+                    if !avatarsPeers.contains(where: { $0.id == peer.id }) {
+                        avatarsPeers.append(peer)
+                        if avatarsPeers.count == 3 {
+                            break
+                        }
                     }
                 }
             }

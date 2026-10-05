@@ -23,6 +23,7 @@ import UndoUI
 import NewSessionInfoScreen
 import PresentationDataUtils
 import GlobalControlPanelsContext
+import DGSimpleSettings
 
 public enum ChatListNodeMode {
     case chatList(appendContacts: Bool)
@@ -1322,6 +1323,7 @@ public final class ChatListNode: ListViewImpl {
     private let chatListLocation = ValuePromise<ChatListNodeLocation>()
     private let chatListDisposable = MetaDisposable()
     private var activityStatusesDisposable: Disposable?
+    private var donutgramShadowBanObserver: NSObjectProtocol?
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
     public var scrollToTopOption: Signal<ChatListGlobalScrollOption, NoError> {
@@ -2757,7 +2759,10 @@ public final class ChatListNode: ListViewImpl {
         |> mapToSignal { activitiesByPeerId -> Signal<[ChatListNodePeerInputActivities.ItemId: [(EnginePeer, PeerInputActivity)]], NoError> in
             var activitiesByPeerId = activitiesByPeerId
             for key in activitiesByPeerId.keys {
-                activitiesByPeerId[key]?.removeAll(where: { _, activity in
+                activitiesByPeerId[key]?.removeAll(where: { peerId, activity in
+                    if DonutgramShadowBan.isPeerHidden(peerId, inChat: key.peerId) {
+                        return true
+                    }
                     switch activity {
                     case .interactingWithEmoji:
                         return true
@@ -3188,9 +3193,26 @@ public final class ChatListNode: ListViewImpl {
             return strongSelf.isSelectionGestureEnabled
         }
         self.view.addGestureRecognizer(selectionRecognizer)
+
+        // Previews and typing read the shadow ban at layout time: a fresh presentation data object lays out every row again,
+        // as a theme change does.
+        self.donutgramShadowBanObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.shadowBanDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.updateState { state in
+                var state = state
+                let current = state.presentationData
+                state.presentationData = ChatListPresentationData(theme: current.theme, fontSize: current.fontSize, strings: current.strings, dateTimeFormat: current.dateTimeFormat, nameSortOrder: current.nameSortOrder, nameDisplayOrder: current.nameDisplayOrder, disableAnimations: current.disableAnimations)
+                return state
+            }
+        })
     }
-    
+
     deinit {
+        if let donutgramShadowBanObserver = self.donutgramShadowBanObserver {
+            NotificationCenter.default.removeObserver(donutgramShadowBanObserver)
+        }
         self.chatListDisposable.dispose()
         self.activityStatusesDisposable?.dispose()
         self.updatedFilterDisposable.dispose()

@@ -29,6 +29,9 @@ public final class DGSimpleSettings {
     public static let didChangeNotification = Notification.Name("donutgram.settings.didChange")
     public static let requestOfflineNotification = Notification.Name("donutgram.ghost.requestOffline")
     public static let lastOnlineDidChangeNotification = Notification.Name("donutgram.presence.lastOnlineDidChange")
+    /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
+    /// send account.updateStatus.
+    public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
 
     public enum TranscriptionBackend: String, CaseIterable {
         case telegram
@@ -127,6 +130,7 @@ public final class DGSimpleSettings {
         static let islandFollowsIcon = "donutgram.appearance.islandFollowsIcon"
         static let pickedAppIconName = "donutgram.appearance.pickedAppIconName"
         static let localPremiumPeerIds = "donutgram.other.localPremiumPeerIds"
+        static let shadowBannedPeerIds = "donutgram.spy.shadowBannedPeerIds"
 
         static let onlyAddedStickers = "donutgram.chats.onlyAddedStickers"
         static let infiniteRecentStickers = "donutgram.chats.infiniteRecentStickers"
@@ -565,6 +569,79 @@ public final class DGSimpleSettings {
         if enabled { ids.insert(String(accountId)) } else { ids.remove(String(accountId)) }
         self.defaults.set(Array(ids).sorted(), forKey: Key.localPremiumPeerIds)
         NotificationCenter.default.post(name: DGSimpleSettings.didChangeNotification, object: self)
+    }
+
+    private let shadowBanLock = NSLock()
+    private var shadowBanCache: Set<Int64>?
+    private var shadowBanRevealedChats = Set<Int64>()
+
+    // Call with shadowBanLock held.
+    private func shadowBanIdsLocked() -> Set<Int64> {
+        if let cache = self.shadowBanCache {
+            return cache
+        }
+        let stored = Set((self.defaults.stringArray(forKey: Key.shadowBannedPeerIds) ?? []).compactMap { Int64($0) })
+        self.shadowBanCache = stored
+        return stored
+    }
+
+    /// Peers in the shadow ban, as `PeerId.toInt64()`, for every account: their messages are hidden in groups, channels and comments.
+    public var shadowBannedPeerIds: Set<Int64> {
+        self.shadowBanLock.lock()
+        defer { self.shadowBanLock.unlock() }
+        return self.shadowBanIdsLocked()
+    }
+
+    public var hasShadowBans: Bool {
+        return !self.shadowBannedPeerIds.isEmpty
+    }
+
+    public func isShadowBanned(_ peerId: Int64) -> Bool {
+        return self.shadowBannedPeerIds.contains(peerId)
+    }
+
+    public func setShadowBanned(_ banned: Bool, peerId: Int64) {
+        self.shadowBanLock.lock()
+        var ids = self.shadowBanIdsLocked()
+        let changed: Bool
+        if banned {
+            changed = ids.insert(peerId).inserted
+        } else {
+            changed = ids.remove(peerId) != nil
+        }
+        if changed {
+            self.shadowBanCache = ids
+            self.defaults.set(ids.map { String($0) }.sorted(), forKey: Key.shadowBannedPeerIds)
+        }
+        self.shadowBanLock.unlock()
+        if changed {
+            NotificationCenter.default.post(name: DGSimpleSettings.shadowBanDidChangeNotification, object: self)
+        }
+    }
+
+    /// Chats where «Показать скрытые» is on, as `PeerId.toInt64()`: in memory only, until the app restarts.
+    public var shadowBanRevealedChatIds: Set<Int64> {
+        self.shadowBanLock.lock()
+        defer { self.shadowBanLock.unlock() }
+        return self.shadowBanRevealedChats
+    }
+
+    public func isShadowBanRevealed(chatPeerId: Int64) -> Bool {
+        return self.shadowBanRevealedChatIds.contains(chatPeerId)
+    }
+
+    public func setShadowBanRevealed(_ revealed: Bool, chatPeerId: Int64) {
+        self.shadowBanLock.lock()
+        let changed: Bool
+        if revealed {
+            changed = self.shadowBanRevealedChats.insert(chatPeerId).inserted
+        } else {
+            changed = self.shadowBanRevealedChats.remove(chatPeerId) != nil
+        }
+        self.shadowBanLock.unlock()
+        if changed {
+            NotificationCenter.default.post(name: DGSimpleSettings.shadowBanDidChangeNotification, object: self)
+        }
     }
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }

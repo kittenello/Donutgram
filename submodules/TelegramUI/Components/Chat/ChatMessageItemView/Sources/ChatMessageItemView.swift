@@ -693,7 +693,11 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
         let isDeleted = item.content.contains(where: { element in
             element.0.localTags.contains(.donutgramDeleted)
         })
-        self.alpha = isDeleted && DGSimpleSettings.shared.semiTransparentDeletedMessages ? 0.55 : 1.0
+        // «Показать скрытые» brings shadow-banned messages back half-transparent, so it's clear whose they are.
+        let isRevealedShadowBanned = DGSimpleSettings.shared.isShadowBanRevealed(chatPeerId: item.message.id.peerId.toInt64()) && item.content.contains(where: { element in
+            DonutgramShadowBan.isBannedContent(element.0)
+        })
+        self.alpha = (isDeleted && DGSimpleSettings.shared.semiTransparentDeletedMessages) || isRevealedShadowBanned ? 0.55 : 1.0
     }
     
     open func updateAccessibilityData(_ accessibilityData: ChatMessageAccessibilityData) {
