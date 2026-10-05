@@ -1411,6 +1411,7 @@ public class VideoMessageCameraScreen: ViewController {
                 guard let self else {
                     return
                 }
+                let previousPosition = self.cameraState.position
                 self.cameraState = self.cameraState.updatedPosition(position).updatedFlashMode(flashMode)
                 if DGSimpleSettings.shared.rememberRoundVideoCamera {
                     DGSimpleSettings.shared.lastRoundVideoCamera = position == .back ? .rear : .front
@@ -1420,7 +1421,9 @@ public class VideoMessageCameraScreen: ViewController {
                     self.resetZoomForVisibleCamera()
                 }
                 
-                if !self.cameraState.isDualCameraEnabled {
+                // A single-camera session restarts on a flip, so a still picture covers the circle meanwhile. Only a flip
+                // needs one: this also fires for the first state and for every flash tap.
+                if !self.cameraState.isDualCameraEnabled && position != previousPosition {
                     self.animatePositionChange()
                 }
                 
@@ -1709,27 +1712,35 @@ public class VideoMessageCameraScreen: ViewController {
         
         private func animatePositionChange() {
             if let snapshotView = self.mainPreviewView.snapshotView(afterScreenUpdates: false) {
-                self.previewContainerContentView.insertSubview(snapshotView, belowSubview: self.progressView)
-                self.previewSnapshotView = snapshotView
-                
-                let action = { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    UIView.animate(withDuration: 0.2, animations: {
-                        self.previewSnapshotView?.alpha = 0.0
-                    }, completion: { [weak self] _ in
-                        self?.previewSnapshotView?.removeFromSuperview()
-                        self?.previewSnapshotView = nil
-                    })
+                self.setPreviewSnapshotView(snapshotView, below: self.progressView)
+
+                Queue.mainQueue().after(1.0) { [weak self] in
+                    self?.removePreviewSnapshotView(snapshotView, duration: 0.2)
                 }
-                
-                Queue.mainQueue().after(1.0) {
-                    action()
-                }
-                
+
                 self.requestUpdateLayout(transition: .immediate)
             }
+        }
+
+        // One still picture at a time covers the camera while it restarts. A new one replaces the old: a picture nobody
+        // removes stays over the live camera until the end of the recording.
+        private func setPreviewSnapshotView(_ snapshotView: UIView, below siblingView: UIView) {
+            self.previewSnapshotView?.removeFromSuperview()
+            self.previewContainerContentView.insertSubview(snapshotView, belowSubview: siblingView)
+            self.previewSnapshotView = snapshotView
+        }
+
+        // Fades this picture out, unless a newer one has already replaced it.
+        private func removePreviewSnapshotView(_ snapshotView: UIView, duration: Double) {
+            guard self.previewSnapshotView === snapshotView else {
+                return
+            }
+            self.previewSnapshotView = nil
+            UIView.animate(withDuration: duration, animations: {
+                snapshotView.alpha = 0.0
+            }, completion: { _ in
+                snapshotView.removeFromSuperview()
+            })
         }
         
         func pauseCameraCapture() {
@@ -1743,9 +1754,9 @@ public class VideoMessageCameraScreen: ViewController {
         
         func resumeCameraCapture() {
             if !self.mainPreviewView.isEnabled {
-                if let snapshotView = self.resultPreviewView?.snapshotView(afterScreenUpdates: false) {
-                    self.previewContainerContentView.insertSubview(snapshotView, belowSubview: self.previewBlurView)
-                    self.previewSnapshotView = snapshotView
+                let snapshotView = self.resultPreviewView?.snapshotView(afterScreenUpdates: false)
+                if let snapshotView {
+                    self.setPreviewSnapshotView(snapshotView, below: self.previewBlurView)
                 }
                 self.mainPreviewView.isEnabled = true
                 self.additionalPreviewView.isEnabled = true
@@ -1762,18 +1773,19 @@ public class VideoMessageCameraScreen: ViewController {
                     }
                     UIView.animate(withDuration: 0.4, animations: {
                         self.previewBlurView.effect = nil
-                        self.previewSnapshotView?.alpha = 0.0
-                    }, completion: { [weak self] _ in
-                        self?.previewSnapshotView?.removeFromSuperview()
-                        self?.previewSnapshotView = nil
                     })
+                    if let snapshotView {
+                        self.removePreviewSnapshotView(snapshotView, duration: 0.4)
+                    }
                 }
+                // On the main queue, like every other change of the picture over the camera.
                 let _ = (self.mainPreviewView.isPreviewing
                 |> filter { $0 }
-                |> take(1)).startStandalone(next: { _ in
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { _ in
                     action()
                 })
-                
+
                 self.cameraIsActive = true
                 self.requestUpdateLayout(transition: .immediate)
             }
