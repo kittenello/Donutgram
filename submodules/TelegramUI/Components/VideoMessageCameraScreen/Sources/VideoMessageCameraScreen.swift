@@ -1180,6 +1180,9 @@ public class VideoMessageCameraScreen: ViewController {
         private var isPanZooming = false
         private let zoomHapticFeedback = HapticFeedback()
         private var displayedZoom: CGFloat = 1.0
+        // What the controls show: it trails `displayedZoom` only while the dial glides along with a ramp of the camera.
+        private var shownZoom: CGFloat = 1.0
+        private var zoomRampAnimator: DisplayLinkAnimator?
         private var minZoom: CGFloat = 1.0
         private var maxZoom: CGFloat = 1.0
         private var zoomPosition: Camera.Position?
@@ -1461,9 +1464,10 @@ public class VideoMessageCameraScreen: ViewController {
                 }
                 self.isPinchZooming = false
                 if !DGSimpleSettings.shared.staticRoundVideoZoom {
-                    // Back to where the pinch started, such as a lens picked with a button, not always to 1×.
-                    // A paused camera has nothing to animate, so it gets the value at once.
-                    self.setDisplayedZoom(self.zoomBeforePinch, rampRate: self.previewState == nil ? 8.0 : nil)
+                    // Back to where the pinch started, such as a lens picked with a button, not always to 1×, and the
+                    // dial glides back along with the picture. A paused camera has nothing to animate, so it gets the
+                    // value at once.
+                    self.setDisplayedZoom(self.zoomBeforePinch, rampRate: self.previewState == nil ? 8.0 : nil, followsRamp: true)
                 }
                 self.endZoomGesture()
             default:
@@ -1518,6 +1522,11 @@ public class VideoMessageCameraScreen: ViewController {
         // A swipe and a pinch both move through `RoundVideoZoomDetents` positions, so they rest on every lens for a moment
         // and tick there.
         private func beginZoomGesture() {
+            // A gesture that catches the dial gliding back takes the zoom from where it is now, so neither the dial nor
+            // the picture jumps to the end of the glide.
+            if self.zoomRampAnimator != nil {
+                self.setDisplayedZoom(self.shownZoom)
+            }
             self.zoomCollapseToken += 1
             self.zoomHapticFeedback.prepareTap()
             let detents = self.zoomDetents()
@@ -1588,10 +1597,37 @@ public class VideoMessageCameraScreen: ViewController {
             self.updateZoomControls(transition: .spring(duration: 0.4))
         }
 
-        private func setDisplayedZoom(_ value: CGFloat, rampRate: CGFloat? = nil, transition: ComponentTransition = .immediate) {
+        // With `followsRamp` the controls glide along with the camera's ramp instead of showing its end at once.
+        // AVFoundation ramps by a constant number of doublings per second, which is an even pace on the dial's log scale.
+        private func setDisplayedZoom(_ value: CGFloat, rampRate: CGFloat? = nil, followsRamp: Bool = false, transition: ComponentTransition = .immediate) {
             self.displayedZoom = min(max(value, self.minZoom), self.maxZoom)
             self.camera?.setZoomFactor(self.displayedZoom, rampRate: rampRate)
-            self.updateZoomControls(transition: transition)
+
+            self.zoomRampAnimator?.invalidate()
+            self.zoomRampAnimator = nil
+            let fromLogValue = log2(self.shownZoom)
+            let toLogValue = log2(self.displayedZoom)
+            if let rampRate, followsRamp, rampRate > 0.0, abs(toLogValue - fromLogValue) > 0.001 {
+                let target = self.displayedZoom
+                self.zoomRampAnimator = DisplayLinkAnimator(duration: Double(abs(toLogValue - fromLogValue) / rampRate), from: fromLogValue, to: toLogValue, update: { [weak self] logValue in
+                    guard let self else {
+                        return
+                    }
+                    self.shownZoom = pow(2.0, logValue)
+                    self.updateZoomControls()
+                }, completion: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.zoomRampAnimator?.invalidate()
+                    self.zoomRampAnimator = nil
+                    self.shownZoom = target
+                    self.updateZoomControls()
+                })
+            } else {
+                self.shownZoom = self.displayedZoom
+                self.updateZoomControls(transition: transition)
+            }
         }
 
         // Each camera has its own zoom, limit and lenses, so a flip starts over at 1×. The limit and the buttons come
@@ -1647,7 +1683,7 @@ public class VideoMessageCameraScreen: ViewController {
                 lensValues: self.zoomLensValues(),
                 minimumValue: self.minZoom,
                 maximumValue: self.maxZoom,
-                value: self.displayedZoom,
+                value: self.shownZoom,
                 isExpanded: extendedZoomEnabled && self.zoomControlsExpanded,
                 theme: self.presentationData.theme,
                 decimalSeparator: decimalSeparator,
