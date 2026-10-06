@@ -11,16 +11,26 @@ import AsyncDisplayKit
 import ComponentFlow
 import ComponentDisplayAdapters
 import EmojiStatusComponent
+import ChatListUI
 
 extension PeerInfoScreenNode {
     func accountContextMenuItems(context: AccountContext, logout: @escaping () -> Void) -> Signal<[ContextMenuItem], NoError> {
         let strings = context.sharedContext.currentPresentationData.with({ $0 }).strings
         return context.engine.messages.unreadChatListPeerIds(groupId: .root, filterPredicate: nil)
-        |> map { unreadChatListPeerIds -> [ContextMenuItem] in
+        |> map { [weak self] unreadChatListPeerIds -> [ContextMenuItem] in
             var items: [ContextMenuItem] = []
             
             if !unreadChatListPeerIds.isEmpty {
-                items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAllAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { _, f in
+                items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAllAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                    if donutgramGhostHidesReadReceipts() {
+                        f(.default)
+                        donutgramConfirmReadInGhostMode(context: context, present: { c in
+                            self?.controller?.present(c, in: .window(.root))
+                        }, proceed: {
+                            let _ = context.engine.messages.markAllChatsAsReadInteractively(items: [(groupId: .root, filterPredicate: nil)]).startStandalone()
+                        })
+                        return
+                    }
                     let _ = (context.engine.messages.markAllChatsAsReadInteractively(items: [(groupId: .root, filterPredicate: nil)])
                     |> deliverOnMainQueue).startStandalone(completed: {
                         f(.default)

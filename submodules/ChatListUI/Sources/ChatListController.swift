@@ -4202,7 +4202,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     markItems.append((EngineChatList.Group(additionalGroupId), filterPredicate))
                 }
                 
-                let _ = self.context.engine.messages.markAllChatsAsReadInteractively(items: markItems).startStandalone()
+                let context = self.context
+                donutgramConfirmReadInGhostMode(context: context, present: { [weak self] c in
+                    self?.present(c, in: .window(.root))
+                }, proceed: {
+                    let _ = context.engine.messages.markAllChatsAsReadInteractively(items: markItems).startStandalone()
+                })
                 break
             }
         }
@@ -4953,46 +4958,54 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         return inputShortcuts + folderShortcuts + chatShortcuts
     }
     
+    private func markSelectedChatsAsRead(peerIds: Set<EnginePeer.Id>, threadIds: Set<Int64>) {
+        let signal: Signal<Never, NoError>
+        var completion: (() -> Void)?
+        if !threadIds.isEmpty, case let .forum(peerId) = self.chatListDisplayNode.effectiveContainerNode.location {
+            self.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerId, threadId: threadIds.first!))
+            completion = { [weak self] in
+                self?.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(nil)
+            }
+            signal = self.context.engine.messages.markForumThreadsAsRead(peerId: peerId, threadIds: Array(threadIds))
+        } else if !peerIds.isEmpty {
+            self.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerIds.first!, threadId: nil))
+            completion = { [weak self] in
+                self?.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(nil)
+            }
+            signal = self.context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: Array(peerIds), setToValue: false)
+        } else if case let .chatList(groupId) = self.chatListDisplayNode.effectiveContainerNode.location {
+            let filterPredicate: ChatListFilterPredicate?
+            if let filter = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter, case let .filter(_, _, _, data) = filter {
+                filterPredicate = chatListFilterPredicate(filter: data, accountPeerId: self.context.account.peerId)
+            } else {
+                filterPredicate = nil
+            }
+            var markItems: [(groupId: EngineChatList.Group, filterPredicate: ChatListFilterPredicate?)] = []
+            markItems.append((groupId, filterPredicate))
+            if let filterPredicate = filterPredicate {
+                for additionalGroupId in filterPredicate.includeAdditionalPeerGroupIds {
+                    markItems.append((EngineChatList.Group(additionalGroupId), filterPredicate))
+                }
+            }
+            signal = self.context.engine.messages.markAllChatsAsReadInteractively(items: markItems)
+        } else {
+            signal = .complete()
+        }
+        let _ = (signal
+        |> deliverOnMainQueue).startStandalone(completed: { [weak self] in
+            self?.donePressed()
+            completion?()
+        })
+    }
+
     override public func toolbarActionSelected(action: ToolbarActionOption) {
         let peerIds = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.selectedPeerIds
         let threadIds = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.selectedThreadIds
         if case .left = action {
-            let signal: Signal<Never, NoError>
-            var completion: (() -> Void)?
-            if !threadIds.isEmpty, case let .forum(peerId) = self.chatListDisplayNode.effectiveContainerNode.location {
-                self.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerId, threadId: threadIds.first!))
-                completion = { [weak self] in
-                    self?.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(nil)
-                }
-                signal = self.context.engine.messages.markForumThreadsAsRead(peerId: peerId, threadIds: Array(threadIds))
-            } else if !peerIds.isEmpty {
-                self.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerIds.first!, threadId: nil))
-                completion = { [weak self] in
-                    self?.chatListDisplayNode.effectiveContainerNode.currentItemNode.setCurrentRemovingItemId(nil)
-                }
-                signal = self.context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: Array(peerIds), setToValue: false)
-            } else if case let .chatList(groupId) = self.chatListDisplayNode.effectiveContainerNode.location {
-                let filterPredicate: ChatListFilterPredicate?
-                if let filter = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter, case let .filter(_, _, _, data) = filter {
-                    filterPredicate = chatListFilterPredicate(filter: data, accountPeerId: self.context.account.peerId)
-                } else {
-                    filterPredicate = nil
-                }
-                var markItems: [(groupId: EngineChatList.Group, filterPredicate: ChatListFilterPredicate?)] = []
-                markItems.append((groupId, filterPredicate))
-                if let filterPredicate = filterPredicate {
-                    for additionalGroupId in filterPredicate.includeAdditionalPeerGroupIds {
-                        markItems.append((EngineChatList.Group(additionalGroupId), filterPredicate))
-                    }
-                }
-                signal = self.context.engine.messages.markAllChatsAsReadInteractively(items: markItems)
-            } else {
-                signal = .complete()
-            }
-            let _ = (signal
-            |> deliverOnMainQueue).startStandalone(completed: { [weak self] in
-                self?.donePressed()
-                completion?()
+            donutgramConfirmReadInGhostMode(context: self.context, present: { [weak self] c in
+                self?.present(c, in: .window(.root))
+            }, proceed: { [weak self] in
+                self?.markSelectedChatsAsRead(peerIds: peerIds, threadIds: threadIds)
             })
         } else if case .right = action {
             if !threadIds.isEmpty, case let .forum(peerId) = self.chatListDisplayNode.effectiveContainerNode.location {

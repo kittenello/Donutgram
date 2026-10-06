@@ -1674,15 +1674,25 @@ public final class ChatListNode: ListViewImpl {
             guard let context = context else {
                 return
             }
-            self?.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerId, threadId: nil))
-            let _ = (context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: nil)
-            |> deliverOnMainQueue).startStandalone(completed: {
+            donutgramConfirmToggleUnreadInGhostMode(context: context, peerId: peerId, threadId: nil, present: { c in
+                self?.present?(c)
+            }, proceed: {
+                self?.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerId, threadId: nil))
+                let _ = (context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: nil)
+                |> deliverOnMainQueue).startStandalone(completed: {
+                    self?.updateState { state in
+                        var state = state
+                        state.peerIdWithRevealedOptions = nil
+                        return state
+                    }
+                    self?.setCurrentRemovingItemId(nil)
+                })
+            }, cancel: {
                 self?.updateState { state in
                     var state = state
                     state.peerIdWithRevealedOptions = nil
                     return state
                 }
-                self?.setCurrentRemovingItemId(nil)
             })
         }, toggleArchivedFolderHiddenByDefault: { [weak self] in
             self?.toggleArchivedFolderHiddenByDefault?()

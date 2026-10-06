@@ -196,9 +196,8 @@ func _internal_toggleForumThreadUnreadMarkInteractively(transaction: Transaction
 }
 
 func _internal_markForumThreadAsReadInteractively(transaction: Transaction, network: Network, viewTracker: AccountViewTracker, peerId: PeerId, threadId: Int64) {
-    if DGSimpleSettings.shared.ghostModeEnabled && !DGSimpleSettings.shared.ghostReadMessages {
-        return
-    }
+    // Donutgram: only the chat list's «Прочитано» calls this, and in ghost mode it asks
+    // first (donutgramConfirmReadInGhostMode), like the other explicit reads.
     guard let peer = transaction.getPeer(peerId) else {
         return
     }

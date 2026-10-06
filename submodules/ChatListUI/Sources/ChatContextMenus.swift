@@ -29,7 +29,16 @@ func archiveContextMenuItems(context: AccountContext, group: EngineChatList.Grou
         var items: [ContextMenuItem] = []
         
         if !unreadChatListPeerIds.isEmpty {
-            items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAllAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { _, f in
+            items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAllAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { [weak chatListController] _, f in
+                if donutgramGhostHidesReadReceipts() {
+                    f(.default)
+                    donutgramConfirmReadInGhostMode(context: context, present: { c in
+                        chatListController?.present(c, in: .window(.root))
+                    }, proceed: {
+                        let _ = context.engine.messages.markAllChatsAsReadInteractively(items: [(groupId: group, filterPredicate: nil)]).startStandalone()
+                    })
+                    return
+                }
                 let _ = (context.engine.messages.markAllChatsAsReadInteractively(items: [(groupId: group, filterPredicate: nil)])
                 |> deliverOnMainQueue).startStandalone(completed: {
                     f(.default)
@@ -363,9 +372,13 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                         
                         if !isCommunity {
                             if isUnread {
-                                items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { _, f in
-                                    let _ = context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: nil).startStandalone()
+                                items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { [weak chatListController] _, f in
                                     f(.default)
+                                    donutgramConfirmReadInGhostMode(context: context, present: { c in
+                                        chatListController?.present(c, in: .window(.root))
+                                    }, proceed: {
+                                        let _ = context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: nil).startStandalone()
+                                    })
                                 })))
                             } else if !isForum {
                                 var canMarkAsUnread = true
@@ -686,9 +699,13 @@ public func chatForumTopicMenuItems(context: AccountContext, peerId: EnginePeer.
         }
         
         if isUnread {
-            items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { _, f in
-                let _ = context.engine.messages.markForumThreadAsRead(peerId: peerId, threadId: threadId).startStandalone()
+            items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAsRead, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { [weak chatListController] _, f in
                 f(.default)
+                donutgramConfirmReadInGhostMode(context: context, present: { c in
+                    chatListController?.present(c, in: .window(.root))
+                }, proceed: {
+                    let _ = context.engine.messages.markForumThreadAsRead(peerId: peerId, threadId: threadId).startStandalone()
+                })
             })))
         }
         
