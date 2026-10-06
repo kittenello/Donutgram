@@ -23,13 +23,15 @@ public final class NavigationSearchView: UIView {
         let strings: PresentationStrings
         let isActive: Bool
         let integrated: Bool
+        let isHighlighted: Bool
 
-        init(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, integrated: Bool) {
+        init(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, integrated: Bool, isHighlighted: Bool) {
             self.size = size
             self.theme = theme
             self.strings = strings
             self.isActive = isActive
             self.integrated = integrated
+            self.isHighlighted = isHighlighted
         }
 
         static func ==(lhs: Params, rhs: Params) -> Bool {
@@ -43,6 +45,7 @@ public final class NavigationSearchView: UIView {
                 return false
             }
             if lhs.integrated != rhs.integrated { return false }
+            if lhs.isHighlighted != rhs.isHighlighted { return false }
             if lhs.isActive != rhs.isActive {
                 return false
             }
@@ -93,8 +96,8 @@ public final class NavigationSearchView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    public func update(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, integrated: Bool = false, transition: ComponentTransition) {
-        let params = Params(size: size, theme: theme, strings: strings, isActive: isActive, integrated: integrated)
+    public func update(size: CGSize, theme: PresentationTheme, strings: PresentationStrings, isActive: Bool, integrated: Bool = false, isHighlighted: Bool = false, transition: ComponentTransition) {
+        let params = Params(size: size, theme: theme, strings: strings, isActive: isActive, integrated: integrated, isHighlighted: isHighlighted)
         if self.params == params {
             return
         }
@@ -125,7 +128,16 @@ public final class NavigationSearchView: UIView {
         if self.iconView.image == nil {
             self.iconView.image = UIImage(bundleImageName: "Navigation/Search")?.withRenderingMode(.alwaysTemplate)
         }
-        transition.setTintColor(view: self.iconView, color: params.isActive ? params.theme.rootController.navigationSearchBar.inputIconColor : params.theme.chat.inputPanel.panelControlColor)
+        // Highlighted while the dragged tab selection is over the search inside the bar, like a tab under the selection.
+        let iconColor: UIColor
+        if params.isActive {
+            iconColor = params.theme.rootController.navigationSearchBar.inputIconColor
+        } else if params.isHighlighted {
+            iconColor = params.theme.rootController.tabBar.selectedTextColor
+        } else {
+            iconColor = params.theme.chat.inputPanel.panelControlColor
+        }
+        transition.setTintColor(view: self.iconView, color: iconColor)
         
         if let image = self.iconView.image {
             let imageSize: CGSize
@@ -433,7 +445,8 @@ public final class TabBarComponent: Component {
         private var component: TabBarComponent?
         private weak var state: EmptyComponentState?
 
-        private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemWidth: CGFloat, itemId: AnyHashable)?
+        private var selectionGestureState: (startX: CGFloat, currentX: CGFloat, itemWidth: CGFloat, itemId: AnyHashable, isOverSearch: Bool)?
+        private var isSearchIntegrated: Bool = false
         private var overrideSelectedItemId: AnyHashable?
         private var pendingDoubleTapItem: (id: AnyHashable, previouslySelectedId: AnyHashable?, timer: Foundation.Timer)?
 
@@ -550,14 +563,16 @@ public final class TabBarComponent: Component {
                     }
                     
                     let startX = itemView.frame.minX - 4.0
-                    self.selectionGestureState = (startX, startX, itemView.bounds.width, itemId)
+                    self.selectionGestureState = (startX, startX, itemView.bounds.width, itemId, false)
                     self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
                 }
             case .changed:
                 if let search = component.search, search.isActive {
                 } else if var selectionGestureState = self.selectionGestureState {
                     selectionGestureState.currentX = selectionGestureState.startX + recognizer.translation(in: self).x
-                    if let itemId = self.item(at: recognizer.location(in: self)) {
+                    let location = recognizer.location(in: self)
+                    selectionGestureState.isOverSearch = self.isOverIntegratedSearch(location)
+                    if !selectionGestureState.isOverSearch, let itemId = self.item(at: location) {
                         selectionGestureState.itemId = itemId
                     }
                     self.selectionGestureState = selectionGestureState
@@ -568,6 +583,12 @@ public final class TabBarComponent: Component {
                     search.deactivate()
                 } else if let selectionGestureState = self.selectionGestureState {
                     self.selectionGestureState = nil
+                    if case .ended = recognizer.state, selectionGestureState.isOverSearch {
+                        // Releasing the selection over the search inside the bar opens the search, like a tap on it.
+                        self.state?.updated(transition: .spring(duration: 0.4), isLocal: true)
+                        component.search?.activate()
+                        return
+                    }
                     if case .ended = recognizer.state, let component = self.component {
                         guard let item = component.items.first(where: { $0.id == selectionGestureState.itemId }) else {
                             return
@@ -656,7 +677,20 @@ public final class TabBarComponent: Component {
             }
             return closestItem?.0
         }
-        
+
+        // The finger is past the tabs on the side of the search inside the bar.
+        private func isOverIntegratedSearch(_ point: CGPoint) -> Bool {
+            guard self.isSearchIntegrated, let component = self.component, let searchView = self.searchView else {
+                return false
+            }
+            let searchFrame = self.convert(searchView.bounds, from: searchView)
+            if component.layout.searchOnLeft {
+                return point.x < searchFrame.maxX
+            } else {
+                return point.x > searchFrame.minX
+            }
+        }
+
         public override func didMoveToWindow() {
             super.didMoveToWindow()
             
@@ -681,6 +715,7 @@ public final class TabBarComponent: Component {
             let integratedSearch = component.search != nil && component.layout.integratedSearch && component.search?.isActive != true
             let searchOnLeft = component.search != nil && component.layout.searchOnLeft && component.search?.isActive != true
             let searchGap: CGFloat = integratedSearch ? 0.0 : 8.0
+            self.isSearchIntegrated = integratedSearch
             var availableItemsWidth: CGFloat = availableSize.width - innerInset * 2.0
             if component.search != nil {
                 availableItemsWidth -= barHeight + searchGap
@@ -900,17 +935,8 @@ public final class TabBarComponent: Component {
                 lensSelection = (0.0, 48.0)
             }
             
-            // With the search inside the bar the selection stays over the tabs and never covers the search button.
-            var lensMinX: CGFloat = 0.0
-            var lensMaxX: CGFloat = lensSize.width
-            if integratedSearch {
-                if searchOnLeft {
-                    lensMinX = barHeight
-                } else {
-                    lensMaxX -= barHeight
-                }
-            }
-            lensSelection.x = max(lensMinX, min(lensSelection.x, lensMaxX - lensSelection.width))
+            // With the search inside the bar the dragged selection reaches the search button too: releasing it there opens the search.
+            lensSelection.x = max(0.0, min(lensSelection.x, lensSize.width - lensSelection.width))
             
             self.liquidLensView.update(size: lensSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: lensSize.height), inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil && component.isLiftedStateEnabled, isCollapsed: isLensCollapsed, transition: transition.withUserData(LiquidLensView.TransitionInfo(disableAnimationWorkarounds: !component.isLiftedStateEnabled)))
 
@@ -955,7 +981,7 @@ public final class TabBarComponent: Component {
                     self.backgroundContainer.contentView.addSubview(searchView)
                     searchView.frame = CGRect(origin: CGPoint(x: availableSize.width + 50.0, y: 0.0), size: searchSize)
                 }
-                searchView.update(size: searchSize, theme: component.theme, strings: component.strings, isActive: search.isActive, integrated: integratedSearch, transition: searchViewTransition)
+                searchView.update(size: searchSize, theme: component.theme, strings: component.strings, isActive: search.isActive, integrated: integratedSearch, isHighlighted: integratedSearch && component.tintSelectedItem && self.selectionGestureState?.isOverSearch == true, transition: searchViewTransition)
                 transition.setFrame(view: searchView, frame: searchFrame)
             } else {
                 if let searchView = self.searchView {
