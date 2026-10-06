@@ -254,5 +254,8 @@ private let dgEnglishStrings: [String: String] = [
     "бот": "bot",
     "пользователь": "user",
     "канал": "channel",
-    "Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются.": "Messages from these people are hidden in groups, comments and channels on this device only. They won't be notified. Private chats are not affected."
+    "Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются.": "Messages from these people are hidden in groups, comments and channels on this device only. They won't be notified. Private chats are not affected.",
+    "Скрытое сообщение": "Hidden Message",
+    "Автор в теневом бане": "The author is shadow banned",
+    "Сообщение скрыто теневым баном": "This message is hidden by shadow ban"
 ]
