@@ -255,7 +255,7 @@ private func synchronizePinnedChats(transaction: Transaction, postbox: Postbox, 
                 // Donutgram: chat top messages may already be stored; keep their local-only state.
                 let _ = transaction.addMessages(donutgramPreservingLocalState(transaction: transaction, messages: storeMessages), location: .UpperHistoryBlock)
                 
-                transaction.resetIncomingReadStates(readStates)
+                donutgramResetIncomingReadStates(transaction: transaction, accountPeerId: accountPeerId, readStates)
                 
                 for (peerId, pts) in channelStates {
                     if let _ = transaction.getPeerChatState(peerId) as? ChannelState {

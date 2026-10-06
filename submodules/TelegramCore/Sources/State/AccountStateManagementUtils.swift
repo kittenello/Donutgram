@@ -4663,6 +4663,7 @@ func replayFinalState(
                 updateMessageMedia(transaction: transaction, id: id, media: media)
             case let .ReadInbox(messageId):
                 transaction.applyIncomingReadMaxId(messageId)
+                donutgramGhostLocalReadDidReadOnServer(accountPeerId: accountPeerId, messageId: messageId)
             case let .ReadOutbox(messageId, timestamp):
                 transaction.applyOutgoingReadMaxId(messageId)
                 if messageId.peerId != accountPeerId, messageId.peerId.namespace == Namespaces.Peer.CloudUser, let timestamp = timestamp {
@@ -4775,7 +4776,9 @@ func replayFinalState(
                             switch currentState {
                             case let .idBased(localMaxIncomingReadId, _, _, localCount, localMarkedUnread):
                                 if count != 0 || markedUnreadValue {
-                                    if localMaxIncomingReadId > maxIncomingReadId {
+                                    // Donutgram: a chat read only on this device in ghost mode takes the
+                                    // server's state below; its local read is applied on top of it again.
+                                    if localMaxIncomingReadId > maxIncomingReadId && donutgramGhostLocalReadState(accountPeerId: accountPeerId, peerId: peerId) == nil {
                                         transaction.setNeedsIncomingReadStateSynchronization(peerId)
                                         
                                         transaction.resetIncomingReadStates([peerId: [namespace: .idBased(maxIncomingReadId: localMaxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: localCount, markedUnread: localMarkedUnread)]])
@@ -4793,6 +4796,9 @@ func replayFinalState(
                 }
                 if !ignore {
                     transaction.resetIncomingReadStates([peerId: [namespace: .idBased(maxIncomingReadId: maxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: count, markedUnread: markedUnreadValue)]])
+                    if namespace == Namespaces.Message.Cloud {
+                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverIsRead: count == 0 && !markedUnreadValue)
+                    }
                 }
             case let .ResetIncomingReadState(groupId, peerId, namespace, maxIncomingReadId, count, pts):
                 var ptsMatchesState = false
@@ -4832,8 +4838,12 @@ func replayFinalState(
                     }
                     let stateDict = Dictionary(updatedStates, uniquingKeysWith: { lhs, _ in lhs })
                     transaction.resetIncomingReadStates([peerId: stateDict])
+                    if namespace == Namespaces.Message.Cloud {
+                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverIsRead: count == 0)
+                    }
                 } else {
                     transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: namespace, id: maxIncomingReadId))
+                    donutgramGhostLocalReadDidReadOnServer(accountPeerId: accountPeerId, messageId: MessageId(peerId: peerId, namespace: namespace, id: maxIncomingReadId))
                     transaction.setNeedsIncomingReadStateSynchronization(peerId)
                     invalidateGroupStats.insert(groupId)
                 }

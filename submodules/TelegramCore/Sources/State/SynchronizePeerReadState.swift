@@ -186,7 +186,10 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                         case let .idBased(localMaxIncomingReadId, _, _, _, _):
                             if case let .idBased(updatedMaxIncomingReadId, _, _, updatedCount, updatedMarkedUnread) = readState {
                                 if updatedCount != 0 || updatedMarkedUnread {
-                                    if localMaxIncomingReadId > updatedMaxIncomingReadId {
+                                    // Donutgram: a chat read only on this device in ghost mode is ahead of
+                                    // the server on purpose; it takes the server's state below and gets its
+                                    // local read back on top of it.
+                                    if localMaxIncomingReadId > updatedMaxIncomingReadId && donutgramGhostLocalReadState(accountPeerId: stateManager.accountPeerId, peerId: peerId) == nil {
                                         return .retry
                                     }
                                 }
@@ -213,6 +216,9 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                 }
             }
             transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud: updatedReadState]])
+            if case let .idBased(maxIncomingReadId, _, _, count, markedUnread) = updatedReadState {
+                donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: stateManager.accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverIsRead: count == 0 && !markedUnread)
+            }
             return nil
         }
         |> mapToSignalPromotingError { error -> Signal<Never, PeerReadStateValidationError> in
@@ -379,6 +385,12 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
 }
 
 func synchronizePeerReadState(network: Network, postbox: Postbox, stateManager: AccountStateManager, peerId: PeerId, push: Bool, validate: Bool) -> Signal<Never, PeerReadStateValidationError> {
+    // Donutgram: what ghost mode read only on this device never goes to the server. Explicit
+    // reads forget the local read before they push (donutgramGhostLocalReadWillReadOnServer),
+    // so a push for such a chat is a leftover; the validation keeps the local read instead.
+    if push && donutgramGhostLocalReadState(accountPeerId: stateManager.accountPeerId, peerId: peerId) != nil {
+        return validatePeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId)
+    }
     var signal: Signal<Never, PeerReadStateValidationError> = .complete()
     if push {
         signal = signal

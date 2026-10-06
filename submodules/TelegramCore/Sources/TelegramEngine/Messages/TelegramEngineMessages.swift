@@ -2,7 +2,6 @@ import Foundation
 import SwiftSignalKit
 import Postbox
 import TelegramApi
-import DGSimpleSettings
 
 public enum EngineOutgoingMessageContent {
     case text(String, [MessageTextEntity])
@@ -99,9 +98,7 @@ public extension TelegramEngine {
         }
 
         public func applyMaxReadIndexInteractively(index: MessageIndex) -> Signal<Void, NoError> {
-            if DGSimpleSettings.shared.ghostModeEnabled && !DGSimpleSettings.shared.ghostReadMessages {
-                return .single(())
-            }
+            // Donutgram: in ghost mode this reads the chat on this device only.
             return _internal_applyMaxReadIndexInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, index: index)
         }
 

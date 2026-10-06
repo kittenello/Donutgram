@@ -1210,7 +1210,7 @@ func fetchChatListHole(postbox: Postbox, network: Network, accountPeerId: PeerId
             // Donutgram: chat top messages may already be stored; keep their local-only state.
             let _ = transaction.addMessages(donutgramPreservingLocalState(transaction: transaction, messages: fetchedChats.storeMessages), location: .UpperHistoryBlock)
             let _ = transaction.addMessages(additionalMessages, location: .Random)
-            transaction.resetIncomingReadStates(fetchedChats.readStates)
+            donutgramResetIncomingReadStates(transaction: transaction, accountPeerId: accountPeerId, fetchedChats.readStates)
             
             for (peerId, autoremoveValue) in fetchedChats.ttlPeriods {
                 transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in

@@ -285,7 +285,7 @@ private struct ViewCountContextState {
 
 public final class AccountViewTracker {
     weak var account: Account?
-    private let accountPeerId: PeerId
+    let accountPeerId: PeerId
     private let queue = Queue()
     private var nextViewId: Int32 = 0
     
