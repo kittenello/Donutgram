@@ -1028,18 +1028,22 @@ struct ChatListFiltersState: Codable, Equatable {
     func donutgramApplyingLocalColors(_ filters: [ChatListFilter]) -> [ChatListFilter] {
         return filters.map { filter in
             guard case let .filter(id, title, emoticon, data) = filter, let value = self.donutgramLocalFolderColors[id] else { return filter }
-            var data = data
-            data.color = value == -1 ? nil : PeerNameColor(rawValue: value)
-            return .filter(id: id, title: title, emoticon: emoticon, data: data)
+            var updatedData = data
+            updatedData.color = value == -1 ? nil : PeerNameColor(rawValue: value)
+            return .filter(id: id, title: title, emoticon: emoticon, data: updatedData)
         }
     }
 
     func donutgramServerFilters(_ filters: [ChatListFilter]) -> [ChatListFilter] {
         return filters.map { filter in
             guard case let .filter(id, title, emoticon, data) = filter, self.donutgramLocalFolderColors[id] != nil else { return filter }
-            var data = data
-            data.color = self.remoteFilters?.first(where: { $0.id == id })?.data?.color
-            return .filter(id: id, title: title, emoticon: emoticon, data: data)
+            var updatedData = data
+            if let remoteFilter = self.remoteFilters?.first(where: { $0.id == id }), case let .filter(_, _, _, remoteData) = remoteFilter {
+                updatedData.color = remoteData.color
+            } else {
+                updatedData.color = nil
+            }
+            return .filter(id: id, title: title, emoticon: emoticon, data: updatedData)
         }
     }
     
@@ -1111,8 +1115,14 @@ func _internal_updateChatListFiltersInteractively(postbox: Postbox, accountPeerI
             if updatedFilters != state.filters {
                 if donutgramUsesLocalFolderPresentation(transaction: transaction, accountPeerId: accountPeerId) {
                     for filter in updatedFilters {
-                        if case let .filter(id, _, _, data) = filter, data.color != state.filters.first(where: { $0.id == id })?.data?.color {
-                            state.donutgramLocalFolderColors[id] = data.color?.rawValue ?? -1
+                        if case let .filter(id, _, _, data) = filter {
+                            var previousColor: PeerNameColor?
+                            if let previousFilter = state.filters.first(where: { $0.id == id }), case let .filter(_, _, _, previousData) = previousFilter {
+                                previousColor = previousData.color
+                            }
+                            if data.color != previousColor {
+                                state.donutgramLocalFolderColors[id] = data.color?.rawValue ?? -1
+                            }
                         }
                     }
                     hasUpdates = state.donutgramServerFilters(updatedFilters) != state.donutgramServerFilters(state.filters)
