@@ -4,7 +4,12 @@ import DGSimpleSettings
 struct PeerId: Hashable { let namespace: Int; let value: Int64 }
 struct MessageId: Hashable { let peerId: PeerId; let namespace: Int; let id: Int32 }
 enum Namespaces {
-    enum Peer { static let CloudUser = 0; static let SecretChat = 3 }
+    enum Peer {
+        static let CloudUser = 0
+        static let CloudGroup = 1
+        static let CloudChannel = 2
+        static let SecretChat = 3
+    }
     enum Message { static let Cloud = 0; static let Local = 1 }
 }
 class Peer { let id: PeerId; init(_ id: PeerId) { self.id = id } }
@@ -119,10 +124,12 @@ if args.count == 3 {
         settings.saveInBotChats = true
         settings.saveEditHistory = false
         settings.saveViewOnceMedia = true
+        settings.removePings = true
     } else {
         let settings = DGMessagePreservationSettings(sharedDefaults: defaults, legacyDefaults: .standard, migrateLegacyValues: false)
         expect(settings.saveDeletedMessages && settings.saveInBotChats && settings.saveViewOnceMedia, "extension reads another process's preferences")
         expect(!settings.saveEditHistory, "disabled preferences persist")
+        expect(settings.removePings, "notification extension reads persisted remove-pings preference from another process")
         defaults.removePersistentDomain(forName: suite)
         print("Cross-process settings checks passed")
     }
@@ -142,6 +149,7 @@ legacy.set(false, forKey: "donutgram.spy.saveInBotChats")
 legacy.set(false, forKey: "donutgram.spy.saveViewOnceMedia")
 let beforeMigration = DGMessagePreservationSettings(sharedDefaults: shared, legacyDefaults: legacy, migrateLegacyValues: false)
 expect(!beforeMigration.saveDeletedMessages, "extension must not use its own enabled legacy defaults")
+expect(!beforeMigration.removePings, "remove pings is disabled by default")
 let migrated = DGMessagePreservationSettings(sharedDefaults: shared, legacyDefaults: legacy, migrateLegacyValues: true)
 expect(migrated.saveDeletedMessages && migrated.saveEditHistory, "main app migrates enabled preferences")
 expect(!migrated.saveInBotChats && !migrated.saveViewOnceMedia, "migration preserves disabled preferences")
@@ -155,6 +163,20 @@ DGSimpleSettings.shared.configureMessagePreservation(appGroupName: activeSuite, 
 DGSimpleSettings.shared.saveDeletedMessages = true
 DGSimpleSettings.shared.saveInBotChats = false
 expect(UserDefaults(suiteName: activeSuite)!.bool(forKey: "donutgram.spy.saveDeletedMessages"), "settings UI writes app-group preferences")
+DGSimpleSettings.shared.removePings = true
+let extensionSettings = DGMessagePreservationSettings(sharedDefaults: UserDefaults(suiteName: activeSuite)!, legacyDefaults: legacy, migrateLegacyValues: false)
+expect(extensionSettings.removePings, "remove-pings toggle reaches the notification extension")
+DGSimpleSettings.shared.removePings = false
+expect(!extensionSettings.removePings, "switching off restores ordinary mention handling in the extension")
+for namespace in [Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel] {
+    let peerId = PeerId(namespace: namespace, value: 101)
+    expect(!donutgramUsesPersonalNotificationSettings(peerId: peerId, personal: true, removePings: true), "mention in group or channel uses chat mute/sound settings")
+    expect(donutgramUsesPersonalNotificationSettings(peerId: peerId, personal: true, removePings: false), "disabled toggle retains mention notification routing")
+    expect(!donutgramUsesPersonalNotificationSettings(peerId: peerId, personal: false, removePings: false), "ordinary message keeps ordinary routing")
+}
+for namespace in [Namespaces.Peer.CloudUser, Namespaces.Peer.SecretChat] {
+    expect(donutgramUsesPersonalNotificationSettings(peerId: PeerId(namespace: namespace, value: 101), personal: true, removePings: true), "direct-message notification routing stays intact")
+}
 
 let alice = TelegramUser(PeerId(namespace: 0, value: 1234567890))
 let bot = TelegramUser(PeerId(namespace: 0, value: 20)); bot.botInfo = true

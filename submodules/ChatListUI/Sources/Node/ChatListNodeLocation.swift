@@ -5,6 +5,7 @@ import SwiftSignalKit
 import Display
 import TelegramUIPreferences
 import AccountContext
+import DGSimpleSettings
 
 public enum ChatListNodeLocation: Equatable {
     case initial(count: Int, filter: ChatListFilter?)
@@ -124,7 +125,7 @@ public func chatListFilterPredicate(filter: ChatListFilterData, accountPeerId: E
     }
     
     var messageTagSummary: ChatListMessageTagSummaryResultCalculation?
-    if filter.excludeRead || filter.excludeMuted {
+    if (filter.excludeRead || filter.excludeMuted) && !DGSimpleSettings.shared.removePings {
         messageTagSummary = ChatListMessageTagSummaryResultCalculation(addCount: ChatListMessageTagSummaryResultComponent(tag: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud), subtractCount: ChatListMessageTagActionsSummaryResultComponent(type: PendingMessageActionType.consumeUnseenPersonalMessage, namespace: Namespaces.Message.Cloud))
     }
     return ChatListFilterPredicate(includePeerIds: includePeers, excludePeerIds: excludePeers, pinnedPeerIds: filter.includePeers.pinnedPeers, messageTagSummary: messageTagSummary, includeAdditionalPeerGroupIds: includeAdditionalPeerGroupIds, include: { peer, isMuted, isUnread, isContact, messageTagSummaryResult in

@@ -2,6 +2,27 @@ import Foundation
 import DGSimpleSettings
 import Postbox
 import TelegramApi
+import SwiftSignalKit
+
+public func donutgramUsesPersonalNotificationSettings(peerId: PeerId, personal: Bool, removePings: Bool) -> Bool {
+    if removePings, peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel {
+        return false
+    }
+    return personal
+}
+
+/// Emits the current persisted setting and live updates without modifying server
+/// mention tags, so switching the toggle off restores unconsumed mentions.
+public func donutgramRemovePingsEnabled() -> Signal<Bool, NoError> {
+    return Signal { subscriber in
+        let observer = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: nil) { _ in
+            subscriber.putNext(DGSimpleSettings.shared.removePings)
+        }
+        subscriber.putNext(DGSimpleSettings.shared.removePings)
+        return ActionDisposable { NotificationCenter.default.removeObserver(observer) }
+    }
+    |> distinctUntilChanged
+}
 
 public extension MessageFlags {
     var isSending: Bool {
@@ -69,6 +90,12 @@ public extension Message {
         return false
     }
     
+    /// Only notification routing changes; selective bot keyboards still use the
+    /// original personal flag and stored unread/mention state remains untouched.
+    var donutgramPersonalForNotifications: Bool {
+        return donutgramUsesPersonalNotificationSettings(peerId: self.id.peerId, personal: self.personal, removePings: DGSimpleSettings.shared.removePings)
+    }
+
     var requestsSetupReply: Bool {
         for attribute in self.attributes {
             if let attribute = attribute as? ReplyMarkupMessageAttribute {
