@@ -2052,6 +2052,37 @@ private final class NotificationServiceHandler {
                                     |> map { _ -> (NotificationContent, Media?) in }
                                 }
                                 
+                                // Mention pushes must respect the group's/topic's mute and
+                                // sound settings too, including while the main app is closed.
+                                let ordinaryMentionContent = pollWithUpdatedContent
+                                |> mapToSignal { content, media -> Signal<(NotificationContent, Media?), NoError> in
+                                    guard DGSimpleSettings.shared.removePings, let messageId else { return .single((content, media)) }
+                                    return stateManager.postbox.transaction { transaction -> (NotificationContent, Media?) in
+                                        guard let message = transaction.getMessage(messageId), message.personal,
+                                              message.id.peerId.namespace == Namespaces.Peer.CloudGroup || message.id.peerId.namespace == Namespaces.Peer.CloudChannel else { return (content, media) }
+                                        let notification = messagesForNotification(transaction: transaction, id: messageId, alwaysReturnMessage: true)
+                                        guard notification.notify else { return (NotificationContent(isLockedMessage: nil), nil) }
+                                        var content = content
+                                        switch notification.sound {
+                                        case .none:
+                                            content.sound = nil
+                                        case let .cloud(fileId):
+                                            let fileName = "\(fileId).mp3"
+                                            let soundPath = appGroupUrl.path + "/Library/Sounds/" + fileName
+                                            if !FileManager.default.fileExists(atPath: soundPath),
+                                               let sound = notificationSoundList?.sounds.first(where: { $0.file.fileId.id == fileId }),
+                                               let filePath = stateManager.postbox.mediaBox.completedResourcePath(id: sound.file.resource.id, pathExtension: nil) {
+                                                let _ = try? FileManager.default.createDirectory(atPath: appGroupUrl.path + "/Library/Sounds", withIntermediateDirectories: true, attributes: nil)
+                                                let _ = try? FileManager.default.copyItem(atPath: filePath, toPath: soundPath)
+                                            }
+                                            content.sound = FileManager.default.fileExists(atPath: soundPath) ? fileName : "0.m4a"
+                                        default:
+                                            content.sound = "0.m4a"
+                                        }
+                                        return (content, media)
+                                    }
+                                }
+
                                 let reportDeliverySignal: Signal<Bool, NoError>
                                 if reportDelivery, let messageId {
                                     reportDeliverySignal = _internal_reportMessageDelivery(postbox: stateManager.postbox, network: stateManager.network, messageIds: [messageId], fromPushNotification: true)
@@ -2062,7 +2093,7 @@ private final class NotificationServiceHandler {
 
                                 var updatedContent = initialContent
                                 var updatedMedia: Media?
-                                strongSelf.pollDisposable.set(combineLatest(pollWithUpdatedContent, reportDeliverySignal).start(next: { contentAndMedia, _ in
+                                strongSelf.pollDisposable.set(combineLatest(ordinaryMentionContent, reportDeliverySignal).start(next: { contentAndMedia, _ in
                                     updatedContent = contentAndMedia.0
                                     updatedMedia = contentAndMedia.1
                                 }, completed: {

@@ -8,6 +8,7 @@ on:
       - 'Telegram/NotificationService/**'
       - 'submodules/TelegramCore/Sources/Donutgram/**'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/SearchPeers.swift'
+      - 'submodules/TelegramCore/Sources/Utils/MessageUtils.swift'
       - 'submodules/TelegramUI/Sources/AppDelegate.swift'
       - 'Tests/notification_id_search/**'
       - '.github/workflows/notification-id-search-tests.yml'
@@ -22,5 +23,5 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - name: Test production retention and ID-search helpers
+      - name: Test production retention, mention routing and ID-search helpers
         run: python3 Tests/notification_id_search/run.py

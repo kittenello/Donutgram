@@ -185,6 +185,7 @@ public final class DGSimpleSettings {
         static let hideGreetingSticker = "donutgram.chats.hideGreetingSticker"
         static let commaAfterMention = "donutgram.chats.commaAfterMention"
         static let mentionAvatars = "donutgram.chats.mentionAvatars"
+        static let removePings = "donutgram.chats.removePings"
         static let hideArchive = "donutgram.chats.hideArchive"
         static let openArchiveOnPull = "donutgram.chats.openArchiveOnPull"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
@@ -827,6 +828,16 @@ public final class DGSimpleSettings {
     public var showOnlineIndicator: Bool { get { bool(Key.showOnlineIndicator) } set { setBool(newValue, Key.showOnlineIndicator) } }
     public var hideGreetingSticker: Bool { get { bool(Key.hideGreetingSticker) } set { setBool(newValue, Key.hideGreetingSticker) } }
     public var commaAfterMention: Bool { get { bool(Key.commaAfterMention) } set { setBool(newValue, Key.commaAfterMention) } }
+    public var removePings: Bool {
+        get { self.preservationSettings?.removePings ?? self.defaults.bool(forKey: Key.removePings) }
+        set {
+            guard self.removePings != newValue else { return }
+            self.defaults.set(newValue, forKey: Key.removePings)
+            self.preservationSettings?.removePings = newValue
+            NotificationCenter.default.post(name: DGSimpleSettings.didChangeNotification, object: self)
+        }
+    }
+
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }

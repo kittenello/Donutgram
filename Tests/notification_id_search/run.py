@@ -38,6 +38,10 @@ def make_harness():
         extract((CORE / file).read_text(encoding="utf-8"), name)
         for file, names in HELPERS.items() for name in names
     )
+    helpers += "\n" + extract(
+        (ROOT / "submodules/TelegramCore/Sources/Utils/MessageUtils.swift").read_text(encoding="utf-8"),
+        "donutgramUsesPersonalNotificationSettings",
+    )
     fixture = Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
     assert fixture.count("// PRODUCTION_HELPERS") == 1
     extension = (ROOT / "Telegram/NotificationService/Sources/NotificationService.swift").read_text(encoding="utf-8")
@@ -45,6 +49,8 @@ def make_harness():
     assert "|> then(pollSignal)" in extension[capture:capture + 650]
     assert "donutgramDeleteMessagesFromNotification(transaction:" in extension
     assert "configureMessagePreservation(appGroupName: appGroupName, isMainApp: false)" in extension
+    assert "combineLatest(ordinaryMentionContent, reportDeliverySignal)" in extension
+    assert "guard notification.notify else" in extension
     assert "configureMessagePreservation(appGroupName: appGroupName, isMainApp: true)" in (ROOT / "submodules/TelegramUI/Sources/AppDelegate.swift").read_text(encoding="utf-8")
     return fixture.replace("// PRODUCTION_HELPERS", helpers)
 
@@ -80,6 +86,7 @@ def main():
         for path in [CORE / file for file in HELPERS] + [
             ROOT / "Telegram/NotificationService/Sources/NotificationService.swift",
             ROOT / "submodules/TelegramCore/Sources/TelegramEngine/Peers/SearchPeers.swift",
+            ROOT / "submodules/TelegramCore/Sources/Utils/MessageUtils.swift",
             ROOT / "submodules/TelegramUI/Sources/AppDelegate.swift",
         ]:
             subprocess.run([swift, "-frontend", "-parse", str(path)], check=True)

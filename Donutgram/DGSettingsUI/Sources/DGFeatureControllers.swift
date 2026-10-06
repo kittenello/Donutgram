@@ -279,6 +279,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(20, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
             .toggle(21, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
             .toggle(22, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
+            .toggle(23, 4, "removePings", "Убрать пинги", s.removePings, true),
             .header(24, 5, "ГОЛОС В ТЕКСТ"),
             .disclosure(25, 5, "transcription", "Сервис", transcription),
             .header(30, 6, "ЗАПИСЬ"),
@@ -320,6 +321,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "greetingSticker": s.hideGreetingSticker = value
         case "mentionComma": s.commaAfterMention = value
         case "mentionAvatars": s.mentionAvatars = value
+        case "removePings": s.removePings = value
         case "pollResultsBeforeVoting": s.showPollResultsBeforeVoting = value
         case "channelForwardCount": s.showChannelForwardCount = value
         case "forwardDate": s.showForwardDate = value

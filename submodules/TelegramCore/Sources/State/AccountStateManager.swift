@@ -2441,7 +2441,7 @@ public func messagesForNotification(transaction: Transaction, id: MessageId, alw
     if let peer, peer is TelegramSecretChat, let associatedPeerId = peer.associatedPeerId {
         notificationPeerId = associatedPeerId
     }
-    if message.personal, let author = message.author {
+    if message.donutgramPersonalForNotifications, let author = message.author {
         notificationPeerId = author.id
     }
     
