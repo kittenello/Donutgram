@@ -90,6 +90,13 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
     
+    // Telegram's own «Show Calls Tab», and «Вкладка Контакты» / «Вкладка Звонки» as the tabs were last built: the tabs
+    // follow these settings at once, without a restart.
+    private var showCallsTab: Bool = true
+    private var appliedShowContactsTab: Bool?
+    private var appliedShowCallsTab: Bool?
+    private var donutgramTabsObserver: NSObjectProtocol?
+
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
             self.minimizedContainer?.navigationController = self
@@ -147,6 +154,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
+        if let donutgramTabsObserver = self.donutgramTabsObserver {
+            NotificationCenter.default.removeObserver(donutgramTabsObserver)
+        }
     }
     
     public func getContactsController() -> ViewController? {
@@ -246,6 +256,20 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if DGSimpleSettings.shared.hideTabBar {
             tabBarController.updateIsTabBarHidden(true, transition: .immediate)
         }
+        self.showCallsTab = showCallsTab
+        self.appliedShowContactsTab = DGSimpleSettings.shared.showContactsTab
+        self.appliedShowCallsTab = DGSimpleSettings.shared.showCallsTab
+        if self.donutgramTabsObserver == nil {
+            self.donutgramTabsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self, self.rootTabController != nil else {
+                    return
+                }
+                let settings = DGSimpleSettings.shared
+                if settings.showContactsTab != self.appliedShowContactsTab || settings.showCallsTab != self.appliedShowCallsTab {
+                    self.updateRootControllers(showCallsTab: self.showCallsTab)
+                }
+            }
+        }
         
         self.contactsController = contactsController
         self.callListController = callListController
@@ -259,6 +283,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
+        self.showCallsTab = showCallsTab
+        self.appliedShowContactsTab = DGSimpleSettings.shared.showContactsTab
+        self.appliedShowCallsTab = DGSimpleSettings.shared.showCallsTab
         var controllers: [ViewController] = []
         if DGSimpleSettings.shared.showContactsTab {
             controllers.append(self.contactsController!)

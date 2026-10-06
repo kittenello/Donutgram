@@ -140,7 +140,7 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
             .toggle(42, 5, "confirmCalls", "Подтверждение вызова", s.confirmCalls, true)
         ])
         return entries
-    }, restartRequiredKeys: ["premiumStatuses", "hideStories", "hideTabBar", "contacts", "calls"], toggle: { key, value in
+    }, restartRequiredKeys: ["premiumStatuses", "hideStories", "hideTabBar"], toggle: { key, value in
         switch key { case "premiumStatuses": s.hidePremiumStatuses = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "integratedTabSearch": s.integratedTabSearch = value; case "tabSearchOnLeft": s.tabSearchOnLeft = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
     }, open: { key in
         switch key {
