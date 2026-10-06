@@ -72,7 +72,7 @@ public final class NavigationSearchView: UIView {
         super.init(frame: CGRect())
 
         self.addSubview(self.backgroundView)
-        self.addSubview(self.iconView)
+        self.backgroundView.contentView.addSubview(self.iconView)
 
         self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
     }
@@ -118,8 +118,9 @@ public final class NavigationSearchView: UIView {
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: backgroundSize))
         let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.25)
 
-        alphaTransition.setAlpha(view: self.backgroundView, alpha: params.integrated && !params.isActive ? 0.0 : 1.0)
-        self.backgroundView.update(size: backgroundSize, cornerRadius: backgroundSize.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
+        // Inside the tab bar the button uses the bar's glass. The own glass is turned off with isVisible, like other glass
+        // in the app, not with alpha: iOS 26 animates glass in and out by its effect, and the icon stays in its content.
+        self.backgroundView.update(size: backgroundSize, cornerRadius: backgroundSize.height * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, isVisible: !params.integrated || params.isActive, transition: transition)
 
         if self.iconView.image == nil {
             self.iconView.image = UIImage(bundleImageName: "Navigation/Search")?.withRenderingMode(.alwaysTemplate)
@@ -899,7 +900,17 @@ public final class TabBarComponent: Component {
                 lensSelection = (0.0, 48.0)
             }
             
-            lensSelection.x = max(0.0, min(lensSelection.x, lensSize.width - lensSelection.width))
+            // With the search inside the bar the selection stays over the tabs and never covers the search button.
+            var lensMinX: CGFloat = 0.0
+            var lensMaxX: CGFloat = lensSize.width
+            if integratedSearch {
+                if searchOnLeft {
+                    lensMinX = barHeight
+                } else {
+                    lensMaxX -= barHeight
+                }
+            }
+            lensSelection.x = max(lensMinX, min(lensSelection.x, lensMaxX - lensSelection.width))
             
             self.liquidLensView.update(size: lensSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: lensSize.height), inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil && component.isLiftedStateEnabled, isCollapsed: isLensCollapsed, transition: transition.withUserData(LiquidLensView.TransitionInfo(disableAnimationWorkarounds: !component.isLiftedStateEnabled)))
 
