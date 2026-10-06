@@ -221,6 +221,12 @@ public final class Transaction {
         self.postbox?.confirmSynchronizedIncomingReadState(peerId)
     }
     
+    /// Whether the peer's read state is waiting to be pushed to the server.
+    public func hasPendingIncomingReadStatePush(_ peerId: PeerId) -> Bool {
+        assert(!self.disposed)
+        return self.postbox?.synchronizeReadStateTable.hasPendingPush(peerId) ?? false
+    }
+
     public func applyIncomingReadMaxId(_ messageId: MessageId) {
         assert(!self.disposed)
         self.postbox?.applyIncomingReadMaxId(messageId)

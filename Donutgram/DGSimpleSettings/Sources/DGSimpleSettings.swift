@@ -653,131 +653,85 @@ public final class DGSimpleSettings {
     }
 
     /// A chat that ghost mode read only on this device: the server, and so the senders, still
-    /// see it unread. Stored per account (`PeerId.toInt64()` keys) by TelegramCore.
-    public enum GhostLocalRead: Equatable {
-        /// Read here up to `maxIncomingReadId`, further than on the server.
-        case active(maxIncomingReadId: Int32)
-        /// Read receipts are no longer hidden: the chat waits for the server's read state.
-        case reverting
-    }
+    /// see it unread. Stored per account (`PeerId.toInt64()` keys) by TelegramCore, together
+    /// with the server's read state the local read was made on top of.
+    public struct GhostLocalRead: Equatable {
+        /// Read here up to this id.
+        public var maxIncomingReadId: Int32
+        /// The server's read state.
+        public var serverMaxIncomingReadId: Int32
+        public var serverMarkedUnread: Bool
+        /// Messages the server counts as unread that are read here.
+        public var readCount: Int32
 
-    private struct GhostLocalReads {
-        var active: [Int64: Int32] = [:]
-        var reverting = Set<Int64>()
+        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readCount: Int32) {
+            self.maxIncomingReadId = maxIncomingReadId
+            self.serverMaxIncomingReadId = serverMaxIncomingReadId
+            self.serverMarkedUnread = serverMarkedUnread
+            self.readCount = readCount
+        }
     }
 
     private let ghostLocalReadLock = NSLock()
-    private var ghostLocalReadCache: [Int64: GhostLocalReads] = [:]
+    private var ghostLocalReadCache: [Int64: [Int64: GhostLocalRead]] = [:]
 
-    private func ghostLocalReadsKey(_ suffix: String, accountPeerId: Int64) -> String {
-        return "donutgram.ghost.localReads.\(accountPeerId).\(suffix)"
+    private func ghostLocalReadsKey(accountPeerId: Int64) -> String {
+        return "donutgram.ghost.localReads.\(accountPeerId)"
     }
 
     // Call with ghostLocalReadLock held.
-    private func ghostLocalReadsLocked(accountPeerId: Int64) -> GhostLocalReads {
+    private func ghostLocalReadsLocked(accountPeerId: Int64) -> [Int64: GhostLocalRead] {
         if let cached = self.ghostLocalReadCache[accountPeerId] {
             return cached
         }
-        var reads = GhostLocalReads()
-        for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey("active", accountPeerId: accountPeerId)) ?? [:] {
-            if let peerId = Int64(key), let maxId = (value as? Int).flatMap({ Int32(exactly: $0) }) {
-                reads.active[peerId] = maxId
+        var reads: [Int64: GhostLocalRead] = [:]
+        for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey(accountPeerId: accountPeerId)) ?? [:] {
+            guard let peerId = Int64(key), let values = value as? [Int], values.count == 4 else {
+                continue
             }
+            let ids = values.prefix(3).compactMap { Int32(exactly: $0) }
+            guard ids.count == 3 else {
+                continue
+            }
+            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readCount: ids[2])
         }
-        reads.reverting = Set((self.defaults.stringArray(forKey: ghostLocalReadsKey("reverting", accountPeerId: accountPeerId)) ?? []).compactMap { Int64($0) })
         self.ghostLocalReadCache[accountPeerId] = reads
         return reads
-    }
-
-    // Call with ghostLocalReadLock held.
-    private func storeGhostLocalReadsLocked(_ reads: GhostLocalReads, accountPeerId: Int64) {
-        self.ghostLocalReadCache[accountPeerId] = reads
-        var active: [String: Int] = [:]
-        for (peerId, maxId) in reads.active {
-            active[String(peerId)] = Int(maxId)
-        }
-        self.defaults.set(active, forKey: ghostLocalReadsKey("active", accountPeerId: accountPeerId))
-        self.defaults.set(reads.reverting.map { String($0) }.sorted(), forKey: ghostLocalReadsKey("reverting", accountPeerId: accountPeerId))
     }
 
     public func hasGhostLocalReads(accountPeerId: Int64) -> Bool {
         self.ghostLocalReadLock.lock()
         defer { self.ghostLocalReadLock.unlock() }
-        let reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        return !reads.active.isEmpty || !reads.reverting.isEmpty
+        return !self.ghostLocalReadsLocked(accountPeerId: accountPeerId).isEmpty
     }
 
     public func ghostLocalRead(accountPeerId: Int64, peerId: Int64) -> GhostLocalRead? {
         self.ghostLocalReadLock.lock()
         defer { self.ghostLocalReadLock.unlock() }
-        let reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        if let maxId = reads.active[peerId] {
-            return .active(maxIncomingReadId: maxId)
-        } else if reads.reverting.contains(peerId) {
-            return .reverting
-        } else {
-            return nil
-        }
+        return self.ghostLocalReadsLocked(accountPeerId: accountPeerId)[peerId]
     }
 
-    /// Chats read only on this device, with the id each one is read up to.
-    public func activeGhostLocalReads(accountPeerId: Int64) -> [Int64: Int32] {
+    public func ghostLocalReads(accountPeerId: Int64) -> [Int64: GhostLocalRead] {
         self.ghostLocalReadLock.lock()
         defer { self.ghostLocalReadLock.unlock() }
-        return self.ghostLocalReadsLocked(accountPeerId: accountPeerId).active
+        return self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
     }
 
-    public func revertingGhostLocalReads(accountPeerId: Int64) -> Set<Int64> {
-        self.ghostLocalReadLock.lock()
-        defer { self.ghostLocalReadLock.unlock() }
-        return self.ghostLocalReadsLocked(accountPeerId: accountPeerId).reverting
-    }
-
-    /// Records that the chat is read up to `maxIncomingReadId` on this device only.
-    public func setGhostLocalRead(maxIncomingReadId: Int32, accountPeerId: Int64, peerId: Int64) {
+    /// Records the chat's local read, or forgets it (`nil`).
+    public func setGhostLocalRead(_ read: GhostLocalRead?, accountPeerId: Int64, peerId: Int64) {
         self.ghostLocalReadLock.lock()
         defer { self.ghostLocalReadLock.unlock() }
         var reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        let current = reads.active[peerId]
-        if let current, current >= maxIncomingReadId {
+        guard reads[peerId] != read else {
             return
         }
-        reads.active[peerId] = maxIncomingReadId
-        reads.reverting.remove(peerId)
-        self.storeGhostLocalReadsLocked(reads, accountPeerId: accountPeerId)
-    }
-
-    public func removeGhostLocalRead(accountPeerId: Int64, peerId: Int64) {
-        self.ghostLocalReadLock.lock()
-        defer { self.ghostLocalReadLock.unlock() }
-        var reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        guard reads.active.removeValue(forKey: peerId) != nil || reads.reverting.remove(peerId) != nil else {
-            return
+        reads[peerId] = read
+        self.ghostLocalReadCache[accountPeerId] = reads
+        var stored: [String: [Int]] = [:]
+        for (peerId, read) in reads {
+            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount), read.serverMarkedUnread ? 1 : 0]
         }
-        self.storeGhostLocalReadsLocked(reads, accountPeerId: accountPeerId)
-    }
-
-    /// Moves the chats read only on this device (all of them, or the one with `peerId`) to
-    /// the reverting state and returns the moved ones.
-    public func beginRevertingGhostLocalReads(accountPeerId: Int64, peerId: Int64? = nil) -> [Int64] {
-        self.ghostLocalReadLock.lock()
-        defer { self.ghostLocalReadLock.unlock() }
-        var reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        let moved: [Int64]
-        if let peerId {
-            moved = reads.active[peerId] != nil ? [peerId] : []
-        } else {
-            moved = Array(reads.active.keys)
-        }
-        guard !moved.isEmpty else {
-            return []
-        }
-        for peerId in moved {
-            reads.active.removeValue(forKey: peerId)
-            reads.reverting.insert(peerId)
-        }
-        self.storeGhostLocalReadsLocked(reads, accountPeerId: accountPeerId)
-        return moved
+        self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
     }
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }

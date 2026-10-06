@@ -356,9 +356,9 @@ public func clearPeerUnseenReactionsAndPollVotesInteractively(account: Account, 
 
 func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network: Network, viewTracker: AccountViewTracker, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?) {
     // Donutgram: chats read only on this device are unread on the server, so they are read too.
-    let ghostLocalReadPeerIds = donutgramGhostLocalReadsPrepareReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId)
+    let ghostLocalReads = donutgramGhostLocalReadsPrepareReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId)
     let peerIds = transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false)
-    donutgramGhostLocalReadsFinishReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId, markedPeerIds: ghostLocalReadPeerIds, readPeerIds: Set(peerIds))
+    donutgramGhostLocalReadsFinishReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId, restored: ghostLocalReads, readPeerIds: Set(peerIds))
     for peerId in peerIds {
         _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
     }

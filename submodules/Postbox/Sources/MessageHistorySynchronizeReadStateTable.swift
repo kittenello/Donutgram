@@ -60,6 +60,22 @@ final class MessageHistorySynchronizeReadStateTable: Table {
         return operations
     }
     
+    func hasPendingPush(_ peerId: PeerId) -> Bool {
+        if let operation = self.updatedPeerIds[peerId] {
+            if case .Push? = operation {
+                return true
+            } else {
+                return false
+            }
+        }
+        if let value = self.valueBox.get(self.table, key: self.key(peerId: peerId)) {
+            var operationValue: Int8 = 0
+            value.read(&operationValue, offset: 0, length: 1)
+            return operationValue == 0
+        }
+        return false
+    }
+
     override func beforeCommit() {
         if !self.updatedPeerIds.isEmpty {
             let key = ValueBoxKey(length: 8)

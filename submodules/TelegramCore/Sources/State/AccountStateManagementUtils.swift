@@ -4797,7 +4797,7 @@ func replayFinalState(
                 if !ignore {
                     transaction.resetIncomingReadStates([peerId: [namespace: .idBased(maxIncomingReadId: maxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: count, markedUnread: markedUnreadValue)]])
                     if namespace == Namespaces.Message.Cloud {
-                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverIsRead: count == 0 && !markedUnreadValue)
+                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: markedUnread)
                     }
                 }
             case let .ResetIncomingReadState(groupId, peerId, namespace, maxIncomingReadId, count, pts):
@@ -4839,7 +4839,7 @@ func replayFinalState(
                     let stateDict = Dictionary(updatedStates, uniquingKeysWith: { lhs, _ in lhs })
                     transaction.resetIncomingReadStates([peerId: stateDict])
                     if namespace == Namespaces.Message.Cloud {
-                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverIsRead: count == 0)
+                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: nil)
                     }
                 } else {
                     transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: namespace, id: maxIncomingReadId))
@@ -4856,6 +4856,7 @@ func replayFinalState(
                         }
                     }
                 } else {
+                    donutgramGhostLocalReadDidUpdateServerUnreadMark(accountPeerId: accountPeerId, peerId: peerId, namespace: namespace, value: value)
                     transaction.applyMarkUnread(peerId: peerId, namespace: namespace, value: value, interactive: false)
                 }
             case let .ResetMessageTagSummary(peerId, tag, namespace, count, range):

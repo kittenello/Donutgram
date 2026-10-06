@@ -42,8 +42,8 @@ private final class SynchronizePeerReadStatesContextImpl {
         self.ghostHidesReadReceipts = donutgramGhostModeBlocksContentReads()
 
         // Donutgram: chats ghost mode read only on this device become unread again (take the
-        // server's read state) once read receipts are no longer hidden. The ones left
-        // waiting when the app stopped are validated again on start.
+        // server's read state) once read receipts are no longer hidden, also when that
+        // happened while the app wasn't running.
         self.ghostSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil, using: { [weak self] _ in
             self?.queue.async { [weak self] in
                 self?.updateGhostLocalReads(initial: false)
@@ -77,30 +77,12 @@ private final class SynchronizePeerReadStatesContextImpl {
             return
         }
         self.ghostHidesReadReceipts = hidesReadReceipts
-
-        let settings = DGSimpleSettings.shared
-        let accountPeerId = self.stateManager.accountPeerId.toInt64()
-        var peerIds: [Int64] = []
-        if !hidesReadReceipts {
-            peerIds = settings.beginRevertingGhostLocalReads(accountPeerId: accountPeerId)
-        }
-        if initial {
-            peerIds = Array(settings.revertingGhostLocalReads(accountPeerId: accountPeerId))
-        }
-        if peerIds.isEmpty {
+        let accountPeerId = self.stateManager.accountPeerId
+        if hidesReadReceipts || !DGSimpleSettings.shared.hasGhostLocalReads(accountPeerId: accountPeerId.toInt64()) {
             return
         }
         let _ = self.postbox.transaction({ transaction -> Void in
-            for peerId in peerIds {
-                let id = PeerId(peerId)
-                if transaction.getPeerChatListIndex(id) == nil {
-                    // A chat that left the chat list may have no dialog on the server, and
-                    // its validation would keep retrying.
-                    settings.removeGhostLocalRead(accountPeerId: accountPeerId, peerId: peerId)
-                } else {
-                    transaction.setNeedsIncomingReadStateSynchronization(id)
-                }
-            }
+            donutgramRestoreGhostLocalReads(transaction: transaction, accountPeerId: accountPeerId)
         }).start()
     }
 
