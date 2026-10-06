@@ -2,6 +2,7 @@ import Foundation
 import Postbox
 import SwiftSignalKit
 import TelegramApi
+import DGSimpleSettings
 
 private struct DiscussionMessage {
     var messageId: MessageId
@@ -320,6 +321,12 @@ private class ReplyThreadHistoryContextImpl {
         let threadId = self.threadId
         
         if messageIndex.id.namespace != Namespaces.Message.Cloud {
+            return
+        }
+        // Donutgram: ghost mode keeps forum topics, comments and channel direct
+        // messages unread, like regular chats in _internal_applyMaxReadIndexInteractively.
+        // Otherwise readDiscussion/readSavedHistory below would report the read.
+        if DGSimpleSettings.shared.ghostModeEnabled && !DGSimpleSettings.shared.ghostReadMessages {
             return
         }
 
