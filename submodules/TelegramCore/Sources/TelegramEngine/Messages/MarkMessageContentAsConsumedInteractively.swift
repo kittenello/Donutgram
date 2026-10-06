@@ -15,7 +15,10 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                         updatedAttributes[i] = ConsumableContentMessageAttribute(consumed: true)
                         updateMessage = true
                         
-                        if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
+                        if donutgramGhostModeBlocksContentReads() {
+                            // Donutgram: ghost mode does not report playback, in secret chats
+                            // either; the content is still marked as consumed locally above.
+                        } else if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                             if let state = transaction.getPeerChatState(message.id.peerId) as? SecretChatState {
                                 var layer: SecretChatLayer?
                                 switch state.embeddedState {
@@ -37,9 +40,7 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                                     }
                                 }
                             }
-                        } else if !donutgramGhostModeBlocksContentReads() {
-                            // Donutgram: ghost mode does not report playback; the content
-                            // is still marked as consumed locally above.
+                        } else {
                             addSynchronizeConsumeMessageContentsOperation(transaction: transaction, messageIds: [message.id])
                         }
                     }
@@ -64,7 +65,9 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                         updatedAttributes[i] = AutoremoveTimeoutMessageAttribute(timeout: timeout, countdownBeginTime: timestamp)
                         updateMessage = true
                         
-                        if messageId.peerId.namespace == Namespaces.Peer.SecretChat {
+                        // Donutgram: in ghost mode the countdown runs only on this device and
+                        // the other side is not told that the media was opened.
+                        if messageId.peerId.namespace == Namespaces.Peer.SecretChat && !donutgramGhostModeBlocksContentReads() {
                             var layer: SecretChatLayer?
                             let state = transaction.getPeerChatState(message.id.peerId) as? SecretChatState
                             if let state = state {
@@ -95,7 +98,9 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                         updatedAttributes[i] = AutoclearTimeoutMessageAttribute(timeout: timeout, countdownBeginTime: timestamp)
                         updateMessage = true
                         
-                        if messageId.peerId.namespace == Namespaces.Peer.SecretChat {
+                        // Donutgram: in ghost mode the countdown runs only on this device and
+                        // the other side is not told that the media was opened.
+                        if messageId.peerId.namespace == Namespaces.Peer.SecretChat && !donutgramGhostModeBlocksContentReads() {
                             var layer: SecretChatLayer?
                             let state = transaction.getPeerChatState(message.id.peerId) as? SecretChatState
                             if let state = state {
