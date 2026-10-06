@@ -358,7 +358,7 @@ func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network
     // Donutgram: chats read only on this device are unread on the server, so they are read too.
     let ghostLocalReads = donutgramGhostLocalReadsPrepareReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId)
     let peerIds = transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false)
-    donutgramGhostLocalReadsFinishReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId, restored: ghostLocalReads, readPeerIds: Set(peerIds))
+    donutgramGhostLocalReadsFinishReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId, before: ghostLocalReads, readPeerIds: Set(peerIds))
     for peerId in peerIds {
         _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
     }

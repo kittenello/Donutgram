@@ -215,9 +215,10 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                     }
                 }
             }
+            let ghostLocalCount = donutgramGhostLocalReadCount(transaction: transaction, accountPeerId: stateManager.accountPeerId, peerId: peerId)
             transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud: updatedReadState]])
             if case let .idBased(maxIncomingReadId, _, _, count, markedUnread) = updatedReadState {
-                donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: stateManager.accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: markedUnread)
+                donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: stateManager.accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: markedUnread, localCount: ghostLocalCount)
             }
             return nil
         }

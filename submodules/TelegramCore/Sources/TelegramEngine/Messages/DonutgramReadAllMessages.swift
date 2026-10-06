@@ -92,7 +92,12 @@ private func donutgramReadDialogPage(postbox: Postbox, network: Network, stateMa
                             transaction.applyIncomingReadMaxId(readMessageId)
                             donutgramGhostLocalReadDidReadOnServer(accountPeerId: stateManager.accountPeerId, messageId: readMessageId)
                         }
-                        if markSucceeded { transaction.applyMarkUnread(peerId: peerId, namespace: Namespaces.Message.Cloud, value: false, interactive: false) }
+                        if markSucceeded {
+                            if markedUnread {
+                                donutgramGhostLocalReadDidUpdateServerUnreadMark(accountPeerId: stateManager.accountPeerId, peerId: peerId, namespace: Namespaces.Message.Cloud, value: false)
+                            }
+                            transaction.applyMarkUnread(peerId: peerId, namespace: Namespaces.Message.Cloud, value: false, interactive: false)
+                        }
                         return readSucceeded && markSucceeded
                     }
                 }

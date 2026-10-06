@@ -4795,9 +4795,10 @@ func replayFinalState(
                     }
                 }
                 if !ignore {
+                    let ghostLocalCount = donutgramGhostLocalReadCount(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId)
                     transaction.resetIncomingReadStates([peerId: [namespace: .idBased(maxIncomingReadId: maxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: count, markedUnread: markedUnreadValue)]])
                     if namespace == Namespaces.Message.Cloud {
-                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: markedUnread)
+                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: markedUnread, localCount: ghostLocalCount)
                     }
                 }
             case let .ResetIncomingReadState(groupId, peerId, namespace, maxIncomingReadId, count, pts):
@@ -4837,9 +4838,10 @@ func replayFinalState(
                         invalidateGroupStats.insert(groupId)
                     }
                     let stateDict = Dictionary(updatedStates, uniquingKeysWith: { lhs, _ in lhs })
+                    let ghostLocalCount = donutgramGhostLocalReadCount(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId)
                     transaction.resetIncomingReadStates([peerId: stateDict])
                     if namespace == Namespaces.Message.Cloud {
-                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: nil)
+                        donutgramGhostLocalReadDidApplyServerState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, serverMaxIncomingReadId: maxIncomingReadId, serverCount: count, serverMarkedUnread: nil, localCount: ghostLocalCount)
                     }
                 } else {
                     transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: namespace, id: maxIncomingReadId))

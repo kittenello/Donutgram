@@ -661,13 +661,17 @@ public final class DGSimpleSettings {
         /// The server's read state.
         public var serverMaxIncomingReadId: Int32
         public var serverMarkedUnread: Bool
-        /// Messages the server counts as unread that are read here.
-        public var readCount: Int32
+        /// The server's unread mark is read here as well.
+        public var readsServerMark: Bool
+        /// Messages the server counts as unread that are read here; nil when that is not known
+        /// (the server read part of them on another device).
+        public var readCount: Int32?
 
-        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readCount: Int32) {
+        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?) {
             self.maxIncomingReadId = maxIncomingReadId
             self.serverMaxIncomingReadId = serverMaxIncomingReadId
             self.serverMarkedUnread = serverMarkedUnread
+            self.readsServerMark = readsServerMark
             self.readCount = readCount
         }
     }
@@ -686,14 +690,14 @@ public final class DGSimpleSettings {
         }
         var reads: [Int64: GhostLocalRead] = [:]
         for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey(accountPeerId: accountPeerId)) ?? [:] {
-            guard let peerId = Int64(key), let values = value as? [Int], values.count == 4 else {
+            guard let peerId = Int64(key), let values = value as? [Int], values.count == 5 else {
                 continue
             }
             let ids = values.prefix(3).compactMap { Int32(exactly: $0) }
             guard ids.count == 3 else {
                 continue
             }
-            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readCount: ids[2])
+            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil)
         }
         self.ghostLocalReadCache[accountPeerId] = reads
         return reads
@@ -729,7 +733,7 @@ public final class DGSimpleSettings {
         self.ghostLocalReadCache[accountPeerId] = reads
         var stored: [String: [Int]] = [:]
         for (peerId, read) in reads {
-            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount), read.serverMarkedUnread ? 1 : 0]
+            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0]
         }
         self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
     }

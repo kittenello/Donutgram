@@ -221,10 +221,15 @@ public final class Transaction {
         self.postbox?.confirmSynchronizedIncomingReadState(peerId)
     }
     
-    /// Whether the peer's read state is waiting to be pushed to the server.
-    public func hasPendingIncomingReadStatePush(_ peerId: PeerId) -> Bool {
+    /// The pending synchronization of the peer's read state with the server.
+    public func getPeerReadStateSynchronizationOperation(_ peerId: PeerId) -> PeerReadStateSynchronizationOperation? {
         assert(!self.disposed)
-        return self.postbox?.synchronizeReadStateTable.hasPendingPush(peerId) ?? false
+        guard let postbox = self.postbox else {
+            return nil
+        }
+        return postbox.synchronizeReadStateTable.get(peerId, getCombinedPeerReadState: { peerId in
+            return postbox.readStateTable.getCombinedState(peerId)
+        })
     }
 
     public func applyIncomingReadMaxId(_ messageId: MessageId) {
