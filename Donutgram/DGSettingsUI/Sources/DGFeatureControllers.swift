@@ -83,7 +83,7 @@ private func dgVisualPhoneController(context: AccountContext, focusKey: String? 
 private func dgGhostSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     return dgController(context: context, page: .ghost, title: "Режим призрака", focusKey: focusKey, entries: {
-        let count = [s.ghostReadMessages, s.ghostReadStories, s.ghostSendOnline, s.ghostSendTyping, !s.ghostAutomaticOffline].filter { !$0 }.count
+        let count = s.ghostModeEnabled ? [s.ghostReadMessages, s.ghostReadStories, s.ghostSendOnline, s.ghostSendTyping, !s.ghostAutomaticOffline].filter { !$0 }.count : 0
         let silent = ["Никогда", "В режиме призрака", "Всегда"][min(max(s.ghostSendWithoutSound, 0), 2)]
         return [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .toggle(1, 0, "enabled", "Режим призрака", s.ghostModeEnabled, true), .disclosure(2, 0, "options", "Параметры режима призрака", "\(count)/5"), .toggle(3, 0, "readOnAction", "Читать при действиях", s.ghostReadOnAction, s.ghostModeEnabled), .toggle(4, 0, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, s.ghostModeEnabled), .disclosure(5, 0, "silent", "Отправлять без звука", silent), .toggle(6, 0, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true)]
     }, toggle: { key, value in
@@ -94,7 +94,13 @@ private func dgGhostSettingsController(context: AccountContext, focusKey: String
 private func dgGhostOptionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     return dgController(context: context, page: .ghostOptions, title: "Параметры призрака", focusKey: focusKey, entries: {
-        [.header(0, 0, "НЕ ОТПРАВЛЯТЬ"), .toggle(1, 0, "messages", "Отметки о прочтении сообщений", !s.ghostReadMessages, true), .toggle(2, 0, "stories", "Отметки о просмотре историй", !s.ghostReadStories, true), .toggle(3, 0, "online", "Статус «онлайн»", !s.ghostSendOnline, true), .toggle(4, 0, "typing", "Статус «печатает»", !s.ghostSendTyping, true), .toggle(5, 0, "offline", "Автоматический «офлайн»", s.ghostAutomaticOffline, true)]
+        // Every option is checked together with the main switch, so without it they stay off and locked.
+        let isOn = s.ghostModeEnabled
+        var result: [DGListEntry] = [.header(0, 0, "НЕ ОТПРАВЛЯТЬ"), .toggle(1, 0, "messages", "Отметки о прочтении сообщений", isOn && !s.ghostReadMessages, isOn), .toggle(2, 0, "stories", "Отметки о просмотре историй", isOn && !s.ghostReadStories, isOn), .toggle(3, 0, "online", "Статус «онлайн»", isOn && !s.ghostSendOnline, isOn), .toggle(4, 0, "typing", "Статус «печатает»", isOn && !s.ghostSendTyping, isOn), .toggle(5, 0, "offline", "Автоматический «офлайн»", isOn && s.ghostAutomaticOffline, isOn)]
+        if !isOn {
+            result.append(.info(6, 0, "Параметры действуют только при включённом режиме призрака."))
+        }
+        return result
     }, toggle: { key, value in
         switch key { case "messages": s.ghostReadMessages = !value; case "stories": s.ghostReadStories = !value; case "online": s.ghostSendOnline = !value; case "typing": s.ghostSendTyping = !value; case "offline": s.ghostAutomaticOffline = value; default: break }
     })
