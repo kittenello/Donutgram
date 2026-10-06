@@ -10,6 +10,10 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/UIKitRuntimeUtils",
+        "//submodules/TelegramUI/Components/TabBarComponent:TabBarComponent",
+        "//submodules/ComponentFlow:ComponentFlow",
+        "//submodules/Components/ComponentDisplayAdapters:ComponentDisplayAdapters",
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//Donutgram/DGSnowEffect:DGSnowEffect",
         "//submodules/TelegramUI/Components/ChatListTitleView:ChatListTitleView",

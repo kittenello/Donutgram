@@ -50,6 +50,8 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "stories", "hideStories", "saveProtectedStories": return "play.rectangle"
     case "premiumStatuses": return "star.slash"
     case "hideTabBar", "wideTabBar": return "rectangle.split.3x1"
+    case "integratedTabSearch": return "magnifyingglass"
+    case "tabSearchOnLeft": return "arrow.left"
     case "contacts", "mutualContact": return "person.2"
     case "calls", "confirmCalls": return "phone"
     case "profileId", "visualId", "dialogIdFormat": return "number"
@@ -108,6 +110,7 @@ enum DGListEntry: ItemListNodeEntry {
     // The flags are diff keys: the bubbles read DGSimpleSettings at layout time.
     case messagePreview(Int32, Int32, Bool, Bool, Bool, Bool)
     case chatListPreview(Int32, Int32, Bool, Bool, Bool, Bool, Int)
+    case tabBarPreview(Int32, Int32, DGTabBarLayout)
     // The Int is the current icon's DGSimpleSettings.appMarks index: a diff key, so the grid moves its selection.
     case appIcons(Int32, Int32, Int)
     case islandStyles(Int32, Int32, Int)
@@ -123,12 +126,12 @@ enum DGListEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .checkbox(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _, _, _), let .chatListPreview(_, section, _, _, _, _, _),let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconAndIsland(_, section, _, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerReplies(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
+        case let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .checkbox(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _),let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconAndIsland(_, section, _, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerReplies(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
         }
     }
     var stableId: Int32 {
         switch self {
-        case let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .checkbox(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _, _, _), let .chatListPreview(id, _, _, _, _, _, _),let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconAndIsland(id, _, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerReplies(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
+        case let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .checkbox(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _),let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconAndIsland(id, _, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerReplies(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
         }
     }
     // The tag the row's node reports: the one item(presentationData:arguments:) gives the item,
@@ -138,6 +141,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .toggle(_, _, key, _, _, _), let .disclosure(_, _, key, _, _), let .checkbox(_, _, key, _, _), let .input(_, _, key, _, _): return DGSettingItemTag(key: key)
         case .iconAndIsland: return DGSettingItemTag(key: "iconAndIsland")
         case .speedSlider: return DGSettingItemTag(key: "downloadAcceleration")
+        case .tabBarPreview: return DGSettingItemTag(key: "tabBarPreview")
         case .chatListPreview: return DGSettingItemTag(key: "chatListPreview")
         case .stickerSizeSlider: return DGSettingItemTag(key: "stickerSize")
         case .stickerReplies: return DGSettingItemTag(key: "stickerReplies")
@@ -185,6 +189,8 @@ enum DGListEntry: ItemListNodeEntry {
             return donutgramMessagePreviewItem(context: arguments.context, sectionId: self.section)
         case let .chatListPreview(_, _, snow, hideEmojiStatus, centerTitle, hideSearch, titleMode):
             return DGChatListPreviewItem(context: arguments.context, theme: presentationData.theme, sectionId: self.section, snow: snow, hideEmojiStatus: hideEmojiStatus, centerTitle: centerTitle, hideSearch: hideSearch, titleMode: titleMode)
+        case let .tabBarPreview(_, _, layout):
+            return DGTabBarPreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, sectionId: self.section, layout: layout)
         case .appIcons:
             return donutgramAppIconItem(context: arguments.context, sectionId: self.section, updated: { arguments.select("refreshAppIcon") })
         case let .islandStyles(_, _, value):

@@ -24,6 +24,25 @@ public struct DGVisualUsername: Codable, Equatable {
     }
 }
 
+/// One snapshot shared by the real tab bar and its settings preview.
+public struct DGTabBarLayout: Equatable {
+    public let hidden: Bool
+    public let contacts: Bool
+    public let calls: Bool
+    public let wide: Bool
+    public let integratedSearch: Bool
+    public let searchOnLeft: Bool
+
+    public init(hidden: Bool, contacts: Bool, calls: Bool, wide: Bool, integratedSearch: Bool, searchOnLeft: Bool) {
+        self.hidden = hidden
+        self.contacts = contacts
+        self.calls = calls
+        self.wide = wide
+        self.integratedSearch = integratedSearch
+        self.searchOnLeft = searchOnLeft
+    }
+}
+
 public final class DGSimpleSettings {
     public static let shared = DGSimpleSettings()
     public static let didChangeNotification = Notification.Name("donutgram.settings.didChange")
@@ -108,6 +127,8 @@ public final class DGSimpleSettings {
         static let showContactsTab = "donutgram.appearance.showContactsTab"
         static let showCallsTab = "donutgram.appearance.showCallsTab"
         static let wideTabBar = "donutgram.appearance.wideTabBar"
+        static let integratedTabSearch = "donutgram.appearance.integratedTabSearch"
+        static let tabSearchOnLeft = "donutgram.appearance.tabSearchOnLeft"
         static let showProfileId = "donutgram.appearance.showProfileId"
         static let dialogIdFormat = "donutgram.appearance.dialogIdFormat"
         static let relativeOnlineTime = "donutgram.appearance.relativeOnlineTime"
@@ -476,6 +497,11 @@ public final class DGSimpleSettings {
     public var channelBottomButton: ChannelBottomButton {
         get { ChannelBottomButton(rawValue: (self.defaults.object(forKey: Key.channelBottomButton) as? Int) ?? 1) ?? .mute }
         set { setInteger(newValue.rawValue, Key.channelBottomButton) }
+    }
+    public var integratedTabSearch: Bool { get { bool(Key.integratedTabSearch) } set { setBool(newValue, Key.integratedTabSearch) } }
+    public var tabSearchOnLeft: Bool { get { bool(Key.tabSearchOnLeft) } set { setBool(newValue, Key.tabSearchOnLeft) } }
+    public var tabBarLayout: DGTabBarLayout {
+        return DGTabBarLayout(hidden: hideTabBar, contacts: showContactsTab, calls: showCallsTab, wide: wideTabBar, integratedSearch: integratedTabSearch, searchOnLeft: tabSearchOnLeft)
     }
     public var wideTabBar: Bool { get { bool(Key.wideTabBar) } set { setBool(newValue, Key.wideTabBar) } }
     public var showProfileId: Bool { get { bool(Key.showProfileId) } set { setBool(newValue, Key.showProfileId) } }

@@ -471,7 +471,7 @@ public final class ChatTitleComponent: Component {
                                 titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                             }
                         }
-                        if let badge = donutgramBadge(peerId: peer.id) {
+                        if peerView.peerId != component.context.account.peerId, let badge = donutgramBadge(peerId: peer.id) {
                             titleVerifiedIcon = .verified
                             donutgramTeamBadge = (badge: badge, peerName: EnginePeer(peer).displayTitle(strings: component.strings, displayOrder: component.nameDisplayOrder))
                         }

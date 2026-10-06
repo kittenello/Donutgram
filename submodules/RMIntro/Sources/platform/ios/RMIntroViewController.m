@@ -104,6 +104,7 @@ typedef enum {
     SVariable *_alternativeLocalization;
     NSDictionary<NSString *, NSString *> *_englishStrings;
     
+    UIImageView *_welcomeLogoView;
     UIView *_wrapperView;
     UIView *_startButton;
     
@@ -160,9 +161,15 @@ typedef enum {
         }
         _englishStrings = englishStrings;
         
-        _headlines = @[ _englishStrings[@"Tour.Title1"], _englishStrings[@"Tour.Title2"],  _englishStrings[@"Tour.Title6"], _englishStrings[@"Tour.Title3"], _englishStrings[@"Tour.Title4"], _englishStrings[@"Tour.Title5"]];
+        _headlines = @[ @"Donutgram", _englishStrings[@"Tour.Title2"],  _englishStrings[@"Tour.Title6"], _englishStrings[@"Tour.Title3"], _englishStrings[@"Tour.Title4"], _englishStrings[@"Tour.Title5"]];
         _descriptions = @[_englishStrings[@"Tour.Text1"], _englishStrings[@"Tour.Text2"],  _englishStrings[@"Tour.Text6"], _englishStrings[@"Tour.Text3"], _englishStrings[@"Tour.Text4"], _englishStrings[@"Tour.Text5"]];
         
+        NSMutableArray *brandedDescriptions = [[NSMutableArray alloc] init];
+        for (NSString *text in _descriptions) {
+            [brandedDescriptions addObject:[text stringByReplacingOccurrencesOfString:@"Telegram" withString:@"Donutgram"]];
+        }
+        _descriptions = brandedDescriptions;
+
         __weak RMIntroViewController *weakSelf = self;
         _didEnterBackgroundObserver = [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil queue:nil usingBlock:^(__unused NSNotification *notification)
         {
@@ -230,8 +237,9 @@ typedef enum {
 }
 
 - (void)animateIn {
-    CGPoint logoTargetPosition = _glkView.center;
-    _glkView.center = CGPointMake(self.view.bounds.size.width / 2.0, self.view.bounds.size.height / 2.0);
+    UIView *logoView = _welcomeLogoView != nil ? _welcomeLogoView : _glkView;
+    CGPoint logoTargetPosition = logoView.center;
+    logoView.center = CGPointMake(self.view.bounds.size.width / 2.0, self.view.bounds.size.height / 2.0);
     
     RMIntroPageView *firstPage = (RMIntroPageView *)[_pageViews firstObject];
     CGPoint headerTargetPosition = firstPage.headerLabel.center;
@@ -246,24 +254,24 @@ typedef enum {
     CGPoint buttonTargetPosition = _startButton.center;
     _startButton.center = CGPointMake(buttonTargetPosition.x, buttonTargetPosition.y + 220.0);
     
-    _glkView.transform = CGAffineTransformMakeScale(0.66, 0.66);
+    logoView.transform = CGAffineTransformMakeScale(0.66, 0.66);
         
     [UIView animateWithDuration:0.65 delay:0.15 usingSpringWithDamping:1.2f initialSpringVelocity:0.0 options:kNilOptions animations:^{
-        _glkView.center = logoTargetPosition;
+        logoView.center = logoTargetPosition;
         firstPage.headerLabel.center = headerTargetPosition;
         firstPage.descriptionLabel.center = descriptionTargetPosition;
         _pageControl.center = pageControlTargetPosition;
         _startButton.center = buttonTargetPosition;
-        _glkView.transform = CGAffineTransformIdentity;
+        logoView.transform = CGAffineTransformIdentity;
     } completion:nil];
     
-    _glkView.alpha = 0.0;
+    logoView.alpha = 0.0;
     _pageScrollView.alpha = 0.0;
     _pageControl.alpha = 0.0;
     _startButton.alpha = 0.0;
     
     [UIView animateWithDuration:0.3 delay:0.15 options:kNilOptions animations:^{
-        _glkView.alpha = 1.0;
+        logoView.alpha = 1.0;
         _pageScrollView.alpha = 1.0;
         _pageControl.alpha = 1.0;
         _startButton.alpha = 1.0;
@@ -302,7 +310,10 @@ typedef enum {
         _glkView.delegate = self;
         
         [self setupGL];
-        [self.view addSubview:_glkView];
+        [self.view insertSubview:_glkView atIndex:0];
+        if (_welcomeLogoView != nil) {
+            _glkView.alpha = 1.0 - _welcomeLogoView.alpha;
+        }
         
         [self startTimer];
         _isOpenGLLoaded = true;
@@ -351,6 +362,18 @@ typedef enum {
     
     [self loadGL];
     
+    if (self.welcomeImage != nil) {
+        _welcomeLogoView = [[UIImageView alloc] initWithImage:self.welcomeImage];
+        _welcomeLogoView.contentMode = UIViewContentModeScaleAspectFit;
+        _welcomeLogoView.userInteractionEnabled = false;
+        _welcomeLogoView.layer.cornerRadius = 160.0 * 0.2237;
+        _welcomeLogoView.clipsToBounds = true;
+        _welcomeLogoView.accessibilityLabel = @"Donutgram";
+        _welcomeLogoView.isAccessibilityElement = true;
+        [self.view addSubview:_welcomeLogoView];
+        _glkView.alpha = 0.0;
+    }
+
     _wrapperView = [[UIScrollView alloc]initWithFrame:self.view.bounds];
     [self.view addSubview:_wrapperView];
     
@@ -390,6 +413,11 @@ typedef enum {
 }
 
 - (UIView *)createAnimationSnapshot {
+    if (_welcomeLogoView != nil && _welcomeLogoView.alpha > 0.5) {
+        UIView *snapshot = [_welcomeLogoView snapshotViewAfterScreenUpdates:false];
+        snapshot.frame = _welcomeLogoView.frame;
+        return snapshot;
+    }
     UIImage *image = _glkView.snapshot;
     UIImageView *imageView = [[UIImageView alloc] initWithFrame:_glkView.frame];
     imageView.image = image;
@@ -551,6 +579,7 @@ typedef enum {
     
     _pageControl.frame = CGRectMake(0, pageControlY, self.view.bounds.size.width, 7);
     _glkView.frame = CGRectChangedOriginY(_glkView.frame, glViewY - statusBarHeight);
+    _welcomeLogoView.frame = CGRectMake(floor((self.view.bounds.size.width - 160.0) / 2.0), glViewY - statusBarHeight + 20.0, 160.0, 160.0);
     
     CGFloat startButtonWidth = MIN(430.0 - 48.0, self.view.bounds.size.width - 48.0f);
     UIView *startButton = self.createStartButton(startButtonWidth);
@@ -668,6 +697,12 @@ NSInteger _current_page_end;
     CGFloat offset = (scrollView.contentOffset.x - _currentPage * scrollView.frame.size.width) / self.view.frame.size.width;
     
     set_scroll_offset((float)offset);
+    if (_welcomeLogoView != nil && scrollView.frame.size.width > 0.0) {
+        CGFloat progress = MAX(0.0, MIN(1.0, scrollView.contentOffset.x / scrollView.frame.size.width));
+        _welcomeLogoView.alpha = 1.0 - progress;
+        _welcomeLogoView.accessibilityElementsHidden = progress > 0.5;
+        _glkView.alpha = progress;
+    }
     
     if (justEndDragging)
     {

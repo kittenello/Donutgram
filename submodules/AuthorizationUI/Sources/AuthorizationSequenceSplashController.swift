@@ -9,6 +9,8 @@ import TelegramPresentationData
 import LegacyComponents
 import SolidRoundedButtonNode
 import RMIntro
+import AppBundle
+import DGSimpleSettings
 
 public final class AuthorizationSequenceSplashController: ViewController {
     private var controllerNode: AuthorizationSequenceSplashControllerNode {
@@ -72,6 +74,9 @@ public final class AuthorizationSequenceSplashController: ViewController {
         
         self.controller = RMIntroViewController(backgroundColor: theme.list.plainBackgroundColor, primaryColor: theme.list.itemPrimaryTextColor, buttonColor: theme.intro.startButtonColor, accentColor: theme.list.itemAccentColor, regularDotColor: theme.intro.dotColor, highlightedDotColor: theme.list.itemAccentColor, suggestedLocalizationSignal: localizationSignal)
         
+        // The icon the app has now: the one picked in «Иконка и остров», or the default one.
+        self.controller.welcomeImage = DGSimpleSettings.shared.pickedAppIconName.flatMap { UIImage(named: $0, in: getAppBundle(), compatibleWith: nil) } ?? UIImage(named: "BlueIcon", in: getAppBundle(), compatibleWith: nil)
+
         self.startButton = SolidRoundedButtonNode(title: "Start Messaging", theme: SolidRoundedButtonTheme(theme: theme), glass: false, height: 50.0, cornerRadius: 50.0 * 0.5, isShimmering: true)
         self.startButton.accessibilityIdentifier = "Auth.Welcome.StartButton"
 
