@@ -76,6 +76,8 @@ public final class SparseMessageList {
         private var topItemsDisposable = MetaDisposable()
 
         private var deletedMessagesDisposable: Disposable?
+        private var preservedMessagesDisposable: Disposable?
+        private var preservedMessages: [Message] = []
 
         private var sparseItems: SparseItems?
         private var sparseItemsDisposable: Disposable?
@@ -204,6 +206,16 @@ public final class SparseMessageList {
                 })
             }
 
+            self.preservedMessagesDisposable = (account.postbox.combinedView(keys: [.localMessageTag(.donutgramDeleted)])
+            |> deliverOn(self.queue)).start(next: { [weak self] views in
+                guard let self, let view = views.views[.localMessageTag(.donutgramDeleted)] as? LocalMessageTagsView else { return }
+                self.preservedMessages = view.messages.values.filter { message in
+                    message.id.peerId == self.peerId && message.tags.contains(self.messageTag)
+                        && (self.threadId == nil || message.threadId == self.threadId)
+                }.sorted { $0.id > $1.id }
+                self.updateState()
+            })
+
             self.deletedMessagesDisposable = (account.postbox.combinedView(keys: [.deletedMessages(peerId: peerId)])
             |> deliverOn(self.queue)).start(next: { [weak self] views in
                 guard let strongSelf = self else {
@@ -221,11 +233,12 @@ public final class SparseMessageList {
             self.sparseItemsDisposable?.dispose()
             self.loadHoleDisposable.dispose()
             self.deletedMessagesDisposable?.dispose()
+            self.preservedMessagesDisposable?.dispose()
         }
 
         private func resetTopSection() {
             let count: Int
-            count = 200
+            count = max(200, self.topSectionItemRequestCount)
             
             let location: ChatLocationInput = .peer(peerId: self.peerId, threadId: self.threadId)
             
@@ -620,7 +633,8 @@ public final class SparseMessageList {
             if view.isLoading {
                 topSection = nil
             } else {
-                topSection = TopSection(messages: view.entries.lazy.reversed().map { entry in
+                // Server offsets do not include preserved deleted messages.
+                topSection = TopSection(messages: view.entries.lazy.reversed().filter { !$0.message.localTags.contains(.donutgramDeleted) }.map { entry in
                     return entry.message
                 })
             }
@@ -691,10 +705,36 @@ public final class SparseMessageList {
                 }
             }
 
+            // Insert local media into the sparse server positions, shifting later
+            // grid indices. Include old deletions beyond the loaded top section.
+            for message in self.preservedMessages {
+                if let existing = items.firstIndex(where: { item in
+                    switch item.content {
+                    case let .message(value, _): return value.id == message.id
+                    case let .placeholder(id, _): return id == message.id
+                    }
+                }) {
+                    items[existing] = State.Item(index: items[existing].index, content: .message(message: message, isLocal: true))
+                    continue
+                }
+                let position = items.firstIndex { item in
+                    switch item.content {
+                    case let .message(value, _): return value.id < message.id
+                    case let .placeholder(id, _): return id < message.id
+                    }
+                } ?? items.count
+                let index = position < items.count ? items[position].index : totalCount
+                for i in position ..< items.count {
+                    items[i] = State.Item(index: items[i].index + 1, content: items[i].content)
+                }
+                items.insert(State.Item(index: index, content: .message(message: message, isLocal: true)), at: position)
+                totalCount += 1
+            }
+
             self.statePromise.set(.single(SparseMessageList.State(
                 items: items,
                 totalCount: totalCount,
-                isLoading: self.topSection == nil
+                isLoading: self.topSection == nil && self.preservedMessages.isEmpty
             )))
         }
     }
