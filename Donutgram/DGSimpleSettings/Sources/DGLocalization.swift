@@ -241,5 +241,18 @@ private let dgEnglishStrings: [String: String] = [
     "Не удалось прочитать все сообщения. Попробуйте ещё раз.": "Couldn't read all messages. Please try again.",
     "Отправить как голосовое": "Send as Voice Message",
     "Не удалось преобразовать музыку в голосовое сообщение.": "Couldn't convert this audio to a voice message.",
-    "Воспроизвести": "Play"
+    "Воспроизвести": "Play",
+    "Теневой бан": "Shadow Ban",
+    "Убрать из теневого бана": "Remove from Shadow Ban",
+    "%@ в теневом бане": "%@ is shadow banned",
+    "%@ убран из теневого бана": "%@ is no longer shadow banned",
+    "Показать скрытые сообщения": "Show Shadow-Banned Messages",
+    "Спрятать скрытые сообщения": "Hide Shadow-Banned Messages",
+    "Добавить": "Add",
+    "Убрать": "Remove",
+    "Неизвестный": "Unknown",
+    "бот": "bot",
+    "пользователь": "user",
+    "канал": "channel",
+    "Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются.": "Messages from these people are hidden in groups, comments and channels on this device only. They won't be notified. Private chats are not affected."
 ]
