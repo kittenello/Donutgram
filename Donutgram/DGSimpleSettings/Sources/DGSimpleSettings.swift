@@ -28,6 +28,8 @@ public final class DGSimpleSettings {
     public static let shared = DGSimpleSettings()
     public static let didChangeNotification = Notification.Name("donutgram.settings.didChange")
     public static let requestOfflineNotification = Notification.Name("donutgram.ghost.requestOffline")
+    /// `requestOfflineNotification` user info: the `PeerId.toInt64()` of the account to send the offline packet for.
+    public static let requestOfflineAccountPeerIdKey = "accountPeerId"
     public static let lastOnlineDidChangeNotification = Notification.Name("donutgram.presence.lastOnlineDidChange")
     /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
     /// send account.updateStatus.
@@ -295,9 +297,15 @@ public final class DGSimpleSettings {
         NotificationCenter.default.post(name: DGSimpleSettings.didChangeNotification, object: self)
     }
 
-    public func requestGhostOffline() {
+    /// Asks for an offline packet after an action that shows the user online on the server, for the
+    /// account with `accountPeerId` (`PeerId.toInt64()`) or for every account when it is nil.
+    public func requestGhostOffline(accountPeerId: Int64? = nil) {
         guard self.ghostModeEnabled && self.ghostAutomaticOffline else { return }
-        NotificationCenter.default.post(name: DGSimpleSettings.requestOfflineNotification, object: self)
+        var userInfo: [AnyHashable: Any]?
+        if let accountPeerId {
+            userInfo = [DGSimpleSettings.requestOfflineAccountPeerIdKey: accountPeerId]
+        }
+        NotificationCenter.default.post(name: DGSimpleSettings.requestOfflineNotification, object: self, userInfo: userInfo)
     }
 
     public var ghostModeEnabled: Bool {

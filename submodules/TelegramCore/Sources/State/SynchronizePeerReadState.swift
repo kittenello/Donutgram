@@ -2,6 +2,7 @@ import Foundation
 import Postbox
 import TelegramApi
 import SwiftSignalKit
+import DGSimpleSettings
 
 
 private enum PeerReadStateMarker: Equatable {
@@ -340,6 +341,8 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
         if let (namespace, readState) = namespaceAndReadState {
             return pushPeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId, readState: readState)
             |> map { updatedReadState -> (MessageId.Namespace, PeerReadState) in
+                // Donutgram: reading a chat shows the reader online on the server.
+                DGSimpleSettings.shared.requestGhostOffline(accountPeerId: stateManager.accountPeerId.toInt64())
                 return (namespace, updatedReadState)
             }
         } else {

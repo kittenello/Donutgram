@@ -3,6 +3,7 @@ import Postbox
 import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
+import DGSimpleSettings
 
 
 public enum StandaloneMedia {
@@ -628,6 +629,8 @@ private func sendUploadedMessageContent(
                     return .complete()
                 case let .result(result):
                     stateManager.addUpdates(result)
+                    // Donutgram: a sent message shows the sender online on the server.
+                    DGSimpleSettings.shared.requestGhostOffline(accountPeerId: accountPeerId.toInt64())
                     return .complete()
                 }
             }

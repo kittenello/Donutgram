@@ -7,18 +7,24 @@ import DGSimpleSettings
 
 private typealias SignalKitTimer = SwiftSignalKit.Timer
 
+// Donutgram: the server shows the user online after some own actions (sending a message,
+// reading a chat, ...). Ghost mode answers each of them with an offline packet (see
+// DGSimpleSettings.requestGhostOffline); while the app is in front this timer backs them
+// up for actions nothing reports.
+private let ghostOfflineFallbackInterval: Double = 30.0
 
 private final class AccountPresenceManagerImpl {
     private let queue: Queue
     private let network: Network
     private let accountId: Int64
+    private let accountPeerId: PeerId
     let isPerformingUpdate = ValuePromise<Bool>(false, ignoreRepeated: true)
     
     private var shouldKeepOnlinePresenceDisposable: Disposable?
     private let currentRequestDisposable = MetaDisposable()
     private let initialPresenceRequestDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
-    private var offlineTimer: SignalKitTimer?
+    private var offlineFallbackTimer: SignalKitTimer?
     private var settingsObserver: NSObjectProtocol?
     private var offlineRequestObserver: NSObjectProtocol?
     
@@ -27,10 +33,11 @@ private final class AccountPresenceManagerImpl {
     private var resolvingInitialPresence = false
     private var didResolveInitialPresence = false
     
-    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, accountId: Int64) {
+    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, accountId: Int64, accountPeerId: PeerId) {
         self.queue = queue
         self.network = network
         self.accountId = accountId
+        self.accountPeerId = accountPeerId
         
         self.shouldKeepOnlinePresenceDisposable = (shouldKeepOnlinePresence
         |> distinctUntilChanged
@@ -58,9 +65,17 @@ private final class AccountPresenceManagerImpl {
                 self.updatePresence(self.wasOnline)
             }
         })
-        self.offlineRequestObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.requestOfflineNotification, object: DGSimpleSettings.shared, queue: nil, using: { [weak self] _ in
+        self.offlineRequestObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.requestOfflineNotification, object: DGSimpleSettings.shared, queue: nil, using: { [weak self] notification in
+            // A request without an account is for every account.
+            let requestedAccountPeerId = notification.userInfo?[DGSimpleSettings.requestOfflineAccountPeerIdKey] as? Int64
             self?.queue.async { [weak self] in
-                self?.requestOfflinePresence()
+                guard let self else {
+                    return
+                }
+                if let requestedAccountPeerId, requestedAccountPeerId != self.accountPeerId.toInt64() {
+                    return
+                }
+                self.requestOfflinePresence()
             }
         })
     }
@@ -71,7 +86,7 @@ private final class AccountPresenceManagerImpl {
         self.currentRequestDisposable.dispose()
         self.initialPresenceRequestDisposable.dispose()
         self.onlineTimer?.invalidate()
-        self.offlineTimer?.invalidate()
+        self.offlineFallbackTimer?.invalidate()
         if let settingsObserver = self.settingsObserver {
             NotificationCenter.default.removeObserver(settingsObserver)
         }
@@ -90,6 +105,9 @@ private final class AccountPresenceManagerImpl {
 
     private func requestOfflinePresence() {
         guard !self.resolvingInitialPresence else { return }
+        // The request may have been queued before ghost mode was turned off.
+        let ghost = DGSimpleSettings.shared
+        guard ghost.ghostModeEnabled && ghost.ghostAutomaticOffline else { return }
         let timestamp = Int32(self.network.globalTime)
         let request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         self.isPerformingUpdate.set(true)
@@ -106,6 +124,21 @@ private final class AccountPresenceManagerImpl {
         }))
     }
     
+    private func updateOfflineFallbackTimer(isActive: Bool) {
+        if isActive {
+            if self.offlineFallbackTimer == nil {
+                let timer = SignalKitTimer(timeout: ghostOfflineFallbackInterval, repeat: true, completion: { [weak self] in
+                    self?.requestOfflinePresence()
+                }, queue: self.queue)
+                self.offlineFallbackTimer = timer
+                timer.start()
+            }
+        } else {
+            self.offlineFallbackTimer?.invalidate()
+            self.offlineFallbackTimer = nil
+        }
+    }
+
     private func updatePresence(_ isOnline: Bool) {
         let ghost = DGSimpleSettings.shared
         let effectiveOnline = isOnline && !ghost.ghostHidesOnline
@@ -151,8 +184,7 @@ private final class AccountPresenceManagerImpl {
         let timestamp = Int32(self.network.globalTime)
         let request: Signal<Api.Bool, MTRpcError>
         if effectiveOnline {
-            self.offlineTimer?.invalidate()
-            self.offlineTimer = nil
+            self.updateOfflineFallbackTimer(isActive: false)
             let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
                 guard let strongSelf = self else {
                     return
@@ -165,17 +197,8 @@ private final class AccountPresenceManagerImpl {
         } else {
             self.onlineTimer?.invalidate()
             self.onlineTimer = nil
-            let keepForcingOffline = ghost.ghostModeEnabled && ghost.ghostAutomaticOffline
-            if keepForcingOffline && self.offlineTimer == nil {
-                let timer = SignalKitTimer(timeout: 1.0, repeat: true, completion: { [weak self] in
-                    self?.requestOfflinePresence()
-                }, queue: self.queue)
-                self.offlineTimer = timer
-                timer.start()
-            } else if !keepForcingOffline {
-                self.offlineTimer?.invalidate()
-                self.offlineTimer = nil
-            }
+            // `isOnline` is true while the app is in front: only then can the user act.
+            self.updateOfflineFallbackTimer(isActive: isOnline && ghost.ghostModeEnabled && ghost.ghostAutomaticOffline)
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         }
         self.isPerformingUpdate.set(true)
@@ -200,10 +223,10 @@ final class AccountPresenceManager {
     private let queue = Queue()
     private let impl: QueueLocalObject<AccountPresenceManagerImpl>
     
-    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, accountId: Int64) {
+    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, accountId: Int64, accountPeerId: PeerId) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: self.queue, generate: {
-            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network, accountId: accountId)
+            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network, accountId: accountId, accountPeerId: accountPeerId)
         })
     }
     
