@@ -87,8 +87,17 @@ private func donutgramReadDialogPage(postbox: Postbox, network: Network, stateMa
                 clearUnreadMark |> mapToSignal { markSucceeded -> Signal<Bool, NoError> in
                     return postbox.transaction { transaction -> Bool in
                         // Apply only successful server acknowledgements, and never read messages arriving after the snapshot.
-                        if needsReadHistory && readSucceeded { transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: data.topMessage)) }
-                        if markSucceeded { transaction.applyMarkUnread(peerId: peerId, namespace: Namespaces.Message.Cloud, value: false, interactive: false) }
+                        if needsReadHistory && readSucceeded {
+                            let readMessageId = MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: data.topMessage)
+                            transaction.applyIncomingReadMaxId(readMessageId)
+                            donutgramGhostLocalReadDidReadOnServer(accountPeerId: stateManager.accountPeerId, messageId: readMessageId)
+                        }
+                        if markSucceeded {
+                            if markedUnread {
+                                donutgramGhostLocalReadDidUpdateServerUnreadMark(accountPeerId: stateManager.accountPeerId, peerId: peerId, namespace: Namespaces.Message.Cloud, value: false)
+                            }
+                            transaction.applyMarkUnread(peerId: peerId, namespace: Namespaces.Message.Cloud, value: false, interactive: false)
+                        }
                         return readSucceeded && markSucceeded
                     }
                 }

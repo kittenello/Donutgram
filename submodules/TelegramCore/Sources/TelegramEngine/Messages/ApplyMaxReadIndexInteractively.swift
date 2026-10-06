@@ -13,8 +13,13 @@ func _internal_applyMaxReadIndexInteractively(postbox: Postbox, stateManager: Ac
     
 func _internal_applyMaxReadIndexInteractively(transaction: Transaction, stateManager: AccountStateManager, index: MessageIndex) {
     if DGSimpleSettings.shared.ghostModeEnabled && !DGSimpleSettings.shared.ghostReadMessages {
+        // Donutgram: read on this device only, the server keeps the chat unread.
+        if donutgramApplyGhostLocalRead(transaction: transaction, accountPeerId: stateManager.accountPeerId, index: index) {
+            stateManager.notifyAppliedIncomingReadMessages([index.id])
+        }
         return
     }
+    donutgramGhostLocalReadWillReadOnServer(transaction: transaction, accountPeerId: stateManager.accountPeerId, peerId: index.id.peerId)
     let messageIds = transaction.applyInteractiveReadMaxIndex(index)
     
     if let peer = transaction.getPeer(index.id.peerId), peer.isForumOrMonoForum {
@@ -298,6 +303,20 @@ func _internal_togglePeerUnreadMarkInteractively(transaction: Transaction, netwo
             }
         }
         
+        let accountPeerId = viewTracker.accountPeerId
+        if !hasUnread && (setToValue == nil || setToValue!) {
+            // Donutgram: a chat read only on this device is unread on the server already.
+            if donutgramGhostLocalReadMarkUnread(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId) {
+                return
+            }
+        } else if setToValue == nil || !(setToValue!) {
+            // Donutgram: reading a chat explicitly also sends what was read only on this device.
+            if donutgramGhostLocalReadState(accountPeerId: accountPeerId, peerId: peerId) != nil {
+                donutgramGhostLocalReadWillReadOnServer(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId)
+                hasUnread = true
+            }
+        }
+
         if hasUnread {
             if setToValue == nil || !(setToValue!) {
                 if let index = transaction.getTopPeerMessageIndex(peerId: peerId) {
@@ -336,7 +355,11 @@ public func clearPeerUnseenReactionsAndPollVotesInteractively(account: Account, 
 }
 
 func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network: Network, viewTracker: AccountViewTracker, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?) {
-    for peerId in transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false) {
+    // Donutgram: chats read only on this device are unread on the server, so they are read too.
+    let ghostLocalReads = donutgramGhostLocalReadsPrepareReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId)
+    let peerIds = transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false)
+    donutgramGhostLocalReadsFinishReadAll(transaction: transaction, accountPeerId: viewTracker.accountPeerId, before: ghostLocalReads, readPeerIds: Set(peerIds))
+    for peerId in peerIds {
         _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
     }
 }

@@ -769,6 +769,8 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     if DGSimpleSettings.shared.ghostModeEnabled && DGSimpleSettings.shared.ghostReadOnAction {
         let namespace: MessageId.Namespace = peerId.namespace == Namespaces.Peer.SecretChat ? Namespaces.Message.SecretIncoming : Namespaces.Message.Cloud
         if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: namespace) {
+            // A chat read only on this device has to send that read now as well.
+            donutgramGhostLocalReadWillReadOnServer(transaction: transaction, accountPeerId: account.peerId, peerId: peerId)
             let _ = transaction.applyInteractiveReadMaxIndex(index)
         }
     }

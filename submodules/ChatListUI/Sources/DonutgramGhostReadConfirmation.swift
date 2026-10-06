@@ -6,10 +6,10 @@ import AccountContext
 import PresentationDataUtils
 import DGSimpleSettings
 
-// Donutgram: ghost mode keeps chats unread on the server, but «Прочитано» and
-// «Прочитать все» in the chat list are explicit requests to read there. They
-// can't stay local (the server's read state would win again on the next sync),
-// so in ghost mode they ask before sending the read receipts.
+// Donutgram: ghost mode keeps chats unread on the server (opening a chat reads it
+// on this device only), but «Прочитано» and «Прочитать все» in the chat list are
+// explicit requests to read there, so in ghost mode they ask before sending the
+// read receipts.
 
 public func donutgramGhostHidesReadReceipts() -> Bool {
     let settings = DGSimpleSettings.shared

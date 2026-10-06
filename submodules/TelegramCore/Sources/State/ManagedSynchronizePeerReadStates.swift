@@ -1,6 +1,7 @@
 import Foundation
 import Postbox
 import SwiftSignalKit
+import DGSimpleSettings
 
 private final class SynchronizePeerReadStatesContextImpl {
     private final class Operation {
@@ -26,6 +27,8 @@ private final class SynchronizePeerReadStatesContextImpl {
     private let stateManager: AccountStateManager
     
     private var disposable: Disposable?
+    private var ghostSettingsObserver: NSObjectProtocol?
+    private var ghostHidesReadReceipts: Bool
     
     private var currentState: [PeerId : PeerReadStateSynchronizationOperation] = [:]
     private var activeOperations: [PeerId: Operation] = [:]
@@ -36,6 +39,17 @@ private final class SynchronizePeerReadStatesContextImpl {
         self.network = network
         self.postbox = postbox
         self.stateManager = stateManager
+        self.ghostHidesReadReceipts = donutgramGhostModeBlocksContentReads()
+
+        // Donutgram: chats ghost mode read only on this device become unread again (take the
+        // server's read state) once read receipts are no longer hidden, also when that
+        // happened while the app wasn't running.
+        self.ghostSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil, using: { [weak self] _ in
+            self?.queue.async { [weak self] in
+                self?.updateGhostLocalReads(initial: false)
+            }
+        })
+        self.updateGhostLocalReads(initial: true)
         
         self.disposable = (postbox.synchronizePeerReadStatesView()
         |> deliverOn(self.queue)).start(next: { [weak self] view in
@@ -49,11 +63,29 @@ private final class SynchronizePeerReadStatesContextImpl {
     
     deinit {
         self.disposable?.dispose()
+        if let ghostSettingsObserver = self.ghostSettingsObserver {
+            NotificationCenter.default.removeObserver(ghostSettingsObserver)
+        }
     }
     
     func dispose() {
     }
     
+    private func updateGhostLocalReads(initial: Bool) {
+        let hidesReadReceipts = donutgramGhostModeBlocksContentReads()
+        if !initial && hidesReadReceipts == self.ghostHidesReadReceipts {
+            return
+        }
+        self.ghostHidesReadReceipts = hidesReadReceipts
+        let accountPeerId = self.stateManager.accountPeerId
+        if hidesReadReceipts || !DGSimpleSettings.shared.hasGhostLocalReads(accountPeerId: accountPeerId.toInt64()) {
+            return
+        }
+        let _ = self.postbox.transaction({ transaction -> Void in
+            donutgramRestoreGhostLocalReads(transaction: transaction, accountPeerId: accountPeerId)
+        }).start()
+    }
+
     private func update() {
         let peerIds = Set(self.currentState.keys).union(Set(self.pendingOperations.keys))
         
