@@ -1569,7 +1569,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                 if let item = self.item {
                                     // The hidden message is not in the chat, so there is nowhere to go.
                                     if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
-                                        item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
+                                        item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip(strings: item.presentationData.strings), false, replyInfoNode, nil)
                                         return
                                     }
                                     for attribute in item.message.attributes {

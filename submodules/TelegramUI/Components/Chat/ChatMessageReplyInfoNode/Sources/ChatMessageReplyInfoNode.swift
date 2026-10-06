@@ -58,7 +58,9 @@ private let groupIcon: UIImage = {
 
 public class ChatMessageReplyInfoNode: ASDisplayNode {
     /// The tooltip for a tap on the placeholder of a reply to a shadow-banned message.
-    public static let donutgramHiddenTooltip = "Сообщение скрыто теневым баном"
+    public static func donutgramHiddenTooltip(strings: PresentationStrings) -> String {
+        return dgLocalized("Сообщение скрыто теневым баном", languageCode: strings.primaryComponent.languageCode)
+    }
 
     public final class TransitionReplyPanel {
         public let titleView: UIView
@@ -705,8 +707,9 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             adjustedConstrainedTextSize.width -= textLeftInset
             
             if arguments.donutgramHidden {
-                titleString = NSAttributedString(string: "Скрытое сообщение", font: titleFont, textColor: titleColor)
-                messageText = NSAttributedString(string: "Автор в теневом бане", font: textFont, textColor: textColor)
+                let languageCode = arguments.strings.primaryComponent.languageCode
+                titleString = NSAttributedString(string: dgLocalized("Скрытое сообщение", languageCode: languageCode), font: titleFont, textColor: titleColor)
+                messageText = NSAttributedString(string: dgLocalized("Автор в теневом бане", languageCode: languageCode), font: textFont, textColor: textColor)
             }
             if arguments.isSummarized {
                 titleString = NSAttributedString(string: arguments.presentationData.strings.Conversation_Summary_Title, font: titleFont, textColor: titleColor)

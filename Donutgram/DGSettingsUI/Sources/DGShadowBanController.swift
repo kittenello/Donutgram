@@ -12,16 +12,17 @@ import LocalizedPeerData
 import UndoUI
 import DGSimpleSettings
 
-/// Bans or unbans `peer` and shows «<name> в теневом бане» or «<name> убран из теневого бана» with «Отменить».
+/// Bans or unbans `peer` and shows «<name> в теневом бане» or «<name> убран из теневого бана» with an undo button.
 public func dgToggleShadowBan(context: AccountContext, peer: EnginePeer, present: @escaping (ViewController) -> Void) {
     let settings = DGSimpleSettings.shared
     let peerId = peer.id.toInt64()
     let ban = !settings.isShadowBanned(peerId)
     settings.setShadowBanned(ban, peerId: peerId)
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let languageCode = presentationData.strings.primaryComponent.languageCode
     let name = peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
-    let text = ban ? "\(name) в теневом бане" : "\(name) убран из теневого бана"
-    present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: "Отменить"), elevatedLayout: false, action: { action in
+    let text = dgLocalized(ban ? "%@ в теневом бане" : "%@ убран из теневого бана", languageCode: languageCode).replacingOccurrences(of: "%@", with: name)
+    present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: presentationData.strings.Undo_Undo), elevatedLayout: false, action: { action in
         if case .undo = action {
             settings.setShadowBanned(!ban, peerId: peerId)
         }
@@ -113,13 +114,14 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! DGShadowBanArguments
+        let languageCode = presentationData.strings.primaryComponent.languageCode
         switch self {
         case let .add(theme):
-            return ItemListPeerActionItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesItemList.addPersonIcon(theme), title: "Добавить", sectionId: self.section, height: .generic, editing: false, action: {
+            return ItemListPeerActionItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesItemList.addPersonIcon(theme), title: dgLocalized("Добавить", languageCode: languageCode), sectionId: self.section, height: .generic, editing: false, action: {
                 arguments.addPeer()
             })
         case let .peer(_, peer, text, isKnown, editing):
-            let revealOptions = ItemListPeerItemRevealOptions(options: [ItemListPeerItemRevealOption(type: .destructive, title: "Убрать", action: {
+            let revealOptions = ItemListPeerItemRevealOptions(options: [ItemListPeerItemRevealOption(type: .destructive, title: dgLocalized("Убрать", languageCode: languageCode), action: {
                 arguments.removePeer(peer.id)
             })])
             return ItemListPeerItem(presentationData: presentationData, systemStyle: .glass, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, context: arguments.context, peer: peer, presence: nil, text: .text(text, .secondary), label: .none, editing: editing, revealOptions: revealOptions, switchValue: nil, enabled: true, selectable: isKnown, sectionId: self.section, action: {
@@ -141,11 +143,11 @@ private struct DGShadowBanState: Equatable {
 }
 
 // A row for an id this account doesn't know (e.g. banned from another account): it can still be removed.
-private func dgUnknownShadowBanPeer(_ peerId: EnginePeer.Id) -> EnginePeer {
-    return .user(TelegramUser(id: peerId, accessHash: nil, firstName: "Неизвестный", lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil))
+private func dgUnknownShadowBanPeer(_ peerId: EnginePeer.Id, languageCode: String) -> EnginePeer {
+    return .user(TelegramUser(id: peerId, accessHash: nil, firstName: dgLocalized("Неизвестный", languageCode: languageCode), lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil))
 }
 
-private func dgShadowBanSubtitle(_ peer: EnginePeer?, peerId: EnginePeer.Id) -> String {
+private func dgShadowBanSubtitle(_ peer: EnginePeer?, peerId: EnginePeer.Id, languageCode: String) -> String {
     guard let peer else {
         return "ID \(peerId.id._internalGetInt64Value())"
     }
@@ -154,9 +156,9 @@ private func dgShadowBanSubtitle(_ peer: EnginePeer?, peerId: EnginePeer.Id) -> 
     }
     switch peer {
     case let .user(user):
-        return user.botInfo != nil ? "бот" : "пользователь"
+        return dgLocalized(user.botInfo != nil ? "бот" : "пользователь", languageCode: languageCode)
     case .channel:
-        return "канал"
+        return dgLocalized("канал", languageCode: languageCode)
     default:
         return ""
     }
@@ -180,7 +182,8 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
             return state
         }
     }, addPeer: {
-        let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.excludeGroups, .excludeSecretChats, .excludeSavedMessages, .removeSearchHeader, .excludeRecent, .doNotSearchMessages], title: "Теневой бан"))
+        let languageCode = context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode
+        let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.excludeGroups, .excludeSecretChats, .excludeSavedMessages, .removeSearchHeader, .excludeRecent, .doNotSearchMessages], title: dgLocalized("Теневой бан", languageCode: languageCode)))
         controller.peerSelected = { [weak controller] peer, _ in
             if DonutgramShadowBan.canBan(peer, accountPeerId: context.account.peerId) {
                 DGSimpleSettings.shared.setShadowBanned(true, peerId: peer.id.toInt64())
@@ -218,6 +221,7 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
     |> deliverOnMainQueue
     |> map { presentationData, state, bannedPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let (peerIds, peers) = bannedPeers
+        let languageCode = presentationData.strings.primaryComponent.languageCode
         var rightNavigationButton: ItemListNavigationButton?
         if !peerIds.isEmpty {
             if state.editing {
@@ -256,11 +260,11 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
         var entries: [DGShadowBanEntry] = [.add(presentationData.theme)]
         for (index, peerId) in orderedPeerIds.enumerated() {
             let peer = peers[peerId]
-            entries.append(.peer(Int32(index), peer ?? dgUnknownShadowBanPeer(peerId), dgShadowBanSubtitle(peer, peerId: peerId), peer != nil, ItemListPeerItemEditing(editable: true, editing: state.editing, revealed: peerId == state.peerIdWithRevealedOptions)))
+            entries.append(.peer(Int32(index), peer ?? dgUnknownShadowBanPeer(peerId, languageCode: languageCode), dgShadowBanSubtitle(peer, peerId: peerId, languageCode: languageCode), peer != nil, ItemListPeerItemEditing(editable: true, editing: state.editing, revealed: peerId == state.peerIdWithRevealedOptions)))
         }
-        entries.append(.info("Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются."))
+        entries.append(.info(dgLocalized("Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются.", languageCode: languageCode)))
 
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Теневой бан"), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized("Теневой бан", languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
         return (controllerState, (listState, arguments))
     }

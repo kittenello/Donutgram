@@ -1571,7 +1571,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                         // The hidden message is not in the chat, so there is nowhere to go.
                         if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
                             return .optionalAction({
-                                item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip, false, replyInfoNode, nil)
+                                item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip(strings: item.presentationData.strings), false, replyInfoNode, nil)
                             })
                         }
                         for attribute in item.message.attributes {

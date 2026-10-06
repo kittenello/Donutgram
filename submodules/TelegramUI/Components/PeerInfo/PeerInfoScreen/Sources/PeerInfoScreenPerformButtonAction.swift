@@ -1271,7 +1271,7 @@ extension PeerInfoScreenNode {
                 var shadowBanItems: [ContextMenuItem] = []
                 if DonutgramShadowBan.canBan(peer, accountPeerId: strongSelf.context.account.peerId) {
                     let isBanned = DGSimpleSettings.shared.isShadowBanned(peer.id.toInt64())
-                    shadowBanItems.append(.action(ContextMenuActionItem(text: isBanned ? "Убрать из теневого бана" : "Теневой бан", icon: { theme in
+                    shadowBanItems.append(.action(ContextMenuActionItem(text: dgLocalized(isBanned ? "Убрать из теневого бана" : "Теневой бан", languageCode: strongSelf.presentationData.strings.primaryComponent.languageCode), icon: { theme in
                         generateTintedImage(image: UIImage(systemName: isBanned ? "eye" : "eye.slash", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
@@ -1285,7 +1285,7 @@ extension PeerInfoScreenNode {
                 }
                 if DGSimpleSettings.shared.hasShadowBans && DonutgramShadowBan.appliesToChat(peer) {
                     let isRevealed = DGSimpleSettings.shared.isShadowBanRevealed(chatPeerId: peer.id.toInt64())
-                    shadowBanItems.append(.action(ContextMenuActionItem(text: isRevealed ? "Спрятать скрытые сообщения" : "Показать скрытые сообщения", icon: { theme in
+                    shadowBanItems.append(.action(ContextMenuActionItem(text: dgLocalized(isRevealed ? "Спрятать скрытые сообщения" : "Показать скрытые сообщения", languageCode: strongSelf.presentationData.strings.primaryComponent.languageCode), icon: { theme in
                         generateTintedImage(image: UIImage(systemName: isRevealed ? "eye.slash" : "eye", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18.0, weight: .regular)), color: theme.contextMenu.primaryColor)
                     }, action: { _, f in
                         f(.dismissWithoutContent)
