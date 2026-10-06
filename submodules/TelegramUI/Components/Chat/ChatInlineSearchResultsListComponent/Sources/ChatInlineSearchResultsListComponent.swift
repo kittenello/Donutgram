@@ -369,8 +369,13 @@ public final class ChatInlineSearchResultsListComponent: Component {
             }
             
             let threadId = threadId ?? peerId.toInt64()
-            
-            let _ = component.context.engine.messages.togglePeerUnreadMarkInteractively(peerId: mainPeerId, threadId: threadId, setToValue: nil).startStandalone()
+
+            let context = component.context
+            donutgramConfirmToggleUnreadInGhostMode(context: context, peerId: mainPeerId, threadId: threadId, present: { c in
+                context.sharedContext.mainWindow?.present(c, on: .root)
+            }, proceed: {
+                let _ = context.engine.messages.togglePeerUnreadMarkInteractively(peerId: mainPeerId, threadId: threadId, setToValue: nil).startStandalone()
+            })
         }
         
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

@@ -77,6 +77,8 @@ private let dgEnglishStrings: [String: String] = [
     "Статус «онлайн»": "Online Status",
     "Статус «печатает»": "Typing Status",
     "Автоматический «офлайн»": "Automatic Offline Status",
+    "Параметры действуют только при включённом режиме призрака.": "These options work only while Ghost Mode is on.",
+    "Отправители увидят, что сообщения прочитаны.": "Senders will see that the messages have been read.",
     "Оформление": "Appearance",
     "Основное": "General",
     "Скрыть премиум статусы": "Hide Premium Badges",

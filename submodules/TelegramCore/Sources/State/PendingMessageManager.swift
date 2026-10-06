@@ -3,6 +3,7 @@ import Postbox
 import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
+import DGSimpleSettings
 
 // The quote's author name goes out as message text, so it must be a name the
 // author set themselves. For a contact, firstName/lastName hold the name this
@@ -2469,6 +2470,8 @@ public final class PendingMessageManager {
     }
     
     private func applySentMessage(postbox: Postbox, stateManager: AccountStateManager, message: Message, content: PendingMessageUploadedContentAndReuploadInfo, result: Api.Updates) -> Signal<Void, NoError> {
+        // Donutgram: a sent message shows the sender online on the server.
+        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: self.accountPeerId.toInt64())
         if let _ = message.peers[message.id.peerId] as? TelegramChannel {
             for attribute in message.attributes {
                 if let attribute = attribute as? PaidStarsMessageAttribute {
@@ -2534,6 +2537,8 @@ public final class PendingMessageManager {
     }
     
     private func applySentGroupMessages(postbox: Postbox, stateManager: AccountStateManager, messages: [Message], result: Api.Updates) -> Signal<Void, NoError> {
+        // Donutgram: a sent message shows the sender online on the server.
+        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: self.accountPeerId.toInt64())
         var namespace = Namespaces.Message.Cloud
         if let message = messages.first {
             if let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.isMonoForum {

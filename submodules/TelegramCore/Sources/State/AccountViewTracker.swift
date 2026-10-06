@@ -3,6 +3,7 @@ import Postbox
 import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
+import DGSimpleSettings
 
 
 public enum CallListViewType {
@@ -720,7 +721,10 @@ public final class AccountViewTracker {
                             guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) else {
                                 return .complete()
                             }
-                            return account.network.request(Api.functions.messages.getMessagesViews(peer: inputPeer, id: messageIds.map { $0.id }, increment: .boolTrue))
+                            // Donutgram: ghost mode only fetches the counters and does not add a view.
+                            let ghostSettings = DGSimpleSettings.shared
+                            let incrementViews = !(ghostSettings.ghostModeEnabled && !ghostSettings.ghostReadMessages)
+                            return account.network.request(Api.functions.messages.getMessagesViews(peer: inputPeer, id: messageIds.map { $0.id }, increment: incrementViews ? .boolTrue : .boolFalse))
                             |> map(Optional.init)
                             |> `catch` { _ -> Signal<Api.messages.MessageViews?, NoError> in
                                 return .single(nil)
