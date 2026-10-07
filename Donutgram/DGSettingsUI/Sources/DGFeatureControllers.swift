@@ -310,7 +310,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         ])
         result.append(contentsOf: [
             .header(80, 11, "ВОСПРОИЗВЕДЕНИЕ"),
-            .toggle(81, 11, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
+            .toggle(81, 11, "autoplayMedia", "Авто воспроизведение медиа", s.disableMediaAutoplay, true),
             .disclosure(82, 11, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
             .info(83, 11, "Если включено, после голосового сообщения или кружка выбранного типа воспроизведение остановится. Следующее сообщение нужно запустить вручную."),
             .header(90, 12, "БОТЫ"),
@@ -560,7 +560,7 @@ private func dgTranscriptionController(context: AccountContext, focusKey: String
 
 private func dgAutoplayMediaController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .autoplayMedia, title: "Отключить автовоспроизведение медиа", focusKey: focusKey, entries: {
+    return dgController(context: context, page: .autoplayMedia, title: "Авто воспроизведение медиа", focusKey: focusKey, entries: {
         [.toggle(0, 0, "1", "Голосовые", s.disabledAutoplayMediaTypes & 1 != 0, s.disableMediaAutoplay),
          .toggle(1, 0, "2", "Кружки", s.disabledAutoplayMediaTypes & 2 != 0, s.disableMediaAutoplay)]
     }, toggle: { key, value in
