@@ -2196,12 +2196,12 @@ extension ChatControllerImpl {
                     return
                 }
                 
-                var disableUrlPreview = false
+                var disableUrlPreview = DGSimpleSettings.shared.removeLinkPreviews
                 
                 var webpage: TelegramMediaWebpage?
                 var webpagePreviewAttribute: WebpagePreviewMessageAttribute?
                 if let urlPreview = strongSelf.presentationInterfaceState.editingUrlPreview {
-                    if editMessage.disableUrlPreviews.contains(urlPreview.url) {
+                    if DGSimpleSettings.shared.removeLinkPreviews || editMessage.disableUrlPreviews.contains(urlPreview.url) {
                         disableUrlPreview = true
                     } else {
                         webpage = urlPreview.webPage

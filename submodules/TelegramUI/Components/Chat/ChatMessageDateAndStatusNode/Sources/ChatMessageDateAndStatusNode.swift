@@ -245,11 +245,11 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             self.availableReactions = availableReactions
             self.savedMessageTags = savedMessageTags
             self.constrainedSize = constrainedSize
-            self.reactions = reactions
-            self.reactionPeers = reactionPeers
+            self.reactions = DGSimpleSettings.shared.hidePaidReactions ? reactions.filter { $0.value != .stars } : reactions
+            self.reactionPeers = DGSimpleSettings.shared.hidePaidReactions ? reactionPeers.filter { $0.0 != .stars } : reactionPeers
             self.displayAllReactionPeers = displayAllReactionPeers
             self.areReactionsTags = areReactionsTags
-            self.areStarReactionsEnabled = areStarReactionsEnabled
+            self.areStarReactionsEnabled = areStarReactionsEnabled && !DGSimpleSettings.shared.hidePaidReactions
             self.messageEffect = messageEffect
             self.replyCount = replyCount
             self.starsCount = starsCount

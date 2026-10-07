@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import TelegramCore
 import AccountContext
@@ -181,7 +182,8 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
                 panel.interfaceInteraction = interfaceInteraction
                 return panel
             }
-        } else if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil {
+        } else if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil,
+            DGSimpleSettings.shared.shouldShowBotAutomation(hasPinnedMessage: selectedContext == .pinnedMessage) {
             if let currentPanel = currentPanel as? ChatManagingBotTitlePanelNode {
                 return currentPanel
             } else {

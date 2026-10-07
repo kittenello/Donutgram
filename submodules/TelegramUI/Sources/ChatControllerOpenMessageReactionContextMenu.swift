@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import TelegramPresentationData
 import AccountContext
 import TelegramCore
@@ -393,7 +394,7 @@ extension ChatControllerImpl {
     }
     
     func openMessageSendStarsScreen(message: EngineMessage) {
-        guard canSendReactionsToChat(self.presentationInterfaceState) else {
+        guard !DGSimpleSettings.shared.hidePaidReactions, canSendReactionsToChat(self.presentationInterfaceState) else {
             return
         }
 

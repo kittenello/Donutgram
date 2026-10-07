@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -466,7 +467,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
             var replyInnerSubject: EngineMessageReplyInnerSubject?
             var replyStory: EngineStoryId?
             for attribute in item.message.attributes {
-                if let attribute = attribute as? InlineBotMessageAttribute {
+                if let attribute = attribute as? InlineBotMessageAttribute, !DGSimpleSettings.shared.hideViaBot {
                     var inlineBotNameString: String?
                     if let peerId = attribute.peerId, let bot = item.message.peers[peerId] as? TelegramUser {
                         inlineBotNameString = bot.addressName
@@ -608,7 +609,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
             if shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) {
                 reactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             } else {
-                reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
+                reactions = donutgramVisibleMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             }
             
             var reactionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode))?

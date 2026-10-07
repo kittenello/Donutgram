@@ -5,6 +5,18 @@ import SwiftSignalKit
 import Emoji
 import DGSimpleSettings
 
+/// Applies the preview-close behavior before the outgoing message is persisted for sending or scheduling.
+public func donutgramOutgoingMessageAttributes(_ attributes: [MessageAttribute]) -> [MessageAttribute] {
+    guard DGSimpleSettings.shared.removeLinkPreviews else { return attributes }
+    var result = attributes.filter { !($0 is WebpagePreviewMessageAttribute) }
+    if let index = result.firstIndex(where: { $0 is OutgoingContentInfoMessageAttribute }), let contentInfo = result[index] as? OutgoingContentInfoMessageAttribute {
+        result[index] = contentInfo.withUpdatedFlags(contentInfo.flags.union(.disableLinkPreviews))
+    } else {
+        result.append(OutgoingContentInfoMessageAttribute(flags: [.disableLinkPreviews]))
+    }
+    return result
+}
+
 public enum EnqueueMessageGrouping {
     case none
     case auto
@@ -972,7 +984,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                         }
                     }
                     
-                    for attribute in filterMessageAttributesForOutgoingMessage(requestedAttributes) {
+                    for attribute in donutgramOutgoingMessageAttributes(filterMessageAttributesForOutgoingMessage(requestedAttributes)) {
                         if let attribute = attribute as? AutoremoveTimeoutMessageAttribute {
                             if let _ = peer as? TelegramSecretChat {
                                 peerAutoremoveTimeout = nil
@@ -1017,7 +1029,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                         attributes.append(ReplyStoryAttribute(storyId: replyToStoryId))
                     }
                     var mediaList: [Media] = []
-                    if let mediaReference = mediaReference {
+                    if let mediaReference = mediaReference, !(DGSimpleSettings.shared.removeLinkPreviews && mediaReference.media is TelegramMediaWebpage) {
                         let augmentedMedia = augmentMediaWithReference(mediaReference)
                         mediaList.append(augmentedMedia)
                     }

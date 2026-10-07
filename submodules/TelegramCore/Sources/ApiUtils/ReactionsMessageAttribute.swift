@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import Postbox
 import TelegramApi
 
@@ -80,8 +81,20 @@ extension ReactionsMessageAttribute {
     }
 }
 
+public func donutgramVisibleMessageReactions(attributes: [MessageAttribute], isTags: Bool) -> ReactionsMessageAttribute? {
+    guard let attribute = mergedMessageReactions(attributes: attributes, isTags: isTags) else { return nil }
+    guard DGSimpleSettings.shared.hidePaidReactions else { return attribute }
+    return ReactionsMessageAttribute(
+        canViewList: attribute.canViewList,
+        isTags: attribute.isTags,
+        reactions: attribute.reactions.filter { $0.value != .stars },
+        recentPeers: attribute.recentPeers.filter { $0.value != .stars },
+        topPeers: []
+    )
+}
+
 public func mergedMessageReactionsAndPeers(accountPeerId: EnginePeer.Id, accountPeer: EnginePeer?, message: Message) -> (reactions: [MessageReaction], peers: [(MessageReaction.Reaction, EnginePeer)]) {
-    guard let attribute = mergedMessageReactions(attributes: message.attributes, isTags: message.areReactionsTags(accountPeerId: accountPeerId)) else {
+    guard let attribute = donutgramVisibleMessageReactions(attributes: message.attributes, isTags: message.areReactionsTags(accountPeerId: accountPeerId)) else {
         return ([], [])
     }
     

@@ -157,6 +157,14 @@ public final class DGSimpleSettings {
 
         static let onlyAddedStickers = "donutgram.chats.onlyAddedStickers"
         static let infiniteRecentStickers = "donutgram.chats.infiniteRecentStickers"
+        static let hidePaidReactions = "donutgram.chats.hidePaidReactions"
+        static let hideBirthdayNotifications = "donutgram.appearance.hideBirthdayNotifications"
+        static let hideViaBot = "donutgram.chats.hideViaBot"
+        static let showPinnedMessagesWithBot = "donutgram.chats.showPinnedMessagesWithBot"
+        static let hideBotAutomation = "donutgram.chats.hideBotAutomation"
+        static let removeLinkPreviews = "donutgram.chats.removeLinkPreviews"
+        static let autoplayMedia = "donutgram.chats.autoplayMedia"
+        static let autoplayMediaTypes = "donutgram.chats.autoplayMediaTypes"
         static let hiddenReactions = "donutgram.chats.hiddenReactions"
         static let removeMessageTails = "donutgram.chats.removeMessageTails"
         static let hideShareButton = "donutgram.chats.hideShareButton"
@@ -205,7 +213,7 @@ public final class DGSimpleSettings {
         )
     }
 
-    private init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
         if defaults.object(forKey: Key.saveDeletedMessages) == nil {
@@ -766,6 +774,30 @@ public final class DGSimpleSettings {
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
+    public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
+    public var hideBirthdayNotifications: Bool { get { bool(Key.hideBirthdayNotifications) } set { setBool(newValue, Key.hideBirthdayNotifications) } }
+    public var hideViaBot: Bool { get { bool(Key.hideViaBot) } set { setBool(newValue, Key.hideViaBot) } }
+    public var showPinnedMessagesWithBot: Bool { get { bool(Key.showPinnedMessagesWithBot) } set { setBool(newValue, Key.showPinnedMessagesWithBot) } }
+    public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }
+    public var removeLinkPreviews: Bool { get { bool(Key.removeLinkPreviews) } set { setBool(newValue, Key.removeLinkPreviews) } }
+    // Preserve Telegram's existing sequential playback until the user changes it.
+    public var autoplayMedia: Bool {
+        get { defaults.object(forKey: Key.autoplayMedia) == nil || bool(Key.autoplayMedia) }
+        set { setBool(newValue, Key.autoplayMedia) }
+    }
+    /// 1: voice messages; 2: round videos. The selection survives disabling the master switch.
+    public var autoplayMediaTypes: Int {
+        get { defaults.object(forKey: Key.autoplayMediaTypes) == nil ? 3 : integer(Key.autoplayMediaTypes) }
+        set { setInteger(newValue & 3, Key.autoplayMediaTypes) }
+    }
+    public func shouldAutoplayMedia(isRoundVideo: Bool) -> Bool {
+        return autoplayMedia && autoplayMediaTypes & (isRoundVideo ? 2 : 1) != 0
+    }
+
+    public func shouldShowBotAutomation(hasPinnedMessage: Bool) -> Bool {
+        return !hideBotAutomation && !(showPinnedMessagesWithBot && hasPinnedMessage)
+    }
+
     public var hiddenReactions: Int { get { integer(Key.hiddenReactions) } set { setInteger(newValue, Key.hiddenReactions) } }
     public var musicPlaybackExceptions: MusicPlaybackExceptions {
         get { MusicPlaybackExceptions(rawValue: integer(Key.musicPlaybackExceptions) & 7) }
