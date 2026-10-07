@@ -165,7 +165,6 @@ final class SharedMediaPlayer {
             }
         }
     }
-    private var automaticallyAdvancing = false
     private var currentPlayedToEnd = false
     private var scheduledPlaybackAction: SharedMediaPlayerPlaybackControlAction?
     private var scheduledStartTime: Double?
@@ -223,19 +222,6 @@ final class SharedMediaPlayer {
                     }
                     strongSelf.playbackItem = nil
                     if let item = state.item, let playbackData = item.playbackData {
-                        if strongSelf.automaticallyAdvancing {
-                            strongSelf.automaticallyAdvancing = false
-                            let shouldPlay: Bool
-                            switch playbackData.type {
-                            case .voice: shouldPlay = DGSimpleSettings.shared.shouldAutoplayMedia(isRoundVideo: false)
-                            case .instantVideo: shouldPlay = DGSimpleSettings.shared.shouldAutoplayMedia(isRoundVideo: true)
-                            case .music: shouldPlay = true
-                            }
-                            if !shouldPlay {
-                                strongSelf.playedToEnd?()
-                                return
-                            }
-                        }
                         let rateValue: Double
                         if case .music = playbackData.type {
                             rateValue = 1.0
@@ -269,18 +255,26 @@ final class SharedMediaPlayer {
                         playbackItem.setActionAtEnd({
                             Queue.mainQueue().async {
                                 if let strongSelf = self {
+                                    // Decide from the message that just ended, before advancing the playlist.
+                                    // Manual next/play controls and music retain Telegram's normal behavior.
+                                    if strongSelf.type == .voice, let completedType = state.item?.playbackData?.type {
+                                        let shouldStop: Bool
+                                        switch completedType {
+                                        case .voice: shouldStop = DGSimpleSettings.shared.shouldStopAfterMedia(isRoundVideo: false)
+                                        case .instantVideo: shouldStop = DGSimpleSettings.shared.shouldStopAfterMedia(isRoundVideo: true)
+                                        case .music: shouldStop = false
+                                        }
+                                        if shouldStop {
+                                            strongSelf.playbackItem?.pause()
+                                            strongSelf.playedToEnd?()
+                                            return
+                                        }
+                                    }
                                     switch strongSelf.playlist.looping {
                                         case .item:
                                             strongSelf.playbackItem?.seek(0.0)
                                             strongSelf.playbackItem?.play()
                                         default:
-                                            if strongSelf.type == .voice {
-                                                guard DGSimpleSettings.shared.autoplayMedia else {
-                                                    strongSelf.playedToEnd?()
-                                                    return
-                                                }
-                                                strongSelf.automaticallyAdvancing = true
-                                            }
                                             strongSelf.scheduledPlaybackAction = .play
                                             strongSelf.playlist.control(.next)
                                     }
@@ -437,11 +431,9 @@ final class SharedMediaPlayer {
     func control(_ action: SharedMediaPlayerControlAction) {
         switch action {
             case .next:
-                self.automaticallyAdvancing = false
                 self.scheduledPlaybackAction = .play
                 self.playlist.control(.next)
             case .previous:
-                self.automaticallyAdvancing = false
                 let threshold: Double = 5.0
                 if let playbackStateValue = self._playbackStateValue, case let .item(item) = playbackStateValue, item.status.duration > threshold, item.status.timestamp > threshold {
                     self.control(.seek(0.0))

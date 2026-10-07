@@ -310,9 +310,9 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         ])
         result.append(contentsOf: [
             .header(80, 11, "ВОСПРОИЗВЕДЕНИЕ"),
-            .toggle(81, 11, "autoplayMedia", "Автовоспроизведение медиа", s.autoplayMedia, true),
-            .disclosure(82, 11, "autoplayMediaTypes", "Воспроизводить автоматически", "\([1, 2].filter { s.autoplayMediaTypes & $0 != 0 }.count)/2"),
-            .info(83, 11, "После окончания сообщения автоматически воспроизводится следующее голосовое или кружок выбранного типа."),
+            .toggle(81, 11, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
+            .disclosure(82, 11, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
+            .info(83, 11, "Если включено, после голосового сообщения или кружка выбранного типа воспроизведение остановится. Следующее сообщение нужно запустить вручную."),
             .header(90, 12, "БОТЫ"),
             .toggle(91, 12, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
             .toggle(92, 12, "showPinnedMessagesWithBot", "Показывать закрепленные сообщения", s.showPinnedMessagesWithBot, true),
@@ -326,7 +326,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "removeLinkPreviews": s.removeLinkPreviews = value
         case "hideBotAutomation": s.hideBotAutomation = value
         case "showPinnedMessagesWithBot": s.showPinnedMessagesWithBot = value
-        case "autoplayMedia": s.autoplayMedia = value
+        case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value
         case "recent": s.infiniteRecentStickers = value
         case "hideStickerTime": s.hideStickerTime = value
@@ -560,12 +560,12 @@ private func dgTranscriptionController(context: AccountContext, focusKey: String
 
 private func dgAutoplayMediaController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .autoplayMedia, title: "Автовоспроизведение медиа", focusKey: focusKey, entries: {
-        [.toggle(0, 0, "1", "Голосовые", s.autoplayMediaTypes & 1 != 0, s.autoplayMedia),
-         .toggle(1, 0, "2", "Кружки", s.autoplayMediaTypes & 2 != 0, s.autoplayMedia)]
+    return dgController(context: context, page: .autoplayMedia, title: "Отключить автовоспроизведение медиа", focusKey: focusKey, entries: {
+        [.toggle(0, 0, "1", "Голосовые", s.disabledAutoplayMediaTypes & 1 != 0, s.disableMediaAutoplay),
+         .toggle(1, 0, "2", "Кружки", s.disabledAutoplayMediaTypes & 2 != 0, s.disableMediaAutoplay)]
     }, toggle: { key, value in
         guard let mask = Int(key) else { return }
-        s.autoplayMediaTypes = value ? (s.autoplayMediaTypes | mask) : (s.autoplayMediaTypes & ~mask)
+        s.disabledAutoplayMediaTypes = value ? (s.disabledAutoplayMediaTypes | mask) : (s.disabledAutoplayMediaTypes & ~mask)
     })
 }
 

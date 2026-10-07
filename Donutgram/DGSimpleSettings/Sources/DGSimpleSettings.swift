@@ -163,8 +163,8 @@ public final class DGSimpleSettings {
         static let showPinnedMessagesWithBot = "donutgram.chats.showPinnedMessagesWithBot"
         static let hideBotAutomation = "donutgram.chats.hideBotAutomation"
         static let removeLinkPreviews = "donutgram.chats.removeLinkPreviews"
-        static let autoplayMedia = "donutgram.chats.autoplayMedia"
-        static let autoplayMediaTypes = "donutgram.chats.autoplayMediaTypes"
+        static let disableMediaAutoplay = "donutgram.chats.disableMediaAutoplay"
+        static let disabledAutoplayMediaTypes = "donutgram.chats.disabledAutoplayMediaTypes"
         static let hiddenReactions = "donutgram.chats.hiddenReactions"
         static let removeMessageTails = "donutgram.chats.removeMessageTails"
         static let hideShareButton = "donutgram.chats.hideShareButton"
@@ -780,18 +780,18 @@ public final class DGSimpleSettings {
     public var showPinnedMessagesWithBot: Bool { get { bool(Key.showPinnedMessagesWithBot) } set { setBool(newValue, Key.showPinnedMessagesWithBot) } }
     public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }
     public var removeLinkPreviews: Bool { get { bool(Key.removeLinkPreviews) } set { setBool(newValue, Key.removeLinkPreviews) } }
-    // Preserve Telegram's existing sequential playback until the user changes it.
-    public var autoplayMedia: Bool {
-        get { defaults.object(forKey: Key.autoplayMedia) == nil || bool(Key.autoplayMedia) }
-        set { setBool(newValue, Key.autoplayMedia) }
+    // Opt-in: stop after the current selected media type instead of starting the next message.
+    public var disableMediaAutoplay: Bool {
+        get { bool(Key.disableMediaAutoplay) }
+        set { setBool(newValue, Key.disableMediaAutoplay) }
     }
     /// 1: voice messages; 2: round videos. The selection survives disabling the master switch.
-    public var autoplayMediaTypes: Int {
-        get { defaults.object(forKey: Key.autoplayMediaTypes) == nil ? 3 : integer(Key.autoplayMediaTypes) }
-        set { setInteger(newValue & 3, Key.autoplayMediaTypes) }
+    public var disabledAutoplayMediaTypes: Int {
+        get { defaults.object(forKey: Key.disabledAutoplayMediaTypes) == nil ? 3 : integer(Key.disabledAutoplayMediaTypes) }
+        set { setInteger(newValue & 3, Key.disabledAutoplayMediaTypes) }
     }
-    public func shouldAutoplayMedia(isRoundVideo: Bool) -> Bool {
-        return autoplayMedia && autoplayMediaTypes & (isRoundVideo ? 2 : 1) != 0
+    public func shouldStopAfterMedia(isRoundVideo: Bool) -> Bool {
+        return disableMediaAutoplay && disabledAutoplayMediaTypes & (isRoundVideo ? 2 : 1) != 0
     }
 
     public func shouldShowBotAutomation(hasPinnedMessage: Bool) -> Bool {
