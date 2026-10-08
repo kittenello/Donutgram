@@ -66,6 +66,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "hideViaBot", "hideBotAutomation": return "cpu"
     case "showPinnedMessagesWithBot": return "pin"
     case "removeLinkPreviews": return "link"
+    case "fixHashtags": return "number"
     case "autoplayMedia", "autoplayMediaTypes": return "play.circle"
     case "seconds", "hideStickerTime", "forwardDate": return "clock"
     case "hideStickerChecks": return "checkmark"

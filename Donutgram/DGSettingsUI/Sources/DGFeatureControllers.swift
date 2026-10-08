@@ -282,6 +282,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(21, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
             .toggle(22, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
             .toggle(23, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
+            .toggle(24, 4, "fixHashtags", "Исправить хештеги", s.fixHashtags, true),
             .toggle(26, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
             .header(27, 5, "ГОЛОС В ТЕКСТ"),
             .disclosure(28, 5, "transcription", "Сервис", transcription),
@@ -296,34 +297,30 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .disclosure(41, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
             .toggle(42, 7, "autoPause", "Авто пауза", s.autoPause, true),
             .disclosure(43, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
-            .header(50, 8, "ДРУГОЕ"),
-            .toggle(51, 8, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
+            .header(50, 8, "КАНАЛЫ"),
+            .toggle(51, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
+            .disclosure(52, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
+            .header(60, 9, "ВОСПРОИЗВЕДЕНИЕ"),
+            .toggle(61, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
+            .disclosure(62, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
+            .info(63, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
+            .header(70, 10, "БОТЫ"),
+            .toggle(71, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
+            .toggle(72, 10, "showPinnedMessagesWithBot", "Показывать закрепленные сообщения", s.showPinnedMessagesWithBot, true),
+            .header(80, 11, "ДРУГОЕ"),
+            .toggle(81, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
         if s.hideArchive {
-            result.append(.toggle(52, 8, "openArchiveOnPull", "Открывать архив при вытягивании", s.openArchiveOnPull, true))
+            result.append(.toggle(82, 11, "openArchiveOnPull", "Открывать архив при вытягивании", s.openArchiveOnPull, true))
         }
-        result.append(contentsOf: [
-            .header(60, 9, "КАНАЛЫ"),
-            .toggle(61, 9, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
-            .disclosure(62, 9, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .header(70, 10, "ЭФФЕКТЫ"), .disclosure(71, 10, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2")
-        ])
-        result.append(contentsOf: [
-            .header(80, 11, "ВОСПРОИЗВЕДЕНИЕ"),
-            .toggle(81, 11, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
-            .disclosure(82, 11, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
-            .info(83, 11, "Если включено, после голосового сообщения или кружка выбранного типа воспроизведение остановится. Следующее сообщение нужно запустить вручную."),
-            .header(90, 12, "БОТЫ"),
-            .toggle(91, 12, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
-            .toggle(92, 12, "showPinnedMessagesWithBot", "Показывать закрепленные сообщения", s.showPinnedMessagesWithBot, true),
-            .info(93, 12, "Если включена автоматизация ботов, закрепленные сообщения можно будет видеть.")
-        ])
+        result.append(.disclosure(83, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {
         case "hidePaidReactions": s.hidePaidReactions = value
         case "hideViaBot": s.hideViaBot = value
         case "removeLinkPreviews": s.removeLinkPreviews = value
+        case "fixHashtags": s.fixHashtags = value
         case "hideBotAutomation": s.hideBotAutomation = value
         case "showPinnedMessagesWithBot": s.showPinnedMessagesWithBot = value
         case "autoplayMedia": s.disableMediaAutoplay = value

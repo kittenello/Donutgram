@@ -13,6 +13,7 @@ if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
+    check(!settings.fixHashtags, "hashtag search changes must be opt-in")
     for enabled in [false, true] {
         settings.disableMediaAutoplay = enabled
         for mask in 0 ... 3 {
@@ -34,6 +35,7 @@ if mode == "write" {
     settings.hideBotAutomation = true
     settings.showPinnedMessagesWithBot = true
     settings.removeLinkPreviews = true
+    settings.fixHashtags = true
     settings.disabledAutoplayMediaTypes = 1
     settings.disableMediaAutoplay = false
     check(settings.disabledAutoplayMediaTypes == 1, "turning the stop switch off must preserve its selection")
@@ -44,6 +46,7 @@ if mode == "write" {
 } else if mode == "read" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.showPinnedMessagesWithBot && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
+    check(settings.fixHashtags, "hashtag search preference must survive process restart")
     check(settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 1, "autoplay preferences must survive process restart")
     check(settings.shouldStopAfterMedia(isRoundVideo: false) && !settings.shouldStopAfterMedia(isRoundVideo: true), "persisted selection stops after voice but allows continuation after round videos")
     settings.disableMediaAutoplay = false
