@@ -119,6 +119,7 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
             .toggle(1, 0, "premiumStatuses", "Скрыть премиум статусы", s.hidePremiumStatuses, true),
             .toggle(2, 0, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
             .toggle(3, 0, "hideStories", "Скрыть сторис", s.hideStories, true),
+            .toggle(4, 0, "hideBirthdayNotifications", "Скрыть уведомление о дне рождении", s.hideBirthdayNotifications, true),
             .header(10, 1, "ПРИЛОЖЕНИЕ"), dgIconAndIslandRow(context: context, id: 11, section: 1),
             .header(20, 3, "ВКЛАДКИ"),
             .tabBarPreview(21, 3, s.tabBarLayout),
@@ -147,7 +148,7 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
         ])
         return entries
     }, restartRequiredKeys: ["premiumStatuses", "hideStories", "hideTabBar"], toggle: { key, value in
-        switch key { case "premiumStatuses": s.hidePremiumStatuses = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "integratedTabSearch": s.integratedTabSearch = value; case "tabSearchOnLeft": s.tabSearchOnLeft = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
+        switch key { case "hideBirthdayNotifications": s.hideBirthdayNotifications = value; case "premiumStatuses": s.hidePremiumStatuses = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "integratedTabSearch": s.integratedTabSearch = value; case "tabSearchOnLeft": s.tabSearchOnLeft = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
     }, open: { key in
         switch key {
         case "dialogIdFormat": return dgDialogIdFormatController(context: context)
@@ -264,8 +265,9 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(1, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
             .toggle(2, 2, "recent", "Беск. недавние стикеры", s.infiniteRecentStickers, true),
             .disclosure(3, 2, "reactions", "Скрыть реакции", "\(hiddenCount)/3"),
-            .header(4, 3, "ВНЕШНИЙ ВИД"),
-            .disclosure(5, 3, "chatListAppearance", "Внешний вид", ""),
+            .toggle(6, 2, "hidePaidReactions", "Скрыть платные реакции", s.hidePaidReactions, true),
+            .header(7, 3, "ВНЕШНИЙ ВИД"),
+            .disclosure(8, 3, "chatListAppearance", "Внешний вид", ""),
             .header(10, 4, "СООБЩЕНИЯ"),
             .messagePreview(11, 4, s.removeMessageTails, s.showMessageSeconds, s.disableColoredReplies, s.editedIcon),
             .toggle(12, 4, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
@@ -279,8 +281,11 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(20, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
             .toggle(21, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
             .toggle(22, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
-            .header(24, 5, "ГОЛОС В ТЕКСТ"),
-            .disclosure(25, 5, "transcription", "Сервис", transcription),
+            .toggle(23, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
+            .toggle(24, 4, "fixHashtags", "Исправить хештеги", s.fixHashtags, true),
+            .toggle(26, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
+            .header(27, 5, "ГОЛОС В ТЕКСТ"),
+            .disclosure(28, 5, "transcription", "Сервис", transcription),
             .header(30, 6, "ЗАПИСЬ"),
             .disclosure(31, 6, "camera", "Камера в кружках", cameraTitle),
             .toggle(32, 6, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
@@ -292,21 +297,33 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .disclosure(41, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
             .toggle(42, 7, "autoPause", "Авто пауза", s.autoPause, true),
             .disclosure(43, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
-            .header(50, 8, "ДРУГОЕ"),
-            .toggle(51, 8, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
+            .header(50, 8, "КАНАЛЫ"),
+            .toggle(51, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
+            .disclosure(52, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
+            .header(60, 9, "ВОСПРОИЗВЕДЕНИЕ"),
+            .toggle(61, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
+            .disclosure(62, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
+            .info(63, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
+            .header(70, 10, "БОТЫ"),
+            .toggle(71, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
+            .toggle(72, 10, "showPinnedMessagesWithBot", "Показывать закрепленные сообщения", s.showPinnedMessagesWithBot, true),
+            .header(80, 11, "ДРУГОЕ"),
+            .toggle(81, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
         if s.hideArchive {
-            result.append(.toggle(52, 8, "openArchiveOnPull", "Открывать архив при вытягивании", s.openArchiveOnPull, true))
+            result.append(.toggle(82, 11, "openArchiveOnPull", "Открывать архив при вытягивании", s.openArchiveOnPull, true))
         }
-        result.append(contentsOf: [
-            .header(60, 9, "КАНАЛЫ"),
-            .toggle(61, 9, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
-            .disclosure(62, 9, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .header(70, 10, "ЭФФЕКТЫ"), .disclosure(71, 10, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2")
-        ])
+        result.append(.disclosure(83, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {
+        case "hidePaidReactions": s.hidePaidReactions = value
+        case "hideViaBot": s.hideViaBot = value
+        case "removeLinkPreviews": s.removeLinkPreviews = value
+        case "fixHashtags": s.fixHashtags = value
+        case "hideBotAutomation": s.hideBotAutomation = value
+        case "showPinnedMessagesWithBot": s.showPinnedMessagesWithBot = value
+        case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value
         case "recent": s.infiniteRecentStickers = value
         case "hideStickerTime": s.hideStickerTime = value
@@ -358,6 +375,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "glow": return dgGlowController(context: context)
         case "transcription": return dgTranscriptionController(context: context)
         case "camera": return dgRoundVideoCameraController(context: context)
+        case "autoplayMediaTypes": return dgAutoplayMediaController(context: context)
         case "autoPauseMedia": return dgAutoPauseMediaController(context: context)
         case "doubleTapSeek": return dgDoubleTapSeekController(context: context)
         case "chatListAppearance": return dgChatListAppearanceController(context: context)
@@ -537,6 +555,17 @@ private func dgTranscriptionController(context: AccountContext, focusKey: String
     }, select: { s.transcriptionBackend = DGSimpleSettings.TranscriptionBackend(rawValue: $0) ?? .auto })
 }
 
+private func dgAutoplayMediaController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .autoplayMedia, title: "Отключить автовоспроизведение медиа", focusKey: focusKey, entries: {
+        [.toggle(0, 0, "1", "Голосовые", s.disabledAutoplayMediaTypes & 1 != 0, s.disableMediaAutoplay),
+         .toggle(1, 0, "2", "Кружки", s.disabledAutoplayMediaTypes & 2 != 0, s.disableMediaAutoplay)]
+    }, toggle: { key, value in
+        guard let mask = Int(key) else { return }
+        s.disabledAutoplayMediaTypes = value ? (s.disabledAutoplayMediaTypes | mask) : (s.disabledAutoplayMediaTypes & ~mask)
+    })
+}
+
 private func dgHiddenReactionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     return dgController(context: context, page: .reactions, title: "Скрыть реакции", focusKey: focusKey, entries: { [.toggle(0, 0, "1", "Каналы", s.hiddenReactions & 1 != 0, true), .toggle(1, 0, "2", "Группы", s.hiddenReactions & 2 != 0, true), .toggle(2, 0, "4", "Личные чаты", s.hiddenReactions & 4 != 0, true)] }, toggle: { key, value in
@@ -579,6 +608,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     case .chatListTitle: makeController = dgChatListTitleModeController
     case .doubleTapSeek: makeController = dgDoubleTapSeekController
     case .camera: makeController = dgRoundVideoCameraController
+    case .autoplayMedia: makeController = dgAutoplayMediaController
     case .autoPause: makeController = dgAutoPauseMediaController
     case .musicPlaybackExceptions: makeController = dgMusicPlaybackExceptionsController
     case .downloads: makeController = dgDownloadsSettingsController

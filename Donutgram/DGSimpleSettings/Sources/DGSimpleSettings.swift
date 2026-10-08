@@ -157,6 +157,15 @@ public final class DGSimpleSettings {
 
         static let onlyAddedStickers = "donutgram.chats.onlyAddedStickers"
         static let infiniteRecentStickers = "donutgram.chats.infiniteRecentStickers"
+        static let hidePaidReactions = "donutgram.chats.hidePaidReactions"
+        static let hideBirthdayNotifications = "donutgram.appearance.hideBirthdayNotifications"
+        static let hideViaBot = "donutgram.chats.hideViaBot"
+        static let showPinnedMessagesWithBot = "donutgram.chats.showPinnedMessagesWithBot"
+        static let hideBotAutomation = "donutgram.chats.hideBotAutomation"
+        static let removeLinkPreviews = "donutgram.chats.removeLinkPreviews"
+        static let fixHashtags = "donutgram.chats.fixHashtags"
+        static let disableMediaAutoplay = "donutgram.chats.disableMediaAutoplay"
+        static let disabledAutoplayMediaTypes = "donutgram.chats.disabledAutoplayMediaTypes"
         static let hiddenReactions = "donutgram.chats.hiddenReactions"
         static let removeMessageTails = "donutgram.chats.removeMessageTails"
         static let hideShareButton = "donutgram.chats.hideShareButton"
@@ -205,7 +214,7 @@ public final class DGSimpleSettings {
         )
     }
 
-    private init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
         if defaults.object(forKey: Key.saveDeletedMessages) == nil {
@@ -766,6 +775,31 @@ public final class DGSimpleSettings {
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
+    public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
+    public var hideBirthdayNotifications: Bool { get { bool(Key.hideBirthdayNotifications) } set { setBool(newValue, Key.hideBirthdayNotifications) } }
+    public var hideViaBot: Bool { get { bool(Key.hideViaBot) } set { setBool(newValue, Key.hideViaBot) } }
+    public var fixHashtags: Bool { get { bool(Key.fixHashtags) } set { setBool(newValue, Key.fixHashtags) } }
+    public var showPinnedMessagesWithBot: Bool { get { bool(Key.showPinnedMessagesWithBot) } set { setBool(newValue, Key.showPinnedMessagesWithBot) } }
+    public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }
+    public var removeLinkPreviews: Bool { get { bool(Key.removeLinkPreviews) } set { setBool(newValue, Key.removeLinkPreviews) } }
+    // Opt-in: stop after the current selected media type instead of starting the next message.
+    public var disableMediaAutoplay: Bool {
+        get { bool(Key.disableMediaAutoplay) }
+        set { setBool(newValue, Key.disableMediaAutoplay) }
+    }
+    /// 1: voice messages; 2: round videos. The selection survives disabling the master switch.
+    public var disabledAutoplayMediaTypes: Int {
+        get { defaults.object(forKey: Key.disabledAutoplayMediaTypes) == nil ? 3 : integer(Key.disabledAutoplayMediaTypes) }
+        set { setInteger(newValue & 3, Key.disabledAutoplayMediaTypes) }
+    }
+    public func shouldStopAfterMedia(isRoundVideo: Bool) -> Bool {
+        return disableMediaAutoplay && disabledAutoplayMediaTypes & (isRoundVideo ? 2 : 1) != 0
+    }
+
+    public func shouldShowBotAutomation() -> Bool {
+        return !hideBotAutomation
+    }
+
     public var hiddenReactions: Int { get { integer(Key.hiddenReactions) } set { setInteger(newValue, Key.hiddenReactions) } }
     public var musicPlaybackExceptions: MusicPlaybackExceptions {
         get { MusicPlaybackExceptions(rawValue: integer(Key.musicPlaybackExceptions) & 7) }

@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
@@ -452,7 +453,7 @@ public func topMessageReactions(context: AccountContext, message: EngineRawMessa
             }
         }
         
-        if allowedReactionsAndFiles.areStarsEnabled {
+        if allowedReactionsAndFiles.areStarsEnabled && !DGSimpleSettings.shared.hidePaidReactions {
             result.removeAll(where: { $0.reaction.rawValue == .stars })
             if let reaction = availableReactions.reactions.first(where: { $0.value == .stars }) {
                 if let centerAnimation = reaction.centerAnimation, let aroundAnimation = reaction.aroundAnimation {
@@ -472,6 +473,9 @@ public func topMessageReactions(context: AccountContext, message: EngineRawMessa
             }
         }
 
+        if DGSimpleSettings.shared.hidePaidReactions {
+            result.removeAll(where: { $0.reaction.rawValue == .stars })
+        }
         return result
     }
 }

@@ -806,6 +806,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private var donutgramShowChannelForwardCount = DGSimpleSettings.shared.showChannelForwardCount
     private var donutgramShowForwardDate = DGSimpleSettings.shared.showForwardDate
     private var donutgramWideChannelPosts = DGSimpleSettings.shared.wideChannelPosts
+    private var donutgramHidePaidReactions = DGSimpleSettings.shared.hidePaidReactions
+    private var donutgramHideViaBot = DGSimpleSettings.shared.hideViaBot
     private var donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
     
     private var visibleMessageRange = Atomic<VisibleMessageRange?>(value: nil)
@@ -1349,15 +1351,19 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             let forwardCountChanged = self.donutgramShowChannelForwardCount != showChannelForwardCount
             let forwardDateChanged = self.donutgramShowForwardDate != DGSimpleSettings.shared.showForwardDate
             let wideChannelPostsChanged = self.donutgramWideChannelPosts != DGSimpleSettings.shared.wideChannelPosts
+            let hidePaidReactionsChanged = self.donutgramHidePaidReactions != DGSimpleSettings.shared.hidePaidReactions
+            let hideViaBotChanged = self.donutgramHideViaBot != DGSimpleSettings.shared.hideViaBot
             let mentionAvatarsChanged = self.donutgramMentionAvatars != DGSimpleSettings.shared.mentionAvatars
-            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged {
+            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged {
                 self.donutgramTranscriptionBackend = transcriptionBackend
                 self.donutgramStickerAppearance = stickerAppearance
                 self.donutgramShowChannelForwardCount = showChannelForwardCount
                 self.donutgramShowForwardDate = DGSimpleSettings.shared.showForwardDate
                 self.donutgramWideChannelPosts = DGSimpleSettings.shared.wideChannelPosts
+                self.donutgramHidePaidReactions = DGSimpleSettings.shared.hidePaidReactions
+                self.donutgramHideViaBot = DGSimpleSettings.shared.hideViaBot
                 self.donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
-                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged)
+                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged)
             }
         })
 

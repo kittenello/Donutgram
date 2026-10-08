@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import Postbox
@@ -262,6 +263,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     
     private let titleAccessoryPanelContainer: ChatControllerTitlePanelNodeContainer
     private var currentTitleAccessoryPanelNode: ChatTitleAccessoryPanelNode?
+    private var currentPinnedWithBotPanelNode: ChatPinnedMessageTitlePanelNode?
     
     private var floatingTopicsPanelContainer: ChatControllerTitlePanelNodeContainer
     private var floatingTopicsPanel: (view: ComponentView<ChatSidePanelEnvironment>, component: ChatFloatingTopicsPanel)?
@@ -1634,6 +1636,24 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         } else {
             self.currentTitleAccessoryPanelNode = nil
         }
+
+        // Keep the managing bot panel intact and add the pin as its own header row.
+        // Reuse the native selector so closed pins, pending unpins, and other title contexts remain respected.
+        if !hideTopPanels, self.currentTitleAccessoryPanelNode is ChatManagingBotTitlePanelNode,
+            DGSimpleSettings.shared.showPinnedMessagesWithBot,
+            let pinnedPanel = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentPinnedWithBotPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false, skipManagingBotPanel: true) as? ChatPinnedMessageTitlePanelNode {
+            self.currentPinnedWithBotPanelNode = pinnedPanel
+            headerPanels.append(HeaderPanelContainerComponent.Panel(
+                key: "donutgram-pinned-with-bot",
+                orderIndex: 4,
+                component: AnyComponent(LegacyChatHeaderPanelComponent(
+                    panelNode: pinnedPanel,
+                    interfaceState: self.chatPresentationInterfaceState
+                )))
+            )
+        } else {
+            self.currentPinnedWithBotPanelNode = nil
+        }
         
         var displayFeePanel: (value: Int64, peer: EnginePeer)?
         if !hideTopPanels, let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
@@ -1648,7 +1668,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if let displayFeePanel {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "fee",
-                orderIndex: 4,
+                orderIndex: 5,
                 component: AnyComponent(MessageFeeHeaderPanelComponent(
                     context: self.context,
                     theme: self.chatPresentationInterfaceState.theme,
@@ -1670,7 +1690,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         if !hideTopPanels, hasTranslationPanel, let translationState = self.chatPresentationInterfaceState.translationState {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "translate",
-                orderIndex: 5,
+                orderIndex: 6,
                 component: AnyComponent(TranslateHeaderPanelComponent(
                     context: self.context,
                     theme: self.chatPresentationInterfaceState.theme,
