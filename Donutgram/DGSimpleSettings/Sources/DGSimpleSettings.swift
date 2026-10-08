@@ -794,8 +794,8 @@ public final class DGSimpleSettings {
         return disableMediaAutoplay && disabledAutoplayMediaTypes & (isRoundVideo ? 2 : 1) != 0
     }
 
-    public func shouldShowBotAutomation(hasPinnedMessage: Bool) -> Bool {
-        return !hideBotAutomation && !(showPinnedMessagesWithBot && hasPinnedMessage)
+    public func shouldShowBotAutomation() -> Bool {
+        return !hideBotAutomation
     }
 
     public var hiddenReactions: Int { get { integer(Key.hiddenReactions) } set { setInteger(newValue, Key.hiddenReactions) } }

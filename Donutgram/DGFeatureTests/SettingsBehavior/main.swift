@@ -25,9 +25,7 @@ if mode == "write" {
         for pinned in [false, true] {
             settings.hideBotAutomation = hidden
             settings.showPinnedMessagesWithBot = pinned
-            for hasPin in [false, true] {
-                check(settings.shouldShowBotAutomation(hasPinnedMessage: hasPin) == (!hidden && !(pinned && hasPin)), "bot/pin precedence")
-            }
+            check(settings.shouldShowBotAutomation() == !hidden, "showing pins must never hide the bot automation panel")
         }
     }
     settings.hidePaidReactions = true

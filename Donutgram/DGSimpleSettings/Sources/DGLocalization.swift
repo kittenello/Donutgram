@@ -132,7 +132,7 @@ private let dgEnglishStrings: [String: String] = [
     "Скрыть «Via Bot» в сообщении": "Hide Via Bot in Messages",
     "Удалить превью-ссылки": "Remove Link Previews",
     "Воспроизведение": "Playback",
-    "Авто воспроизведение медиа": "Media Autoplay",
+    "Отключить автовоспроизведение медиа": "Disable Media Autoplay",
     "Останавливать после": "Stop After",
     "Голосовые": "Voice Messages",
     "Если включено, после голосового сообщения или кружка выбранного типа воспроизведение остановится. Следующее сообщение нужно запустить вручную.": "When enabled, playback stops after a voice message or round video of the selected type. Start the next message manually.",

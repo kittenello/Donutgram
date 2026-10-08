@@ -9,7 +9,7 @@ import ComponentFlow
 import ChatSideTopicsPanel
 import LegacyChatHeaderPanelComponent
 
-func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatTitleAccessoryPanelNode?, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, force: Bool) -> ChatTitleAccessoryPanelNode? {
+func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatTitleAccessoryPanelNode?, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, force: Bool, skipManagingBotPanel: Bool = false) -> ChatTitleAccessoryPanelNode? {
     if !force, case .standard(.embedded) = chatPresentationInterfaceState.mode {
         return nil
     }
@@ -183,7 +183,7 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
                 return panel
             }
         } else if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil,
-            DGSimpleSettings.shared.shouldShowBotAutomation(hasPinnedMessage: selectedContext == .pinnedMessage) {
+            !skipManagingBotPanel, DGSimpleSettings.shared.shouldShowBotAutomation() {
             if let currentPanel = currentPanel as? ChatManagingBotTitlePanelNode {
                 return currentPanel
             } else {
