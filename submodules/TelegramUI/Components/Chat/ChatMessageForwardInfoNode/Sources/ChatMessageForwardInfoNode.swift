@@ -497,9 +497,14 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
                 viaBotLayoutAndApply = viaBotNodeLayout(TextNodeLayoutArguments(attributedString: viaString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: availableNameWidth, height: constrainedSize.height), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             }
             
+            // Donutgram: with the forward date the name and date get the whole width (up to two lines), so the bot label
+            // can't squeeze the date out. The label then follows the last line if it fits there, or takes a line of its own.
+            let viaBotFollowsName = viaBotLayoutAndApply != nil && showForwardDate
+            var viaBotOnOwnLine = false
+            
             var nameLayoutAndApply: (TextNodeLayout, () -> TextNode)?
             if let authorString {
-                let viaBotWidth = viaBotLayoutAndApply?.0.size.width ?? 0.0
+                let viaBotWidth = viaBotFollowsName ? 0.0 : (viaBotLayoutAndApply?.0.size.width ?? 0.0)
                 nameLayoutAndApply = nameNodeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: authorString, font: peer != nil ? peerFont : prefixFont, textColor: titleColor), backgroundColor: nil, maximumNumberOfLines: showForwardDate ? 2 : 1, truncationType: .end, constrainedSize: CGSize(width: max(0.0, availableNameWidth - viaBotWidth), height: constrainedSize.height), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             }
             
@@ -508,24 +513,29 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
             let resultSize: CGSize
             if let nameLayoutAndApply {
                 let viaBotSize = viaBotLayoutAndApply?.0.size ?? CGSize()
-                // Donutgram: a name the forward date wrapped onto a second line takes the bot label at the end of its
-                // last line, which always has room for it: every line was laid out narrower by the label's width.
-                let nameAndViaBotWidth: CGFloat
-                if nameLayoutAndApply.0.numberOfLines > 1 {
-                    nameAndViaBotWidth = max(nameLayoutAndApply.0.size.width, nameLayoutAndApply.0.trailingLineWidth + viaBotSize.width)
+                let nameAndViaBotSize: CGSize
+                if viaBotFollowsName {
+                    let nameLayout = nameLayoutAndApply.0
+                    if nameLayout.trailingLineWidth + viaBotSize.width <= availableNameWidth {
+                        nameAndViaBotSize = CGSize(width: max(nameLayout.size.width, nameLayout.trailingLineWidth + viaBotSize.width), height: max(nameLayout.size.height, viaBotSize.height))
+                    } else {
+                        viaBotOnOwnLine = true
+                        nameAndViaBotSize = CGSize(width: max(nameLayout.size.width, viaBotSize.width), height: nameLayout.size.height + viaBotSize.height)
+                    }
                 } else {
-                    nameAndViaBotWidth = nameLayoutAndApply.0.size.width + viaBotSize.width
+                    nameAndViaBotSize = CGSize(width: nameLayoutAndApply.0.size.width + viaBotSize.width, height: max(nameLayoutAndApply.0.size.height, viaBotSize.height))
                 }
                 resultSize = CGSize(
                     width: max(
                         titleLayout.size.width + credibilityIconWidth + infoWidth,
-                        authorAvatarInset + nameAndViaBotWidth
+                        authorAvatarInset + nameAndViaBotSize.width
                     ),
-                    height: titleLayout.size.height + titleAuthorSpacing + max(nameLayoutAndApply.0.size.height, viaBotSize.height)
+                    height: titleLayout.size.height + titleAuthorSpacing + nameAndViaBotSize.height
                 )
             } else {
                 resultSize = CGSize(width: titleLayout.size.width + credibilityIconWidth + infoWidth, height: titleLayout.size.height)
             }
+            let isViaBotOnOwnLine = viaBotOnOwnLine
             
             return (resultSize, { width in
                 let node: ChatMessageForwardInfoNode
@@ -608,7 +618,9 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
                         node.viaBotNode = viaBotNode
                         node.addSubnode(viaBotNode)
                     }
-                    if let (nameLayout, _) = nameLayoutAndApply, nameLayout.numberOfLines > 1 {
+                    if isViaBotOnOwnLine {
+                        viaBotFrame = CGRect(origin: CGPoint(x: nameFrame.minX, y: nameFrame.maxY), size: viaBotLayout.size)
+                    } else if viaBotFollowsName, let (nameLayout, _) = nameLayoutAndApply {
                         viaBotFrame = CGRect(origin: CGPoint(x: nameFrame.minX + nameLayout.trailingLineWidth, y: nameFrame.maxY - viaBotLayout.size.height), size: viaBotLayout.size)
                     } else {
                         viaBotFrame = CGRect(origin: CGPoint(x: nameFrame.maxX, y: titleLayout.size.height + titleAuthorSpacing), size: viaBotLayout.size)
