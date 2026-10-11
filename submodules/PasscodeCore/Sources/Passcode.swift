@@ -30,6 +30,7 @@ public final class PasscodeEnvironment: @unchecked Sendable {
     private var configuration: PasscodeConfiguration?
     private var resolvePrivateAccessGroup: (() -> String?)?
     private var resolvedPrivateAccessGroup: String?
+    private var isAppGroupAvailable = true
 
     init() {
         
@@ -54,6 +55,9 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         guard configuration.processRole != .mainApp || privateAccessGroup != nil else { throw PasscodeError.unavailable }
         self.configuration = configuration
         self.resolvePrivateAccessGroup = privateAccessGroup
+        #if !os(macOS)
+        self.isAppGroupAvailable = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: configuration.appGroupIdentifier) != nil
+        #endif
     }
 
     public var keychainScope: String? {
@@ -73,6 +77,15 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         self.mutex.lock()
         defer { self.mutex.unlock() }
         guard let configuration = self.configuration else { throw PasscodeError.unavailable }
+        #if !os(macOS)
+        // Donutgram: a sideloaded build is usually signed without the App Groups entitlement, and then the app group
+        // can't be a keychain access group either: every passcode read and write would fail with
+        // errSecMissingEntitlement, so a passcode set before the update could never be entered again. Such a build
+        // has no app extensions, so the main app keeps the items in its own access group instead.
+        if configuration.processRole == .mainApp && !self.isAppGroupAvailable {
+            return try self.privateAccessGroupLocked(configuration)
+        }
+        #endif
         return configuration.appGroupIdentifier
     }
 
@@ -90,6 +103,11 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         self.mutex.lock()
         defer { self.mutex.unlock() }
         guard let configuration = self.configuration, configuration.processRole == .mainApp else { throw PasscodeError.unavailable }
+        return try self.privateAccessGroupLocked(configuration)
+    }
+
+    // Called with `mutex` held.
+    private func privateAccessGroupLocked(_ configuration: PasscodeConfiguration) throws -> String {
         if let group = self.resolvedPrivateAccessGroup { return group }
         guard let group = self.resolvePrivateAccessGroup?(), !group.isEmpty else {
             throw PasscodeError.unavailable
