@@ -23,17 +23,13 @@ if mode == "write" {
         }
     }
     for hidden in [false, true] {
-        for pinned in [false, true] {
-            settings.hideBotAutomation = hidden
-            settings.showPinnedMessagesWithBot = pinned
-            check(settings.shouldShowBotAutomation() == !hidden, "showing pins must never hide the bot automation panel")
-        }
+        settings.hideBotAutomation = hidden
+        check(settings.shouldShowBotAutomation() == !hidden, "the bot automation panel follows its own switch")
     }
     settings.hidePaidReactions = true
     settings.hideBirthdayNotifications = true
     settings.hideViaBot = true
     settings.hideBotAutomation = true
-    settings.showPinnedMessagesWithBot = true
     settings.removeLinkPreviews = true
     settings.fixHashtags = true
     settings.disabledAutoplayMediaTypes = 1
@@ -45,7 +41,7 @@ if mode == "write" {
     print("settings behavior checks passed")
 } else if mode == "read" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
-    check(settings.hideBotAutomation && settings.showPinnedMessagesWithBot && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
+    check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
     check(settings.fixHashtags, "hashtag search preference must survive process restart")
     check(settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 1, "autoplay preferences must survive process restart")
     check(settings.shouldStopAfterMedia(isRoundVideo: false) && !settings.shouldStopAfterMedia(isRoundVideo: true), "persisted selection stops after voice but allows continuation after round videos")

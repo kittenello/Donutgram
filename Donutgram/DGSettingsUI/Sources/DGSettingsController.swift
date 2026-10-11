@@ -64,7 +64,6 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "reactions", "hidePaidReactions": return "heart"
     case "hideBirthdayNotifications": return "gift"
     case "hideViaBot", "hideBotAutomation": return "cpu"
-    case "showPinnedMessagesWithBot": return "pin"
     case "removeLinkPreviews": return "link"
     case "fixHashtags": return "number"
     case "autoplayMedia", "autoplayMediaTypes": return "play.circle"

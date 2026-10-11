@@ -139,7 +139,6 @@ private let dgEnglishStrings: [String: String] = [
     "Если включено, следующее ГС или кружок не запустится автоматически.": "When enabled, the next voice message or round video will not start automatically.",
     "Боты": "Bots",
     "Скрыть автоматизацию ботов": "Hide Bot Automation",
-    "Показывать закрепленные сообщения": "Show Pinned Messages",
     "Сообщения": "Messages",
     "Убрать хвост у сообщений": "Remove Message Tails",
     "Показывать секунды": "Show Seconds",

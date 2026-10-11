@@ -306,7 +306,6 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .info(63, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
             .header(70, 10, "БОТЫ"),
             .toggle(71, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
-            .toggle(72, 10, "showPinnedMessagesWithBot", "Показывать закрепленные сообщения", s.showPinnedMessagesWithBot, true),
             .header(80, 11, "ДРУГОЕ"),
             .toggle(81, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
@@ -322,7 +321,6 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "removeLinkPreviews": s.removeLinkPreviews = value
         case "fixHashtags": s.fixHashtags = value
         case "hideBotAutomation": s.hideBotAutomation = value
-        case "showPinnedMessagesWithBot": s.showPinnedMessagesWithBot = value
         case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value
         case "recent": s.infiniteRecentStickers = value
