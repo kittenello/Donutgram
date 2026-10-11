@@ -70,13 +70,16 @@ jobs:
           xcodebuild -version
           sw_vers
 
+      # A PR's own entries carry its number (see «Save Bazel disk cache»), so
+      # its next push restores them before master's.
       - name: Restore Bazel disk cache
         id: bazel-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/telegram-bazel-cache
-          key: donutgram-bazel-${{ runner.os }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock') }}-${{ github.sha }}
+          key: donutgram-bazel-${{ runner.os }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock') }}-${{ github.event.pull_request.number && format('pr{0}-', github.event.pull_request.number) || '' }}${{ github.sha }}
           restore-keys: |
+            donutgram-bazel-${{ runner.os }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock') }}-${{ github.event.pull_request.number && format('pr{0}-', github.event.pull_request.number) || '' }}
             donutgram-bazel-${{ runner.os }}-${{ hashFiles('versions.json', 'MODULE.bazel', 'MODULE.bazel.lock') }}-
 
       - name: Prepare canonical source path
@@ -133,6 +136,7 @@ jobs:
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir="$HOME/telegram-bazel-cache" \
             build \
+            --continueOnError \
             --configurationPath="$CONFIG_PATH" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
@@ -186,12 +190,14 @@ jobs:
       # Only master saves the ~6 GB cache. The repository cache limit is 10 GB,
       # so an entry saved by a branch evicts master's, while other branches
       # cannot restore a branch's entry and fall back to a cold build.
-      # Exception: a run that restored nothing at all (versions.json or
-      # MODULE.bazel changed, so no master entry fits) saves once, so the next
-      # pushes to the same PR start warm. A failed build saves too: the disk
-      # cache only holds finished actions, and the next push needs them most.
+      # Exception: a PR whose versions.json or MODULE.bazel changed finds no
+      # master entry, so it restores nothing or only its own earlier entry
+      # (the key carries the PR number). Such a run saves, so each next push to
+      # that PR starts from the previous one. A failed build saves too: the
+      # disk cache only holds finished actions, and with --continueOnError
+      # those are everything the error didn't block.
       - name: Save Bazel disk cache
-        if: ${{ !cancelled() && steps.bazel-cache.outputs.cache-hit != 'true' && (github.ref == 'refs/heads/master' || steps.bazel-cache.outputs.cache-matched-key == '') }}
+        if: ${{ !cancelled() && steps.bazel-cache.outputs.cache-hit != 'true' && (github.ref == 'refs/heads/master' || steps.bazel-cache.outputs.cache-matched-key == '' || (github.event.pull_request.number && contains(steps.bazel-cache.outputs.cache-matched-key, format('-pr{0}-', github.event.pull_request.number)))) }}
         uses: actions/cache/save@v4
         with:
           path: ~/telegram-bazel-cache
