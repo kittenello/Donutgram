@@ -162,7 +162,6 @@ public final class DGSimpleSettings {
         static let hideViaBot = "donutgram.chats.hideViaBot"
         static let hideBotAutomation = "donutgram.chats.hideBotAutomation"
         static let removeLinkPreviews = "donutgram.chats.removeLinkPreviews"
-        static let fixHashtags = "donutgram.chats.fixHashtags"
         static let disableMediaAutoplay = "donutgram.chats.disableMediaAutoplay"
         static let disabledAutoplayMediaTypes = "donutgram.chats.disabledAutoplayMediaTypes"
         static let hiddenReactions = "donutgram.chats.hiddenReactions"
@@ -777,7 +776,6 @@ public final class DGSimpleSettings {
     public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
     public var hideBirthdayNotifications: Bool { get { bool(Key.hideBirthdayNotifications) } set { setBool(newValue, Key.hideBirthdayNotifications) } }
     public var hideViaBot: Bool { get { bool(Key.hideViaBot) } set { setBool(newValue, Key.hideViaBot) } }
-    public var fixHashtags: Bool { get { bool(Key.fixHashtags) } set { setBool(newValue, Key.fixHashtags) } }
     public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }
     public var removeLinkPreviews: Bool { get { bool(Key.removeLinkPreviews) } set { setBool(newValue, Key.removeLinkPreviews) } }
     // Opt-in: stop after the current selected media type instead of starting the next message.

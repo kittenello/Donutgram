@@ -282,7 +282,6 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(21, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
             .toggle(22, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
             .toggle(23, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
-            .toggle(24, 4, "fixHashtags", "Исправить хештеги", s.fixHashtags, true),
             .toggle(26, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
             .header(27, 5, "ГОЛОС В ТЕКСТ"),
             .disclosure(28, 5, "transcription", "Сервис", transcription),
@@ -319,7 +318,6 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "hidePaidReactions": s.hidePaidReactions = value
         case "hideViaBot": s.hideViaBot = value
         case "removeLinkPreviews": s.removeLinkPreviews = value
-        case "fixHashtags": s.fixHashtags = value
         case "hideBotAutomation": s.hideBotAutomation = value
         case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value

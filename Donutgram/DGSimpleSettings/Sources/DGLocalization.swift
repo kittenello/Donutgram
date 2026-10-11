@@ -131,7 +131,6 @@ private let dgEnglishStrings: [String: String] = [
     "Скрыть уведомление о дне рождении": "Hide Birthday Notifications",
     "Скрыть «Via Bot» в сообщении": "Hide Via Bot in Messages",
     "Удалить превью-ссылки": "Remove Link Previews",
-    "Исправить хештеги": "Fix Hashtags",
     "Воспроизведение": "Playback",
     "Отключить автовоспроизведение медиа": "Disable Media Autoplay",
     "Останавливать после": "Stop After",
