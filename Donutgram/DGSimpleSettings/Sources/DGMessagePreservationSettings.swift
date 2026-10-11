@@ -1,6 +1,6 @@
 import Foundation
 
-/// Only message-retention preferences are shared with the notification extension.
+/// Message-retention and mention-notification preferences are shared with the notification extension.
 /// An extension must not initialize them from its own, unrelated standard defaults.
 public final class DGMessagePreservationSettings {
     private let defaults: UserDefaults
@@ -10,7 +10,8 @@ public final class DGMessagePreservationSettings {
         static let edits = "donutgram.spy.saveEditHistory"
         static let viewOnce = "donutgram.spy.saveViewOnceMedia"
         static let bots = "donutgram.spy.saveInBotChats"
-        static let all = [deleted, edits, viewOnce, bots]
+        static let removePings = "donutgram.chats.removePings"
+        static let all = [deleted, edits, viewOnce, bots, removePings]
     }
 
     public init(sharedDefaults: UserDefaults, legacyDefaults: UserDefaults, migrateLegacyValues: Bool) {
@@ -44,6 +45,11 @@ public final class DGMessagePreservationSettings {
     public var saveViewOnceMedia: Bool {
         get { self.defaults.bool(forKey: Key.viewOnce) }
         set { self.set(newValue, forKey: Key.viewOnce) }
+    }
+
+    public var removePings: Bool {
+        get { self.defaults.bool(forKey: Key.removePings) }
+        set { self.set(newValue, forKey: Key.removePings) }
     }
 
     public var saveInBotChats: Bool {

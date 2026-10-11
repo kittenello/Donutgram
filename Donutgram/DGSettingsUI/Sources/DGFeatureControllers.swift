@@ -19,7 +19,7 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         result.append(.disclosure(19, 1, "shadowBan", "Теневой бан", shadowBanCount == 0 ? "Выключен" : "\(shadowBanCount)"))
         result.append(contentsOf: [.header(20, 2, "ПЕРЕСЫЛКА"), .toggle(21, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true), .header(25, 3, "УСКОРЕНИЕ ЗАГРУЗКИ"), .speedSlider(26, 3, s.downloadAcceleration), .toggle(27, 3, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true), .info(28, 3, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео."), .header(30, 4, "ДРУГОЕ"), .disclosure(31, 4, "visualPhone", "Визуальный номер", s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"), .disclosure(32, 4, "visualRating", "Визуальный рейтинг", s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"), .disclosure(33, 4, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"), .disclosure(34, 4, "visualId", "Визуальный ID", s.visualProfileId(accountId: accountId).isEmpty ? "Выключен" : s.visualProfileId(accountId: accountId)), .toggle(35, 4, "localPremium", "Локальный TG Premium", s.localPremium(accountId: accountId), true)])
         if s.localPremium(accountId: accountId) {
-            result.append(.info(36, 4, "Premium включён локально для этого аккаунта. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
+            result.append(.info(36, 4, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
         }
         return result
     }, restartRequiredKeys: ["localPremium"], toggle: { key, value in
@@ -279,6 +279,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(20, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
             .toggle(21, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
             .toggle(22, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
+            .toggle(23, 4, "removePings", "Убрать пинги", s.removePings, true),
             .header(24, 5, "ГОЛОС В ТЕКСТ"),
             .disclosure(25, 5, "transcription", "Сервис", transcription),
             .header(30, 6, "ЗАПИСЬ"),
@@ -320,6 +321,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "greetingSticker": s.hideGreetingSticker = value
         case "mentionComma": s.commaAfterMention = value
         case "mentionAvatars": s.mentionAvatars = value
+        case "removePings": s.removePings = value
         case "pollResultsBeforeVoting": s.showPollResultsBeforeVoting = value
         case "channelForwardCount": s.showChannelForwardCount = value
         case "forwardDate": s.showForwardDate = value
