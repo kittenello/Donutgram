@@ -21,10 +21,10 @@ final class DGSpeedSliderItem: ListViewItem, ItemListItem {
         self.updated = updated
     }
 
-    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
         async {
             let node = DGSpeedSliderItemNode()
-            let (layout, apply) = node.asyncLayout()(self, params, itemListNeighbors(item: self, topItem: previousItem as? ItemListItem, bottomItem: nextItem as? ItemListItem))
+            let (layout, apply) = node.asyncLayout()(self, params, itemListNeighbors(item: self, topFacet: neighbors.previous?.base(ItemListNeighborFacet.self), bottomFacet: neighbors.next?.base(ItemListNeighborFacet.self)))
             node.contentSize = layout.contentSize
             node.insets = layout.insets
             Queue.mainQueue().async {
@@ -33,12 +33,12 @@ final class DGSpeedSliderItem: ListViewItem, ItemListItem {
         }
     }
 
-    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, neighbors: ListViewItemNeighbors, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
         Queue.mainQueue().async {
             if let nodeValue = node() as? DGSpeedSliderItemNode {
                 let makeLayout = nodeValue.asyncLayout()
                 async {
-                    let (layout, apply) = makeLayout(self, params, itemListNeighbors(item: self, topItem: previousItem as? ItemListItem, bottomItem: nextItem as? ItemListItem))
+                    let (layout, apply) = makeLayout(self, params, itemListNeighbors(item: self, topFacet: neighbors.previous?.base(ItemListNeighborFacet.self), bottomFacet: neighbors.next?.base(ItemListNeighborFacet.self)))
                     Queue.mainQueue().async { completion(layout, { _ in apply() }) }
                 }
             }
@@ -71,6 +71,12 @@ final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
         let slider = UISlider()
         slider.minimumValue = 0
         slider.maximumValue = 2
+        if #available(iOS 26.0, *) {
+            // The iOS 26 thumb settles after a release with its own animation, which overrode the value set on release:
+            // the thumb stayed where it was let go for a moment. With ticks the slider snaps to a step itself, as
+            // Telegram's discrete sliders do.
+            slider.trackConfiguration = .init(numberOfTicks: 3)
+        }
         slider.isContinuous = false
         slider.disablesInteractiveTransitionGestureRecognizer = true
         slider.addTarget(self, action: #selector(valueChanged), for: .valueChanged)

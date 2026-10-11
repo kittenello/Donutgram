@@ -152,6 +152,7 @@ final class ManagedAudioRecorderContext {
     private let previewState: ValuePromise<AudioPreviewState>
 
     private let beginWithTone: Bool
+    private let pauseMusicOnRecording: Bool
     private let beganWithTone: (Bool) -> Void
     
     private var trimRange: Range<Double>?
@@ -199,6 +200,7 @@ final class ManagedAudioRecorderContext {
         recordingState: ValuePromise<AudioRecordingState>,
         previewState: ValuePromise<AudioPreviewState>,
         beginWithTone: Bool,
+        pauseMusicOnRecording: Bool,
         beganWithTone: @escaping (Bool) -> Void
     ) {
         assert(queue.isCurrent())
@@ -206,6 +208,7 @@ final class ManagedAudioRecorderContext {
         self.id = getNextRecorderContextId()
         self.micLevel = micLevel
         self.beginWithTone = beginWithTone
+        self.pauseMusicOnRecording = pauseMusicOnRecording
         self.beganWithTone = beganWithTone
         
         self.recordingState = recordingState
@@ -438,7 +441,10 @@ final class ManagedAudioRecorderContext {
     
         if self.audioSessionDisposable == nil {
             let queue = self.queue
-            self.audioSessionDisposable = self.mediaManager.audioSession.push(audioSessionType: .record(speaker: self.beginWithTone, video: false, withOthers: DGSimpleSettings.shared.musicPlaybackExceptions.contains(.voiceRecording)), activate: { [weak self] state in
+            // Donutgram: «Голосовые сообщения» ticked in «Пауза музыки при записи» keeps the music playing, the same
+            // as turning off Telegram's own "Pause Music While Recording".
+            let pauseMusicOnRecording = self.pauseMusicOnRecording && !DGSimpleSettings.shared.musicPlaybackExceptions.contains(.voiceRecording)
+            self.audioSessionDisposable = self.mediaManager.audioSession.push(audioSessionType: .voiceMessageRecording(beginWithTone: self.beginWithTone, pauseMusicOnRecording: pauseMusicOnRecording), activate: { [weak self] state in
                 queue.async {
                     if let strongSelf = self, !strongSelf.paused {
                         strongSelf.hasAudioSession = true
@@ -780,11 +786,12 @@ final class ManagedAudioRecorderImpl: ManagedAudioRecorder {
         resumeData: AudioRecorderResumeData?,
         pushIdleTimerExtension: @escaping () -> Disposable,
         beginWithTone: Bool,
+        pauseMusicOnRecording: Bool,
         beganWithTone: @escaping (Bool) -> Void
     ) {
         self.beginWithTone = beginWithTone
         self.queue.async {
-            let context = ManagedAudioRecorderContext(queue: self.queue, mediaManager: mediaManager, resumeData: resumeData, pushIdleTimerExtension: pushIdleTimerExtension, micLevel: self.micLevelValue, recordingState: self.recordingStateValue, previewState: self.previewStateValue, beginWithTone: beginWithTone, beganWithTone: beganWithTone)
+            let context = ManagedAudioRecorderContext(queue: self.queue, mediaManager: mediaManager, resumeData: resumeData, pushIdleTimerExtension: pushIdleTimerExtension, micLevel: self.micLevelValue, recordingState: self.recordingStateValue, previewState: self.previewStateValue, beginWithTone: beginWithTone, pauseMusicOnRecording: pauseMusicOnRecording, beganWithTone: beganWithTone)
             self.contextRef = Unmanaged.passRetained(context)
         }
     }
