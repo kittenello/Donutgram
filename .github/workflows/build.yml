@@ -186,8 +186,12 @@ jobs:
       # Only master saves the ~6 GB cache. The repository cache limit is 10 GB,
       # so an entry saved by a branch evicts master's, while other branches
       # cannot restore a branch's entry and fall back to a cold build.
+      # Exception: a run that restored nothing at all (versions.json or
+      # MODULE.bazel changed, so no master entry fits) saves once, so the next
+      # pushes to the same PR start warm. A failed build saves too: the disk
+      # cache only holds finished actions, and the next push needs them most.
       - name: Save Bazel disk cache
-        if: github.ref == 'refs/heads/master' && steps.bazel-cache.outputs.cache-hit != 'true'
+        if: ${{ !cancelled() && steps.bazel-cache.outputs.cache-hit != 'true' && (github.ref == 'refs/heads/master' || steps.bazel-cache.outputs.cache-matched-key == '') }}
         uses: actions/cache/save@v4
         with:
           path: ~/telegram-bazel-cache
