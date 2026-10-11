@@ -545,9 +545,10 @@ final class CameraNeo: NSObject, CameraProtocol {
         }
     }
 
-    // Donutgram: `setPosition` publishes the new position before it queues the camera switch, and a single-camera
-    // session has no device for that position until the switch has run. Reading one hop later on the session queue
-    // lands behind the switch, so a query made right on a flip describes the camera that is actually shown.
+    // Donutgram: `setPosition` publishes the new position before it queues the camera switch, and the round-video screen
+    // asks for the zoom range right inside that publication. A single-camera session has no device for a position it
+    // never showed until the switch has run, so the system camera for the position, the one the switch configures, is
+    // read instead: its lens crops are the same, and the screen caps the zoom at 10× anyway.
     private func readActiveDevice<T>(_ read: @escaping (AVCaptureDevice?) -> T) -> Signal<T, NoError> {
         return Signal { [weak self] subscriber in
             guard let self else {
@@ -561,10 +562,9 @@ final class CameraNeo: NSObject, CameraProtocol {
                     subscriber.putCompletion()
                     return
                 }
-                self.sessionQueue.async { [weak self] in
-                    subscriber.putNext(read(self?.activeDevice))
-                    subscriber.putCompletion()
-                }
+                let device = self.activeDevice ?? self.makeVideoDevice(position: self.positionValue.with { $0 })
+                subscriber.putNext(read(device))
+                subscriber.putCompletion()
             }
             return EmptyDisposable
         }
