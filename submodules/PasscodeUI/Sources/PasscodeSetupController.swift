@@ -173,7 +173,8 @@ public final class PasscodeSetupController: ViewController {
                     }
                     if error != .cancelled {
                         let strings = self.presentationData.strings
-                        self.context.sharedContext.presentGlobalController(textAlertController(context: self.context, title: nil, text: strings.PasscodeSettings_UpdateError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), nil)
+                        // Donutgram: the cause goes into the text, so a failure on a sideloaded install can be reported.
+                        self.context.sharedContext.presentGlobalController(textAlertController(context: self.context, title: nil, text: strings.PasscodeSettings_UpdateError + "\n\n(\(error))", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), nil)
                     }
                 }
                 self.authenticationCompleted?(result)
@@ -418,7 +419,8 @@ public func applicationPasscodeSetupController(
                     controller?.updateSetupInputEnabled(true)
                     guard (error as? PasscodeError) != .cancelled else { return }
                     let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
-                    controller?.present(textAlertController(context: context, title: nil, text: strings.PasscodeSettings_UpdateError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root))
+                    // Donutgram: the cause goes into the text, so a failure on a sideloaded install can be reported.
+                    controller?.present(textAlertController(context: context, title: nil, text: strings.PasscodeSettings_UpdateError + "\n\n(\(error))", actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})]), in: .window(.root))
                 }
             }
         }

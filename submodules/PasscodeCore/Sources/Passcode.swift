@@ -77,16 +77,21 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         self.mutex.lock()
         defer { self.mutex.unlock() }
         guard let configuration = self.configuration else { throw PasscodeError.unavailable }
-        #if !os(macOS)
-        // Donutgram: a sideloaded build is usually signed without the App Groups entitlement, and then the app group
-        // can't be a keychain access group either: every passcode read and write would fail with
-        // errSecMissingEntitlement, so a passcode set before the update could never be entered again. Such a build
-        // has no app extensions, so the main app keeps the items in its own access group instead.
-        if configuration.processRole == .mainApp && !self.isAppGroupAvailable {
-            return try self.privateAccessGroupLocked(configuration)
-        }
-        #endif
         return configuration.appGroupIdentifier
+    }
+
+    // Donutgram: a sideloaded build is usually signed without the App Groups entitlement. The app group then can't be a
+    // keychain access group, and the private group built from the team prefix depends on how the signing tool set up the
+    // keychain groups: passcode reads and writes failed, so a passcode could be neither set nor entered. Such a build has
+    // no app extensions, so its main app keeps the items in its default access group, which every signature has.
+    var usesDefaultKeychainAccessGroup: Bool {
+        self.mutex.lock()
+        defer { self.mutex.unlock() }
+        #if os(macOS)
+        return false
+        #else
+        return self.configuration?.processRole == .mainApp && !self.isAppGroupAvailable
+        #endif
     }
 
     func biometricKeychainService() throws -> String {
@@ -103,11 +108,6 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         self.mutex.lock()
         defer { self.mutex.unlock() }
         guard let configuration = self.configuration, configuration.processRole == .mainApp else { throw PasscodeError.unavailable }
-        return try self.privateAccessGroupLocked(configuration)
-    }
-
-    // Called with `mutex` held.
-    private func privateAccessGroupLocked(_ configuration: PasscodeConfiguration) throws -> String {
         if let group = self.resolvedPrivateAccessGroup { return group }
         guard let group = self.resolvePrivateAccessGroup?(), !group.isEmpty else {
             throw PasscodeError.unavailable
@@ -142,7 +142,10 @@ final class PasscodeKeychain: PasscodeStorage {
             kSecAttrSynchronizable as String: false
         ]
         #if !os(macOS)
-        query[kSecAttrAccessGroup as String] = try account.hasPrefix("biometric.") ? self.environment.privateAccessGroup() : self.environment.sharedAccessGroup()
+        // Donutgram: see `PasscodeEnvironment.usesDefaultKeychainAccessGroup`.
+        if !self.environment.usesDefaultKeychainAccessGroup {
+            query[kSecAttrAccessGroup as String] = try account.hasPrefix("biometric.") ? self.environment.privateAccessGroup() : self.environment.sharedAccessGroup()
+        }
         #endif
         return query
     }
