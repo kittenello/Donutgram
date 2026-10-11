@@ -6,6 +6,13 @@ import Camera
 
 func legacyIsDualCameraSupported(forRoundVideo: Bool) -> Bool {
     if #available(iOS 13.0, *), AVCaptureMultiCamSession.isMultiCamSupported && !DeviceModel.current.isIpad {
+        // Donutgram: the round-video MultiCam path uses separate physical front/back cameras.
+        // An exclusive session enables the rear virtual camera to switch lenses
+        // down to 0.5×, independently of Low Power Mode. Position flips still use
+        // the existing single-camera recording path.
+        if forRoundVideo, AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil {
+            return false
+        }
         if forRoundVideo && (ProcessInfo.processInfo.isLowPowerModeEnabled || DeviceModel.current == .iPhoneXR) {
             return false
         }

@@ -96,7 +96,16 @@ public protocol CameraProtocol: AnyObject {
     func setZoomLevel(_ zoomLevel: CGFloat)
     func setZoomDelta(_ zoomDelta: CGFloat)
     func rampZoom(_ zoomLevel: CGFloat, rate: CGFloat)
+    /// Donutgram: zooms the camera on screen; 1.0 is the wide-angle lens («1×») on every device type.
+    func setZoomFactor(_ zoomFactor: CGFloat, rampRate: CGFloat?)
     func setTorchActive(_ active: Bool)
+
+    /// Donutgram: zoom relative to the wide-angle lens, including 0.5× where the camera on screen has it.
+    /// Emits once; query again after changing camera position.
+    var zoomFactorRange: Signal<ClosedRange<CGFloat>, NoError> { get }
+    /// Donutgram: the zoom factors of the camera on screen that need no upscaling, i.e. its lenses and 48 MP crops,
+    /// in `setZoomFactor` units and ascending. Emits once; query again after changing camera position.
+    var nativeZoomFactors: Signal<[CGFloat], NoError> { get }
 
     var hasTorch: Signal<Bool, NoError> { get }
     var isFlashActive: Signal<Bool, NoError> { get }
@@ -119,6 +128,10 @@ public extension CameraProtocol {
 
     func focus(at point: CGPoint) {
         self.focus(at: point, autoFocus: true)
+    }
+
+    func setZoomFactor(_ zoomFactor: CGFloat) {
+        self.setZoomFactor(zoomFactor, rampRate: nil)
     }
 }
 

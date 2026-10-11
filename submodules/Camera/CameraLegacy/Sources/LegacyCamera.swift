@@ -549,6 +549,32 @@ private final class CameraContext {
         }
     }
     
+    // Donutgram: the device on screen. A round-video dual session shows the front camera through the additional
+    // context, but the single-camera session (for example in Low Power Mode) has only the main one, where
+    // the position-based routing above does nothing for the front camera.
+    private var visibleZoomDevice: CameraDevice? {
+        if self.initialConfiguration.isRoundVideo, self.positionValue == .front, let additionalDeviceContext = self.additionalDeviceContext {
+            return additionalDeviceContext.device
+        }
+        return self.mainDeviceContext?.device
+    }
+    
+    func setZoomFactor(_ zoomFactor: CGFloat, rampRate: CGFloat?) {
+        self.visibleZoomDevice?.setZoomFactor(zoomFactor, rampRate: rampRate)
+    }
+    
+    var zoomFactorRange: ClosedRange<CGFloat> {
+        guard let device = self.visibleZoomDevice else {
+            return 1.0 ... 1.0
+        }
+        let minimum = device.minZoomFactor
+        return minimum ... max(minimum, device.maxZoomFactor)
+    }
+    
+    var nativeZoomFactors: [CGFloat] {
+        return self.visibleZoomDevice?.nativeZoomFactors ?? [1.0]
+    }
+    
     func takePhoto() -> Signal<PhotoCaptureResult, NoError> {
         guard let mainDeviceContext = self.mainDeviceContext else {
             return .complete()
@@ -596,7 +622,7 @@ private final class CameraContext {
         
         let orientation = self.simplePreviewView?.videoPreviewLayer.connection?.videoOrientation ?? .portrait
         if self.initialConfiguration.isRoundVideo {
-            return mainDeviceContext.output.startRecording(mode: .roundVideo, orientation: DeviceModel.current.isIpad ? orientation : .portrait, additionalOutput: self.additionalDeviceContext?.output)
+            return mainDeviceContext.output.startRecording(mode: .roundVideo, position: self.positionValue, orientation: DeviceModel.current.isIpad ? orientation : .portrait, additionalOutput: self.additionalDeviceContext?.output)
         } else {
             if let additionalDeviceContext = self.additionalDeviceContext {
                 return combineLatest(
@@ -927,6 +953,38 @@ final class LegacyCamera: CameraProtocol {
             if let context = self.contextRef?.takeUnretainedValue() {
                 context.rampZoom(zoomLevel, rate: rate)
             }
+        }
+    }
+    
+    func setZoomFactor(_ zoomFactor: CGFloat, rampRate: CGFloat?) {
+        self.queue.async {
+            if let context = self.contextRef?.takeUnretainedValue() {
+                context.setZoomFactor(zoomFactor, rampRate: rampRate)
+            }
+        }
+    }
+    
+    var zoomFactorRange: Signal<ClosedRange<CGFloat>, NoError> {
+        return Signal { subscriber in
+            self.queue.async {
+                if let context = self.contextRef?.takeUnretainedValue() {
+                    subscriber.putNext(context.zoomFactorRange)
+                }
+                subscriber.putCompletion()
+            }
+            return EmptyDisposable
+        }
+    }
+    
+    var nativeZoomFactors: Signal<[CGFloat], NoError> {
+        return Signal { subscriber in
+            self.queue.async {
+                if let context = self.contextRef?.takeUnretainedValue() {
+                    subscriber.putNext(context.nativeZoomFactors)
+                }
+                subscriber.putCompletion()
+            }
+            return EmptyDisposable
         }
     }
     

@@ -286,6 +286,11 @@ final class CameraOutput: NSObject {
             dimensions = videoMessageDimensions.cgSize
             orientation = .landscapeRight
             
+            // Donutgram: a round video can start on the rear camera, so record the camera that is actually shown instead of assuming the front one.
+            if let position {
+                self.currentPosition = position
+            }
+            
             let compressionProperties: [String: Any] = [
                 AVVideoAverageBitRateKey: 1000 * 1000,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,

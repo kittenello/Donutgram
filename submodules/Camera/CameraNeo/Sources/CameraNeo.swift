@@ -492,6 +492,84 @@ final class CameraNeo: NSObject, CameraProtocol {
         }
     }
 
+    // Donutgram: this pipeline films with the wide-angle lens only, so its raw zoom factor already is the «1×»-relative
+    // value the round-video zoom controls use; there is no 0.5× and no optical telephoto here.
+    func setZoomFactor(_ zoomFactor: CGFloat, rampRate: CGFloat?) {
+        self.sessionQueue.async { [weak self] in
+            guard let self, let device = self.activeDevice else {
+                return
+            }
+            self.withLockedDevice(device) { device in
+                let target = self.clampedZoom(zoomFactor, device: device)
+                if let rampRate {
+                    device.ramp(toVideoZoomFactor: target, withRate: Float(rampRate))
+                } else {
+                    device.videoZoomFactor = target
+                }
+            }
+        }
+    }
+
+    var zoomFactorRange: Signal<ClosedRange<CGFloat>, NoError> {
+        return self.readActiveDevice { device in
+            guard let device else {
+                return 1.0 ... 1.0
+            }
+            let minimum = max(1.0, device.minAvailableVideoZoomFactor)
+            return minimum ... max(minimum, device.maxAvailableVideoZoomFactor)
+        }
+    }
+
+    // Donutgram: 1× plus the crops of a 48 MP sensor, such as the wide camera's 2×, taken from every format: the small
+    // round-video format may not list them, but such a crop still covers it without upscaling.
+    var nativeZoomFactors: Signal<[CGFloat], NoError> {
+        return self.readActiveDevice { device in
+            guard let device else {
+                return [1.0]
+            }
+            var rawFactors: [CGFloat] = [1.0]
+            if #available(iOS 16.0, *) {
+                for format in device.formats {
+                    rawFactors.append(contentsOf: format.secondaryNativeResolutionZoomFactors)
+                }
+            }
+            var result: [CGFloat] = []
+            for rawFactor in rawFactors where rawFactor <= device.maxAvailableVideoZoomFactor {
+                // One decimal, as on the labels.
+                let factor = (rawFactor * 10.0).rounded() / 10.0
+                if !result.contains(factor) {
+                    result.append(factor)
+                }
+            }
+            return result.sorted()
+        }
+    }
+
+    // Donutgram: `setPosition` publishes the new position before it queues the camera switch, and a single-camera
+    // session has no device for that position until the switch has run. Reading one hop later on the session queue
+    // lands behind the switch, so a query made right on a flip describes the camera that is actually shown.
+    private func readActiveDevice<T>(_ read: @escaping (AVCaptureDevice?) -> T) -> Signal<T, NoError> {
+        return Signal { [weak self] subscriber in
+            guard let self else {
+                subscriber.putNext(read(nil))
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+            self.sessionQueue.async { [weak self] in
+                guard let self else {
+                    subscriber.putNext(read(nil))
+                    subscriber.putCompletion()
+                    return
+                }
+                self.sessionQueue.async { [weak self] in
+                    subscriber.putNext(read(self?.activeDevice))
+                    subscriber.putCompletion()
+                }
+            }
+            return EmptyDisposable
+        }
+    }
+
     func setTorchActive(_ active: Bool) {
         self.sessionQueue.async { [weak self] in
             guard let self, let device = self.activeDevice else {
