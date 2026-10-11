@@ -1319,7 +1319,10 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewBlurView.isUserInteractionEnabled = false
             
             if isDualCameraEnabled {
-                self.mainPreviewView.resetPlaceholder(front: false)
+                // Donutgram: the rear view lies under the front one, and a dual session reports the front camera as
+                // previewing before its first frame. The rear view keeps a still picture of the starting camera as a
+                // backing until the rear camera is shown, so the live rear camera can't flash through at the start.
+                self.mainPreviewView.resetPlaceholder(front: isFrontPosition)
                 self.additionalPreviewView.resetPlaceholder(front: true)
             } else {
                 self.mainPreviewView.resetPlaceholder(front: isFrontPosition)
@@ -1370,14 +1373,11 @@ public class VideoMessageCameraScreen: ViewController {
                     self.addCaptureResult(result)
                 }
             }
-            if isDualCameraEnabled {
-                self.mainPreviewView.removePlaceholder(delay: 0.0)
-            }
             self.withReadyCamera(isFirstTime: true, { [weak self] in
                 guard let self else {
                     return
                 }
-                if !isDualCameraEnabled {
+                if !isDualCameraEnabled || self.cameraState.position == .back {
                     self.mainPreviewView.removePlaceholder(delay: 0.0)
                 }
                 self.loadingView.alpha = 0.0
@@ -1462,6 +1462,11 @@ public class VideoMessageCameraScreen: ViewController {
                 }
                 let previousPosition = self.cameraState.position
                 self.cameraState = self.cameraState.updatedPosition(position).updatedFlashMode(flashMode)
+                // Donutgram: the first flip to the rear camera in a dual session drops the backing picture; the rear
+                // camera has been streaming all along.
+                if self.cameraState.isDualCameraEnabled && position == .back && previousPosition != .back {
+                    self.mainPreviewView.removePlaceholder(delay: 0.0)
+                }
                 if DGSimpleSettings.shared.rememberRoundVideoCamera {
                     DGSimpleSettings.shared.lastRoundVideoCamera = position == .back ? .rear : .front
                 }
@@ -1855,6 +1860,9 @@ public class VideoMessageCameraScreen: ViewController {
                     }
                     UIView.animate(withDuration: 0.4, animations: {
                         self.previewBlurView.effect = nil
+                        // Donutgram: the loading shimmer faded in above goes too; it stayed over the live camera as
+                        // white stripes until the screen closed.
+                        self.loadingView.alpha = 0.0
                     })
                     if let snapshotView {
                         self.removePreviewSnapshotView(snapshotView, duration: 0.4)
