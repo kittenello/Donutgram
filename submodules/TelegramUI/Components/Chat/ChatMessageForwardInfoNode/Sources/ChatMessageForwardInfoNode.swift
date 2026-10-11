@@ -144,7 +144,7 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
             addRects(titleNode, CGPoint(x: titleNode.frame.minX, y: offsetY + titleNode.frame.minY), 0.0)
             
             if let nameNode = self.nameNode {
-                let viaBotWidth = self.viaBotNode.map { $0.frame.maxX - nameNode.frame.maxX } ?? 0.0
+                let viaBotWidth = self.viaBotNode.map { max(0.0, $0.frame.maxX - nameNode.frame.maxX) } ?? 0.0
                 addRects(nameNode, CGPoint(x: titleNode.frame.minX, y: offsetY + nameNode.frame.minY), nameNode.frame.minX - titleNode.frame.minX + viaBotWidth)
             }
         }
@@ -176,7 +176,7 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
             addRects(titleNode, CGPoint(x: titleNode.frame.minX, y: offsetY + titleNode.frame.minY), 0.0)
             
             if let nameNode = self.nameNode {
-                let viaBotWidth = self.viaBotNode.map { $0.frame.maxX - nameNode.frame.maxX } ?? 0.0
+                let viaBotWidth = self.viaBotNode.map { max(0.0, $0.frame.maxX - nameNode.frame.maxX) } ?? 0.0
                 addRects(nameNode, CGPoint(x: titleNode.frame.minX, y: offsetY + nameNode.frame.minY), nameNode.frame.minX - titleNode.frame.minX + viaBotWidth)
             }
         }
@@ -253,7 +253,7 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
                 addRects(titleNode, CGPoint(x: titleNode.frame.minX, y: offsetY + titleNode.frame.minY), 0.0)
                 
                 if let nameNode = self.nameNode {
-                    let viaBotWidth = self.viaBotNode.map { $0.frame.maxX - nameNode.frame.maxX } ?? 0.0
+                    let viaBotWidth = self.viaBotNode.map { max(0.0, $0.frame.maxX - nameNode.frame.maxX) } ?? 0.0
                     addRects(nameNode, CGPoint(x: titleNode.frame.minX, y: offsetY + nameNode.frame.minY), nameNode.frame.minX - titleNode.frame.minX + viaBotWidth)
                 }
             }
@@ -508,10 +508,18 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
             let resultSize: CGSize
             if let nameLayoutAndApply {
                 let viaBotSize = viaBotLayoutAndApply?.0.size ?? CGSize()
+                // Donutgram: a name the forward date wrapped onto a second line takes the bot label at the end of its
+                // last line, which always has room for it: every line was laid out narrower by the label's width.
+                let nameAndViaBotWidth: CGFloat
+                if nameLayoutAndApply.0.numberOfLines > 1 {
+                    nameAndViaBotWidth = max(nameLayoutAndApply.0.size.width, nameLayoutAndApply.0.trailingLineWidth + viaBotSize.width)
+                } else {
+                    nameAndViaBotWidth = nameLayoutAndApply.0.size.width + viaBotSize.width
+                }
                 resultSize = CGSize(
                     width: max(
                         titleLayout.size.width + credibilityIconWidth + infoWidth,
-                        authorAvatarInset + nameLayoutAndApply.0.size.width + viaBotSize.width
+                        authorAvatarInset + nameAndViaBotWidth
                     ),
                     height: titleLayout.size.height + titleAuthorSpacing + max(nameLayoutAndApply.0.size.height, viaBotSize.height)
                 )
@@ -600,7 +608,11 @@ public class ChatMessageForwardInfoNode: ASDisplayNode {
                         node.viaBotNode = viaBotNode
                         node.addSubnode(viaBotNode)
                     }
-                    viaBotFrame = CGRect(origin: CGPoint(x: nameFrame.maxX, y: titleLayout.size.height + titleAuthorSpacing), size: viaBotLayout.size)
+                    if let (nameLayout, _) = nameLayoutAndApply, nameLayout.numberOfLines > 1 {
+                        viaBotFrame = CGRect(origin: CGPoint(x: nameFrame.minX + nameLayout.trailingLineWidth, y: nameFrame.maxY - viaBotLayout.size.height), size: viaBotLayout.size)
+                    } else {
+                        viaBotFrame = CGRect(origin: CGPoint(x: nameFrame.maxX, y: titleLayout.size.height + titleAuthorSpacing), size: viaBotLayout.size)
+                    }
                     viaBotNode.frame = viaBotFrame
                 } else if let viaBotNode = node.viaBotNode {
                     node.viaBotNode = nil
