@@ -7,14 +7,15 @@ import DGSimpleSettings
 
 // The quote's author name goes out as message text, so it must be a name the
 // author set themselves. For a contact, firstName/lastName hold the name this
-// account saved for them (the server never sends us theirs), so contacts get no
-// name; nameOrPhone is avoided because it falls back to the phone number.
+// account saved for them (the server never sends us theirs), so a contact is
+// named by the username they chose, or not at all; nameOrPhone is avoided
+// because it falls back to the phone number.
 private func donutgramPseudoReplyAuthorName(transaction: Transaction, author: Peer?) -> String {
     guard let user = author as? TelegramUser else {
         return author?.debugDisplayTitle ?? ""
     }
     if transaction.isPeerContact(peerId: user.id) {
-        return ""
+        return user.addressName.map { "@" + $0 } ?? ""
     }
     return [user.firstName, user.lastName].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
 }
