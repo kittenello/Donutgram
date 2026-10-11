@@ -71,6 +71,12 @@ final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
         let slider = UISlider()
         slider.minimumValue = 0
         slider.maximumValue = 2
+        if #available(iOS 26.0, *) {
+            // The iOS 26 thumb settles after a release with its own animation, which overrode the value set on release:
+            // the thumb stayed where it was let go for a moment. With ticks the slider snaps to a step itself, as
+            // Telegram's discrete sliders do.
+            slider.trackConfiguration = .init(numberOfTicks: 3)
+        }
         slider.isContinuous = false
         slider.disablesInteractiveTransitionGestureRecognizer = true
         slider.addTarget(self, action: #selector(valueChanged), for: .valueChanged)
