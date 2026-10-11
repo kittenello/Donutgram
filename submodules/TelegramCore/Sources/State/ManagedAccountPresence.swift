@@ -13,6 +13,20 @@ private typealias SignalKitTimer = SwiftSignalKit.Timer
 // up for actions nothing reports.
 private let ghostOfflineFallbackInterval: Double = 30.0
 
+// Donutgram: whether ghost mode hides online, now and after every settings change.
+func donutgramGhostHidesOnlineSignal() -> Signal<Bool, NoError> {
+    return Signal<Bool, NoError> { subscriber in
+        subscriber.putNext(DGSimpleSettings.shared.ghostHidesOnline)
+        let observer = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil, using: { _ in
+            subscriber.putNext(DGSimpleSettings.shared.ghostHidesOnline)
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    |> distinctUntilChanged
+}
+
 private final class AccountPresenceManagerImpl {
     private let queue: Queue
     private let network: Network

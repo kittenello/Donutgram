@@ -1,3 +1,4 @@
+import LottieSettings
 import UIKit
 import ComponentFlow
 import Display
@@ -1002,7 +1003,7 @@ public final class ChatInlineSearchResultsListComponent: Component {
                 let listPresentationData = ItemListPresentationData(component.context.sharedContext.currentPresentationData.with({ $0 }))
                 let peerSelected = component.peerSelected
                 
-                let entryToItem: (Entry) -> ListViewItem = { entry -> ListViewItem in
+                let entryToItem: (Entry) -> ListViewItem = { [weak self] entry -> ListViewItem in
                     switch entry {
                     case let .peer(peer):
                         return ContactsPeerItem(
@@ -1261,7 +1262,8 @@ public final class ChatInlineSearchResultsListComponent: Component {
                 let emptyResultsAnimationSize = self.emptyResultsAnimation.update(
                     transition: .immediate,
                     component: AnyComponent(LottieComponent(
-                        content: LottieComponent.AppBundleContent(name: "ChatListNoResults")
+                        content: LottieComponent.AppBundleContent(name: "ChatListNoResults"),
+                        lottieSettings: component.context.lottieRenderingSettings
                     )),
                     environment: {},
                     containerSize: CGSize(width: emptyAnimationHeight, height: emptyAnimationHeight)
