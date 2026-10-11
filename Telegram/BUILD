@@ -348,6 +348,8 @@ alternate_icon_folders = [
     "DgKisserRed",
     # Donutgram cat icon
     "DgCat",
+    # Donutgram golden pig-phone icon
+    "DgBahafon",
 ]
 
 composer_icon_folders = ["Telegram"]
