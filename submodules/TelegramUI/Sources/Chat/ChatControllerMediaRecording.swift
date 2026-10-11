@@ -206,7 +206,7 @@ extension ChatControllerImpl {
                         }
                         
                         var usedCorrelationId = false
-                        if scheduleTime == nil, shouldAnimateMessageTransition, let extractedView = videoController.extractVideoSnapshot() {
+                        if scheduleTime == nil, !self.donutgramDivertsSendsToGhostSchedule, shouldAnimateMessageTransition, let extractedView = videoController.extractVideoSnapshot() {
                             usedCorrelationId = true
                             self.chatDisplayNode.messageTransitionNode.add(correlationId: correlationId, source:  .videoMessage(ChatMessageTransitionNodeImpl.Source.VideoMessage(view: extractedView)), initiated: { [weak videoController, weak self] in
                                 videoController?.hideVideoSnapshot()
@@ -367,7 +367,7 @@ extension ChatControllerImpl {
                                 shouldAnimateMessageTransition = false
                             }
                             
-                            if shouldAnimateMessageTransition, let textInputPanelNode = strongSelf.chatDisplayNode.textInputPanelNode, let micButton = textInputPanelNode.micButton {
+                            if shouldAnimateMessageTransition, !strongSelf.donutgramDivertsSendsToGhostSchedule, let textInputPanelNode = strongSelf.chatDisplayNode.textInputPanelNode, let micButton = textInputPanelNode.micButton {
                                 usedCorrelationId = true
                                 strongSelf.chatDisplayNode.messageTransitionNode.add(correlationId: correlationId, source: .audioMicInput(ChatMessageTransitionNodeImpl.Source.AudioMicInput(micButton: micButton)), initiated: {
                                     guard let strongSelf = self else {
@@ -763,6 +763,14 @@ extension ChatControllerImpl {
                     strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
                 }
             })
+            
+            // Donutgram: a ghost-scheduled voice message shows up in the history only once it is published, so the
+            // composer clears itself now instead of waiting for that.
+            if self.donutgramDivertsSendsToGhostSchedule, let layoutActionOnViewTransitionAction = self.layoutActionOnViewTransitionAction {
+                self.layoutActionOnViewTransitionAction = nil
+                self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
+                layoutActionOnViewTransitionAction()
+            }
             
             donateSendMessageIntent(account: self.context.account, sharedContext: self.context.sharedContext, intentContext: .chat, peerIds: [peerId])
         case .video:

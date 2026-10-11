@@ -9153,6 +9153,17 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         return .single(settings.ghostModeEnabled && settings.ghostUseScheduledMessages)
     }
     
+    /// Donutgram: whether a send from this chat goes out as a ghost-scheduled message. Such a message reaches the chat's
+    /// history only once it is published, so a send must not wait for it to appear there: a "flies into the bubble"
+    /// transition would never start, and the recorder it was to dismiss stayed on screen.
+    var donutgramDivertsSendsToGhostSchedule: Bool {
+        if case .scheduledMessages = self.presentationInterfaceState.subject {
+            return false
+        }
+        let settings = DGSimpleSettings.shared
+        return settings.ghostModeEnabled && settings.ghostUseScheduledMessages
+    }
+    
     func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {
         if case let .customChatContents(customChatContents) = self.subject {
             customChatContents.enqueueMessages(messages: messages)
