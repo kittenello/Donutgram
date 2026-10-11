@@ -11,7 +11,9 @@ swift_library(
     ],
     deps = [
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
+        "//submodules/UrlWhitelist",
         "//submodules/Display",
+        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/ComponentFlow",
         "//submodules/Components/ViewControllerComponent",
