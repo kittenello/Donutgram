@@ -20,28 +20,12 @@ public struct NetworkTelemetryConfiguration: Equatable {
         self.reportInterval = reportInterval
     }
 
+    // Donutgram: network telemetry stays off whatever the server sends. Its per-method request counts and its
+    // `userOnline` flag would show Telegram what ghost mode hides: history loads without reads, offline packets,
+    // and use of the app while the account looks offline. Disabled, nothing is recorded or reported, and the
+    // network removes the telemetry folder of an earlier launch.
     public static func with(appConfiguration: AppConfiguration) -> NetworkTelemetryConfiguration {
-        guard let data = appConfiguration.data else {
-            return .disabled
-        }
-        var result = NetworkTelemetryConfiguration.disabled
-        switch data["network_telemetry_enabled"] {
-        case let value as Bool:
-            result.isEnabled = value
-        case let value as Double:
-            result.isEnabled = value != 0.0
-        case let value as String:
-            result.isEnabled = !["", "0", "false", "no"].contains(value.lowercased())
-        default:
-            break
-        }
-        if let variant = data["network_telemetry_variant"] as? String, !variant.isEmpty {
-            result.variant = networkTelemetryToken(variant, maxLength: 32)
-        }
-        if let interval = data["network_telemetry_report_interval"] as? Double {
-            result.reportInterval = min(max(interval, 60.0 * 60.0), 7.0 * 24.0 * 60.0 * 60.0)
-        }
-        return result
+        return .disabled
     }
 }
 
@@ -66,10 +50,8 @@ func networkTelemetryShouldRecord(supplementary: Bool, isAppExtension: Bool, con
     if let recording = networkTelemetryOverrides.recording {
         return recording
     }
-    if supplementary || isAppExtension {
-        return false
-    }
-    return networkTelemetryAlwaysRecords || configuration.isEnabled
+    // Donutgram: never records, in Debug builds too (see `NetworkTelemetryConfiguration.with`).
+    return false
 }
 
 func networkTelemetrySystemVersion() -> String {
