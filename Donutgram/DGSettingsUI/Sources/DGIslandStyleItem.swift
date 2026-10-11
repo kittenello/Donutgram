@@ -59,6 +59,9 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
     private var item: DGIslandStyleItem?
     private var params: ListViewItemLayoutParams?
     private var neighbors: ItemListNeighbors?
+    // Holds the whole block and clips it to the row's apparent height: the list grows and collapses the row when
+    // «Остров как у иконки» is switched, and the grid would otherwise be drawn at full height over the icons below.
+    private let containerView = UIView()
     private let cornersView = UIImageView()
     private var buttons: [UIButton] = []
     private var imageViews: [UIImageView] = []
@@ -70,8 +73,10 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
 
     override func didLoad() {
         super.didLoad()
+        self.containerView.clipsToBounds = true
+        self.view.addSubview(self.containerView)
         self.cornersView.isUserInteractionEnabled = false
-        self.view.addSubview(self.cornersView)
+        self.containerView.addSubview(self.cornersView)
         // One card per island, drawn as the island itself.
         for (index, mark) in DGSimpleSettings.appMarks.enumerated() {
             let title = mark.title
@@ -81,7 +86,7 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
             button.layer.borderWidth = 2.0
             button.accessibilityLabel = title
             button.addTarget(self, action: #selector(selected(_:)), for: .touchUpInside)
-            self.view.addSubview(button)
+            self.containerView.addSubview(button)
             self.buttons.append(button)
 
             let imageView = UIImageView(image: UIImage(bundleImageName: mark.islandAssetName))
@@ -96,7 +101,7 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
             caption.text = title
             // The card already reads its title to VoiceOver.
             caption.isAccessibilityElement = false
-            self.view.addSubview(caption)
+            self.containerView.addSubview(caption)
             self.captions.append(caption)
         }
         self.updateControls()
@@ -117,7 +122,8 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
     private func updateControls() {
         guard let item, let params, let neighbors else { return }
         let theme = item.theme
-        self.backgroundColor = theme.list.itemBlocksBackgroundColor
+        self.containerView.backgroundColor = theme.list.itemBlocksBackgroundColor
+        self.updateContainerFrame(apparentHeight: self.apparentHeight)
 
         // The block spans the list insets like the other rows; the corner image rounds it like the
         // neighbouring glass rows by painting the page background over its corners.
@@ -155,6 +161,25 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
             caption.frame = CGRect(x: x, y: y + 58.0, width: cardWidth, height: 18.0)
             caption.textColor = isSelected ? theme.list.itemAccentColor : theme.list.itemSecondaryTextColor
         }
+    }
+
+    private func updateContainerFrame(apparentHeight: CGFloat) {
+        guard let params = self.params else { return }
+        let height = min(DGIslandStyleItemNode.contentHeight, max(0.0, apparentHeight - self.insets.top - self.insets.bottom))
+        self.containerView.frame = CGRect(x: 0.0, y: 0.0, width: params.width, height: height)
+    }
+
+    override func animateFrameTransition(_ progress: CGFloat, _ currentValue: CGFloat) {
+        super.animateFrameTransition(progress, currentValue)
+        self.updateContainerFrame(apparentHeight: currentValue)
+    }
+
+    override func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
+        self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.4)
+    }
+
+    override func animateRemoved(_ currentTimestamp: Double, duration: Double) {
+        self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
     }
 
     @objc private func selected(_ sender: UIButton) {
