@@ -49,7 +49,7 @@ def make_harness():
     assert "|> then(pollSignal)" in extension[capture:capture + 650]
     assert "donutgramDeleteMessagesFromNotification(transaction:" in extension
     assert "configureMessagePreservation(appGroupName: appGroupName, isMainApp: false)" in extension
-    assert "combineLatest(ordinaryMentionContent, reportDeliverySignal)" in extension
+    assert "|> then(ordinaryMentionContent)" in extension
     assert "guard notification.notify else" in extension
     assert "configureMessagePreservation(appGroupName: appGroupName, isMainApp: true)" in (ROOT / "submodules/TelegramUI/Sources/AppDelegate.swift").read_text(encoding="utf-8")
     return fixture.replace("// PRODUCTION_HELPERS", helpers)

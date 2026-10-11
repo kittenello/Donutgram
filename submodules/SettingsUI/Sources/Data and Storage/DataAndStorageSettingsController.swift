@@ -635,6 +635,8 @@ private func dataAndStorageControllerEntries(context: AccountContext, state: Dat
                 proxyValue = presentationData.strings.ChatSettings_ConnectionType_UseSocks5
             case .mtp:
                 proxyValue = presentationData.strings.SocksProxySetup_ProxyTelegram
+            case .web:
+                proxyValue = presentationData.strings.SocksProxySetup_ProxyWeb
         }
     } else {
         proxyValue = presentationData.strings.GroupInfo_SharedMediaNone
@@ -862,7 +864,7 @@ public func dataAndStorageController(context: AccountContext, focusOnItemTag: Da
         let controller = intentsSettingsController(context: context)
         pushControllerImpl?(controller)
     }, toggleSensitiveContent: { value in
-        let update = {
+        let update = { [contentSettingsConfiguration] in
             let _ = (contentSettingsConfiguration.get()
             |> take(1)
             |> deliverOnMainQueue).start(next: { [weak contentSettingsConfiguration] settings in
