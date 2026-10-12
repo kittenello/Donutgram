@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - 'Donutgram/DGSimpleSettings/**'
+      - 'Donutgram/DGSettingsUI/**'
       - 'submodules/TelegramCore/Sources/Donutgram/DonutgramVerificationDisplay.swift'
       - 'submodules/TelegramCore/Sources/Utils/PeerUtils.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/Peer.swift'

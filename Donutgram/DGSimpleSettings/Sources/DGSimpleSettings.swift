@@ -523,7 +523,7 @@ public final class DGSimpleSettings {
     public var showMutualContact: Bool { get { bool(Key.showMutualContact) } set { setBool(newValue, Key.showMutualContact) } }
     public var confirmCalls: Bool { get { bool(Key.confirmCalls) } set { setBool(newValue, Key.confirmCalls) } }
     public var disableAds: Bool { get { bool(Key.disableAds) } set { setBool(newValue, Key.disableAds) } }
-    /// Presentation only; intentionally has no settings-screen entry yet. Off by default.
+    /// Presentation only; «Оформление → Скрыть верификацию». Off by default.
     public var hideVerification: Bool { get { bool(Key.hideVerification) } set { setBool(newValue, Key.hideVerification) } }
 
     public var hidePremiumStatuses: Bool { get { bool(Key.hidePremiumStatuses) } set { setBool(newValue, Key.hidePremiumStatuses) } }

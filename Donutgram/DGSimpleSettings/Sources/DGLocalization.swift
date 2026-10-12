@@ -82,6 +82,7 @@ private let dgEnglishStrings: [String: String] = [
     "Оформление": "Appearance",
     "Основное": "General",
     "Скрыть премиум статусы": "Hide Premium Badges",
+    "Скрыть верификацию": "Hide Verification Badges",
     "Отключить кастомные фоны": "Disable Custom Backgrounds",
     "Скрыть сторис": "Hide Stories",
     "Приложение": "Application",

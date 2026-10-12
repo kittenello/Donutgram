@@ -1,6 +1,6 @@
 # Hide verification
 
-Backend for «Скрыть верификацию». No settings screen entry is added. The persistent flag defaults to `false` and can be enabled later using:
+Backend for «Скрыть верификацию», the toggle in Donutgram settings → «Оформление» → «Основное» (link key `hideVerification`). The persistent flag defaults to `false`; in code:
 
 ```swift
 DGSimpleSettings.shared.hideVerification = true

@@ -71,8 +71,9 @@ def harness():
     assert "if !DonutgramVerificationDisplay.isHidden, let _ = chatPresentationInterfaceState.peerVerification" in panels
     card = (ROOT / "submodules/TelegramUI/Components/Chat/ChatUserInfoItem/Sources/ChatUserInfoItem.swift").read_text(encoding="utf-8")
     assert "DonutgramVerificationDisplay.verification(item.verification)" in card
-    for file in (ROOT / "Donutgram/DGSettingsUI/Sources").glob("*.swift"):
-        assert "hideVerification" not in file.read_text(encoding="utf-8"), "Feature must not have a settings UI entry yet"
+    appearance = (ROOT / "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift").read_text(encoding="utf-8")
+    assert '"hideVerification", "Скрыть верификацию", s.hideVerification' in appearance, "Settings entry is missing"
+    assert 'case "hideVerification": s.hideVerification = value' in appearance, "Settings entry is not wired to the flag"
     assert "hideVerification" not in badge
     for name in ["ChatTitleComponent.swift", "ChatTitleView.swift"]:
         source = (ROOT / "submodules/TelegramUI/Components/ChatTitleView/Sources" / name).read_text(encoding="utf-8")
