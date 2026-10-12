@@ -40,6 +40,8 @@ private let dgEnglishStrings: [String: String] = [
     "Видеть удаленные подарки": "Show Removed Gifts",
     "Сохранять запрещенные истории": "Save Protected Stories",
     "Обход блокировок GIF": "Bypass GIF Restrictions",
+    "Это прямой эфир. Смотреть его можно только как участник, и автор может увидеть вас среди зрителей.": "This is a live stream. You can only watch it as a participant, and the host may see you among the viewers.",
+    "Смотреть": "Watch",
     "Пересылка": "Forwarding",
     "Запрещенная рассылка": "Allow Restricted Forwarding",
     "Ускорение загрузки": "Download Acceleration",

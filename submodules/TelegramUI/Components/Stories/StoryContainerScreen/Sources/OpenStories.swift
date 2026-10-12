@@ -42,6 +42,38 @@ public extension StoryContainerScreen {
             })
         ], dismissOnOutsideTap: false)
     }
+    
+    // Ghost mode hides story views, but a live story is a group call: watching it joins
+    // the call as the account, so its host can see the viewer. The viewer asks first
+    // (StoryItemContentComponent). Only the first tap counts.
+    internal static func makeDonutgramLiveStreamGhostAlert(context: AccountContext, completion: @escaping (Bool) -> Void) -> AlertController {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let languageCode = presentationData.strings.primaryComponent.languageCode
+        var didAnswer = false
+        return standardTextAlertController(theme: AlertControllerTheme(presentationData: presentationData), title: dgLocalized("Режим призрака", languageCode: languageCode), text: dgLocalized("Это прямой эфир. Смотреть его можно только как участник, и автор может увидеть вас среди зрителей.", languageCode: languageCode), actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+                if didAnswer {
+                    return
+                }
+                didAnswer = true
+                completion(false)
+            }),
+            TextAlertAction(type: .defaultAction, title: dgLocalized("Смотреть", languageCode: languageCode), action: {
+                if didAnswer {
+                    return
+                }
+                didAnswer = true
+                completion(true)
+            })
+        ], dismissOnOutsideTap: false)
+    }
+    
+    // Whether watching a live story has to be confirmed: ghost mode with story view
+    // receipts off (the check `_internal_markStoryAsSeen` makes).
+    internal static func donutgramLiveStreamNeedsGhostConfirmation() -> Bool {
+        let settings = DGSimpleSettings.shared
+        return settings.ghostModeEnabled && !settings.ghostReadStories
+    }
 
     // Whether stealth mode still hides story views. Its last half minute counts
     // as over: the local deadline runs a round trip late, and the server judges
