@@ -575,6 +575,19 @@ public extension Message {
         }
     }
 
+    /// Whether forwarding this message as a real forward would be refused. Besides the message's own
+    /// flag and the group or channel setting, a private chat can have sharing disabled by either side;
+    /// that lives in the user's cached data, not on the message, so it needs the transaction.
+    func isForwardProtectedIgnoringDonutgramSetting(transaction: Transaction) -> Bool {
+        if self.isCopyProtectedIgnoringDonutgramSetting() {
+            return true
+        }
+        if self.id.peerId.namespace == Namespaces.Peer.CloudUser, let cachedUserData = transaction.getPeerCachedData(peerId: self.id.peerId) as? CachedUserData {
+            return cachedUserData.flags.contains(.copyProtectionEnabled) || cachedUserData.flags.contains(.myCopyProtectionEnabled)
+        }
+        return false
+    }
+
     func isCopyProtected() -> Bool {
         if DGSimpleSettings.shared.bypassForwardRestrictions {
             return false

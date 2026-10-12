@@ -18,6 +18,7 @@ import TopMessageReactions
 import TelegramNotices
 import PresentationDataUtils
 import ChatPresentationInterfaceState
+import DGSimpleSettings
 
 extension ChatControllerImpl {
     func openMessageContextMenu(message: EngineMessage, selectAll: Bool, node: ASDisplayNode, frame: CGRect, anyRecognizer: UIGestureRecognizer?, location: CGPoint?) -> Void {
@@ -335,7 +336,7 @@ extension ChatControllerImpl {
                     }
                 }
                 
-                let isSecret = self.presentationInterfaceState.copyProtectionEnabled || self.presentationInterfaceState.myCopyProtectionEnabled || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
+                let isSecret = ((self.presentationInterfaceState.copyProtectionEnabled || self.presentationInterfaceState.myCopyProtectionEnabled) && !DGSimpleSettings.shared.allowProtectedScreenshots) || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
                 let controller = makeContextController(presentationData: self.presentationData, source: source, items: actionsSignal, recognizer: recognizer, gesture: gesture, disableScreenshots: isSecret, hideReactionPanelTail: hideReactionPanelTail)
                 controller.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)

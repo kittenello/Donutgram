@@ -15,6 +15,7 @@ import TopMessageReactions
 import GlassBackgroundComponent
 import ComponentFlow
 import ComponentDisplayAdapters
+import DGSimpleSettings
 
 private final class ChatMessageSelectionInputPanelNodeViewForOverlayContent: UIView, ChatInputPanelViewForOverlayContent {
     var reactionContextNode: ReactionContextNode?
@@ -308,7 +309,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if let _ = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramSecretChat {
             return
         }
-        if let actions = self.actions, actions.isCopyProtected {
+        if let actions = self.actions, actions.isCopyProtected, !DGSimpleSettings.shared.bypassForwardRestrictions || self.forwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.displayCopyProtectionTip(self.forwardButton, false)
         } else if !self.forwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessages()

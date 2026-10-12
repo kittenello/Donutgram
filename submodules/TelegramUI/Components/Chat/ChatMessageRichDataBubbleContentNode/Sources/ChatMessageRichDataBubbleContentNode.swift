@@ -19,6 +19,7 @@ import TextSelectionNode
 import StreamingTextReveal
 import ShimmeringLinkNode
 import WalletContext
+import DGSimpleSettings
 
 public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode {
     public final class ContainerNode: ASDisplayNode {
@@ -326,7 +327,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     /// than captured once: `isCopyProtectionEnabled` is a peer setting that can flip while the
     /// bubble is on screen.
     private static func isCaptureProtected(item: ChatMessageBubbleContentItem) -> Bool {
-        return item.associatedData.isCopyProtectionEnabled || item.message.isCopyProtected()
+        return (item.associatedData.isCopyProtectionEnabled || item.message.isCopyProtected()) && !DGSimpleSettings.shared.allowProtectedScreenshots
     }
 
     /// Builds (or reuses) the V2View. Same-message stableVersion bumps (streamed AI chunks) reuse

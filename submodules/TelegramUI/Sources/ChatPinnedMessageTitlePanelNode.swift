@@ -24,6 +24,7 @@ import TranslateUI
 import ChatControllerInteraction
 import LegacyChatHeaderPanelComponent
 import UIKitRuntimeUtils
+import DGSimpleSettings
 
 private enum PinnedMessageAnimation {
     case slideToTop
@@ -291,7 +292,7 @@ final class ChatPinnedMessageTitlePanelNode: ChatTitleAccessoryPanelNode {
         }
         self.isReplyThread = isReplyThread
         
-        self.captureProtected = interfaceState.copyProtectionEnabled || interfaceState.myCopyProtectionEnabled
+        self.captureProtected = (interfaceState.copyProtectionEnabled || interfaceState.myCopyProtectionEnabled) && !DGSimpleSettings.shared.allowProtectedScreenshots
         
         self.contextContainer.isGestureEnabled = !isReplyThread
         

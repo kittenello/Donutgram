@@ -17,6 +17,7 @@ import ScreenCaptureDetection
 import UndoUI
 import TranslateUI
 import UrlWhitelist
+import DGSimpleSettings
 
 private func tagsForMessage(_ message: Message) -> MessageTags? {
     //TODO:rewrite to take all media (effectiveMedia returns all rich-text media; we stop at the first)
@@ -303,7 +304,7 @@ public func galleryItemForEntry(
     
     if let image = media as? TelegramMediaImage {
         if let file = image.video {
-            let captureProtected = message.isCopyProtected() || message.containsSecretMedia || message.minAutoremoveOrClearTimeout == viewOnceTimeout || message.paidContent != nil || peerIsCopyProtected
+            let captureProtected = ((message.isCopyProtected() || peerIsCopyProtected) && !DGSimpleSettings.shared.allowProtectedScreenshots) || message.containsSecretMedia || message.minAutoremoveOrClearTimeout == viewOnceTimeout || message.paidContent != nil
             
             var originData = GalleryItemOriginData(title: message.effectiveAuthor.flatMap(EnginePeer.init)?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder), timestamp: message.timestamp)
             if Namespaces.Message.allNonRegular.contains(message.id.namespace) {
@@ -360,7 +361,7 @@ public func galleryItemForEntry(
     } else if let file = media as? TelegramMediaFile {
         if file.isVideo {
             let content: UniversalVideoContent
-            let captureProtected = message.isCopyProtected() || message.containsSecretMedia || message.minAutoremoveOrClearTimeout == viewOnceTimeout || message.paidContent != nil || peerIsCopyProtected
+            let captureProtected = ((message.isCopyProtected() || peerIsCopyProtected) && !DGSimpleSettings.shared.allowProtectedScreenshots) || message.containsSecretMedia || message.minAutoremoveOrClearTimeout == viewOnceTimeout || message.paidContent != nil
             if file.isAnimated {
                 content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), loopVideo: true, enableSound: false, tempFilePath: tempFilePath, captureProtected: captureProtected, storeAfterDownload: generateStoreAfterDownload?(message, file))
             } else {
@@ -490,11 +491,11 @@ public func galleryItemForEntry(
         var content: UniversalVideoContent?
         switch websiteType(of: webpageContent.websiteName) {
         case .instagram where webpageContent.file != nil && webpageContent.image != nil && webpageContent.file!.isVideo:
-            content = NativeVideoContent(id: .message(message.stableId, webpageContent.file?.id ?? webpage.webpageId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: webpageContent.file!), imageReference: webpageContent.image.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, enableSound: true, captureProtected: message.isCopyProtected() || message.containsSecretMedia || peerIsCopyProtected, storeAfterDownload: nil)
+            content = NativeVideoContent(id: .message(message.stableId, webpageContent.file?.id ?? webpage.webpageId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: webpageContent.file!), imageReference: webpageContent.image.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, enableSound: true, captureProtected: ((message.isCopyProtected() || peerIsCopyProtected) && !DGSimpleSettings.shared.allowProtectedScreenshots) || message.containsSecretMedia, storeAfterDownload: nil)
         default:
             if let embedUrl = webpageContent.embedUrl, let image = webpageContent.image {
                 if let file = webpageContent.file, file.isVideo {
-                    content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: message.isCopyProtected() || message.containsSecretMedia || peerIsCopyProtected, storeAfterDownload: generateStoreAfterDownload?(message, file))
+                    content = NativeVideoContent(id: .message(message.stableId, file.fileId), userLocation: .peer(message.id.peerId), fileReference: .message(message: MessageReference(message), media: file), imageReference: mediaImage.flatMap({ ImageMediaReference.message(message: MessageReference(message), media: $0) }), streamVideo: .conservative, loopVideo: loopVideos, tempFilePath: tempFilePath, captureProtected: ((message.isCopyProtected() || peerIsCopyProtected) && !DGSimpleSettings.shared.allowProtectedScreenshots) || message.containsSecretMedia, storeAfterDownload: generateStoreAfterDownload?(message, file))
                 } else if URL(string: embedUrl)?.pathExtension == "mp4" {
                     content = SystemVideoContent(userLocation: .peer(message.id.peerId), url: embedUrl, imageReference: .webPage(webPage: WebpageReference(webpage), media: image), dimensions: webpageContent.embedSize?.cgSize ?? CGSize(width: 640.0, height: 640.0), duration: webpageContent.duration.flatMap(Double.init) ?? 0.0)
                 }

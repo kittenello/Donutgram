@@ -47,6 +47,8 @@ private let dgEnglishStrings: [String: String] = [
     "Смотреть": "Watch",
     "Пересылка": "Forwarding",
     "Запрещенная рассылка": "Allow Restricted Forwarding",
+    "Скриншоты в защищённых чатах": "Screenshots in Protected Chats",
+    "Чаты, группы и каналы с запретом копирования не скрываются на скриншотах и записи экрана. Секретные чаты и медиа с таймером по-прежнему скрыты. Изменение применится, когда чат откроется заново.": "Chats, groups and channels that forbid copying are not hidden on screenshots and screen recordings. Secret chats and media with a timer stay hidden. The change applies when the chat is opened again.",
     "Ускорение загрузки": "Download Acceleration",
     "Ускорение отправки": "Upload Acceleration",
     "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео.": "Ultra uses more simultaneous connections. On slow networks this may affect downloads and video playback.",

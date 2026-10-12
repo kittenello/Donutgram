@@ -707,6 +707,31 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
     return combineLatest(signals)
 }
 
+/// Whether a forward that the server would refuse may go out as a copy instead. Sending a copy acts
+/// as this account, so it is refused where that does more than repeat the message: a dice with a TON
+/// stake would place a new stake from this account's balance, and view-once or short-timer media
+/// (also once saved by "Save View-Once Media") would arrive without its timer.
+private func donutgramCanSendProtectedForwardAsCopy(_ message: Message) -> Bool {
+    if message.localTags.contains(.donutgramSavedViewOnce) || message.containsSecretMedia {
+        return false
+    }
+    for media in message.media {
+        if let dice = media as? TelegramMediaDice, dice.tonAmount != nil {
+            return false
+        }
+    }
+    return true
+}
+
+/// The media a protected forward's copy carries. A live location becomes a static point: as a live
+/// location the copy would start broadcasting this device's own position.
+private func donutgramProtectedForwardCopyMedia(_ media: Media?) -> Media? {
+    if let map = media as? TelegramMediaMap, map.liveBroadcastingTimeout != nil {
+        return TelegramMediaMap(latitude: map.latitude, longitude: map.longitude, heading: nil, accuracyRadius: map.accuracyRadius, venue: map.venue, address: map.address)
+    }
+    return media
+}
+
 private struct PreparedProtectedForward {
     let message: EnqueueMessage
     let sourceMessage: Message?
@@ -721,7 +746,8 @@ private func localCopyOfProtectedMedia(account: Account, sourceMessage: Message,
         sourceResource = file.resource
         contentType = MediaResourceUserContentType(file: file)
         makeMedia = { resource in
-            file.withUpdatedResource(resource).withUpdatedPartialReference(nil)
+            // A new id: with the source's id Postbox would keep the stored cloud media and drop this copy.
+            return TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: resource.fileId), partialReference: nil, resource: resource, previewRepresentations: file.previewRepresentations, videoThumbnails: [], videoCover: file.videoCover, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
         }
     } else if let image = media as? TelegramMediaImage, let largest = image.representations.last {
         sourceResource = largest.resource
@@ -729,7 +755,7 @@ private func localCopyOfProtectedMedia(account: Account, sourceMessage: Message,
         makeMedia = { resource in
             var representations = image.representations
             representations[representations.count - 1] = TelegramMediaImageRepresentation(dimensions: largest.dimensions, resource: resource, progressiveSizes: [], immediateThumbnailData: largest.immediateThumbnailData, hasVideo: false, isPersonal: largest.isPersonal, typeHint: largest.typeHint)
-            return TelegramMediaImage(imageId: image.imageId, representations: representations, videoRepresentations: [], immediateThumbnailData: image.immediateThumbnailData, emojiMarkup: image.emojiMarkup, reference: nil, partialReference: nil, flags: image.flags, video: nil)
+            return TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: resource.fileId), representations: representations, videoRepresentations: [], immediateThumbnailData: image.immediateThumbnailData, emojiMarkup: image.emojiMarkup, reference: nil, partialReference: nil, flags: image.flags, video: nil)
         }
     } else {
         return .single(.standalone(media: media))
@@ -762,11 +788,11 @@ private func localCopyOfProtectedMedia(account: Account, sourceMessage: Message,
 private func prepareProtectedForwardCopies(account: Account, messages: [EnqueueMessage]) -> Signal<[EnqueueMessage], NoError> {
     return account.postbox.transaction { transaction -> [PreparedProtectedForward] in
         return messages.map { message in
-            guard DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = message, let sourceMessage = transaction.getMessage(source), sourceMessage.isCopyProtectedIgnoringDonutgramSetting() else {
+            guard DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = message, let sourceMessage = transaction.getMessage(source), sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction), donutgramCanSendProtectedForwardAsCopy(sourceMessage) else {
                 return PreparedProtectedForward(message: message, sourceMessage: nil)
             }
             var copiedAttributes = sourceMessage.attributes.filter { attribute in
-                return !(attribute is ReplyMessageAttribute) && !(attribute is ReplyThreadMessageAttribute) && !(attribute is ViewCountMessageAttribute) && !(attribute is ForwardCountMessageAttribute) && !(attribute is ReactionsMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute) && !(attribute is AutoremoveTimeoutMessageAttribute)
+                return !(attribute is ReplyMessageAttribute) && !(attribute is ReplyThreadMessageAttribute) && !(attribute is ViewCountMessageAttribute) && !(attribute is ForwardCountMessageAttribute) && !(attribute is ReactionsMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute) && !(attribute is AutoremoveTimeoutMessageAttribute) && !(attribute is EffectMessageAttribute) && !(attribute is PaidStarsMessageAttribute) && !(attribute is NotificationInfoMessageAttribute)
             }
             copiedAttributes.append(contentsOf: forwardedAttributes.filter { !($0 is ForwardOptionsMessageAttribute) })
             let copied = EnqueueMessage.message(text: sourceMessage.text, attributes: copiedAttributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: sourceMessage.groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
@@ -775,7 +801,7 @@ private func prepareProtectedForwardCopies(account: Account, messages: [EnqueueM
     }
     |> mapToSignal { prepared -> Signal<[EnqueueMessage], NoError> in
         let signals: [Signal<EnqueueMessage, NoError>] = prepared.map { item in
-            guard let sourceMessage = item.sourceMessage, let media = sourceMessage.media.first else {
+            guard let sourceMessage = item.sourceMessage, let media = donutgramProtectedForwardCopyMedia(sourceMessage.media.first) else {
                 return .single(item.message)
             }
             return localCopyOfProtectedMedia(account: account, sourceMessage: sourceMessage, media: media)
@@ -973,12 +999,12 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     var updatedMessages: [(Bool, EnqueueMessage)] = []
     outer: for (transformedMedia, message) in messages {
         var updatedMessage = message
-        if DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = updatedMessage, let sourceMessage = transaction.getMessage(source), sourceMessage.isCopyProtectedIgnoringDonutgramSetting() {
+        if DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = updatedMessage, let sourceMessage = transaction.getMessage(source), sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction), donutgramCanSendProtectedForwardAsCopy(sourceMessage) {
             var copiedAttributes = sourceMessage.attributes.filter { attribute in
-                return !(attribute is ReplyMessageAttribute) && !(attribute is ReplyThreadMessageAttribute) && !(attribute is ViewCountMessageAttribute) && !(attribute is ForwardCountMessageAttribute) && !(attribute is ReactionsMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute) && !(attribute is AutoremoveTimeoutMessageAttribute)
+                return !(attribute is ReplyMessageAttribute) && !(attribute is ReplyThreadMessageAttribute) && !(attribute is ViewCountMessageAttribute) && !(attribute is ForwardCountMessageAttribute) && !(attribute is ReactionsMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute) && !(attribute is AutoremoveTimeoutMessageAttribute) && !(attribute is EffectMessageAttribute) && !(attribute is PaidStarsMessageAttribute) && !(attribute is NotificationInfoMessageAttribute)
             }
             copiedAttributes.append(contentsOf: forwardedAttributes.filter { !($0 is ForwardOptionsMessageAttribute) })
-            updatedMessage = .message(text: sourceMessage.text, attributes: copiedAttributes, inlineStickers: [:], mediaReference: sourceMessage.media.first.flatMap(AnyMediaReference.standalone), threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: sourceMessage.groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
+            updatedMessage = .message(text: sourceMessage.text, attributes: copiedAttributes, inlineStickers: [:], mediaReference: donutgramProtectedForwardCopyMedia(sourceMessage.media.first).flatMap(AnyMediaReference.standalone), threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: sourceMessage.groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
         }
         let ghostSettings = DGSimpleSettings.shared
         let shouldSendSilently = ghostSettings.ghostSendWithoutSound == 2 || (ghostSettings.ghostSendWithoutSound == 1 && ghostSettings.ghostModeEnabled)

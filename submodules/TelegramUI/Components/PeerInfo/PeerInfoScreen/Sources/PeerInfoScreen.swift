@@ -2823,7 +2823,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
         }
         
-        setLayerDisableScreenshots(self.layer, peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic))
+        setLayerDisableScreenshots(self.layer, peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic) && !DGSimpleSettings.shared.allowProtectedScreenshots)
     }
     
     func scrollToTop() {

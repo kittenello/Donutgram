@@ -23,6 +23,7 @@ import UndoUI
 import HorizontalTabsComponent
 import GlassBackgroundComponent
 import EdgeEffect
+import DGSimpleSettings
 
 final class PeerInfoPaneWrapper {
     let key: PeerInfoPaneKey
@@ -445,7 +446,7 @@ private final class PeerInfoPendingPane {
     ) {
         let (chatLocationPeerId, chatLocation, chatLocationContextHolder) = peerInfoSharedMediaChatLocation(peerId: peerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
         
-        var captureProtected = peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
+        var captureProtected = peerInfoIsCopyProtected(data: data, sharedMediaFromForumTopic: sharedMediaFromForumTopic) && !DGSimpleSettings.shared.allowProtectedScreenshots
         let paneNode: PeerInfoPaneNode
         switch key {
         case .gifts:
