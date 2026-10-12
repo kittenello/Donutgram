@@ -371,8 +371,11 @@ public final class DGSimpleSettings {
     public var sendTelegramStatistics: Bool { get { bool(Key.sendTelegramStatistics) } set { setBool(newValue, Key.sendTelegramStatistics) } }
     public var bypassForwardRestrictions: Bool { get { bool(Key.bypassForwardRestrictions) } set { setBool(newValue, Key.bypassForwardRestrictions) } }
     /// Content of chats, groups and channels that forbid copying stays visible on screenshots and screen
-    /// recordings. Secret chats, view-once and paid media stay hidden.
-    public var allowProtectedScreenshots: Bool { get { bool(Key.allowProtectedScreenshots) } set { setBool(newValue, Key.allowProtectedScreenshots) } }
+    /// recordings. Secret chats and media with a timer stay hidden. On until switched off.
+    public var allowProtectedScreenshots: Bool {
+        get { self.defaults.object(forKey: Key.allowProtectedScreenshots) == nil ? true : bool(Key.allowProtectedScreenshots) }
+        set { setBool(newValue, Key.allowProtectedScreenshots) }
+    }
     public var visualPhoneEnabled: Bool { get { bool(Key.visualPhoneEnabled) } set { setBool(newValue, Key.visualPhoneEnabled) } }
     public var visualPhoneNumber: String { get { string(Key.visualPhoneNumber) } set { setString(newValue, Key.visualPhoneNumber) } }
 
