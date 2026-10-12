@@ -573,7 +573,8 @@ public final class DGSimpleSettings {
         AppMark(title: "Бойкиссер", iconName: "DgKisser", islandAssetName: "Components/IslandKisser"),
         AppMark(title: "Бойкиссер 2", iconName: "DgKisserRed", islandAssetName: "Components/IslandKisserRed"),
         AppMark(title: "Котик", iconName: "DgCat", islandAssetName: "Components/IslandCat"),
-        AppMark(title: "Бахафон", iconName: "DgBahafon", islandAssetName: "Components/IslandBahafon")
+        AppMark(title: "Бахафон", iconName: "DgBahafon", islandAssetName: "Components/IslandBahafon"),
+        AppMark(title: "Котик-шпион", iconName: "DgCatSpy", islandAssetName: "Components/IslandCatSpy")
     ]
     /// The mark of an app icon (`UIApplication.alternateIconName`, nil for the default icon); an unknown name gets the default.
     public static func appMarkIndex(iconName: String?) -> Int {
