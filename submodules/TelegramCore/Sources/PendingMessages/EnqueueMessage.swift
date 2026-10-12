@@ -762,7 +762,7 @@ private func localCopyOfProtectedMedia(account: Account, sourceMessage: Message,
 private func prepareProtectedForwardCopies(account: Account, messages: [EnqueueMessage]) -> Signal<[EnqueueMessage], NoError> {
     return account.postbox.transaction { transaction -> [PreparedProtectedForward] in
         return messages.map { message in
-            guard DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = message, let sourceMessage = transaction.getMessage(source), sourceMessage.isCopyProtectedIgnoringDonutgramSetting() else {
+            guard DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = message, let sourceMessage = transaction.getMessage(source), sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction) else {
                 return PreparedProtectedForward(message: message, sourceMessage: nil)
             }
             var copiedAttributes = sourceMessage.attributes.filter { attribute in
@@ -973,7 +973,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     var updatedMessages: [(Bool, EnqueueMessage)] = []
     outer: for (transformedMedia, message) in messages {
         var updatedMessage = message
-        if DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = updatedMessage, let sourceMessage = transaction.getMessage(source), sourceMessage.isCopyProtectedIgnoringDonutgramSetting() {
+        if DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = updatedMessage, let sourceMessage = transaction.getMessage(source), sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction) {
             var copiedAttributes = sourceMessage.attributes.filter { attribute in
                 return !(attribute is ReplyMessageAttribute) && !(attribute is ReplyThreadMessageAttribute) && !(attribute is ViewCountMessageAttribute) && !(attribute is ForwardCountMessageAttribute) && !(attribute is ReactionsMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute) && !(attribute is AutoremoveTimeoutMessageAttribute)
             }

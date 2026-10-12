@@ -24,6 +24,7 @@ swift_library(
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/ComponentFlow",
         "//submodules/Components/ComponentDisplayAdapters",
+        "//Donutgram/DGSimpleSettings:DGSimpleSettings",
     ],
     visibility = [
         "//visibility:public",

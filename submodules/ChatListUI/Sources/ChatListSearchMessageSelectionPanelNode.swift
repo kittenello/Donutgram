@@ -8,6 +8,7 @@ import SwiftSignalKit
 import TelegramPresentationData
 import AccountContext
 import AppBundle
+import DGSimpleSettings
 
 final class ChatListSearchMessageSelectionPanelNode: ASDisplayNode {
     private let context: AccountContext
@@ -174,7 +175,7 @@ final class ChatListSearchMessageSelectionPanelNode: ASDisplayNode {
     }
     
     @objc func forwardButtonPressed() {
-        if let actions = self.actions, actions.isCopyProtected {
+        if let actions = self.actions, actions.isCopyProtected, !DGSimpleSettings.shared.bypassForwardRestrictions {
             self.displayCopyProtectionTip(self.forwardButton.view, false)
         } else {
             self.forwardMessages()
