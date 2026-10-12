@@ -175,6 +175,11 @@ final class HistoryViewStateValidationContexts {
                             continue
                         }
                     }
+                    // Donutgram: a saved deleted message no longer exists on the server, so it is never
+                    // validated. No range break: the server has no message in its place.
+                    if entry.message.localTags.contains(.donutgramDeleted) {
+                        continue
+                    }
                     if !historyState.isMessageValid(entry.message) {
                         addToRange(entry.message.id, &rangesToInvalidate)
                     } else {
@@ -282,6 +287,11 @@ final class HistoryViewStateValidationContexts {
                         if !entry.message.tags.contains(tag) {
                             continue
                         }
+                    }
+                    // Donutgram: a saved deleted message no longer exists on the server, so it is never
+                    // validated. No range break: the server has no message in its place.
+                    if entry.message.localTags.contains(.donutgramDeleted) {
+                        continue
                     }
                     if !historyState.isMessageValid(entry.message) {
                         addToRange(entry.message.id, &rangesToInvalidate)
@@ -808,16 +818,17 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                     }
                 }
                 
-                let actuallyRemovedMessagesSignal: Signal<Set<MessageId>, NoError>
+                // Donutgram: the flag is true only when the server answered that the messages are gone.
+                let actuallyRemovedMessagesSignal: Signal<(Set<MessageId>, Bool), NoError>
                 if maybeRemovedMessageIds.isEmpty {
-                    actuallyRemovedMessagesSignal = .single(Set())
+                    actuallyRemovedMessagesSignal = .single((Set<MessageId>(), true))
                 } else {
                     switch historyState {
                         case let .channel(peerId, _):
-                            actuallyRemovedMessagesSignal = postbox.transaction { transaction -> Signal<Set<MessageId>, NoError> in
+                            actuallyRemovedMessagesSignal = postbox.transaction { transaction -> Signal<(Set<MessageId>, Bool), NoError> in
                                 if let inputChannel = transaction.getPeer(peerId).flatMap(apiInputChannel) {
                                     return network.request(Api.functions.channels.getMessages(channel: inputChannel, id: maybeRemovedMessageIds.map({ Api.InputMessage.inputMessageID(.init(id: $0.id)) })))
-                                    |> map { result -> Set<MessageId> in
+                                    |> map { result -> (Set<MessageId>, Bool) in
                                         let apiMessages: [Api.Message]
                                         switch result {
                                             case let .channelMessages(channelMessagesData):
@@ -831,7 +842,7 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                                                 let messages = messagesSliceData.messages
                                                 apiMessages = messages
                                             case .messagesNotModified:
-                                                return Set()
+                                                return (Set<MessageId>(), true)
                                         }
                                         var ids = Set<MessageId>()
                                         for message in apiMessages {
@@ -845,21 +856,22 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                                                 }
                                             }
                                         }
-                                        return Set(maybeRemovedMessageIds).subtracting(ids)
+                                        return (Set(maybeRemovedMessageIds).subtracting(ids), true)
                                     }
-                                    |> `catch` { _ -> Signal<Set<MessageId>, NoError> in
-                                        return .single(Set(maybeRemovedMessageIds))
+                                    |> `catch` { _ -> Signal<(Set<MessageId>, Bool), NoError> in
+                                        return .single((Set(maybeRemovedMessageIds), false))
                                     }
                                 }
-                                return .single(Set(maybeRemovedMessageIds))
+                                return .single((Set(maybeRemovedMessageIds), false))
                             } |> switchToLatest
                         default:
-                            actuallyRemovedMessagesSignal = .single(Set(maybeRemovedMessageIds))
+                            actuallyRemovedMessagesSignal = .single((Set(maybeRemovedMessageIds), false))
                     }
                 }
                 
                 return actuallyRemovedMessagesSignal
-                |> mapToSignal { removedMessageIds -> Signal<Void, NoError> in
+                |> mapToSignal { removal -> Signal<Void, NoError> in
+                    let (removedMessageIds, removalConfirmed) = removal
                     return postbox.transaction { transaction -> Void in
                         var validMessageIds = Set<MessageId>()
                         for message in storeMessages {
@@ -986,7 +998,9 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                                         return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: updatedTags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
                                     })
                                 } else {
-                                    if let currentMessage = transaction.getMessage(id), currentMessage.localTags.contains(.donutgramDeleted) {
+                                    // Donutgram: a deletion the server confirmed here was missed by updates (for example
+                                    // after channelDifferenceTooLong), so it is saved like one that arrived as an update.
+                                    if transaction.getMessage(id)?.localTags.contains(.donutgramDeleted) == true || (removalConfirmed && donutgramPreserveDeletedMessage(transaction: transaction, messageId: id)) {
                                         Logger.shared.log("HistoryValidation", "keeping Donutgram deleted message \(id) in \(id.peerId)")
                                     } else {
                                         _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: [id])
@@ -1068,14 +1082,15 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
                 }
             }
             
-            let actuallyRemovedMessagesSignal: Signal<Set<MessageId>, NoError>
+            // Donutgram: the flag is true only when the server answered that the messages are gone.
+            let actuallyRemovedMessagesSignal: Signal<(Set<MessageId>, Bool), NoError>
             if maybeRemovedMessageIds.isEmpty {
-                actuallyRemovedMessagesSignal = .single(Set())
+                actuallyRemovedMessagesSignal = .single((Set<MessageId>(), true))
             } else {
-                actuallyRemovedMessagesSignal = postbox.transaction { transaction -> Signal<Set<MessageId>, NoError> in
+                actuallyRemovedMessagesSignal = postbox.transaction { transaction -> Signal<(Set<MessageId>, Bool), NoError> in
                     if let inputChannel = transaction.getPeer(peerId).flatMap(apiInputChannel) {
                         return network.request(Api.functions.channels.getMessages(channel: inputChannel, id: maybeRemovedMessageIds.map({ Api.InputMessage.inputMessageID(.init(id: $0.id)) })))
-                        |> map { result -> Set<MessageId> in
+                        |> map { result -> (Set<MessageId>, Bool) in
                             let apiMessages: [Api.Message]
                             switch result {
                                 case let .channelMessages(channelMessagesData):
@@ -1089,7 +1104,7 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
                                     let messages = messagesSliceData.messages
                                     apiMessages = messages
                                 case .messagesNotModified:
-                                    return Set()
+                                    return (Set<MessageId>(), true)
                             }
                             var ids = Set<MessageId>()
                             for message in apiMessages {
@@ -1097,19 +1112,20 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
                                     ids.insert(id)
                                 }
                             }
-                            return Set(maybeRemovedMessageIds).subtracting(ids)
+                            return (Set(maybeRemovedMessageIds).subtracting(ids), true)
                         }
-                        |> `catch` { _ -> Signal<Set<MessageId>, NoError> in
-                            return .single(Set(maybeRemovedMessageIds))
+                        |> `catch` { _ -> Signal<(Set<MessageId>, Bool), NoError> in
+                            return .single((Set(maybeRemovedMessageIds), false))
                         }
                     }
-                    return .single(Set(maybeRemovedMessageIds))
+                    return .single((Set(maybeRemovedMessageIds), false))
                 }
                 |> switchToLatest
             }
             
             return actuallyRemovedMessagesSignal
-            |> mapToSignal { removedMessageIds -> Signal<Void, NoError> in
+            |> mapToSignal { removal -> Signal<Void, NoError> in
+                let (removedMessageIds, removalConfirmed) = removal
                 return postbox.transaction { transaction -> Void in
                     var validMessageIds = Set<MessageId>()
                     for message in storeMessages {
@@ -1175,7 +1191,8 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
                 
                     for id in removedMessageIds {
                         if !validMessageIds.contains(id) {
-                            if let currentMessage = transaction.getMessage(id), currentMessage.localTags.contains(.donutgramDeleted) {
+                            // Donutgram: a deletion the server confirmed here is saved like one that arrived as an update.
+                            if transaction.getMessage(id)?.localTags.contains(.donutgramDeleted) == true || (removalConfirmed && donutgramPreserveDeletedMessage(transaction: transaction, messageId: id)) {
                                 Logger.shared.log("HistoryValidation", "keeping Donutgram deleted thread message \(id) in \(id.peerId)")
                             } else {
                                 _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: [id])
