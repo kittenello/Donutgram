@@ -930,6 +930,13 @@ public func resendMessages(account: Account, messageIds: [MessageId]) -> Signal<
 }
 
 func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId, messages: [(Bool, EnqueueMessage)], disableAutoremove: Bool = false, transformGroupingKeysWithPeerId: Bool = false) -> [MessageId?] {
+    // Donutgram: a screenshot notification is not sent in ghost mode, and with nothing queued
+    // nothing is read on the user's behalf either.
+    if donutgramGhostModeDropsScreenshotNotifications(messages) {
+        return messages.map { _ -> MessageId? in
+            return nil
+        }
+    }
     if DGSimpleSettings.shared.ghostModeEnabled && DGSimpleSettings.shared.ghostReadOnAction {
         let namespace: MessageId.Namespace = peerId.namespace == Namespaces.Peer.SecretChat ? Namespaces.Message.SecretIncoming : Namespaces.Message.Cloud
         if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: namespace) {

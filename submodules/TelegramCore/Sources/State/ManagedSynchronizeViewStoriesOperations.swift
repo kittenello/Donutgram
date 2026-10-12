@@ -119,6 +119,11 @@ func managedSynchronizeViewStoriesOperations(postbox: Postbox, network: Network,
 }
 
 private func pushStoriesAreSeen(postbox: Postbox, network: Network, stateManager: AccountStateManager, peer: Peer, operation: SynchronizeViewStoriesOperation) -> Signal<Void, NoError> {
+    // Donutgram: a receipt queued before ghost mode was turned on (a story watched offline) is
+    // dropped as well, as message read pushes are checked when they are sent.
+    if donutgramGhostModeBlocksStoryReads() {
+        return .complete()
+    }
     guard let inputPeer = apiInputPeer(peer) else {
         return .complete()
     }

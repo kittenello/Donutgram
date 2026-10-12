@@ -1858,6 +1858,11 @@ public extension TelegramEngine {
         }
         
         public func reportPeerReadMetrics(peerId: EnginePeer.Id, metrics: [TelegramMessageReadMetric]) -> Signal<Never, NoError> {
+            // Donutgram: ghost mode does not add channel post views (AccountViewTracker), so it does
+            // not report how long each post was on screen either.
+            if donutgramGhostModeBlocksContentReads() {
+                return .complete()
+            }
             return self.account.postbox.transaction { transaction -> Api.InputPeer? in
                 return transaction.getPeer(peerId).flatMap(apiInputPeer)
             }
@@ -1886,6 +1891,10 @@ public extension TelegramEngine {
         }
         
         public func reportMusicListened(file: FileMediaReference, duration: Int) -> Signal<Never, NoError> {
+            // Donutgram: in ghost mode listening is not reported, as voice and round videos are not.
+            if donutgramGhostModeBlocksContentReads() {
+                return .complete()
+            }
             guard let resource = file.media.resource as? CloudDocumentMediaResource, let reference = file.resourceReference(file.media.resource) as? TelegramCloudMediaResourceWithFileReference else {
                 return .complete()
             }

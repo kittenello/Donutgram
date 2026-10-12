@@ -952,6 +952,11 @@ public final class AccountViewTracker {
     }
     
     public func updateSeenLiveLocationForMessageIds(messageIds: Set<MessageId>) {
+        // Donutgram: viewing someone's live location sends readMessageContents, which ghost mode
+        // keeps back like every other content read.
+        if donutgramGhostModeBlocksContentReads() {
+            return
+        }
         self.queue.async { [self] in
             var addedMessageIds: [MessageId] = []
             let timestamp = Int32(CFAbsoluteTimeGetCurrent())
