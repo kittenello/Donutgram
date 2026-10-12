@@ -544,7 +544,7 @@ class CallListCallItemNode: ItemListRevealOptionsItemNode {
                     currentCredibilityIconImage = PresentationResourcesChatList.scamIcon(item.presentationData.theme, strings: item.presentationData.strings, type: .regular)
                 } else if peer.isFake {
                     currentCredibilityIconImage = PresentationResourcesChatList.fakeIcon(item.presentationData.theme, strings: item.presentationData.strings, type: .regular)
-                } else if peer.isVerified {
+                } else if peer.donutgramDisplayIsVerified {
                     currentCredibilityIconImage = PresentationResourcesChatList.verifiedIcon(item.presentationData.theme)
                 } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !donutgramHidesPremiumStatus(peerId: peer.id, accountPeerId: item.context.account.peerId) {
                     currentCredibilityIconImage = PresentationResourcesChatList.premiumIcon(item.presentationData.theme)

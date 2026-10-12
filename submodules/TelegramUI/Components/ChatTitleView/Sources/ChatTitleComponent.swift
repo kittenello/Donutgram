@@ -464,10 +464,10 @@ public final class ChatTitleComponent: Component {
                                 titleCredibilityIcon = .premium
                             }
                             
-                            if peer.isVerified {
+                            if peer.donutgramDisplayIsVerified {
                                 titleCredibilityIcon = .verified
                             }
-                            if let verificationIconFileId = peer.verificationIconFileId {
+                            if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                                 titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                             }
                         }

@@ -210,7 +210,7 @@ public func JoinLinkPreviewController(
             verificationStatus = .fake
         } else if invite.flags.isScam {
             verificationStatus = .scam
-        } else if invite.flags.isVerified {
+        } else if DonutgramVerificationDisplay.isVerified(invite.flags.isVerified) {
             verificationStatus = .verified
         }
         return context.sharedContext.makeJoinSubjectScreen(context: context, mode: .group(JoinSubjectScreenMode.Group(

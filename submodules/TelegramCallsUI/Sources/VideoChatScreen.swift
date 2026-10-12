@@ -1892,7 +1892,7 @@ final class VideoChatScreenComponent: Component {
                                 }
                                 if members.totalCount < 40 {
                                     displayEvent = true
-                                } else if event.peer.isVerified {
+                                } else if event.peer.donutgramDisplayIsVerified {
                                     displayEvent = true
                                 } else if event.isContact || event.isInChatList {
                                     displayEvent = true

@@ -241,7 +241,7 @@ final class ChatMessageNotificationItemNode: NotificationItemNode {
                 messageText = preview.text
                 messageEntities = nil
                 gramTransferAmountRanges = preview.amountRanges
-                if message.id.peerId.isTelegramNotifications {
+                if message.id.peerId.isTelegramNotifications && !DonutgramVerificationDisplay.isHidden {
                     let iconSize: CGFloat = compact ? 14.0 : 16.0
                     self.titleIconNode.image = generateScaledImage(image: PresentationResourcesChatList.verifiedIcon(presentationData.theme), size: CGSize(width: iconSize, height: iconSize), opaque: false)
                     self.titleIconNode.isHidden = self.titleIconNode.image == nil

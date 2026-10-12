@@ -140,6 +140,7 @@ public final class DGSimpleSettings {
         static let showMutualContact = "donutgram.appearance.showMutualContact"
         static let confirmCalls = "donutgram.appearance.confirmCalls"
         static let disableAds = "donutgram.appearance.disableAds"
+        static let hideVerification = "donutgram.appearance.hideVerification"
         static let hidePremiumStatuses = "donutgram.appearance.hidePremiumStatuses"
         static let disableCustomBackgrounds = "donutgram.appearance.disableCustomBackgrounds"
         static let hideStories = "donutgram.appearance.hideStories"
@@ -525,6 +526,9 @@ public final class DGSimpleSettings {
     public var showMutualContact: Bool { get { bool(Key.showMutualContact) } set { setBool(newValue, Key.showMutualContact) } }
     public var confirmCalls: Bool { get { bool(Key.confirmCalls) } set { setBool(newValue, Key.confirmCalls) } }
     public var disableAds: Bool { get { bool(Key.disableAds) } set { setBool(newValue, Key.disableAds) } }
+    /// Presentation only; «Оформление → Скрыть верификацию». Off by default.
+    public var hideVerification: Bool { get { bool(Key.hideVerification) } set { setBool(newValue, Key.hideVerification) } }
+
     public var hidePremiumStatuses: Bool { get { bool(Key.hidePremiumStatuses) } set { setBool(newValue, Key.hidePremiumStatuses) } }
     public var disableCustomBackgrounds: Bool { get { bool(Key.disableCustomBackgrounds) } set { setBool(newValue, Key.disableCustomBackgrounds) } }
     public var hideStories: Bool { get { bool(Key.hideStories) } set { setBool(newValue, Key.hideStories) } }

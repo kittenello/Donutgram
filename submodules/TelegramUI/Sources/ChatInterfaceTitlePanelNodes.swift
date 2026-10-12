@@ -112,7 +112,7 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
         }
     }
     
-    if let _ = chatPresentationInterfaceState.peerVerification {
+    if !DonutgramVerificationDisplay.isHidden, let _ = chatPresentationInterfaceState.peerVerification {
         if let currentPanel = currentPanel as? ChatVerifiedPeerTitlePanelNode {
             return currentPanel
         } else if let controllerInteraction = controllerInteraction {

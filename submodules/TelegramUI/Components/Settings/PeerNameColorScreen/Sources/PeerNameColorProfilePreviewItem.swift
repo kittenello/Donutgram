@@ -315,7 +315,7 @@ final class PeerNameColorProfilePreviewItemNode: ListViewItemNode {
                         credibilityIcon = .emojiStatus(emojiStatus)
                     } else if case let .channel(channel) = peer, let emojiStatus = channel.emojiStatus {
                         credibilityIcon = .emojiStatus(emojiStatus)
-                    } else if peer.isVerified {
+                    } else if peer.donutgramDisplayIsVerified {
                         credibilityIcon = .verified
                     } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
                         credibilityIcon = .premium

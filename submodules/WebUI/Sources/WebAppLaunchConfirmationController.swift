@@ -150,7 +150,7 @@ private final class AlertWebAppHeaderComponent: Component {
                 statusContent = .text(color: environment.theme.list.itemDestructiveColor, string: environment.strings.Message_ScamAccount.uppercased())
             } else if component.peer.isFake {
                 statusContent = .text(color: environment.theme.list.itemDestructiveColor, string: environment.strings.Message_FakeAccount.uppercased())
-            } else if component.peer.isVerified {
+            } else if component.peer.donutgramDisplayIsVerified {
                 statusContent = .verified(fillColor: environment.theme.list.itemCheckColors.fillColor, foregroundColor: environment.theme.list.itemCheckColors.foregroundColor, sizeType: .large)
             }
             if let statusContent {
