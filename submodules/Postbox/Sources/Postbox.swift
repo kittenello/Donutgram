@@ -998,14 +998,13 @@ public final class Transaction {
         return postbox.localMessageHistoryTagsTable.get(tag: tag)
     }
 
-    /// Reads the persistent local-tag index, filtering peer ids before rendering messages.
+    /// A peer's messages with `tag`. The index is read once per tag and then kept grouped by peer.
     public func getMessagesWithLocalTag(_ tag: LocalMessageTags, peerId: PeerId) -> [Message] {
         assert(!self.disposed)
         guard let postbox = self.postbox else {
             return []
         }
-        return postbox.localMessageHistoryTagsTable.get(tag: tag)
-            .filter { $0.peerId == peerId }
+        return postbox.localMessageHistoryTagsTable.get(tag: tag, peerId: peerId)
             .compactMap { postbox.getMessage($0) }
     }
 

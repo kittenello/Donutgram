@@ -13,6 +13,10 @@ final class LocalMessageHistoryTagsTable: Table {
     
     private let sharedKey = ValueBoxKey(length: 4 + 4 + 4 + 8)
     
+    // The ids of a tag grouped by peer. The keys start with the tag, not the peer, so a per-peer
+    // query reads the whole tag once and then stays in step with `set`.
+    private var cachedIdsByPeer: [LocalMessageTags: [PeerId: Set<MessageId>]] = [:]
+    
     private func key(_ id: MessageId, tag: LocalMessageTags) -> ValueBoxKey {
         assert(tag.isSingleTag)
         self.sharedKey.setUInt32(0, value: tag.rawValue)
@@ -45,11 +49,31 @@ final class LocalMessageHistoryTagsTable: Table {
         for tag in addedTags {
             self.valueBox.set(self.table, key: self.key(id, tag: tag), value: MemoryBuffer())
             operations.append(.Insert(tag, id))
+            self.cachedIdsByPeer[tag]?[id.peerId, default: Set()].insert(id)
         }
         for tag in removedTags {
             self.valueBox.remove(self.table, key: self.key(id, tag: tag), secure: false)
             operations.append(.Remove(tag, id))
+            self.cachedIdsByPeer[tag]?[id.peerId]?.remove(id)
         }
+    }
+    
+    func get(tag: LocalMessageTags, peerId: PeerId) -> [MessageId] {
+        if !self.useCaches {
+            return self.get(tag: tag).filter { $0.peerId == peerId }
+        }
+        if self.cachedIdsByPeer[tag] == nil {
+            var idsByPeer: [PeerId: Set<MessageId>] = [:]
+            for id in self.get(tag: tag) {
+                idsByPeer[id.peerId, default: Set()].insert(id)
+            }
+            self.cachedIdsByPeer[tag] = idsByPeer
+        }
+        return Array(self.cachedIdsByPeer[tag]?[peerId] ?? Set())
+    }
+    
+    override func clearMemoryCache() {
+        self.cachedIdsByPeer.removeAll()
     }
     
     func get(tag: LocalMessageTags) -> [MessageId] {
