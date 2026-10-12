@@ -86,10 +86,17 @@ struct Message {
     }
 }
 enum MessageUpdate { case update(StoreMessage) }
+class AccountState {}
+final class AuthorizedAccountState: AccountState {
+    let peerId: PeerId
+    init(peerId: PeerId) { self.peerId = peerId }
+}
 final class Transaction {
     var peers: [PeerId: Peer] = [:]
     var messages: [MessageId: Message] = [:]
     var deleted: [MessageId] = []
+    var state: AccountState?
+    func getState() -> AccountState? { self.state }
     func getPeer(_ id: PeerId) -> Peer? { self.peers[id] }
     func getMessage(_ id: MessageId) -> Message? { self.messages[id] }
     func updateMessage(_ id: MessageId, update: (Message) -> MessageUpdate) {
@@ -216,6 +223,25 @@ expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, message
 let secretId = MessageId(peerId: secret.id, namespace: 0, id: 103)
 reopenedTransaction.messages[secretId] = Message(store(secretId), author: secret)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: secretId), "secret chats excluded")
+let me = TelegramUser(PeerId(namespace: 0, value: 999))
+reopenedTransaction.peers[me.id] = me
+reopenedTransaction.state = AuthorizedAccountState(peerId: me.id)
+let savedMessagesId = MessageId(peerId: me.id, namespace: 0, id: 105)
+reopenedTransaction.messages[savedMessagesId] = Message(store(savedMessagesId, flags: []), author: me)
+expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: savedMessagesId), "Saved Messages cleared on another device are not saved")
+let ownId = MessageId(peerId: alice.id, namespace: 0, id: 106)
+reopenedTransaction.messages[ownId] = Message(store(ownId, flags: []), author: me)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: ownId), "own messages are saved unless switched off")
+DGSimpleSettings.shared.saveOwnDeletedMessages = false
+let otherOwnId = MessageId(peerId: alice.id, namespace: 0, id: 107)
+reopenedTransaction.messages[otherOwnId] = Message(store(otherOwnId, flags: []), author: me)
+expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: otherOwnId), "own messages follow their switch")
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: ownId), "an own message saved before stays saved")
+let incomingId = MessageId(peerId: alice.id, namespace: 0, id: 108)
+reopenedTransaction.messages[incomingId] = Message(store(incomingId), author: alice)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: incomingId), "incoming messages ignore the own-message switch")
+DGSimpleSettings.shared.saveOwnDeletedMessages = true
+reopenedTransaction.state = nil
 DGSimpleSettings.shared.saveDeletedMessages = false
 reopenedTransaction.messages[id] = Message(store(id), author: alice)
 donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])

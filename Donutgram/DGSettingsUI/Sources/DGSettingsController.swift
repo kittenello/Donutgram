@@ -43,6 +43,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "saveEdits": return "pencil"
     case "saveOnce": return "lock"
     case "saveBots": return "bubble.left"
+    case "saveOwnDeleted": return "bubble.right"
     case "bypassForward": return "arrowshape.turn.up.right"
     case "protectedScreenshots": return "camera.viewfinder"
     case "telegramStatistics": return "chart.bar"

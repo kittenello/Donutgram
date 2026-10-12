@@ -92,7 +92,16 @@ func donutgramPreserveDeletedMessage(transaction: Transaction, messageId: Messag
     guard donutgramAllowsSavingInPeer(transaction: transaction, peerId: messageId.peerId) else {
         return false
     }
+    // Saved Messages are cleared by the account itself, on this or another device.
+    if let accountState = transaction.getState() as? AuthorizedAccountState, accountState.peerId == messageId.peerId {
+        return false
+    }
     guard DGSimpleSettings.shared.saveDeletedMessages || message.localTags.contains(.donutgramSavedViewOnce) else {
+        return false
+    }
+    // The update does not say who deleted an own message: the account on another device or, in a
+    // private chat, the other side for both. Keeping them is a setting of its own.
+    if !message.flags.contains(.Incoming) && !DGSimpleSettings.shared.saveOwnDeletedMessages {
         return false
     }
 

@@ -34,6 +34,7 @@ private let dgEnglishStrings: [String: String] = [
     "Выключен": "Disabled",
     "Сохранять удаленки": "Save Deleted Messages",
     "Полупрозрачные удаленки": "Translucent Deleted Messages",
+    "Сохранять свои удаленки": "Save My Deleted Messages",
     "Сохранять историю правок": "Save Edit History",
     "Сохранять одноразки": "Save View-Once Media",
     "Сохранять в чатах с ботами": "Save Messages in Bot Chats",
