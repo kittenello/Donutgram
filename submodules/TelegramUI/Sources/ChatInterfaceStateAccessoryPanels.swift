@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import TelegramCore
@@ -44,7 +45,7 @@ func textInputAccessoryPanel(
     }
     
     if let editMessage = chatPresentationInterfaceState.interfaceState.editMessage, chatPresentationInterfaceState.interfaceState.postSuggestionState == nil {
-        if let editingUrlPreview = chatPresentationInterfaceState.editingUrlPreview, !editMessage.disableUrlPreviews.contains(editingUrlPreview.url) {
+        if let editingUrlPreview = chatPresentationInterfaceState.editingUrlPreview, !editMessage.disableUrlPreviews.contains(editingUrlPreview.url), !DGSimpleSettings.shared.removeLinkPreviews {
             var previousTapTimestamp: Double?
             return AnyComponentWithIdentity(id: "linkPreview", component: AnyComponent(ChatInputMessageAccessoryPanel(
                 context: context,
@@ -80,7 +81,7 @@ func textInputAccessoryPanel(
                 interfaceInteraction?.setupEditMessage(nil, { _ in })
             }
         )))
-    } else if let urlPreview = chatPresentationInterfaceState.urlPreview, !chatPresentationInterfaceState.interfaceState.composeDisableUrlPreviews.contains(urlPreview.url) {
+    } else if let urlPreview = chatPresentationInterfaceState.urlPreview, !chatPresentationInterfaceState.interfaceState.composeDisableUrlPreviews.contains(urlPreview.url), !DGSimpleSettings.shared.removeLinkPreviews {
         var previousTapTimestamp: Double?
         return AnyComponentWithIdentity(id: "linkPreview", component: AnyComponent(ChatInputMessageAccessoryPanel(
             context: context,

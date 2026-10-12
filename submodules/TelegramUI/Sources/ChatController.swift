@@ -645,7 +645,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var lastPostedScheduledMessagesToastTimestamp: Double = 0.0
     private var donutgramChannelSettingsObserver: NSObjectProtocol?
-    private var donutgramChannelBottomButton = DGSimpleSettings.shared.channelBottomButton
     var postedScheduledMessagesEventsDisposable: Disposable?
     
     var globalControlPanelsContext: GlobalControlPanelsContext?
@@ -1851,7 +1850,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         }
                     }
                     
-                    guard let chosenReaction = chosenReaction else {
+                    guard let chosenReaction = chosenReaction, !(DGSimpleSettings.shared.hidePaidReactions && chosenReaction == .stars) else {
                         return
                     }
                     
@@ -1909,7 +1908,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         }
                     }
                     
-                    guard let chosenReaction = chosenReaction else {
+                    guard let chosenReaction = chosenReaction, !(DGSimpleSettings.shared.hidePaidReactions && chosenReaction == .stars) else {
                         return
                     }
                     
@@ -7026,9 +7025,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         })
         
         self.donutgramChannelSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            guard let self, self.donutgramChannelBottomButton != DGSimpleSettings.shared.channelBottomButton else { return }
-            self.donutgramChannelBottomButton = DGSimpleSettings.shared.channelBottomButton
+            guard let self else { return }
             if self.isNodeLoaded {
+                if DGSimpleSettings.shared.hideBirthdayNotifications {
+                    self.birthdayTooltipController?.dismiss()
+                }
                 self.updateChatPresentationInterfaceState(transition: .immediate, interactive: false, force: true, { $0 })
             }
         }
@@ -10421,7 +10422,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     private var didDisplayBirthdayTooltip = false
     func displayBirthdayTooltip() {
-        guard !self.didDisplayBirthdayTooltip else {
+        guard !DGSimpleSettings.shared.hideBirthdayNotifications, !self.didDisplayBirthdayTooltip else {
             return
         }
         if let birthday = (self.contentData?.state.peerView?.cachedData as? CachedUserData)?.birthday {
@@ -10442,6 +10443,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     return
                 }
                 
+                guard !DGSimpleSettings.shared.hideBirthdayNotifications else { return }
                 let peerName = peer.compactDisplayTitle
                 let text = self.presentationData.strings.Chat_BirthdayTooltip(peerName, peerName).string
                 
@@ -10459,6 +10461,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 )
                 self.birthdayTooltipController = tooltipScreen
                 Queue.mainQueue().after(0.35) {
+                    guard !DGSimpleSettings.shared.hideBirthdayNotifications else { return }
                     self.present(tooltipScreen, in: .current)
                 }
                 

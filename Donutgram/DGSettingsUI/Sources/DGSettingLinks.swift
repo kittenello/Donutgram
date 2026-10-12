@@ -37,6 +37,7 @@ enum DGSettingsPage: String {
     case chatListTitle = "chat-list-title"
     case doubleTapSeek = "double-tap-seek"
     case camera
+    case autoplayMedia = "autoplay-media"
     case autoPause = "auto-pause"
     case musicPlaybackExceptions = "music-playback-exceptions"
     case downloads

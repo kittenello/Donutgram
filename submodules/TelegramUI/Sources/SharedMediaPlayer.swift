@@ -255,13 +255,28 @@ final class SharedMediaPlayer {
                         playbackItem.setActionAtEnd({
                             Queue.mainQueue().async {
                                 if let strongSelf = self {
+                                    // Decide from the message that just ended, before advancing the playlist.
+                                    // Manual next/play controls and music retain Telegram's normal behavior.
+                                    if strongSelf.type == .voice, let completedType = state.item?.playbackData?.type {
+                                        let shouldStop: Bool
+                                        switch completedType {
+                                        case .voice: shouldStop = DGSimpleSettings.shared.shouldStopAfterMedia(isRoundVideo: false)
+                                        case .instantVideo: shouldStop = DGSimpleSettings.shared.shouldStopAfterMedia(isRoundVideo: true)
+                                        case .music: shouldStop = false
+                                        }
+                                        if shouldStop {
+                                            strongSelf.playbackItem?.pause()
+                                            strongSelf.playedToEnd?()
+                                            return
+                                        }
+                                    }
                                     switch strongSelf.playlist.looping {
                                         case .item:
                                             strongSelf.playbackItem?.seek(0.0)
                                             strongSelf.playbackItem?.play()
                                         default:
                                             strongSelf.scheduledPlaybackAction = .play
-                                            strongSelf.control(.next)
+                                            strongSelf.playlist.control(.next)
                                     }
                                 }
                             }

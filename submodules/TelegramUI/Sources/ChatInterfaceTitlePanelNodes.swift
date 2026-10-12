@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import TelegramCore
 import AccountContext
@@ -248,7 +249,7 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
 /// bot bar for the lifetime of every transient context (an in-progress request, a toast) that
 /// displaces the report bar without showing it.
 func managingBotTitlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, displayedTitlePanel: ChatTitleAccessoryPanelNode?, currentPanel: ChatManagingBotTitlePanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ChatManagingBotTitlePanelNode? {
-    guard let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil else {
+    guard let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil, DGSimpleSettings.shared.shouldShowBotAutomation() else {
         return nil
     }
     if chatPresentationInterfaceState.peerIsBlocked {

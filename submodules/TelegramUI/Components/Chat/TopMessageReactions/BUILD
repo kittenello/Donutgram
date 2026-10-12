@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGSimpleSettings",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/AccountContext",

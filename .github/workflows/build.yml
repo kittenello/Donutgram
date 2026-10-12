@@ -35,6 +35,15 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Check chat settings behavior and persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          swiftc Donutgram/DGSimpleSettings/Sources/*.swift Donutgram/DGFeatureTests/SettingsBehavior/main.swift -o "$RUNNER_TEMP/dg-settings-checks"
+          suite="donutgram-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          "$RUNNER_TEMP/dg-settings-checks" write "$suite"
+          "$RUNNER_TEMP/dg-settings-checks" read "$suite"
+
       - name: Validate Telegram API credentials
         shell: bash
         run: |
