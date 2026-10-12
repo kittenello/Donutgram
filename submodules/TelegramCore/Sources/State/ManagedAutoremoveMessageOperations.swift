@@ -82,7 +82,12 @@ func managedAutoremoveMessageOperations(network: Network, postbox: Postbox, isRe
                     Logger.shared.log("Autoremove", "Performing autoremove for \(entry.messageId), isRemove: \(isRemove)")
 
                     if let message = transaction.getMessage(entry.messageId) {
-                        if message.id.peerId.namespace == Namespaces.Peer.SecretChat || isRemove {
+                        if isRemove && message.id.peerId.namespace != Namespaces.Peer.SecretChat && donutgramPreserveDeletedMessage(transaction: transaction, messageId: message.id) {
+                            // Donutgram: the auto-delete timer is a deletion too, so the message is
+                            // saved like one. Dropping the entry lets the queue move on.
+                            transaction.clearTimestampBasedAttribute(id: entry.messageId, tag: tag)
+                            Logger.shared.log("Autoremove", "Keeping Donutgram deleted message \(entry.messageId)")
+                        } else if message.id.peerId.namespace == Namespaces.Peer.SecretChat || isRemove {
                             _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: [entry.messageId])
                         } else if donutgramKeepsSavedViewOnce(message) {
                             // Donutgram: a saved view-once message keeps its media. Dropping
