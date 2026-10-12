@@ -112,6 +112,11 @@ func managedSynchronizeAppLogEventsOperations(postbox: Postbox, network: Network
 }
 
 private func synchronizeAppLogEvents(transaction: Transaction, postbox: Postbox, network: Network, operations: [SynchronizeAppLogEventsOperation]) -> Signal<Void, NoError> {
+    // Donutgram: with «Отправлять статистику в Telegram» off, events queued earlier are dropped
+    // unsent: the caller removes them once this completes.
+    if !donutgramSendsTelegramStatistics() {
+        return .complete()
+    }
     var events: [Api.InputAppEvent] = []
     for operation in operations {
         switch operation.content {

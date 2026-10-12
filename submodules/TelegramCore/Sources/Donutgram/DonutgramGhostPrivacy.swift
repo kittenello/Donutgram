@@ -32,3 +32,10 @@ func donutgramGhostModeDropsScreenshotNotifications(_ messages: [(Bool, EnqueueM
 func donutgramRequestGhostOfflineAfterAction(accountPeerId: PeerId) {
     DGSimpleSettings.shared.requestGhostOffline(accountPeerId: accountPeerId.toInt64())
 }
+
+/// Whether the app may send Telegram its statistics: app analytics events (`help.saveAppLog`),
+/// the short service log sent after some request errors, and call quality data. Off by default.
+/// Network telemetry stays off either way (NetworkTelemetry.swift).
+func donutgramSendsTelegramStatistics() -> Bool {
+    return DGSimpleSettings.shared.sendTelegramStatistics
+}
