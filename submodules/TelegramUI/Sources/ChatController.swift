@@ -9215,7 +9215,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             
             if commit || !isScheduledMessages {
-                if !isGhostScheduledSend {
+                // A secret chat is never diverted (no scheduled messages there), so its send is a usual one.
+                if !shouldDivert {
                     self.commitPurposefulAction()
                 }
                 
