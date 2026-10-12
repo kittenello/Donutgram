@@ -1937,6 +1937,16 @@ public final class AccountStateManager {
         }
     }
     
+    /// Until when message notifications should be held back because the account is online on another device
+    /// (its own `updateUserStatus`), as the server does for pushes; nil or past when it is not.
+    public var delayNotificationsUntil: Signal<Int32?, NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            subscriber.putNext(impl.getDelayNotificatonsUntil())
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+    }
+    
     public var reactionNotifications: Signal<[(reactionAuthor: Peer, reaction: MessageReaction.Reaction, message: Message, timestamp: Int32)], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.reactionNotifications.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)

@@ -2,6 +2,7 @@ import Foundation
 import BackgroundTasks
 import AVFAudio
 import UIKit
+import UserNotifications
 import SwiftSignalKit
 import TelegramCore
 import TelegramCallsUI
@@ -94,6 +95,9 @@ public final class SharedWakeupManager {
     private var silenceAudioRenderer: MediaPlayerAudioRenderer?
     private let donutgramKeepAlive = DonutgramBackgroundKeepAlive()
     private var donutgramSettingsObserver: NSObjectProtocol?
+    private var donutgramBackgroundNotificationsEnabled = DGSimpleSettings.shared.backgroundNotifications
+    /// Whether notifications may be shown at all. Unknown until the first check, so assumed until then.
+    private var donutgramNotificationsAuthorized = true
     
     private var accountsAndTasks: [(Account, Bool, AccountTasks)] = []
     
@@ -130,7 +134,14 @@ public final class SharedWakeupManager {
             return !self.inForeground && !self.hasActiveAudioSession
         }
         self.donutgramSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
-            self?.checkTasks()
+            guard let self else {
+                return
+            }
+            let enabled = DGSimpleSettings.shared.backgroundNotifications
+            if self.donutgramBackgroundNotificationsEnabled != enabled {
+                self.donutgramBackgroundNotificationsEnabled = enabled
+                self.checkTasks()
+            }
         })
         
         self.accountSettingsDisposable = (activeAccounts
@@ -162,6 +173,7 @@ public final class SharedWakeupManager {
                 return
             }
             strongSelf.inForeground = value
+            strongSelf.refreshDonutgramNotificationAuthorization()
             if value {
                 strongSelf.activeExplicitExtensionTimer?.invalidate()
                 strongSelf.activeExplicitExtensionTimer = nil
@@ -1150,33 +1162,54 @@ public final class SharedWakeupManager {
         }*/
     }
     
-    /// Without APNs the background connection is the only way messages arrive, so it is kept while the app is
-    /// in the background: by the silent keep-alive, or by Telegram's own audio when that holds the session.
-    private var donutgramKeepsBackgroundConnection: Bool {
-        return !self.inForeground && DGSimpleSettings.shared.backgroundNotifications && (self.donutgramKeepAlive.isActive || self.hasActiveAudioSession)
+    private var donutgramNotificationsWanted: Bool {
+        return self.donutgramBackgroundNotificationsEnabled && self.donutgramNotificationsAuthorized
+    }
+    
+    /// Without APNs an account's own connection is the only way its messages arrive, so every account stays
+    /// connected while the app runs: in the foreground, and in the background while the silent keep-alive or
+    /// Telegram's own audio keeps the app alive. Telegram itself connects only the primary account in the
+    /// foreground and relies on pushes for the rest.
+    private var donutgramKeepsConnections: Bool {
+        return self.donutgramNotificationsWanted && (self.inForeground || self.donutgramKeepAlive.isActive || self.hasActiveAudioSession)
     }
     
     private func updateDonutgramKeepAlive(hasActiveCalls: Bool) {
-        let shouldRun = !self.inForeground && !self.hasActiveAudioSession && !hasActiveCalls && DGSimpleSettings.shared.backgroundNotifications && !self.accountsAndTasks.isEmpty
+        let shouldRun = !self.inForeground && !self.hasActiveAudioSession && !hasActiveCalls && self.donutgramNotificationsWanted && !self.accountsAndTasks.isEmpty
         if shouldRun {
             self.donutgramKeepAlive.start()
         } else {
-            // Telegram's own audio holder may own the session now; only give it back when nothing else uses it.
+            // Telegram's own audio may hold the session now; only give it back when nothing else uses it.
             self.donutgramKeepAlive.stop(releaseSession: !self.hasActiveAudioSession && !hasActiveCalls)
         }
     }
     
+    /// Keeping the app alive is pointless while it may not show notifications, so it follows the permission,
+    /// which can only change in Settings while the app is in the background.
+    private func refreshDonutgramNotificationAuthorization() {
+        UNUserNotificationCenter.current().getNotificationSettings(completionHandler: { [weak self] settings in
+            let authorized = settings.authorizationStatus != .denied && settings.authorizationStatus != .notDetermined
+            Queue.mainQueue().async {
+                guard let self, self.donutgramNotificationsAuthorized != authorized else {
+                    return
+                }
+                self.donutgramNotificationsAuthorized = authorized
+                self.checkTasks()
+            }
+        })
+    }
+    
     private func updateAccounts(hasTasks: Bool, endTaskAfterTransactionsComplete: UIBackgroundTaskIdentifier?) {
         let hasBackgroundLocationTask = self.accountsAndTasks.contains(where: { $0.2.backgroundLocation })
-        let donutgramKeepsBackgroundConnection = self.donutgramKeepsBackgroundConnection
+        let donutgramKeepsConnections = self.donutgramKeepsConnections
         
-        if self.inForeground || self.hasActiveAudioSession || donutgramKeepsBackgroundConnection || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil {
+        if self.inForeground || self.hasActiveAudioSession || donutgramKeepsConnections || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil {
             Logger.shared.log("Wakeup", "enableBeginTransactions: true (active)")
             
             for (account, primary, tasks) in self.accountsAndTasks {
                 account.postbox.setCanBeginTransactions(true)
                 
-                if (self.inForeground && primary) || donutgramKeepsBackgroundConnection || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) {
+                if (self.inForeground && primary) || donutgramKeepsConnections || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) {
                     account.shouldBeServiceTaskMaster.set(.single(.always))
                 } else {
                     account.shouldBeServiceTaskMaster.set(.single(.never))

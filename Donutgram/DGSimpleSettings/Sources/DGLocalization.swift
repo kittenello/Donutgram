@@ -46,7 +46,7 @@ private let dgEnglishStrings: [String: String] = [
     "Ускорение отправки": "Upload Acceleration",
     "Уведомления": "Notifications",
     "Уведомления в фоне": "Background Notifications",
-    "Telegram не присылает пуш-уведомления в установленную сборку, поэтому Donutgram сам держит соединение в фоне и показывает уведомления о новых сообщениях. Расходует больше заряда. Если закрыть приложение смахиванием, уведомления не придут до следующего запуска.": "Telegram does not send push notifications to this build, so Donutgram keeps its own connection in the background and shows notifications for new messages. This uses more battery. If you swipe the app away, notifications stop until you open it again.",
+    "Telegram не присылает пуш-уведомления в установленную сборку, поэтому Donutgram сам держит соединение в фоне и показывает уведомления о новых сообщениях. Нужно разрешение на уведомления. Расходует больше заряда. Если закрыть приложение смахиванием или перезагрузить телефон, уведомления не придут до следующего запуска.": "Telegram does not send push notifications to this build, so Donutgram keeps its own connection in the background and shows notifications for new messages. Notifications must be allowed. This uses more battery. If you swipe the app away or restart the phone, notifications stop until you open it again.",
     "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео.": "Ultra uses more simultaneous connections. On slow networks this may affect downloads and video playback.",
     "Другое": "Other",
     "Визуальный номер": "Visual Phone Number",
