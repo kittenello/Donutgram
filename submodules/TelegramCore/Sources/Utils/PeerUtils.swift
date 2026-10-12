@@ -225,6 +225,15 @@ public extension Peer {
         }
     }
     
+    /// Use for badges only; isVerified remains the unmodified server trust flag.
+    var donutgramDisplayIsVerified: Bool {
+        return DonutgramVerificationDisplay.isVerified(self.isVerified)
+    }
+
+    var donutgramDisplayVerificationIconFileId: Int64? {
+        return DonutgramVerificationDisplay.iconFileId(self.verificationIconFileId)
+    }
+
     var isPremium: Bool {
         switch self {
         case let user as TelegramUser:

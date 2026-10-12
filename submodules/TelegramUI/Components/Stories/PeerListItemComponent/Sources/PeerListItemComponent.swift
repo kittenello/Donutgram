@@ -877,7 +877,7 @@ public final class PeerListItemComponent: Component {
                     if let color = emojiStatus.color {
                         particleColor = UIColor(rgb: UInt32(bitPattern: color))
                     }
-                } else if peer.isVerified {
+                } else if peer.donutgramDisplayIsVerified {
                     statusIcon = .verified(fillColor: component.theme.list.itemCheckColors.fillColor, foregroundColor: component.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
                 } else if !hidesPremiumStatus, peer.isPremium {
                     statusIcon = .premium(color: component.theme.list.itemAccentColor)

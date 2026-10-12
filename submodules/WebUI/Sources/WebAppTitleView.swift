@@ -120,7 +120,7 @@ public final class WebAppTitleView: UIView {
         var totalWidth = titleSize.width
         let topOffset = self.isAttachMenu ? 3.0 : 0.0
         
-        if self.title.isVerified {
+        if DonutgramVerificationDisplay.isVerified(self.title.isVerified) {
             let statusContent: EmojiStatusComponent.Content = .verified(fillColor: self.theme.list.itemCheckColors.fillColor, foregroundColor: self.theme.list.itemCheckColors.foregroundColor, sizeType: .large)
             let titleCredibilityIconTransition: ComponentTransition = .immediate
             

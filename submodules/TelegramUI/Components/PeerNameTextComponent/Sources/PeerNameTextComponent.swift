@@ -96,7 +96,7 @@ public final class PeerNameTextComponent: Component {
                     iconContent = .text(color: UIColor(rgb: 0xeb5545), string: component.strings.Message_FakeAccount.uppercased())
                 }
                 
-                if peer.isVerified {
+                if peer.donutgramDisplayIsVerified {
                     iconContent = .verified(fillColor: component.iconBackgroundColor, foregroundColor: component.iconForegroundColor, sizeType: .compact)
                 }
             }

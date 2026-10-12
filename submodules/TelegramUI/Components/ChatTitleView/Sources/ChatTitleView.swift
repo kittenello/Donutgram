@@ -319,10 +319,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         titleCredibilityIcon = .premium
                                     }
                                     
-                                    if peer.isVerified {
+                                    if peer.donutgramDisplayIsVerified {
                                         titleCredibilityIcon = .verified
                                     }
-                                    if let verificationIconFileId = peer.verificationIconFileId {
+                                    if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                                         titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                                     }
                                 }

@@ -243,7 +243,7 @@ final class FullscreenControlsComponent: Component {
                 }
             }
             
-            if component.isVerified {
+            if DonutgramVerificationDisplay.isVerified(component.isVerified) {
                 let credibilitySize = self.credibility.update(
                     transition: .immediate,
                     component: AnyComponent(BundleIconComponent(name: "Instant View/Verified", tintColor: textColor)),

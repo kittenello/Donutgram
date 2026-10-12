@@ -615,10 +615,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             } else {
                 credibilityIcon = .none
             }
-            if peer.isVerified {
+            if peer.donutgramDisplayIsVerified {
                 credibilityIcon = .verified
             }
-            if let verificationIconFileId = peer.verificationIconFileId {
+            if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
             }
             if donutgramBadge(peerId: peer.id) != nil {
@@ -1207,7 +1207,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let usernameString: (text: String, attributes: MultiScaleTextState.Attributes)
         if let peer = peer {
             isPremium = peer.isPremium
-            isVerified = peer.isVerified
+            isVerified = peer.donutgramDisplayIsVerified
             isFake = peer.isFake || peer.isScam
         }
         

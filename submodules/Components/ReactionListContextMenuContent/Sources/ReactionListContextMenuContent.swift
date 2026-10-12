@@ -642,7 +642,7 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
                     currentCredibilityIcon = .text(color: presentationData.theme.chat.message.incoming.scamColor, string: presentationData.strings.Message_FakeAccount.uppercased())
                 } else if !hidesPremiumStatus, let emojiStatus = item.peer.emojiStatus {
                     currentCredibilityIcon = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: UIColor(white: 0.0, alpha: 0.1), themeColor: presentationData.theme.list.itemAccentColor, loopMode: .count(2))
-                } else if item.peer.isVerified {
+                } else if item.peer.donutgramDisplayIsVerified {
                     currentCredibilityIcon = .verified(fillColor: presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
                 } else if !hidesPremiumStatus, item.peer.isPremium && !premiumConfiguration.isPremiumDisabled {
                     currentCredibilityIcon = .premium(color: presentationData.theme.list.itemCheckColors.fillColor)

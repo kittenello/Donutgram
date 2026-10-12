@@ -448,7 +448,7 @@ public class ItemListAvatarAndNameInfoItemNode: ListViewItemNode, ItemListItemNo
                 } else if peer.isFake {
                     credibilityIconImage = PresentationResourcesChatList.fakeIcon(item.presentationData.theme, strings: item.presentationData.strings, type: .regular)
                     credibilityIconOffset = 2.0
-                } else if peer.isVerified {
+                } else if peer.donutgramDisplayIsVerified {
                     credibilityIconImage = PresentationResourcesItemList.verifiedPeerIcon(item.presentationData.theme)
                 } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled && !donutgramHidesPremiumStatus(peerId: peer.id, accountPeerId: item.itemContext.accountPeerId) {
                     credibilityIconImage = PresentationResourcesChatList.premiumIcon(item.presentationData.theme)

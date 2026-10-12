@@ -513,6 +513,14 @@ public extension EnginePeer {
         return self._asPeer().isVerified
     }
     
+    var donutgramDisplayIsVerified: Bool {
+        return self._asPeer().donutgramDisplayIsVerified
+    }
+
+    var donutgramDisplayVerificationIconFileId: Int64? {
+        return self._asPeer().donutgramDisplayVerificationIconFileId
+    }
+
     var isPremium: Bool {
         return self._asPeer().isPremium
     }

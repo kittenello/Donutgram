@@ -997,7 +997,7 @@ public final class StoryPeerListItemComponent: Component {
             let iconSpacing: CGFloat = 1.0
             
             var currentVerifiedIconContent: EmojiStatusComponent.Content?
-            if component.peer.isVerified {
+            if component.peer.donutgramDisplayIsVerified {
                 currentVerifiedIconContent = .verified(fillColor: component.theme.list.itemCheckColors.fillColor, foregroundColor: component.theme.list.itemCheckColors.foregroundColor, sizeType: .smaller)
             }
             var titleConstrainedSize = CGSize(width: availableSize.width + 12.0, height: 100.0)

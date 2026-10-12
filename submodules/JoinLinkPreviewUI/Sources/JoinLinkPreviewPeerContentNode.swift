@@ -281,7 +281,7 @@ final class JoinLinkPreviewPeerContentNode: ASDisplayNode, ShareContentContainer
         } else if self.content.isScam {
             statusIcon = .text(color: self.theme.chat.message.incoming.scamColor, string: self.strings.Message_ScamAccount.uppercased())
             constrainedTextSize.width -= 32.0
-        } else if self.content.isVerified {
+        } else if DonutgramVerificationDisplay.isVerified(self.content.isVerified) {
             statusIcon = .verified(fillColor: self.theme.list.itemCheckColors.fillColor, foregroundColor: self.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
             constrainedTextSize.width -= 24.0
         }

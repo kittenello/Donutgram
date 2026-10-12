@@ -295,7 +295,11 @@ private final class JoinSubjectSheetContentComponent: Component {
                     subtitleString = environment.strings.Conversation_StatusSubscribers(group.memberCount)
                 }
                 descriptionTextString = group.about
-                verificationStatus = group.verificationStatus
+                if case .verified? = group.verificationStatus, DonutgramVerificationDisplay.isHidden {
+                    verificationStatus = nil
+                } else {
+                    verificationStatus = group.verificationStatus
+                }
                 requestDescriptionString = group.isRequest ? (group.isGroup ? environment.strings.MemberRequests_RequestToJoinDescriptionGroup : environment.strings.MemberRequests_RequestToJoinDescriptionChannel) : nil
 
                 previewPeers = group.members

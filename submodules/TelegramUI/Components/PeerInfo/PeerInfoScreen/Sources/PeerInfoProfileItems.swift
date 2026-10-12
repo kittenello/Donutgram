@@ -561,7 +561,7 @@ func infoItems(
                     }))
                 }
                                 
-                if let verification = (data.cachedData as? CachedUserData)?.verification {
+                if let verification = DonutgramVerificationDisplay.verification((data.cachedData as? CachedUserData)?.verification) {
                     let attributedPrefix = NSMutableAttributedString(string: "  ")
                     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSMakeRange(0, 1))
                     
@@ -728,7 +728,7 @@ func infoItems(
                     }))
                 }
                 
-                if let verification = (data.cachedData as? CachedChannelData)?.verification {
+                if let verification = DonutgramVerificationDisplay.verification((data.cachedData as? CachedChannelData)?.verification) {
                     let attributedPrefix = NSMutableAttributedString(string: "  ")
                     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSMakeRange(0, 1))
                     

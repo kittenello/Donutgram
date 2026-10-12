@@ -1,0 +1,37 @@
+name: Hide verification tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/DGSimpleSettings/**'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramVerificationDisplay.swift'
+      - 'submodules/TelegramCore/Sources/Utils/PeerUtils.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/Peer.swift'
+      - 'submodules/TelegramUI/**'
+      - 'submodules/ChatListUI/**'
+      - 'submodules/WebUI/**'
+      - 'submodules/JoinLinkPreviewUI/**'
+      - 'submodules/TelegramCallsUI/**'
+      - 'submodules/ContactsPeerItem/**'
+      - 'submodules/ItemListPeerItem/**'
+      - 'submodules/ItemListAvatarAndNameInfoItem/**'
+      - 'submodules/CallListUI/**'
+      - 'submodules/Components/ReactionListContextMenuContent/**'
+      - 'Tests/hide_verification/**'
+      - '.github/workflows/hide-verification-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: Compile production getters and test persistence, restoration and team badges
+        run: python3 Tests/hide_verification/run.py

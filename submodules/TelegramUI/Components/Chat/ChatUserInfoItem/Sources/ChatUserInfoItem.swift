@@ -404,7 +404,7 @@ public final class ChatUserInfoItemNode: ListViewItemNode, ASGestureRecognizerDe
             backgroundSize.width = horizontalContentInset * 2.0 + maxTitleWidth + attributeSpacing + maxValueWidth
             
             let disclaimerText: NSMutableAttributedString
-            if let verification = item.verification {
+            if let verification = DonutgramVerificationDisplay.verification(item.verification) {
                 let textFont = Font.regular(13.0)
                 let iconPrefix = " #  "
                 let iconPrefixLength = (iconPrefix as NSString).length
