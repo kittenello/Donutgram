@@ -197,6 +197,7 @@ public final class DGSimpleSettings {
         static let openArchiveOnPull = "donutgram.chats.openArchiveOnPull"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
         static let accelerateUpload = "donutgram.network.accelerateUpload"
+        static let backgroundNotifications = "donutgram.notifications.background"
     }
 
     private let defaults: UserDefaults
@@ -777,6 +778,12 @@ public final class DGSimpleSettings {
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
     public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
     public var hideBirthdayNotifications: Bool { get { bool(Key.hideBirthdayNotifications) } set { setBool(newValue, Key.hideBirthdayNotifications) } }
+    /// A sideloaded build gets no APNs pushes from Telegram, so by default the app keeps its own connection in the
+    /// background and posts message notifications locally.
+    public var backgroundNotifications: Bool {
+        get { defaults.object(forKey: Key.backgroundNotifications) == nil ? true : bool(Key.backgroundNotifications) }
+        set { setBool(newValue, Key.backgroundNotifications) }
+    }
     public var hideViaBot: Bool { get { bool(Key.hideViaBot) } set { setBool(newValue, Key.hideViaBot) } }
     public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }
     public var removeLinkPreviews: Bool { get { bool(Key.removeLinkPreviews) } set { setBool(newValue, Key.removeLinkPreviews) } }

@@ -199,13 +199,15 @@ final class SharedApplicationContext {
     let sharedContext: SharedAccountContextImpl
     let notificationManager: SharedNotificationManager
     let wakeupManager: SharedWakeupManager
+    let donutgramLocalNotificationManager: DonutgramLocalNotificationManager
     let overlayMediaController: ViewController & OverlayMediaController
     var minimizedContainer: [AccountRecordId: MinimizedContainer] = [:]
     
-    init(sharedContext: SharedAccountContextImpl, notificationManager: SharedNotificationManager, wakeupManager: SharedWakeupManager) {
+    init(sharedContext: SharedAccountContextImpl, notificationManager: SharedNotificationManager, wakeupManager: SharedWakeupManager, donutgramLocalNotificationManager: DonutgramLocalNotificationManager) {
         self.sharedContext = sharedContext
         self.notificationManager = notificationManager
         self.wakeupManager = wakeupManager
+        self.donutgramLocalNotificationManager = donutgramLocalNotificationManager
         self.overlayMediaController = OverlayMediaControllerImpl()
     }
 }
@@ -1249,7 +1251,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }, presentationData: {
                 return sharedContext.currentPresentationData.with({ $0 })
             })
-            let sharedApplicationContext = SharedApplicationContext(sharedContext: sharedContext, notificationManager: notificationManager, wakeupManager: wakeupManager)
+            let donutgramLocalNotificationManager = DonutgramLocalNotificationManager(sharedContext: sharedContext, inForeground: applicationBindings.applicationInForeground)
+            let sharedApplicationContext = SharedApplicationContext(sharedContext: sharedContext, notificationManager: notificationManager, wakeupManager: wakeupManager, donutgramLocalNotificationManager: donutgramLocalNotificationManager)
             sharedApplicationContext.sharedContext.mediaManager.overlayMediaManager.attachOverlayMediaController(sharedApplicationContext.overlayMediaController)
             
             return accountManager.transaction { transaction -> (SharedApplicationContext, LoggingSettings) in

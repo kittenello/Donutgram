@@ -9,6 +9,7 @@ import AccountContext
 import UniversalMediaPlayer
 import TelegramAudio
 import TelegramPresentationData
+import DGSimpleSettings
 
 private struct AccountTasks {
     let stateSynchronization: Bool
@@ -91,6 +92,8 @@ public final class SharedWakeupManager {
     private var managedPausedInBackgroundPlayer: Disposable?
     private var keepIdleDisposable: Disposable?
     private var silenceAudioRenderer: MediaPlayerAudioRenderer?
+    private let donutgramKeepAlive = DonutgramBackgroundKeepAlive()
+    private var donutgramSettingsObserver: NSObjectProtocol?
     
     private var accountsAndTasks: [(Account, Bool, AccountTasks)] = []
     
@@ -119,6 +122,16 @@ public final class SharedWakeupManager {
         self.backgroundTimeRemaining = backgroundTimeRemaining
         self.acquireIdleExtension = acquireIdleExtension
         self.presentationData = presentationData
+        
+        self.donutgramKeepAlive.canReclaimSession = { [weak self] in
+            guard let self else {
+                return false
+            }
+            return !self.inForeground && !self.hasActiveAudioSession
+        }
+        self.donutgramSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.checkTasks()
+        })
         
         self.accountSettingsDisposable = (activeAccounts
         |> mapToSignal { activeAccounts -> Signal<Bool, NoError> in
@@ -358,6 +371,9 @@ public final class SharedWakeupManager {
         self.accountSettingsDisposable?.dispose()
         self.inForegroundDisposable?.dispose()
         self.hasActiveAudioSessionDisposable?.dispose()
+        if let donutgramSettingsObserver = self.donutgramSettingsObserver {
+            NotificationCenter.default.removeObserver(donutgramSettingsObserver)
+        }
         self.tasksDisposable?.dispose()
         self.pendingMediaUploadsDisposable?.dispose()
         self.pendingStoryUploadsDisposable?.dispose()
@@ -1097,6 +1113,8 @@ public final class SharedWakeupManager {
             }
         }
         
+        self.updateDonutgramKeepAlive(hasActiveCalls: hasActiveCalls)
+        
         self.updateAccounts(hasTasks: hasTasksForBackgroundExtension, endTaskAfterTransactionsComplete: endTaskAfterTransactionsComplete)
         
         /*if !self.inForeground && pendingMessageCount != 0 && !self.hasActiveAudioSession {
@@ -1132,16 +1150,33 @@ public final class SharedWakeupManager {
         }*/
     }
     
+    /// Without APNs the background connection is the only way messages arrive, so it is kept while the app is
+    /// in the background: by the silent keep-alive, or by Telegram's own audio when that holds the session.
+    private var donutgramKeepsBackgroundConnection: Bool {
+        return !self.inForeground && DGSimpleSettings.shared.backgroundNotifications && (self.donutgramKeepAlive.isActive || self.hasActiveAudioSession)
+    }
+    
+    private func updateDonutgramKeepAlive(hasActiveCalls: Bool) {
+        let shouldRun = !self.inForeground && !self.hasActiveAudioSession && !hasActiveCalls && DGSimpleSettings.shared.backgroundNotifications && !self.accountsAndTasks.isEmpty
+        if shouldRun {
+            self.donutgramKeepAlive.start()
+        } else {
+            // Telegram's own audio holder may own the session now; only give it back when nothing else uses it.
+            self.donutgramKeepAlive.stop(releaseSession: !self.hasActiveAudioSession && !hasActiveCalls)
+        }
+    }
+    
     private func updateAccounts(hasTasks: Bool, endTaskAfterTransactionsComplete: UIBackgroundTaskIdentifier?) {
         let hasBackgroundLocationTask = self.accountsAndTasks.contains(where: { $0.2.backgroundLocation })
+        let donutgramKeepsBackgroundConnection = self.donutgramKeepsBackgroundConnection
         
-        if self.inForeground || self.hasActiveAudioSession || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil {
+        if self.inForeground || self.hasActiveAudioSession || donutgramKeepsBackgroundConnection || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil {
             Logger.shared.log("Wakeup", "enableBeginTransactions: true (active)")
             
             for (account, primary, tasks) in self.accountsAndTasks {
                 account.postbox.setCanBeginTransactions(true)
                 
-                if (self.inForeground && primary) || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) {
+                if (self.inForeground && primary) || donutgramKeepsBackgroundConnection || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) {
                     account.shouldBeServiceTaskMaster.set(.single(.always))
                 } else {
                     account.shouldBeServiceTaskMaster.set(.single(.never))

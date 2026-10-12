@@ -13,6 +13,9 @@ if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
+    check(settings.backgroundNotifications, "background notifications must be on by default")
+    settings.backgroundNotifications = false
+    check(!settings.backgroundNotifications, "background notifications can be turned off")
     for enabled in [false, true] {
         settings.disableMediaAutoplay = enabled
         for mask in 0 ... 3 {
@@ -40,6 +43,7 @@ if mode == "write" {
 } else if mode == "read" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
+    check(!settings.backgroundNotifications, "turning background notifications off must survive process restart")
     check(settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 1, "autoplay preferences must survive process restart")
     check(settings.shouldStopAfterMedia(isRoundVideo: false) && !settings.shouldStopAfterMedia(isRoundVideo: true), "persisted selection stops after voice but allows continuation after round videos")
     settings.disableMediaAutoplay = false
