@@ -822,6 +822,12 @@ public final class Transaction {
         self.postbox?.clearItemCacheCollection(collectionId: collectionId)
     }
     
+    /// The keys of every entry in a collection, without reading the entries.
+    public func getItemCacheEntryKeys(collectionId: ItemCacheCollectionId) -> [ValueBoxKey] {
+        assert(!self.disposed)
+        return self.postbox?.itemCacheTable.keys(collectionId: collectionId) ?? []
+    }
+    
     public func operationLogGetNextEntryLocalIndex(peerId: PeerId, tag: PeerOperationLogTag) -> Int32 {
         assert(!self.disposed)
         if let postbox = self.postbox {

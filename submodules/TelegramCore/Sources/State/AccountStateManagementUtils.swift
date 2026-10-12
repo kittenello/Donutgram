@@ -4595,7 +4595,7 @@ func replayFinalState(
                 for message in messages {
                     if case let .Id(id) = message.id, let _ = transaction.getMessage(id) {
                         transaction.updateMessage(id) { currentMessage -> PostboxUpdateMessage in
-                            return .update(donutgramPreservingLocalState(previous: currentMessage, updated: message))
+                            return .update(donutgramPreservingLocalState(transaction: transaction, previous: currentMessage, updated: message))
                         }
                     } else {
                         let _ = transaction.addMessages(donutgramPreservingLocalState(transaction: transaction, messages: messages), location: .Random)

@@ -173,16 +173,18 @@ private func donutgramPublishedPseudoReplyCopy(transaction: Transaction, id: Mes
 }
 
 /// Returns `updated`, a server copy about to replace the stored `previous`, with the state
-/// that only this client keeps: saved view-once media and the local form of a pseudo-reply.
-func donutgramPreservingLocalState(previous: Message, updated: StoreMessage) -> StoreMessage {
-    return donutgramPseudoReplyLocalForm(previous: previous, updated: donutgramPreservingSavedViewOnceMedia(previous: previous, updated: updated))
+/// that only this client keeps: saved view-once media, the local form of a pseudo-reply and
+/// the edit history (the text it replaces is stored as a revision).
+func donutgramPreservingLocalState(transaction: Transaction, previous: Message, updated: StoreMessage) -> StoreMessage {
+    let updated = donutgramPseudoReplyLocalForm(previous: previous, updated: donutgramPreservingSavedViewOnceMedia(previous: previous, updated: updated))
+    return donutgramPreservingEditHistory(transaction: transaction, previous: previous, updated: updated)
 }
 
-/// `donutgramPreservingLocalState(previous:updated:)` for server messages passed to
+/// `donutgramPreservingLocalState(transaction:previous:updated:)` for server messages passed to
 /// `Transaction.addMessages`, which replaces the text, attributes and media of a message
 /// that is already stored. A published scheduled pseudo-reply gets its local form as well.
 func donutgramPreservingLocalState(transaction: Transaction, messages: [StoreMessage]) -> [StoreMessage] {
-    return donutgramPreservingSavedViewOnceMedia(transaction: transaction, messages: messages).map { message -> StoreMessage in
+    let result = donutgramPreservingSavedViewOnceMedia(transaction: transaction, messages: messages).map { message -> StoreMessage in
         // Pseudo-replies are outgoing.
         guard !message.flags.contains(.Incoming), case let .Id(id) = message.id else {
             return message
@@ -195,6 +197,8 @@ func donutgramPreservingLocalState(transaction: Transaction, messages: [StoreMes
             return message
         }
     }
+    donutgramStoreRevisionsOfReplacedMessages(transaction: transaction, messages: result)
+    return result
 }
 
 /// `updateDeleteScheduledMessages` pairs published messages with their scheduled copies,

@@ -190,6 +190,75 @@ public func donutgramMessageRevisions(
     }
 }
 
+/// `updated`, a server copy about to replace the stored `previous`, with its edit history kept:
+/// the text it replaces is stored as a revision and the edit-history marker stays.
+func donutgramPreservingEditHistory(transaction: Transaction, previous: Message, updated: StoreMessage) -> StoreMessage {
+    guard donutgramStorePreviousMessageRevision(transaction: transaction, previousMessage: previous, updatedText: updated.text), !updated.localTags.contains(.donutgramHasEditHistory) else {
+        return updated
+    }
+    var localTags = updated.localTags
+    localTags.insert(.donutgramHasEditHistory)
+    return updated.withUpdatedLocalTags(localTags)
+}
+
+/// Stores the revisions that `messages`, server copies passed to `Transaction.addMessages`, are
+/// about to replace. `addMessages` keeps the local tags of a stored message, so the marker goes
+/// on the stored message first.
+func donutgramStoreRevisionsOfReplacedMessages(transaction: Transaction, messages: [StoreMessage]) {
+    guard DGSimpleSettings.shared.saveEditHistory else {
+        return
+    }
+    for message in messages {
+        // A copy without an edit date still has the text it was sent with.
+        guard case let .Id(id) = message.id, id.namespace == Namespaces.Message.Cloud, message.attributes.contains(where: { $0 is EditedMessageAttribute }), let previous = transaction.getMessage(id) else {
+            continue
+        }
+        if donutgramStorePreviousMessageRevision(transaction: transaction, previousMessage: previous, updatedText: message.text) && !previous.localTags.contains(.donutgramHasEditHistory) {
+            transaction.updateMessage(id, update: { currentMessage in
+                var localTags = currentMessage.localTags
+                localTags.insert(.donutgramHasEditHistory)
+                return .update(donutgramMessageWithUpdatedLocalTags(currentMessage, localTags: localTags))
+            })
+        }
+    }
+}
+
+func donutgramRemoveMessageRevisions(transaction: Transaction, messageIds: [MessageId]) {
+    for id in messageIds {
+        transaction.removeItemCacheEntry(id: donutgramRevisionCacheId(id))
+    }
+}
+
+/// Drops the edit history of messages that are no longer stored (deleted, or removed with their
+/// chat): nothing can show it, and the item cache never evicts it. A few hundred entries are
+/// checked per transaction, so a long history does not hold the Postbox queue.
+func donutgramRemoveOrphanedMessageRevisions(postbox: Postbox) -> Signal<Never, NoError> {
+    let collectionId = Namespaces.CachedItemCollection.donutgramEditHistory
+    return postbox.transaction { transaction -> [ValueBoxKey] in
+        return transaction.getItemCacheEntryKeys(collectionId: collectionId)
+    }
+    |> mapToSignal { keys -> Signal<Never, NoError> in
+        let chunkSize = 256
+        var signal: Signal<Never, NoError> = .complete()
+        var chunkStart = 0
+        while chunkStart < keys.count {
+            let chunk = keys[chunkStart ..< min(chunkStart + chunkSize, keys.count)]
+            chunkStart += chunkSize
+            signal = signal
+            |> then(postbox.transaction { transaction -> Void in
+                for key in chunk where key.length == 16 {
+                    let messageId = MessageId(peerId: PeerId(key.getInt64(0)), namespace: key.getInt32(8), id: key.getInt32(12))
+                    if !transaction.messageExists(id: messageId) {
+                        transaction.removeItemCacheEntry(id: ItemCacheEntryId(collectionId: collectionId, key: key))
+                    }
+                }
+            }
+            |> ignoreValues)
+        }
+        return signal
+    }
+}
+
 
 /// Matches words and filename prefixes with the same case-insensitive semantics
 /// as local chat search. Cloud messages are not in Postbox's secret-chat text index.

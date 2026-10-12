@@ -84,6 +84,15 @@ final class ItemCacheTable: Table {
         self.valueBox.removeRange(self.table, start: self.lowerBound(collectionId: collectionId), end: self.upperBound(collectionId: collectionId))
     }
     
+    func keys(collectionId: ItemCacheCollectionId) -> [ValueBoxKey] {
+        var keys: [ValueBoxKey] = []
+        self.valueBox.range(self.table, start: self.lowerBound(collectionId: collectionId), end: self.upperBound(collectionId: collectionId), keys: { key in
+            keys.append(ValueBoxKey(key.getMemoryBuffer(2, length: key.length - 2)))
+            return true
+        }, limit: 0)
+        return keys
+    }
+    
     override func clearMemoryCache() {
         
     }

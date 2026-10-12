@@ -903,7 +903,7 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                                                 updatedLocalTags.insert(.OutgoingLiveLocation)
                                             }
                                             // Donutgram: keep the local-only state that the server copy lacks.
-                                            return .update(donutgramPreservingLocalState(previous: currentMessage, updated: message.withUpdatedLocalTags(updatedLocalTags)))
+                                            return .update(donutgramPreservingLocalState(transaction: transaction, previous: currentMessage, updated: message.withUpdatedLocalTags(updatedLocalTags)))
                                         } else {
                                             var storeForwardInfo: StoreMessageForwardInfo?
                                             if let forwardInfo = currentMessage.forwardInfo {
@@ -1157,7 +1157,7 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
                                             updatedLocalTags.insert(.OutgoingLiveLocation)
                                         }
                                         // Donutgram: keep the local-only state that the server copy lacks.
-                                        return .update(donutgramPreservingLocalState(previous: currentMessage, updated: message.withUpdatedLocalTags(updatedLocalTags)))
+                                        return .update(donutgramPreservingLocalState(transaction: transaction, previous: currentMessage, updated: message.withUpdatedLocalTags(updatedLocalTags)))
                                     } else {
                                         var storeForwardInfo: StoreMessageForwardInfo?
                                         if let forwardInfo = currentMessage.forwardInfo {

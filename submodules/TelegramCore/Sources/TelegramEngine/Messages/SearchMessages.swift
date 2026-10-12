@@ -872,7 +872,7 @@ func fetchRemoteMessage(accountPeerId: PeerId, postbox: Postbox, source: FetchMe
                         // retrying the stale reference of the kept media.
                         let keepsSavedMedia = donutgramKeepsSavedViewOnce(currentMessage) && message.media.contains(where: { $0 is TelegramMediaExpiredContent })
                         transaction.updateMessage(updatedId, update: { previousMessage in
-                            return .update(donutgramPreservingLocalState(previous: previousMessage, updated: message))
+                            return .update(donutgramPreservingLocalState(transaction: transaction, previous: previousMessage, updated: message))
                         })
                         if !keepsSavedMedia, let updatedMessage = transaction.getMessage(updatedId) {
                             renderedMessages.append(updatedMessage)
