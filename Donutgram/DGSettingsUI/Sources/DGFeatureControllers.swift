@@ -13,12 +13,14 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
     return dgController(context: context, page: .general, title: "Основные", focusKey: focusKey, entries: {
         var result: [DGListEntry] = [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .disclosure(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Включен" : "Выключен"), .header(10, 1, "ОСНОВНЫЕ"), .toggle(11, 1, "saveDeleted", "Сохранять удаленки", s.saveDeletedMessages, true)]
         if s.saveDeletedMessages { result.append(.toggle(12, 1, "transparentDeleted", "Полупрозрачные удаленки", s.semiTransparentDeletedMessages, true)) }
-        result.append(contentsOf: [.toggle(13, 1, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true), .toggle(14, 1, "saveOnce", "Сохранять одноразки", s.saveViewOnceMedia, true), .toggle(15, 1, "saveBots", "Сохранять в чатах с ботами", s.saveInBotChats, true), .toggle(16, 1, "disappearedGifts", "Видеть удаленные подарки", s.showDisappearedGifts, true), .toggle(17, 1, "saveProtectedStories", "Сохранять запрещенные истории", s.saveProtectedStories, true), .toggle(18, 1, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true)])
+        // Shown with saving off as well: what was saved before stays until it is deleted here.
+        result.append(.disclosure(13, 1, "savedDeleted", "Сохраненные удаленки", ""))
+        result.append(contentsOf: [.toggle(14, 1, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true), .toggle(15, 1, "saveOnce", "Сохранять одноразки", s.saveViewOnceMedia, true), .toggle(16, 1, "saveBots", "Сохранять в чатах с ботами", s.saveInBotChats, true), .toggle(17, 1, "disappearedGifts", "Видеть удаленные подарки", s.showDisappearedGifts, true), .toggle(18, 1, "saveProtectedStories", "Сохранять запрещенные истории", s.saveProtectedStories, true), .toggle(19, 1, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true)])
         // Its own append: one more case with a ternary in the literal above risks the compiler's type-check time limit.
         let shadowBanCount = s.shadowBannedPeerIds.count
-        result.append(.disclosure(19, 1, "shadowBan", "Теневой бан", shadowBanCount == 0 ? "Выключен" : "\(shadowBanCount)"))
-        result.append(contentsOf: [.header(20, 2, "ПЕРЕСЫЛКА"), .toggle(21, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true)])
-        result.append(contentsOf: [.toggle(22, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true), .info(23, 2, "Чаты, группы и каналы с запретом копирования не скрываются на скриншотах и записи экрана. Секретные чаты и медиа с таймером по-прежнему скрыты. Изменение применится, когда чат откроется заново.")])
+        result.append(.disclosure(20, 1, "shadowBan", "Теневой бан", shadowBanCount == 0 ? "Выключен" : "\(shadowBanCount)"))
+        result.append(contentsOf: [.header(21, 2, "ПЕРЕСЫЛКА"), .toggle(22, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true)])
+        result.append(contentsOf: [.toggle(23, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true), .info(24, 2, "Чаты, группы и каналы с запретом копирования не скрываются на скриншотах и записи экрана. Секретные чаты и медиа с таймером по-прежнему скрыты. Изменение применится, когда чат откроется заново.")])
         result.append(contentsOf: [.header(25, 3, "УСКОРЕНИЕ ЗАГРУЗКИ"), .speedSlider(26, 3, s.downloadAcceleration), .toggle(27, 3, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true), .info(28, 3, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео."), .header(30, 4, "ДРУГОЕ"), .disclosure(31, 4, "visualPhone", "Визуальный номер", s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"), .disclosure(32, 4, "visualRating", "Визуальный рейтинг", s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"), .disclosure(33, 4, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"), .disclosure(34, 4, "visualId", "Визуальный ID", s.visualProfileId(accountId: accountId).isEmpty ? "Выключен" : s.visualProfileId(accountId: accountId)), .toggle(35, 4, "localPremium", "Локальный TG Premium", s.localPremium(accountId: accountId), true)])
         if s.localPremium(accountId: accountId) {
             result.append(.info(36, 4, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
@@ -37,6 +39,7 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         case "visualUsernames": return dgVisualUsernamesController(context: context)
         case "visualId": return dgVisualIdController(context: context)
         case "shadowBan": return dgShadowBanController(context: context)
+        case "savedDeleted": return dgSavedDeletedMessagesController(context: context)
         default: return nil
         }
     })
@@ -623,6 +626,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     case .visualUsernames: makeController = dgVisualUsernamesController
     case .visualPhone: makeController = dgVisualPhoneController
     case .shadowBan: makeController = dgShadowBanController
+    case .savedDeleted: makeController = dgSavedDeletedMessagesController
     case .support: makeController = dgSupportController
     }
     return makeController(context, focusKey)

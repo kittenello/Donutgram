@@ -100,6 +100,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "online": return "person.crop.circle"
     case "typing": return "ellipsis.bubble"
     case "shadowBan": return "person.crop.circle.badge.xmark"
+    case "savedDeleted": return "internaldrive"
     default:
         if title.contains("номер") { return "phone" }
         if title.contains("истори") { return "play.rectangle" }

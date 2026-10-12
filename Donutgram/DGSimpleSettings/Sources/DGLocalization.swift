@@ -282,5 +282,16 @@ private let dgEnglishStrings: [String: String] = [
     "Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются.": "Messages from these people are hidden in groups, comments and channels on this device only. They won't be notified. Private chats are not affected.",
     "Скрытое сообщение": "Hidden Message",
     "Автор в теневом бане": "The author is shadow banned",
-    "Сообщение скрыто теневым баном": "This message is hidden by shadow ban"
+    "Сообщение скрыто теневым баном": "This message is hidden by shadow ban",
+    "Сохраненные удаленки": "Saved Deleted Messages",
+    "Хранилище": "Storage",
+    "Файлы": "Files",
+    "Удалить все": "Delete All",
+    "Удаление…": "Deleting…",
+    "Удалить": "Delete",
+    "Сохраненные удаленки хранятся только на этом устройстве. Если выключить «Сохранять удаленки», уже сохраненные останутся.": "Saved deleted messages are stored on this device only. Turning off Save Deleted Messages keeps the ones already saved.",
+    "Удалить все сохраненные удаленки?": "Delete all saved deleted messages?",
+    "Сообщения, их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.": "The messages, their edit history and downloaded files will be deleted from this device. This can't be undone.",
+    "Удалить сохраненные удаленки?": "Delete saved deleted messages?",
+    "Сохраненные удаленки из «%@», их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.": "Saved deleted messages from %@, their edit history and downloaded files will be deleted from this device. This can't be undone."
 ]
