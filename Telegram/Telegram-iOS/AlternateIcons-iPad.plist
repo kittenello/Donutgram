@@ -49,4 +49,6 @@
     <dict><key>CFBundleIconFiles</key><array><string>DgKisserRedIpad</string><string>DgKisserRedLargeIpad</string></array><key>UIPrerenderedIcon</key><true/></dict>
     <key>DgCat</key>
     <dict><key>CFBundleIconFiles</key><array><string>DgCatIpad</string><string>DgCatLargeIpad</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>DgBahafon</key>
+    <dict><key>CFBundleIconFiles</key><array><string>DgBahafonIpad</string><string>DgBahafonLargeIpad</string></array><key>UIPrerenderedIcon</key><true/></dict>
 </dict>
