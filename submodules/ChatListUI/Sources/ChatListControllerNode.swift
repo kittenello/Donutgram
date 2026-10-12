@@ -1218,6 +1218,13 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private var containerLayout: (layout: ContainerViewLayout, navigationBarHeight: CGFloat, visualNavigationHeight: CGFloat, cleanNavigationBarHeight: CGFloat, storiesInset: CGFloat)?
     private var appearanceObserver: NSObjectProtocol?
     private var lastHideSearch = DGSimpleSettings.shared.chatListHideSearch
+    // "Hide search bar" only removes the bar above the root chat list. A forum opened inline
+    // over it keeps its own bar, and the bar comes back while search is being shown: the
+    // search field is inserted into it, so without one search opens with no field.
+    var forceSearchBarVisible = false
+    var hidesSearchBar: Bool {
+        return DGSimpleSettings.shared.chatListHideSearch && self.location == .chatList(groupId: .root) && self.inlineStackContainerNode == nil && !self.forceSearchBarVisible
+    }
     
     var contentScrollingEnded: ((ListView) -> Bool)?
     
@@ -1760,7 +1767,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 statusBarHeight: layout.statusBarHeight ?? 0.0,
                 leftInset: layout.safeInsets.left,
                 rightInset: layout.safeInsets.right,
-                search: DGSimpleSettings.shared.chatListHideSearch && self.location == .chatList(groupId: .root) ? nil : ChatListNavigationBar.Search(isEnabled: true),
+                search: self.hidesSearchBar ? nil : ChatListNavigationBar.Search(isEnabled: true),
                 activeSearch: self.isSearchDisplayControllerActive,
                 primaryContent: headerContent?.primaryContent,
                 secondaryContent: headerContent?.secondaryContent,

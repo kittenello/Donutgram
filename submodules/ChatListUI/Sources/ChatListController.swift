@@ -4765,6 +4765,17 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if self.chatListDisplayNode.searchDisplayController == nil {            
                 let (_, _) = await combineLatest(self.chatListDisplayNode.mainContainerNode.currentItemNode.contentsReady |> take(1), self.context.account.postbox.tailChatListView(groupId: .root, count: 16, summaryComponents: ChatListEntrySummaryComponents(components: [:])) |> take(1)).get()
 
+                // With "Hide search bar" on there is no bar to put the search field into,
+                // so bring it back for as long as search is shown.
+                var searchContentNode = searchContentNode
+                if self.chatListDisplayNode.hidesSearchBar {
+                    self.chatListDisplayNode.forceSearchBarVisible = true
+                    self.requestLayout(transition: .immediate)
+                }
+                if searchContentNode == nil, let navigationBarView = self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View {
+                    searchContentNode = navigationBarView.searchContentNode
+                }
+
                 do {
                     let displaySearchFilters = true
                     
@@ -4776,6 +4787,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         if let searchContentNode = self.chatListDisplayNode.searchDisplayController?.contentNode as? ChatListSearchContainerNode {
                             searchContentNode.search(filter: filter, query: query)
                         }
+                    } else if self.chatListDisplayNode.searchDisplayController == nil, self.chatListDisplayNode.forceSearchBarVisible {
+                        self.chatListDisplayNode.forceSearchBarVisible = false
+                        self.requestLayout(transition: .immediate)
                     }
                     
                     let transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)
@@ -4817,7 +4831,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             searchContentNode = navigationBarView.searchContentNode
         }
         
-        if let searchContentNode {
+        // A bar shown only for the duration of search goes away in the layout below, before the
+        // search field would land on its placeholder, so the field fades out in place instead.
+        if let searchContentNode, !self.chatListDisplayNode.forceSearchBarVisible {
             let previousFrame = searchContentNode.placeholderNode.frame
             if case .chatList(.root) = self.location {
                 searchContentNode.placeholderNode.frame = previousFrame.offsetBy(dx: 0.0, dy: 79.0)
@@ -4827,6 +4843,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         } else {
             completion = self.chatListDisplayNode.deactivateSearch(placeholderNode: nil, animated: animated)
         }
+        self.chatListDisplayNode.forceSearchBarVisible = false
         
         self.chatListDisplayNode.tempAllowAvatarExpansion = true
         self.requestLayout(transition: .animated(duration: 0.5, curve: .spring))
