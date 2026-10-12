@@ -24,3 +24,11 @@ func donutgramGhostModeDropsScreenshotNotifications(_ messages: [(Bool, EnqueueM
         return false
     }
 }
+
+/// Asks for ghost mode's offline packet after an action the server may count as activity that
+/// does not go through PendingMessageManager, which asks after every send it makes: bot starts,
+/// quick replies, ephemeral messages, games, web app data, "send now", edits, reactions and
+/// votes. Does nothing unless ghost mode's automatic offline is on.
+func donutgramRequestGhostOfflineAfterAction(accountPeerId: PeerId) {
+    DGSimpleSettings.shared.requestGhostOffline(accountPeerId: accountPeerId.toInt64())
+}
