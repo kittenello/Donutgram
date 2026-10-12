@@ -7,6 +7,7 @@ import BundleIconComponent
 import MultilineTextComponent
 import MoreButtonNode
 import AccountContext
+import TelegramCore
 import TelegramPresentationData
 import LottieAnimationComponent
 
