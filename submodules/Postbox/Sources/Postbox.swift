@@ -980,6 +980,15 @@ public final class Transaction {
         self.postbox?.replaceGlobalMessageTagsHole(transaction: self, globalTags: globalTags, index: index, with: updatedIndex, messages: messages)
     }
     
+    /// Reads the persistent local-tag index of every peer without rendering messages.
+    public func getMessageIdsWithLocalTag(_ tag: LocalMessageTags) -> [MessageId] {
+        assert(!self.disposed)
+        guard let postbox = self.postbox else {
+            return []
+        }
+        return postbox.localMessageHistoryTagsTable.get(tag: tag)
+    }
+
     /// Reads the persistent local-tag index, filtering peer ids before rendering messages.
     public func getMessagesWithLocalTag(_ tag: LocalMessageTags, peerId: PeerId) -> [Message] {
         assert(!self.disposed)

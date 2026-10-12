@@ -86,8 +86,15 @@ final class AutomaticCacheEvictionContext {
             let _ = processingQueue
             let _ = mediaBox
             
-            self.processDisposable = (self.postbox.mediaBox.storageBox.allPeerIds()
-            |> mapToSignal { peerIds -> Signal<Never, NoError> in
+            self.processDisposable = (combineLatest(
+                self.postbox.mediaBox.storageBox.allPeerIds(),
+                // Donutgram: the files of saved deleted messages cannot be downloaded again.
+                donutgramPreservedMessageResourceIds(postbox: postbox)
+            )
+            |> mapToSignal { peerIds, preservedResourceIds -> Signal<Never, NoError> in
+                // Donutgram: the total size limit of the cache scans once at launch, like this pass.
+                mediaBox.setProtectedResourceIds(preservedResourceIds)
+                
                 return postbox.transaction { transaction -> [PeerId: CacheStorageSettings.PeerStorageCategory] in
                     var channelCategoryMapping: [PeerId: CacheStorageSettings.PeerStorageCategory] = [:]
                     for peerId in peerIds {
@@ -158,6 +165,9 @@ final class AutomaticCacheEvictionContext {
                                             }
                                             
                                             let id = MediaResourceId(String(data: resourceId, encoding: .utf8)!)
+                                            if preservedResourceIds.contains(id) {
+                                                continue
+                                            }
                                             let resourceTimestamp = mediaBox.resourceUsageWithInfo(id: id)
                                             if resourceTimestamp != 0 && resourceTimestamp < minPeerTimestamp {
                                                 removeIds.append(id)
