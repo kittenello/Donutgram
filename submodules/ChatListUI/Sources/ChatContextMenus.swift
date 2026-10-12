@@ -392,7 +392,9 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                 }
                                 if canMarkAsUnread {
                                     items.append(.action(ContextMenuActionItem(text: strings.ChatList_Context_MarkAsUnread, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsUnread"), color: theme.contextMenu.primaryColor) }, action: { _, f in
-                                        let _ = context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: nil).startStandalone()
+                                        // Donutgram: only marks unread. A toggle would read the chat on the server,
+                                        // without the ghost-mode question, if a message arrived while the menu was open.
+                                        let _ = context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: true).startStandalone()
                                         f(.default)
                                     })))
                                 }

@@ -373,8 +373,9 @@ func _internal_sendBotRequestedPeer(account: Account, peerId: PeerId, messageId:
                 |> mapError { error -> SendBotRequestedPeerError in
                     return .generic
                 }
-                |> map { result in
+                |> map { result -> Void in
                     account.stateManager.addUpdates(result)
+                    donutgramRequestGhostOfflineAfterAction(accountPeerId: account.peerId)
                 }
                 return signal
             }

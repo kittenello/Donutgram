@@ -124,23 +124,33 @@ private func synchronizeMarkAllUnseen(transaction: Transaction, postbox: Postbox
     let limit: Int32 = 100
     let oneOperation: (Int32) -> Signal<Int32?, MTRpcError> = { maxId in
         return network.request(Api.functions.messages.getUnreadMentions(flags: 0, peer: inputPeer, topMsgId: nil, offsetId: maxId, addOffset: maxId == 0 ? 0 : -1, limit: limit, maxId: maxId == 0 ? 0 : (maxId + 1), minId: 1))
-        |> mapToSignal { result -> Signal<[MessageId], MTRpcError> in
+        |> mapToSignal { result -> Signal<(ids: [MessageId], keptUnread: Set<MessageId>), MTRpcError> in
+            let messages: [Api.Message]
             switch result {
                 case let .messages(messagesData):
-                    let messages = messagesData.messages
-                    return .single(messages.compactMap({ $0.id() }))
+                    messages = messagesData.messages
                 case let .channelMessages(channelMessagesData):
-                    let messages = channelMessagesData.messages
-                    return .single(messages.compactMap({ $0.id() }))
+                    messages = channelMessagesData.messages
                 case .messagesNotModified:
-                    return .single([])
+                    messages = []
                 case let .messagesSlice(messagesSliceData):
-                    let messages = messagesSliceData.messages
-                    return .single(messages.compactMap({ $0.id() }))
+                    messages = messagesSliceData.messages
             }
+            // Donutgram: reading a mention also reports its voice message, round video or
+            // self-destructing media as played, so in ghost mode such mentions stay unread on the
+            // server, as a single mention read does (synchronizeConsumeMessageContents).
+            var keptUnread = Set<MessageId>()
+            if donutgramGhostModeBlocksContentReads() {
+                for message in messages {
+                    if let id = message.id(), let storeMessage = StoreMessage(apiMessage: message, accountPeerId: stateManager.accountPeerId, peerIsForum: false), storeMessage.attributes.contains(where: { ($0 as? ConsumableContentMessageAttribute)?.consumed == false }) {
+                        keptUnread.insert(id)
+                    }
+                }
+            }
+            return .single((messages.compactMap({ $0.id() }), keptUnread))
         }
-        |> mapToSignal { ids -> Signal<Int32?, MTRpcError> in
-            let filteredIds = ids.filter { $0.id <= operation.maxId }
+        |> mapToSignal { ids, keptUnread -> Signal<Int32?, MTRpcError> in
+            let filteredIds = ids.filter { $0.id <= operation.maxId && !keptUnread.contains($0) }
             if filteredIds.isEmpty {
                 return .single(ids.min()?.id)
             }

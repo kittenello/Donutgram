@@ -1614,6 +1614,10 @@ public class Account {
     }
     
     private func postSmallLogIfNeeded() {
+        // Donutgram: the short service log goes to Telegram only with «Отправлять статистику в Telegram» on.
+        if !donutgramSendsTelegramStatistics() {
+            return
+        }
         let timestamp = CFAbsoluteTimeGetCurrent()
         if self.lastSmallLogPostTimestamp == nil || self.lastSmallLogPostTimestamp! < timestamp - 30.0 {
             self.lastSmallLogPostTimestamp = timestamp

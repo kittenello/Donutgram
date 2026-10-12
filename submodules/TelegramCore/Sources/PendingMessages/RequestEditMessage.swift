@@ -283,6 +283,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
 
                 return request
                 |> map { result -> Api.Updates? in
+                    donutgramRequestGhostOfflineAfterAction(accountPeerId: accountPeerId)
                     return result
                 }
                 |> `catch` { error -> Signal<Api.Updates?, MTRpcError> in

@@ -930,6 +930,13 @@ public func resendMessages(account: Account, messageIds: [MessageId]) -> Signal<
 }
 
 func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId, messages: [(Bool, EnqueueMessage)], disableAutoremove: Bool = false, transformGroupingKeysWithPeerId: Bool = false) -> [MessageId?] {
+    // Donutgram: a screenshot notification is not sent in ghost mode, and with nothing queued
+    // nothing is read on the user's behalf either.
+    if donutgramGhostModeDropsScreenshotNotifications(messages) {
+        return messages.map { _ -> MessageId? in
+            return nil
+        }
+    }
     if DGSimpleSettings.shared.ghostModeEnabled && DGSimpleSettings.shared.ghostReadOnAction {
         let namespace: MessageId.Namespace = peerId.namespace == Namespaces.Peer.SecretChat ? Namespaces.Message.SecretIncoming : Namespaces.Message.Cloud
         if let index = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: namespace) {
@@ -975,14 +982,17 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
         }
         let ghostSettings = DGSimpleSettings.shared
         let shouldSendSilently = ghostSettings.ghostSendWithoutSound == 2 || (ghostSettings.ghostSendWithoutSound == 1 && ghostSettings.ghostModeEnabled)
-        let shouldSchedule = ghostSettings.ghostModeEnabled && ghostSettings.ghostUseScheduledMessages
+        // Secret chats have no scheduled messages, so ghost mode sends there at once.
+        let shouldSchedule = ghostSettings.ghostModeEnabled && ghostSettings.ghostUseScheduledMessages && peerId.namespace != Namespaces.Peer.SecretChat
         if shouldSendSilently || shouldSchedule {
             updatedMessage = updatedMessage.withUpdatedAttributes { current in
                 var current = current
                 if shouldSendSilently && !current.contains(where: { $0 is NotificationInfoMessageAttribute }) {
                     current.append(NotificationInfoMessageAttribute(flags: .muted))
                 }
-                if shouldSchedule && !current.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute }) {
+                // A time the user picked is kept, and a quick reply being composed stays a quick reply:
+                // the schedule attribute would move it to the scheduled messages instead.
+                if shouldSchedule && !current.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute || $0 is OutgoingQuickReplyMessageAttribute }) {
                     current.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(account.network.context.globalTime()) + ghostScheduledMessageDelay, repeatPeriod: nil, isGhostScheduled: true))
                 }
                 return current

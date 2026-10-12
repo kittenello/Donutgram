@@ -9151,6 +9151,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     func shouldDivertMessagesToScheduled(targetPeer: EnginePeer? = nil, messages: [EnqueueMessage]) -> Signal<Bool, NoError> {
         let settings = DGSimpleSettings.shared
+        // Secret chats have no scheduled messages, so ghost mode sends there at once.
+        if (targetPeer?.id ?? self.chatLocation.peerId)?.namespace == Namespaces.Peer.SecretChat {
+            return .single(false)
+        }
         return .single(settings.ghostModeEnabled && settings.ghostUseScheduledMessages)
     }
     
@@ -9159,6 +9163,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     /// transition would never start, and the recorder it was to dismiss stayed on screen.
     var donutgramDivertsSendsToGhostSchedule: Bool {
         if case .scheduledMessages = self.presentationInterfaceState.subject {
+            return false
+        }
+        if self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat {
             return false
         }
         let settings = DGSimpleSettings.shared
@@ -9189,6 +9196,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 let delay: Int32 = isGhostScheduledSend ? ghostScheduledMessageDelay : 10 * 24 * 60 * 60
                 messages = messages.map { message -> EnqueueMessage in
                     return message.withUpdatedAttributes { attributes in
+                        // Donutgram: a time the user picked («Отправить позже», «Когда будет в сети») is kept.
+                        if isGhostScheduledSend && attributes.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute }) {
+                            return attributes
+                        }
                         var attributes = attributes
                         attributes.removeAll(where: { $0 is OutgoingScheduleInfoMessageAttribute })
                         attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + delay, repeatPeriod: nil, isGhostScheduled: isGhostScheduledSend))
@@ -9204,14 +9215,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             
             if commit || !isScheduledMessages {
-                if !isGhostScheduledSend {
+                // A secret chat is never diverted (no scheduled messages there), so its send is a usual one.
+                if !shouldDivert {
                     self.commitPurposefulAction()
                 }
                 
                 let _ = (enqueueMessages(account: self.context.account, peerId: peerId, messages: self.transformEnqueueMessages(messages, postpone: postpone))
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-                    if isGhostScheduledSend {
-                        DGSimpleSettings.shared.requestGhostOffline()
+                    if isGhostScheduledSend, let self {
+                        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: self.context.account.peerId.toInt64())
                     }
                     if let strongSelf = self, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                         strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()

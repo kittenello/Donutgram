@@ -119,6 +119,7 @@ public final class DGSimpleSettings {
         static let ghostUseScheduledMessages = "donutgram.ghost.useScheduledMessages"
         static let ghostSendWithoutSound = "donutgram.ghost.sendWithoutSound"
         static let ghostSuggestForStories = "donutgram.ghost.suggestForStories"
+        static let sendTelegramStatistics = "donutgram.privacy.sendTelegramStatistics"
         static let bypassForwardRestrictions = "donutgram.spy.bypassForwardRestrictions"
         static let visualPhoneEnabled = "donutgram.profile.visualPhoneEnabled"
         static let visualPhoneNumber = "donutgram.profile.visualPhoneNumber"
@@ -365,6 +366,8 @@ public final class DGSimpleSettings {
     public var ghostUseScheduledMessages: Bool { get { bool(Key.ghostUseScheduledMessages) } set { setBool(newValue, Key.ghostUseScheduledMessages) } }
     public var ghostSendWithoutSound: Int { get { integer(Key.ghostSendWithoutSound) } set { setInteger(newValue, Key.ghostSendWithoutSound) } }
     public var ghostSuggestForStories: Bool { get { bool(Key.ghostSuggestForStories) } set { setBool(newValue, Key.ghostSuggestForStories) } }
+    /// App analytics, service logs and call quality data for Telegram. Off by default.
+    public var sendTelegramStatistics: Bool { get { bool(Key.sendTelegramStatistics) } set { setBool(newValue, Key.sendTelegramStatistics) } }
     public var bypassForwardRestrictions: Bool { get { bool(Key.bypassForwardRestrictions) } set { setBool(newValue, Key.bypassForwardRestrictions) } }
     public var visualPhoneEnabled: Bool { get { bool(Key.visualPhoneEnabled) } set { setBool(newValue, Key.visualPhoneEnabled) } }
     public var visualPhoneNumber: String { get { string(Key.visualPhoneNumber) } set { setString(newValue, Key.visualPhoneNumber) } }

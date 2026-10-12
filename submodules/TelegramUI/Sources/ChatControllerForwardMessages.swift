@@ -198,11 +198,16 @@ extension ChatControllerImpl {
                                     var peerMessages = result
                                     if shouldDivert {
                                         displayConvertingTooltip = true
+                                        // Donutgram: `shouldDivertMessagesToScheduled` diverts only ghost mode's
+                                        // scheduled sending, so a forward goes out as a ghost-scheduled message, as a
+                                        // send from the chat does (ChatController.sendMessages). A picked time is kept.
                                         peerMessages = peerMessages.map { message -> EnqueueMessage in
                                             return message.withUpdatedAttributes { attributes in
+                                                if attributes.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute }) {
+                                                    return attributes
+                                                }
                                                 var attributes = attributes
-                                                attributes.removeAll(where: { $0 is OutgoingScheduleInfoMessageAttribute })
-                                                attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + 10 * 24 * 60 * 60, repeatPeriod: nil))
+                                                attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + ghostScheduledMessageDelay, repeatPeriod: nil, isGhostScheduled: true))
                                                 return attributes
                                             }
                                         }
