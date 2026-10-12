@@ -10,6 +10,7 @@ swift_library(
         "//Donutgram/DGSimpleSettings",
         "//submodules/Postbox",
         "//submodules/TelegramCore",
+        "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/InteractiveTextComponent",
     ],
 )

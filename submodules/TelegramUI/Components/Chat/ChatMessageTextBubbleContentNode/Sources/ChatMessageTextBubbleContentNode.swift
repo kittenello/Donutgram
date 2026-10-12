@@ -614,8 +614,8 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 // (`.FormattedDate` renders to text of a different length). An entity's own offsets
                 // index `rawText`, not the string above, so indexing with them lands on the wrong
                 // characters — or out of bounds.
-                if DGSimpleSettings.shared.mentionAvatars, let entities {
-                    attributedText = textWithMentionAvatars(attributedText, entities: entities, peers: item.message.peers.map { EnginePeer($0.1) })
+                if DGSimpleSettings.shared.mentionAvatars, entities != nil {
+                    attributedText = textWithMentionAvatars(attributedText, peers: item.message.peers.map { EnginePeer($0.1) })
                 }
 
                 var customTruncationToken: ((UIFont, Bool) -> NSAttributedString?)?
