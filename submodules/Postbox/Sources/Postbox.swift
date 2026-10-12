@@ -152,6 +152,15 @@ public final class Transaction {
         self.postbox?.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId, forEachMedia: forEachMedia)
     }
     
+    /// The ids of the stored messages in `minId ... maxId`, read from the index without rendering them.
+    public func getMessageIdsInRange(peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id) -> [MessageId] {
+        assert(!self.disposed)
+        guard let postbox = self.postbox else {
+            return []
+        }
+        return postbox.messageHistoryIndexTable.messageIdsInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId)
+    }
+    
     public func withAllMessages(peerId: PeerId, namespace: MessageId.Namespace? = nil, _ f: (Message) -> Bool) {
         self.postbox?.withAllMessages(peerId: peerId, namespace: namespace, f)
     }

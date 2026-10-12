@@ -82,18 +82,18 @@ func donutgramPreserveDeletedMessage(transaction: Transaction, messageId: Messag
     guard messageId.namespace == Namespaces.Message.Cloud else {
         return false
     }
-    guard donutgramAllowsSavingInPeer(transaction: transaction, peerId: messageId.peerId) else {
+    guard let message = transaction.getMessage(messageId) else {
         return false
     }
-    guard let message = transaction.getMessage(messageId) else {
+    // A message that is already saved stays saved: the settings decide only about new deletions.
+    if message.localTags.contains(.donutgramDeleted) {
+        return true
+    }
+    guard donutgramAllowsSavingInPeer(transaction: transaction, peerId: messageId.peerId) else {
         return false
     }
     guard DGSimpleSettings.shared.saveDeletedMessages || message.localTags.contains(.donutgramSavedViewOnce) else {
         return false
-    }
-
-    if message.localTags.contains(.donutgramDeleted) {
-        return true
     }
 
     transaction.updateMessage(messageId, update: { currentMessage in
@@ -102,6 +102,33 @@ func donutgramPreserveDeletedMessage(transaction: Transaction, messageId: Messag
         return .update(donutgramMessageWithUpdatedLocalTags(currentMessage, localTags: localTags))
     })
     return true
+}
+
+/// Removes the stored messages of a chat in `minId ... maxId`, as the server does when it moves a
+/// supergroup's first available message (its history was cleared). Saved deleted messages stay,
+/// and the cleared messages are saved like any other deletion while saving is on.
+func donutgramDeleteMessagesInRange(transaction: Transaction, peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id, forEachMedia: ((Media) -> Void)?) {
+    var keptIds: [MessageId.Id] = []
+    for id in transaction.getMessageIdsInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId) {
+        if donutgramPreserveDeletedMessage(transaction: transaction, messageId: id) {
+            keptIds.append(id.id)
+        }
+    }
+    if keptIds.isEmpty {
+        transaction.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId, forEachMedia: forEachMedia)
+        return
+    }
+
+    var lowerBound = minId
+    for keptId in keptIds.sorted() {
+        if lowerBound < keptId {
+            transaction.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: lowerBound, maxId: keptId - 1, forEachMedia: forEachMedia)
+        }
+        lowerBound = keptId + 1
+    }
+    if lowerBound <= maxId {
+        transaction.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: lowerBound, maxId: maxId, forEachMedia: forEachMedia)
+    }
 }
 
 /// Stores the version that is about to be replaced by an incoming edit.

@@ -133,6 +133,19 @@ final class MessageHistoryIndexTable: Table {
         }
     }
     
+    func messageIdsInRange(peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id) -> [MessageId] {
+        if minId > maxId {
+            return []
+        }
+        var messageIds: [MessageId] = []
+        self.valueBox.range(self.table, start: self.key(MessageId(peerId: peerId, namespace: namespace, id: minId)).predecessor, end: self.key(MessageId(peerId: peerId, namespace: namespace, id: maxId)).successor, values: { key, value in
+            let index = readHistoryIndexEntry(peerId, namespace: namespace, key: key, value: value)
+            messageIds.append(index.id)
+            return true
+        }, limit: 0)
+        return messageIds
+    }
+    
     func updateMessage(_ id: MessageId, message: InternalStoreMessage, operations: inout [MessageHistoryIndexOperation]) {
         if let previousIndex = self.getIndex(id) {
             if previousIndex != message.index {

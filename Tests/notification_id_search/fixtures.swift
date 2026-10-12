@@ -222,6 +222,11 @@ donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaB
 expect(reopenedTransaction.getMessage(id) == nil, "disabled retention follows normal deletion")
 reopenedTransaction.messages[id] = Message(store(id, tags: [.donutgramSavedViewOnce]), author: alice)
 expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: id), "previously saved view-once copy stays retained")
+reopenedTransaction.messages[id] = Message(store(id, tags: [.donutgramDeleted]), author: alice)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: id), "a saved message stays saved after saving is switched off")
+DGSimpleSettings.shared.saveInBotChats = false
+reopenedTransaction.messages[botId] = Message(store(botId, tags: [.donutgramDeleted]), author: bot)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: botId), "a saved bot-chat message stays saved after bot saving is switched off")
 let localId = MessageId(peerId: alice.id, namespace: 1, id: 104)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: localId), "local message ids excluded")
 expect(donutgramIsNotificationMessage(store(id), expectedId: id), "matching incoming API message accepted")
