@@ -309,7 +309,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if let _ = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramSecretChat {
             return
         }
-        if let actions = self.actions, actions.isCopyProtected, !DGSimpleSettings.shared.bypassForwardRestrictions {
+        if let actions = self.actions, actions.isCopyProtected, !DGSimpleSettings.shared.bypassForwardRestrictions || self.forwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.displayCopyProtectionTip(self.forwardButton, false)
         } else if !self.forwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessages()

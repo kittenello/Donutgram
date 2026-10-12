@@ -175,9 +175,14 @@ final class ChatListSearchMessageSelectionPanelNode: ASDisplayNode {
     }
     
     @objc func forwardButtonPressed() {
-        if let actions = self.actions, actions.isCopyProtected, !DGSimpleSettings.shared.bypassForwardRestrictions {
+        guard let actions = self.actions else {
+            return
+        }
+        // "Restricted Forwarding" lifts copy protection, not what else keeps a message from being
+        // forwarded (media with a timer), so the option still decides.
+        if actions.isCopyProtected && (!DGSimpleSettings.shared.bypassForwardRestrictions || !actions.options.contains(.forward)) {
             self.displayCopyProtectionTip(self.forwardButton.view, false)
-        } else {
+        } else if actions.options.contains(.forward) {
             self.forwardMessages()
         }
     }
