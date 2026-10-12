@@ -42,7 +42,7 @@ private let dgEnglishStrings: [String: String] = [
     "Обход блокировок GIF": "Bypass GIF Restrictions",
     "Статистика": "Statistics",
     "Отправлять статистику в Telegram": "Send Statistics to Telegram",
-    "Аналитика приложения, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.": "App analytics, service logs and call quality data, as in regular Telegram. Network telemetry is never sent.",
+    "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.": "App analytics, channel post reading time, music listening, service logs and call quality data, as in regular Telegram. Network telemetry is never sent.",
     "Это прямой эфир. Смотреть его можно только как участник, и автор может увидеть вас среди зрителей.": "This is a live stream. You can only watch it as a participant, and the host may see you among the viewers.",
     "Смотреть": "Watch",
     "Пересылка": "Forwarding",
