@@ -24,6 +24,9 @@ jobs:
     name: Build iOS IPA
     runs-on: macos-26
     timeout-minutes: 360
+    outputs:
+      app_version: ${{ steps.build.outputs.app_version }}
+      build_number: ${{ steps.build.outputs.build_number }}
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
@@ -101,6 +104,7 @@ jobs:
           rsync -a --delete "$GITHUB_WORKSPACE/" /Users/Shared/telegram-ios/
 
       - name: Build unsigned IPA
+        id: build
         shell: bash
         run: |
           set -euo pipefail
@@ -114,6 +118,8 @@ jobs:
           BUILD_NUMBER="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
 
           echo "Build number: $BUILD_NUMBER"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "app_version=$(python3 -c 'import json; print(json.load(open("versions.json"))["app"])')" >> "$GITHUB_OUTPUT"
 
           export CONFIG_PATH="$RUNNER_TEMP/donutgram-configuration.json"
           python3 - <<'PY'
@@ -211,3 +217,64 @@ jobs:
         with:
           path: ~/telegram-bazel-cache
           key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
+
+  # Every master build replaces the content of the «ipa» branch with the IPA
+  # and an AltStore-format source. Add this URL as a source in the installer:
+  # https://raw.githubusercontent.com/kittenello/Donutgram/ipa/source.json
+  # The installer offers the update for an app installed from that source.
+  # The branch is one commit, force-pushed each time, so old IPAs do not
+  # accumulate in the repository. A file pushed to git must stay under
+  # GitHub's 100 MB limit; the IPA is about 76 MB.
+  publish:
+    name: Publish IPA source
+    needs: build
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Two master builds finishing together must not overwrite each other's
+    # branch out of order.
+    concurrency:
+      group: ipa-source
+      cancel-in-progress: false
+    env:
+      APP_VERSION: ${{ needs.build.outputs.app_version }}
+      BUILD_NUMBER: ${{ needs.build.outputs.build_number }}
+      COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+    steps:
+      - name: Checkout publish script
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/ipa
+
+      - name: Download IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: Donutgram-IPA
+          path: build-artifacts
+
+      - name: Publish IPA and source to the ipa branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The IPA name carries the build number so raw.githubusercontent.com's
+          # cache never serves an older IPA under the new source's URL.
+          IPA_NAME="Donutgram-$BUILD_NUMBER.ipa"
+          SITE="$RUNNER_TEMP/ipa-site"
+          mkdir -p "$SITE"
+          cp build-artifacts/Donutgram.ipa "$SITE/$IPA_NAME"
+
+          IPA_PATH="$SITE/$IPA_NAME" \
+          DOWNLOAD_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/ipa/$IPA_NAME" \
+            python3 .github/ipa/update_source.py "$SITE/source.json"
+          cat "$SITE/source.json"
+
+          cd "$SITE"
+          git init -q -b ipa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898099+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Donutgram $APP_VERSION ($BUILD_NUMBER)"
+          git push --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" ipa
