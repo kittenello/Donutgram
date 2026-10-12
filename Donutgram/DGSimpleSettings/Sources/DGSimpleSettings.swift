@@ -121,6 +121,7 @@ public final class DGSimpleSettings {
         static let ghostSuggestForStories = "donutgram.ghost.suggestForStories"
         static let sendTelegramStatistics = "donutgram.privacy.sendTelegramStatistics"
         static let bypassForwardRestrictions = "donutgram.spy.bypassForwardRestrictions"
+        static let allowProtectedScreenshots = "donutgram.spy.allowProtectedScreenshots"
         static let visualPhoneEnabled = "donutgram.profile.visualPhoneEnabled"
         static let visualPhoneNumber = "donutgram.profile.visualPhoneNumber"
 
@@ -369,6 +370,9 @@ public final class DGSimpleSettings {
     /// App analytics, service logs and call quality data for Telegram. Off by default.
     public var sendTelegramStatistics: Bool { get { bool(Key.sendTelegramStatistics) } set { setBool(newValue, Key.sendTelegramStatistics) } }
     public var bypassForwardRestrictions: Bool { get { bool(Key.bypassForwardRestrictions) } set { setBool(newValue, Key.bypassForwardRestrictions) } }
+    /// Content of chats, groups and channels that forbid copying stays visible on screenshots and screen
+    /// recordings. Secret chats, view-once and paid media stay hidden.
+    public var allowProtectedScreenshots: Bool { get { bool(Key.allowProtectedScreenshots) } set { setBool(newValue, Key.allowProtectedScreenshots) } }
     public var visualPhoneEnabled: Bool { get { bool(Key.visualPhoneEnabled) } set { setBool(newValue, Key.visualPhoneEnabled) } }
     public var visualPhoneNumber: String { get { string(Key.visualPhoneNumber) } set { setString(newValue, Key.visualPhoneNumber) } }
 

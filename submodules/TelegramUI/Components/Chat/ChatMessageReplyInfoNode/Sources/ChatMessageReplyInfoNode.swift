@@ -847,7 +847,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     node.imageNode = nil
                 }
                 if let message = arguments.message {
-                    node.imageNode?.captureProtected = arguments.associatedData.isCopyProtectionEnabled || message.isCopyProtected()
+                    node.imageNode?.captureProtected = (arguments.associatedData.isCopyProtectionEnabled || message.isCopyProtected()) && !DGSimpleSettings.shared.allowProtectedScreenshots
                 }
                 
                 titleNode.frame = CGRect(origin: CGPoint(x: leftInset - textInsets.left - 2.0, y: spacing - textInsets.top + 1.0), size: titleLayout.size)

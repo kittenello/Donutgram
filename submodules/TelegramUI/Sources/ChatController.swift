@@ -2278,7 +2278,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             }
 
-            let isSecret = strongSelf.presentationInterfaceState.copyProtectionEnabled || strongSelf.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
+            let isSecret = (strongSelf.presentationInterfaceState.copyProtectionEnabled && !DGSimpleSettings.shared.allowProtectedScreenshots) || strongSelf.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat
             let pinchController = makePinchController(sourceNode: sourceNode, disableScreenshots: isSecret, getContentAreaInScreenSpace: {
                 guard let strongSelf = self else {
                     return CGRect()
