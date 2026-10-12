@@ -1079,6 +1079,10 @@ extension ChatControllerImpl {
                             forwardedMessages = forwardedMessages.map { messageGroup -> [EnqueueMessage] in
                                 return messageGroup.map { message -> EnqueueMessage in
                                     return message.withUpdatedAttributes { attributes in
+                                        // Donutgram: a time the user picked («Отправить позже») is kept.
+                                        if isGhostScheduledSend && attributes.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute }) {
+                                            return attributes
+                                        }
                                         var attributes = attributes
                                         attributes.removeAll(where: { $0 is OutgoingScheduleInfoMessageAttribute })
                                         attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + divertedScheduleDelay, repeatPeriod: nil, isGhostScheduled: isGhostScheduledSend))
@@ -1106,6 +1110,10 @@ extension ChatControllerImpl {
                         if shouldDivert {
                             transformedMessages = transformedMessages.map { message -> EnqueueMessage in
                                 return message.withUpdatedAttributes { attributes in
+                                    // Donutgram: a time the user picked («Отправить позже», «Когда будет в сети») is kept.
+                                    if isGhostScheduledSend && attributes.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute }) {
+                                        return attributes
+                                    }
                                     var attributes = attributes
                                     attributes.removeAll(where: { $0 is OutgoingScheduleInfoMessageAttribute })
                                     attributes.append(OutgoingScheduleInfoMessageAttribute(scheduleTime: Int32(Date().timeIntervalSince1970) + divertedScheduleDelay, repeatPeriod: nil, isGhostScheduled: isGhostScheduledSend))
