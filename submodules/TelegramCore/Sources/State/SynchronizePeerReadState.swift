@@ -386,6 +386,11 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
     let pushedState = currentReadState
     |> mapToSignalPromotingError { result -> Signal<(MessageId.Namespace, PeerReadState), PeerReadStateValidationError> in
         if result.isGhostLocalRead {
+            if willValidate {
+                // The validation that runs next keeps the local read on top of the server's
+                // state; running one here as well would ask the server the same thing twice.
+                return .complete()
+            }
             // The validation keeps the local read on top of the server's state.
             return validatePeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId)
             |> map { _ -> (MessageId.Namespace, PeerReadState) in }

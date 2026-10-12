@@ -86,45 +86,74 @@ private final class MentionAvatarItem: Hashable {
     }
 }
 
-/// Reserves room for an avatar without changing the text or any UTF-16 entity offsets.
-public func textWithMentionAvatars(_ text: NSAttributedString, entities: [MessageTextEntity], peers: [EnginePeer]) -> NSAttributedString {
-    let result = NSMutableAttributedString(attributedString: text)
-    let string = text.string as NSString
-    let excludedRanges = entities.compactMap { entity -> NSRange? in
-        switch entity.type {
-        case .Spoiler, .Code, .Pre:
-            return NSRange(location: entity.range.lowerBound, length: entity.range.count)
-        default:
-            return nil
+/// A mention in the rendered text: a `TextMention` carries the peer's id, a `Mention` is the
+/// username itself.
+private struct RenderedMention {
+    let range: NSRange
+    let peerId: EnginePeer.Id?
+}
+
+/// The mentions in `text`, in text order, found by the attributes `stringWithAppliedEntities`
+/// gave them. The entities' own offsets index the message's raw text, and the rendered text can
+/// differ from it in length: a formatted date is rendered as the date.
+private func renderedMentions(_ text: NSAttributedString) -> [RenderedMention] {
+    let fullRange = NSRange(location: 0, length: text.length)
+    var mentions: [RenderedMention] = []
+    text.enumerateAttribute(NSAttributedString.Key(TelegramTextAttributes.PeerMention), in: fullRange, options: []) { value, range, _ in
+        if let value = value as? TelegramPeerMention {
+            mentions.append(RenderedMention(range: range, peerId: value.peerId))
         }
     }
+    text.enumerateAttribute(NSAttributedString.Key(TelegramTextAttributes.PeerTextMention), in: fullRange, options: []) { value, range, _ in
+        if value != nil {
+            mentions.append(RenderedMention(range: range, peerId: nil))
+        }
+    }
+    return mentions.sorted(by: { $0.range.location < $1.range.location })
+}
+
+/// Mentions in spoilers, inline code and code blocks get no avatar.
+private func isMentionInSpoilerOrCode(_ text: NSAttributedString, range: NSRange) -> Bool {
+    var result = false
+    text.enumerateAttributes(in: range, options: []) { attributes, _, stop in
+        if attributes[NSAttributedString.Key(TelegramTextAttributes.Spoiler)] != nil || attributes[NSAttributedString.Key(TelegramTextAttributes.Code)] != nil {
+            result = true
+        } else if let blockQuote = attributes[NSAttributedString.Key("Attribute__Blockquote")] as? TextNodeBlockQuoteData, case .code = blockQuote.kind {
+            result = true
+        }
+        if result {
+            stop.pointee = ObjCBool(true)
+        }
+    }
+    return result
+}
+
+/// Reserves room for an avatar in front of each mention in `text`, the message text as
+/// `stringWithAppliedEntities` rendered it, without changing the text.
+public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePeer]) -> NSAttributedString {
+    let result = NSMutableAttributedString(attributedString: text)
+    let string = text.string as NSString
     var count = 0
-    for entity in entities {
-        guard count < 40, !entity.range.isEmpty, entity.range.lowerBound >= 0, entity.range.upperBound <= string.length else {
+    for mention in renderedMentions(text) {
+        guard count < 40, !isMentionInSpoilerOrCode(text, range: mention.range) else {
             continue
         }
-        let mentionRange = NSRange(location: entity.range.lowerBound, length: entity.range.count)
-        guard !excludedRanges.contains(where: { NSIntersectionRange($0, mentionRange).length > 0 }) else {
-            continue
-        }
+        let mentionRange = mention.range
         let peer: EnginePeer?
         let username: String?
-        switch entity.type {
-        case let .TextMention(peerId):
+        if let peerId = mention.peerId {
             peer = peers.first(where: { $0.id == peerId })
             username = nil
             guard peer != nil else { continue }
-        case .Mention:
-            let mention = string.substring(with: mentionRange)
-            guard mention.hasPrefix("@") else { continue }
-            let name = String(mention.dropFirst())
+        } else {
+            let mentionText = string.substring(with: mentionRange)
+            guard mentionText.hasPrefix("@") else { continue }
+            let name = String(mentionText.dropFirst())
             guard !name.isEmpty else { continue }
             username = name
             peer = peers.first(where: { peer in
                 peer.addressName?.lowercased() == name.lowercased() || peer.usernames.contains(where: { $0.flags.contains(.isActive) && $0.username.lowercased() == name.lowercased() })
             })
-        default:
-            continue
         }
         let range = string.rangeOfComposedCharacterSequence(at: mentionRange.location)
         guard NSMaxRange(range) <= NSMaxRange(mentionRange), result.attribute(NSAttributedString.Key("Attribute__EmbeddedItem"), at: range.location, effectiveRange: nil) == nil, result.attribute(ChatTextInputAttributes.customEmoji, at: range.location, effectiveRange: nil) == nil, let font = result.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont else {
