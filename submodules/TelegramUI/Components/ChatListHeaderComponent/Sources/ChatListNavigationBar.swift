@@ -437,7 +437,10 @@ public final class ChatListNavigationBar: Component {
             } else {
                 if let searchContentNode = self.searchContentNode {
                     self.searchContentNode = nil
-                    searchContentNode.view.removeFromSuperview()
+                    searchContentNode.isUserInteractionEnabled = false
+                    transition.setAlpha(view: searchContentNode.view, alpha: 0.0, completion: { [weak searchContentNode] _ in
+                        searchContentNode?.view.removeFromSuperview()
+                    })
                 }
             }
             

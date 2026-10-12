@@ -4831,7 +4831,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             searchContentNode = navigationBarView.searchContentNode
         }
         
-        if let searchContentNode {
+        // A bar shown only for the duration of search goes away in the layout below, before the
+        // search field would land on its placeholder, so the field fades out in place instead.
+        if let searchContentNode, !self.chatListDisplayNode.forceSearchBarVisible {
             let previousFrame = searchContentNode.placeholderNode.frame
             if case .chatList(.root) = self.location {
                 searchContentNode.placeholderNode.frame = previousFrame.offsetBy(dx: 0.0, dy: 79.0)
