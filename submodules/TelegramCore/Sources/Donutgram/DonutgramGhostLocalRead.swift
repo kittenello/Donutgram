@@ -126,8 +126,14 @@ func donutgramGhostLocalReadMarkUnread(transaction: Transaction, accountPeerId: 
 /// and become unread again.
 func donutgramRestoreGhostLocalReads(transaction: Transaction, accountPeerId: PeerId) {
     for (peerId, read) in DGSimpleSettings.shared.ghostLocalReads(accountPeerId: accountPeerId.toInt64()) {
-        guard !read.isExplicit else { continue }
         let peerId = PeerId(peerId)
+        if let explicitMaxIncomingReadId = read.explicitMaxIncomingReadId {
+            // The explicit read stays; what ghost mode read after it becomes unread again.
+            if read.maxIncomingReadId > explicitMaxIncomingReadId {
+                donutgramRestoreExplicitLocalRead(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, read: read, explicitMaxIncomingReadId: explicitMaxIncomingReadId)
+            }
+            continue
+        }
         // A chat that left the chat list may have no dialog on the server, and its
         // validation would keep retrying.
         if !donutgramRestoreServerReadState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, read: read) && transaction.getPeerChatListIndex(peerId) != nil {
@@ -150,6 +156,10 @@ func donutgramGhostLocalReadDidReadOnServer(accountPeerId: PeerId, messageId: Me
         read.serverMarkedUnread = false
         read.readsServerMark = false
         read.readCount = nil
+        if let explicitMaxIncomingReadId = read.explicitMaxIncomingReadId, messageId.id >= explicitMaxIncomingReadId {
+            // The server has the explicit part: only what ghost mode read is left here.
+            read.explicitMaxIncomingReadId = nil
+        }
         donutgramSetGhostLocalRead(read, accountPeerId: accountPeerId, peerId: messageId.peerId)
     }
 }
@@ -189,7 +199,12 @@ func donutgramGhostLocalReadDidApplyServerState(transaction: Transaction, accoun
     // A mark the server got after the local read is shown.
     let readsServerMark = serverMarkedUnread && read.serverMarkedUnread && read.readsServerMark
     let isCovered = !readsServerMark && (serverCount == 0 || serverMaxIncomingReadId >= read.maxIncomingReadId)
-    if isCovered || (!read.isExplicit && !donutgramGhostModeBlocksContentReads()) {
+    // The server has read the explicit part: what is left was read by ghost mode only.
+    var explicitMaxIncomingReadId = read.explicitMaxIncomingReadId
+    if let value = explicitMaxIncomingReadId, serverMaxIncomingReadId >= value {
+        explicitMaxIncomingReadId = nil
+    }
+    if isCovered || (explicitMaxIncomingReadId == nil && !donutgramGhostModeBlocksContentReads()) {
         // The server has read what was read here, or read receipts are no longer hidden:
         // the server's state stays. Some server updates keep the higher of the local and the
         // server id together with the server's count; the server's id goes with that count.
@@ -228,7 +243,7 @@ func donutgramGhostLocalReadDidApplyServerState(transaction: Transaction, accoun
         }
         count = max(0, min(count, serverCount))
     }
-    donutgramSetGhostLocalRead(DGSimpleSettings.GhostLocalRead(maxIncomingReadId: maxIncomingReadId, serverMaxIncomingReadId: serverMaxIncomingReadId, serverMarkedUnread: serverMarkedUnread, readsServerMark: readsServerMark, readCount: serverCount - count, isExplicit: read.isExplicit), accountPeerId: accountPeerId, peerId: peerId)
+    donutgramSetGhostLocalRead(DGSimpleSettings.GhostLocalRead(maxIncomingReadId: maxIncomingReadId, serverMaxIncomingReadId: serverMaxIncomingReadId, serverMarkedUnread: serverMarkedUnread, readsServerMark: readsServerMark, readCount: serverCount - count, explicitMaxIncomingReadId: explicitMaxIncomingReadId), accountPeerId: accountPeerId, peerId: peerId)
     // This is the server's state with the local read on top: there is nothing left to sync
     // (resetIncomingReadStates drops the pending synchronization), and a validation would
     // only end up here again.
@@ -291,29 +306,67 @@ func donutgramGhostLocalReadsFinishReadAll(transaction: Transaction, accountPeer
     }
 }
 
+/// Ghost mode is off: the chat goes back to the server's read state and is read here again up to
+/// the explicit read only.
+private func donutgramRestoreExplicitLocalRead(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId, read: DGSimpleSettings.GhostLocalRead, explicitMaxIncomingReadId: Int32) {
+    let isServerStateKnown = donutgramRestoreServerReadState(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, read: read)
+    defer {
+        // A chat that left the chat list may have no dialog on the server, and its validation
+        // would keep retrying.
+        if !isServerStateKnown && transaction.getPeerChatListIndex(peerId) != nil {
+            transaction.setNeedsIncomingReadStateSynchronization(peerId)
+        }
+    }
+    guard explicitMaxIncomingReadId > read.serverMaxIncomingReadId, case let .idBased(_, _, _, previousCount, _)? = donutgramCloudReadState(transaction: transaction, peerId: peerId) else {
+        return
+    }
+    transaction.applyIncomingReadMaxId(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: explicitMaxIncomingReadId))
+    guard case let .idBased(maxIncomingReadId, maxOutgoingReadId, maxKnownId, count, _)? = donutgramCloudReadState(transaction: transaction, peerId: peerId) else {
+        return
+    }
+    if read.serverMarkedUnread && !read.readsServerMark {
+        // The read cleared a mark the server got after the explicit read; that mark is shown.
+        transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud: .idBased(maxIncomingReadId: maxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: count, markedUnread: true)]])
+    }
+    var restored = read
+    restored.maxIncomingReadId = maxIncomingReadId
+    // Without the server's count the next read state from the server counts the messages here.
+    restored.readCount = isServerStateKnown ? max(0, previousCount - count) : nil
+    donutgramSetGhostLocalRead(restored, accountPeerId: accountPeerId, peerId: peerId)
+}
+
 /// Explicit local read, independent of ghost mode. Keep the server baseline and do
 /// not create a Push operation, including when messages have holes in local history.
+/// Returns the id the chat is read up to, or nil for a chat that can't be read this way.
 @discardableResult
-func donutgramReadChatLocally(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId) -> Bool {
+func donutgramReadChatLocally(transaction: Transaction, accountPeerId: PeerId, peerId: PeerId) -> Int32? {
     guard donutgramIsGhostLocalReadPeer(peerId), let peer = transaction.getPeer(peerId), !peer.isForumOrMonoForum,
           transaction.getPeerChatListIndex(peerId) != nil,
           case let .idBased(maxIncomingReadId, maxOutgoingReadId, maxKnownId, count, markedUnread)? = donutgramCloudReadState(transaction: transaction, peerId: peerId) else {
-        return false
+        return nil
     }
     // A previously requested server read owns this state until it completes.
-    if case .Push? = transaction.getPeerReadStateSynchronizationOperation(peerId) { return false }
+    let synchronizationOperation = transaction.getPeerReadStateSynchronizationOperation(peerId)
+    if case .Push? = synchronizationOperation { return nil }
     let topId = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud)?.id.id ?? maxKnownId
     let readId = max(maxIncomingReadId, max(maxKnownId, topId))
-    var read = donutgramGhostLocalReadState(accountPeerId: accountPeerId, peerId: peerId)
-        ?? DGSimpleSettings.GhostLocalRead(maxIncomingReadId: maxIncomingReadId, serverMaxIncomingReadId: maxIncomingReadId, serverMarkedUnread: markedUnread, readsServerMark: false, readCount: 0)
+    // A recorded read the chat's state no longer has was replaced by the server's state.
+    var read = DGSimpleSettings.GhostLocalRead(maxIncomingReadId: maxIncomingReadId, serverMaxIncomingReadId: maxIncomingReadId, serverMarkedUnread: markedUnread, readsServerMark: false, readCount: 0)
+    if let current = donutgramGhostLocalReadState(accountPeerId: accountPeerId, peerId: peerId), current.maxIncomingReadId == maxIncomingReadId {
+        read = current
+    }
     read.maxIncomingReadId = readId
     read.readCount = read.readCount.map { $0 + count }
-    read.isExplicit = true
+    read.explicitMaxIncomingReadId = readId
     if markedUnread {
         read.serverMarkedUnread = true
         read.readsServerMark = true
     }
     donutgramSetGhostLocalRead(read, accountPeerId: accountPeerId, peerId: peerId)
     transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud: .idBased(maxIncomingReadId: readId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: readId, count: 0, markedUnread: false)]])
-    return true
+    // The reset dropped a validation the chat was waiting for; it applies the local read on top.
+    if case .Validate? = synchronizationOperation {
+        transaction.setNeedsIncomingReadStateSynchronization(peerId)
+    }
+    return readId
 }

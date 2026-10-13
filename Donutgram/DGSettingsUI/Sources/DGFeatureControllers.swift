@@ -110,10 +110,15 @@ private func dgPresentReadAllLocally(context: AccountContext, controller: ViewCo
         TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
             let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
             controller?.present(progress, in: .window(.root))
-            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] _ in
+            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] skipped in
                 progress.dismiss()
-                let text = "Все сообщения прочитаны"
-                controller?.present(textAlertController(context: context, title: nil, text: dgLocalized(text, languageCode: languageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                let text: String
+                if skipped == 0 {
+                    text = dgLocalized("Все сообщения прочитаны", languageCode: languageCode)
+                } else {
+                    text = dgLocalized("Прочитано. Пропущено чатов: %@. Секретные чаты и форумы нельзя прочитать локально.", languageCode: languageCode).replacingOccurrences(of: "%@", with: "\(skipped)")
+                }
+                controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             })
         })
     ]), in: .window(.root))
@@ -306,7 +311,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         var result: [DGListEntry] = [
             .header(-30, 0, "СТИКЕРЫ"),
             .stickerSizeSlider(-29, 0, s.stickerSize),
-            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.replyDecorationOptions(isSticker: true), s.stickerShape, previewSticker, previewEmoji),
+            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.disableColoredReplies ? s.replyDecorationOptions(isSticker: true) & ~1 : s.replyDecorationOptions(isSticker: true), s.stickerShape, previewSticker, previewEmoji),
             .toggle(-27, 0, "hideStickerTime", "Скрыть время на стикерах", s.hideStickerTime, true),
             .toggle(-26, 0, "hideStickerChecks", "Скрыть галочки на стикерах", s.hideStickerChecks, true),
             .toggle(-25, 0, "hideStickerReplyColors", "Скрыть цвета", s.hideStickerReplyColors, true),
@@ -328,17 +333,17 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(12, 4, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
             .toggle(13, 4, "seconds", "Показывать секунды", s.showMessageSeconds, true),
             .toggle(14, 4, "replies", "Отключить цветные ответы", s.disableColoredReplies, true),
-            .toggle(25, 4, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
-            .toggle(15, 4, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
-            .toggle(16, 4, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
-            .toggle(17, 4, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
-            .toggle(18, 4, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
-            .toggle(19, 4, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
-            .toggle(20, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
-            .toggle(21, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
-            .toggle(22, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
-            .toggle(23, 4, "removePings", "Убрать пинги", s.removePings, true),
-            .toggle(24, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
+            .toggle(15, 4, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
+            .toggle(16, 4, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
+            .toggle(17, 4, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
+            .toggle(18, 4, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
+            .toggle(19, 4, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
+            .toggle(20, 4, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
+            .toggle(21, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
+            .toggle(22, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
+            .toggle(23, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
+            .toggle(24, 4, "removePings", "Убрать пинги", s.removePings, true),
+            .toggle(25, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
             .toggle(26, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
             .header(27, 5, "ГОЛОС В ТЕКСТ"),
             .disclosure(28, 5, "transcription", "Сервис", transcription),

@@ -153,13 +153,18 @@ if mode == "write" {
     changedBackground.isTransparent = true
     check(refreshBackground(previousParams: originalBackground, params: changedBackground), "transparent backgrounds refresh")
     let red = FixtureColor(name: "red")
-    for type in [FixtureReplyType.bubble(incoming: true), .bubble(incoming: false), .standalone] {
-        let visible = replyColors(type: type, isStickerReply: true, authorNameColor: red)
-        let hidden = replyColors(type: type, isStickerReply: true, authorNameColor: nil)
-        check(visible.0 == red && visible.1 == red, "sticker replies show author colors in every layout")
-        check(hidden.0 != red && hidden.1 != red, "hiding sticker colors restores the theme colors")
+    let incomingVisible = replyColors(type: .bubble(incoming: true), isStickerReply: true, authorNameColor: red)
+    let incomingHidden = replyColors(type: .bubble(incoming: true), isStickerReply: true, authorNameColor: nil)
+    check(incomingVisible.0 == red && incomingVisible.1 == red, "incoming sticker replies show author colors")
+    check(incomingHidden.0 != red && incomingHidden.1 != red, "hiding sticker colors restores the theme colors")
+    for isStickerReply in [false, true] {
+        for authorNameColor in [Optional(red), nil] {
+            let outgoing = replyColors(type: .bubble(incoming: false), isStickerReply: isStickerReply, authorNameColor: authorNameColor)
+            check(outgoing.0.name == "outgoing" && outgoing.1.name == "outgoing", "outgoing replies keep the stock accent color")
+            let standalone = replyColors(type: .standalone, isStickerReply: isStickerReply, authorNameColor: authorNameColor)
+            check(standalone.0.name == "service" && standalone.1.name == "service", "replies above stickers and round videos keep the stock service color")
+        }
     }
-    check(replyColors(type: .bubble(incoming: false), isStickerReply: false, authorNameColor: red).0.name == "outgoing", "ordinary outgoing reply colors remain unchanged")
     check(donutgramArchiveRestoredOffset(-80, hideArchive: true, hasStories: false) == 0, "old archive offset cannot leave a blank row after restart")
     check(donutgramArchiveRestoredOffset(-80, hideArchive: true, hasStories: true) == -80, "visible stories keep their offset")
     check(donutgramArchiveRestoredOffset(100, hideArchive: true, hasStories: false) == 100, "scrolled-away chats keep their position")

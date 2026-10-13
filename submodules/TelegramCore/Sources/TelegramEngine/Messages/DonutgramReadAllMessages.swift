@@ -133,16 +133,22 @@ private func donutgramReadDialogBatches(_ signals: [Signal<Bool, NoError>]) -> S
 }
 
 /// Main list and archive are enumerated from Postbox: this action performs no RPCs.
-func _internal_donutgramReadAllMessagesLocally(postbox: Postbox, accountPeerId: PeerId) -> Signal<Int, NoError> {
-    return postbox.transaction { transaction -> Int in
+/// Returns the chats that can't be read this way and the messages each read chat is now read up to.
+func _internal_donutgramReadAllMessagesLocally(postbox: Postbox, accountPeerId: PeerId) -> Signal<(skipped: Int, readMessageIds: [MessageId]), NoError> {
+    return postbox.transaction { transaction -> (skipped: Int, readMessageIds: [MessageId]) in
         var peerIds = Set<PeerId>()
         for groupId in [PeerGroupId.root, PeerGroupId.group(1)] {
             peerIds.formUnion(transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: nil, additionalFilter: nil, stopOnFirstMatch: false))
         }
         var skipped = 0
+        var readMessageIds: [MessageId] = []
         for peerId in peerIds {
-            if !donutgramReadChatLocally(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId) { skipped += 1 }
+            if let readId = donutgramReadChatLocally(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId) {
+                readMessageIds.append(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: readId))
+            } else {
+                skipped += 1
+            }
         }
-        return skipped
+        return (skipped, readMessageIds)
     }
 }

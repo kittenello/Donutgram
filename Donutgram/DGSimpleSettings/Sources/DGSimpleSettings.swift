@@ -193,7 +193,9 @@ public final class DGSimpleSettings {
         static let commaAfterMention = "donutgram.chats.commaAfterMention"
         static let mentionAvatars = "donutgram.chats.mentionAvatars"
         static let removePings = "donutgram.chats.removePings"
-        static let hideArchive = "donutgram.chats.hideArchive"
+        // Removes the archive row entirely. Not the older "donutgram.chats.hideArchive": the stock
+        // «Hide» used to set that one too, and it must not take the archive away after an update.
+        static let hideArchive = "donutgram.chats.fullyHideArchive"
         static let hideGiftButton = "donutgram.chats.hideGiftButton"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
         static let accelerateUpload = "donutgram.network.accelerateUpload"
@@ -756,16 +758,20 @@ public final class DGSimpleSettings {
         /// Messages the server counts as unread that are read here; nil when that is not known
         /// (the server read part of them on another device).
         public var readCount: Int32?
-        /// Explicit local reads survive changes to ghost mode.
-        public var isExplicit: Bool
+        /// Read here up to this id by «Прочитать все локально». That part survives changes to ghost
+        /// mode; what ghost mode read after it does not. Nil for reads made by ghost mode only.
+        public var explicitMaxIncomingReadId: Int32?
+        public var isExplicit: Bool {
+            return self.explicitMaxIncomingReadId != nil
+        }
 
-        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?, isExplicit: Bool = false) {
+        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?, explicitMaxIncomingReadId: Int32? = nil) {
             self.maxIncomingReadId = maxIncomingReadId
             self.serverMaxIncomingReadId = serverMaxIncomingReadId
             self.serverMarkedUnread = serverMarkedUnread
             self.readsServerMark = readsServerMark
             self.readCount = readCount
-            self.isExplicit = isExplicit
+            self.explicitMaxIncomingReadId = explicitMaxIncomingReadId
         }
     }
 
@@ -783,14 +789,21 @@ public final class DGSimpleSettings {
         }
         var reads: [Int64: GhostLocalRead] = [:]
         for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey(accountPeerId: accountPeerId)) ?? [:] {
-            guard let peerId = Int64(key), let values = value as? [Int], (values.count == 5 || values.count == 6) else {
+            guard let peerId = Int64(key), let values = value as? [Int], ((5 ... 7).contains(values.count)) else {
                 continue
             }
             let ids = values.prefix(3).compactMap { Int32(exactly: $0) }
             guard ids.count == 3 else {
                 continue
             }
-            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil, isExplicit: values.count == 6 && values[5] != 0)
+            // Six values: an explicit read flag (the whole read was explicit). Seven: its boundary.
+            var explicitMaxIncomingReadId: Int32?
+            if values.count == 7 {
+                explicitMaxIncomingReadId = values[6] > 0 ? Int32(exactly: values[6]) : nil
+            } else if values.count == 6 && values[5] != 0 {
+                explicitMaxIncomingReadId = ids[0]
+            }
+            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil, explicitMaxIncomingReadId: explicitMaxIncomingReadId)
         }
         self.ghostLocalReadCache[accountPeerId] = reads
         return reads
@@ -826,7 +839,7 @@ public final class DGSimpleSettings {
         self.ghostLocalReadCache[accountPeerId] = reads
         var stored: [String: [Int]] = [:]
         for (peerId, read) in reads {
-            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0, read.isExplicit ? 1 : 0]
+            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0, read.isExplicit ? 1 : 0, Int(read.explicitMaxIncomingReadId ?? 0)]
         }
         self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
     }
