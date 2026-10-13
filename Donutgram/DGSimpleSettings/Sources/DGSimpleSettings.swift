@@ -761,25 +761,37 @@ public final class DGSimpleSettings {
         /// Read here up to this id by «Прочитать все локально». That part survives changes to ghost
         /// mode; what ghost mode read after it does not. Nil for reads made by ghost mode only.
         public var explicitMaxIncomingReadId: Int32?
+        /// Messages ghost mode read after the explicit read, which become unread again when it is
+        /// turned off; nil when that is not known.
+        public var readCountAfterExplicit: Int32?
         public var isExplicit: Bool {
             return self.explicitMaxIncomingReadId != nil
         }
 
-        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?, explicitMaxIncomingReadId: Int32? = nil) {
+        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?, explicitMaxIncomingReadId: Int32? = nil, readCountAfterExplicit: Int32? = nil) {
             self.maxIncomingReadId = maxIncomingReadId
             self.serverMaxIncomingReadId = serverMaxIncomingReadId
             self.serverMarkedUnread = serverMarkedUnread
             self.readsServerMark = readsServerMark
             self.readCount = readCount
             self.explicitMaxIncomingReadId = explicitMaxIncomingReadId
+            self.readCountAfterExplicit = readCountAfterExplicit
         }
     }
 
     private let ghostLocalReadLock = NSLock()
     private var ghostLocalReadCache: [Int64: [Int64: GhostLocalRead]] = [:]
+    private var ghostLocalReadBatchDepth: [Int64: Int] = [:]
+    private var ghostLocalReadsWithPendingStore = Set<Int64>()
 
     private func ghostLocalReadsKey(accountPeerId: Int64) -> String {
         return "donutgram.ghost.localReads.\(accountPeerId)"
+    }
+
+    // Explicit reads are stored apart, so that the rows above stay the five values every version
+    // reads: [boundary, readCountAfterExplicit or -1].
+    private func ghostLocalExplicitReadsKey(accountPeerId: Int64) -> String {
+        return "donutgram.ghost.explicitReads.\(accountPeerId)"
     }
 
     // Call with ghostLocalReadLock held.
@@ -787,6 +799,7 @@ public final class DGSimpleSettings {
         if let cached = self.ghostLocalReadCache[accountPeerId] {
             return cached
         }
+        let explicitReads = self.defaults.dictionary(forKey: ghostLocalExplicitReadsKey(accountPeerId: accountPeerId)) ?? [:]
         var reads: [Int64: GhostLocalRead] = [:]
         for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey(accountPeerId: accountPeerId)) ?? [:] {
             guard let peerId = Int64(key), let values = value as? [Int], ((5 ... 7).contains(values.count)) else {
@@ -796,17 +809,45 @@ public final class DGSimpleSettings {
             guard ids.count == 3 else {
                 continue
             }
-            // Six values: an explicit read flag (the whole read was explicit). Seven: its boundary.
-            var explicitMaxIncomingReadId: Int32?
-            if values.count == 7 {
-                explicitMaxIncomingReadId = values[6] > 0 ? Int32(exactly: values[6]) : nil
+            var read = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil)
+            if let explicit = (explicitReads[key] as? [Int])?.compactMap({ Int32(exactly: $0) }), explicit.count == 2 {
+                // A version without explicit reads may have changed the row since: a boundary that
+                // doesn't fit it is left out.
+                if read.serverMaxIncomingReadId <= explicit[0] && explicit[0] <= read.maxIncomingReadId {
+                    read.explicitMaxIncomingReadId = explicit[0]
+                    read.readCountAfterExplicit = explicit[1] >= 0 ? explicit[1] : nil
+                }
+            } else if values.count == 7, values[6] > 0, let boundary = Int32(exactly: values[6]) {
+                // Earlier rows kept the boundary as a seventh value, without the count after it.
+                read.explicitMaxIncomingReadId = boundary
+                read.readCountAfterExplicit = boundary == read.maxIncomingReadId ? 0 : nil
             } else if values.count == 6 && values[5] != 0 {
-                explicitMaxIncomingReadId = ids[0]
+                // Or only a flag: the whole read was explicit.
+                read.explicitMaxIncomingReadId = read.maxIncomingReadId
+                read.readCountAfterExplicit = 0
             }
-            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil, explicitMaxIncomingReadId: explicitMaxIncomingReadId)
+            reads[peerId] = read
         }
         self.ghostLocalReadCache[accountPeerId] = reads
         return reads
+    }
+
+    // Call with ghostLocalReadLock held.
+    private func storeGhostLocalReadsLocked(accountPeerId: Int64) {
+        var stored: [String: [Int]] = [:]
+        var explicitReads: [String: [Int]] = [:]
+        for (peerId, read) in self.ghostLocalReadCache[accountPeerId] ?? [:] {
+            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0]
+            if let explicitMaxIncomingReadId = read.explicitMaxIncomingReadId {
+                explicitReads[String(peerId)] = [Int(explicitMaxIncomingReadId), Int(read.readCountAfterExplicit ?? -1)]
+            }
+        }
+        self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
+        if explicitReads.isEmpty {
+            self.defaults.removeObject(forKey: ghostLocalExplicitReadsKey(accountPeerId: accountPeerId))
+        } else {
+            self.defaults.set(explicitReads, forKey: ghostLocalExplicitReadsKey(accountPeerId: accountPeerId))
+        }
     }
 
     public func hasGhostLocalReads(accountPeerId: Int64) -> Bool {
@@ -831,17 +872,37 @@ public final class DGSimpleSettings {
     public func setGhostLocalRead(_ read: GhostLocalRead?, accountPeerId: Int64, peerId: Int64) {
         self.ghostLocalReadLock.lock()
         defer { self.ghostLocalReadLock.unlock() }
-        var reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        guard reads[peerId] != read else {
+        guard self.ghostLocalReadsLocked(accountPeerId: accountPeerId)[peerId] != read else {
             return
         }
-        reads[peerId] = read
-        self.ghostLocalReadCache[accountPeerId] = reads
-        var stored: [String: [Int]] = [:]
-        for (peerId, read) in reads {
-            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0, read.isExplicit ? 1 : 0, Int(read.explicitMaxIncomingReadId ?? 0)]
+        self.ghostLocalReadCache[accountPeerId, default: [:]][peerId] = read
+        if self.ghostLocalReadBatchDepth[accountPeerId] != nil {
+            self.ghostLocalReadsWithPendingStore.insert(accountPeerId)
+        } else {
+            self.storeGhostLocalReadsLocked(accountPeerId: accountPeerId)
         }
-        self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
+    }
+
+    /// Runs `body` and stores the local reads it changes once, when it returns. Every store writes all
+    /// of the account's reads, and «Прочитать все локально» or turning ghost mode off changes many.
+    public func batchGhostLocalReads<T>(accountPeerId: Int64, _ body: () throws -> T) rethrows -> T {
+        self.ghostLocalReadLock.lock()
+        self.ghostLocalReadBatchDepth[accountPeerId, default: 0] += 1
+        self.ghostLocalReadLock.unlock()
+        defer {
+            self.ghostLocalReadLock.lock()
+            let depth = (self.ghostLocalReadBatchDepth[accountPeerId] ?? 1) - 1
+            if depth > 0 {
+                self.ghostLocalReadBatchDepth[accountPeerId] = depth
+            } else {
+                self.ghostLocalReadBatchDepth.removeValue(forKey: accountPeerId)
+                if self.ghostLocalReadsWithPendingStore.remove(accountPeerId) != nil {
+                    self.storeGhostLocalReadsLocked(accountPeerId: accountPeerId)
+                }
+            }
+            self.ghostLocalReadLock.unlock()
+        }
+        return try body()
     }
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
