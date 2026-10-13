@@ -1,4 +1,4 @@
-"""Compile the production ordering helpers with small fixtures (requires Swift)."""
+"""Compile the production history helpers with small fixtures (requires Swift)."""
 
 from pathlib import Path
 import shutil
@@ -10,8 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "submodules/TelegramCore/Sources/TelegramEngine/Payments/StarGifts.swift"
 HELPERS = (
     "giftsMatchForHistory",
+    "giftHistoryKeys",
+    "giftWasUpgraded",
+    "matchGiftHistory",
+    "sortedGiftHistory",
+    "distinctGiftsForHistory",
     "giftsWithDisappeared",
     "reindexGiftHistory",
+    "updatedGiftHistory",
     "removingDisappearedGift",
 )
 
