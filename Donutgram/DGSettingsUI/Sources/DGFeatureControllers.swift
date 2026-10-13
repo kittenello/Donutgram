@@ -6,6 +6,8 @@ import SwiftSignalKit
 import TelegramUIPreferences
 import TelegramCore
 import SettingsUI
+import PresentationDataUtils
+import OverlayStatusController
 
 public func dgSpySettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
@@ -88,10 +90,29 @@ private func dgGhostSettingsController(context: AccountContext, focusKey: String
     return dgController(context: context, page: .ghost, title: "Режим призрака", focusKey: focusKey, entries: {
         let count = s.ghostModeEnabled ? [s.ghostReadMessages, s.ghostReadStories, s.ghostSendOnline, s.ghostSendTyping, !s.ghostAutomaticOffline].filter { !$0 }.count : 0
         let silent = ["Никогда", "В режиме призрака", "Всегда"][min(max(s.ghostSendWithoutSound, 0), 2)]
-        return [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .toggle(1, 0, "enabled", "Режим призрака", s.ghostModeEnabled, true), .disclosure(2, 0, "options", "Параметры режима призрака", "\(count)/5"), .toggle(3, 0, "readOnAction", "Читать при действиях", s.ghostReadOnAction, s.ghostModeEnabled), .toggle(4, 0, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, s.ghostModeEnabled), .disclosure(5, 0, "silent", "Отправлять без звука", silent), .toggle(6, 0, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true)]
+        return [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .toggle(1, 0, "enabled", "Режим призрака", s.ghostModeEnabled, true), .disclosure(2, 0, "options", "Параметры режима призрака", "\(count)/5"), .toggle(3, 0, "readOnAction", "Читать при действиях", s.ghostReadOnAction, s.ghostModeEnabled), .toggle(4, 0, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, s.ghostModeEnabled), .disclosure(5, 0, "silent", "Отправлять без звука", silent), .toggle(6, 0, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true), .header(10, 1, "ЧТЕНИЕ"), .disclosure(11, 1, "readAll", "Прочитать все на сервере", "")]
     }, toggle: { key, value in
         switch key { case "enabled": s.ghostModeEnabled = value; case "readOnAction": s.ghostReadOnAction = value; case "scheduled": s.ghostUseScheduledMessages = value; case "stories": s.ghostSuggestForStories = value; default: break }
-    }, open: { key in key == "options" ? dgGhostOptionsController(context: context) : (key == "silent" ? dgSilentModeController(context: context) : nil) })
+    }, open: { key in key == "options" ? dgGhostOptionsController(context: context) : (key == "silent" ? dgSilentModeController(context: context) : nil) }, perform: { key, controller in
+        if key == "readAll" { dgPresentReadAllOnServer(context: context, controller: controller) }
+    })
+}
+
+private func dgPresentReadAllOnServer(context: AccountContext, controller: ViewController) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let languageCode = presentationData.strings.primaryComponent.languageCode
+    controller.present(textAlertController(context: context, title: nil, text: dgLocalized("Прочитать все сообщения?", languageCode: languageCode), actions: [
+        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+        TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
+            let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
+            controller?.present(progress, in: .window(.root))
+            let _ = (context.engine.messages.donutgramReadAllMessagesOnServer() |> deliverOnMainQueue).startStandalone(next: { [weak controller] succeeded in
+                progress.dismiss()
+                let text = succeeded ? "Все сообщения прочитаны" : "Не удалось прочитать все сообщения. Попробуйте ещё раз."
+                controller?.present(textAlertController(context: context, title: nil, text: dgLocalized(text, languageCode: languageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            })
+        })
+    ]), in: .window(.root))
 }
 
 private func dgGhostOptionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
