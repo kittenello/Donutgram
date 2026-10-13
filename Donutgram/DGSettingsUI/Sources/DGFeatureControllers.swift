@@ -116,7 +116,7 @@ private func dgPresentReadAllLocally(context: AccountContext, controller: ViewCo
                 if skipped == 0 {
                     text = dgLocalized("Все сообщения прочитаны", languageCode: languageCode)
                 } else {
-                    text = dgLocalized("Прочитано. Пропущено чатов: %@. Секретные чаты и форумы нельзя прочитать локально.", languageCode: languageCode).replacingOccurrences(of: "%@", with: "\(skipped)")
+                    text = dgLocalized("Прочитано. Пропущено чатов: %@. Секретные чаты, форумы и чаты, где прочтение ещё отправляется на сервер, нельзя прочитать локально.", languageCode: languageCode).replacingOccurrences(of: "%@", with: "\(skipped)")
                 }
                 controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             })
@@ -311,7 +311,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         var result: [DGListEntry] = [
             .header(-30, 0, "СТИКЕРЫ"),
             .stickerSizeSlider(-29, 0, s.stickerSize),
-            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.disableColoredReplies ? s.replyDecorationOptions(isSticker: true) & ~1 : s.replyDecorationOptions(isSticker: true), s.stickerShape, previewSticker, previewEmoji),
+            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.stickerReplyOptions, s.stickerShape, s.messagePreviewConfiguration, previewSticker, previewEmoji),
             .toggle(-27, 0, "hideStickerTime", "Скрыть время на стикерах", s.hideStickerTime, true),
             .toggle(-26, 0, "hideStickerChecks", "Скрыть галочки на стикерах", s.hideStickerChecks, true),
             .toggle(-25, 0, "hideStickerReplyColors", "Скрыть цвета", s.hideStickerReplyColors, true),
@@ -406,13 +406,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "staticZoom": s.staticRoundVideoZoom = value
         case "builtInMic": s.forceBuiltInMicrophone = value
         case "autoPause": s.autoPause = value
-        case "hideArchive":
-            s.hideArchive = value
-            let _ = updateChatArchiveSettings(engine: context.engine, { current in
-                var current = current
-                current.isHiddenByDefault = value
-                return current
-            }).startStandalone()
+        case "hideArchive": s.hideArchive = value
         case "hideGiftButton": s.hideGiftButton = value
         default: break
         }
@@ -631,7 +625,12 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
         return nil
     }
     let focusKey: String
-    if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {
+    if page == .chats && key == "openArchiveOnPull" {
+        // Links to rows that are gone lead to the switches that replaced them.
+        focusKey = "hideArchive"
+    } else if page == .chats && key == "stickerReplies" {
+        focusKey = "hideStickerReplyColors"
+    } else if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {
         focusKey = "profileId"
     } else if page == .general && key == "saveOwnDeleted" && !DGSimpleSettings.shared.saveDeletedMessages {
         focusKey = "saveDeleted"

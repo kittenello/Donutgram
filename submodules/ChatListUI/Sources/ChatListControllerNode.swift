@@ -2369,9 +2369,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                                 self.allowOverscrollItemExpansion = false
                                 
                                 if isPrimary {
-                                    if !DGSimpleSettings.shared.hideArchive {
-                                        self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
-                                    }
+                                    self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
                                 } else {
                                     self.inlineStackContainerNode?.currentItemNode.revealScrollHiddenItem()
                                 }

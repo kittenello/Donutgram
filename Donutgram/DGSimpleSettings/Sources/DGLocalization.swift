@@ -262,7 +262,7 @@ private let dgEnglishStrings: [String: String] = [
     "Скрыть отправку подарка": "Hide Gift Button",
     "Прочитать все локально": "Read All Locally",
     "Прочитать все сообщения только на этом устройстве?": "Read all messages on this device only?",
-    "Прочитано. Пропущено чатов: %@. Секретные чаты и форумы нельзя прочитать локально.": "Done. Chats skipped: %@. Secret chats and forums can't be read locally.",
+    "Прочитано. Пропущено чатов: %@. Секретные чаты, форумы и чаты, где прочтение ещё отправляется на сервер, нельзя прочитать локально.": "Done. Chats skipped: %@. Secret chats, forums and chats whose read is still being sent to the server can't be read locally.",
     "Прочитать все на сервере": "Read All on Server",
     "ЧТЕНИЕ": "READING",
     "Прочитать все сообщения?": "Read all messages?",

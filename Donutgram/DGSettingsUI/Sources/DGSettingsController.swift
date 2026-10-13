@@ -128,7 +128,9 @@ enum DGListEntry: ItemListNodeEntry {
     case islandStyles(Int32, Int32, Int)
     case speedSlider(Int32, Int32, Int)
     case stickerSizeSlider(Int32, Int32, Int)
-    case stickerPreview(Int32, Int32, Int, Bool, Bool, Int, Int, TelegramMediaFile?, TelegramMediaFile?)
+    // Size, time, checks, the raw reply options and the shape, then the message settings the preview's
+    // bubbles show (tails, seconds, reply colors, premium emoji): diff keys, like messagePreview.
+    case stickerPreview(Int32, Int32, Int, Bool, Bool, Int, Int, DGMessagePreviewConfiguration, TelegramMediaFile?, TelegramMediaFile?)
     case stickerShape(Int32, Int32, Int)
     // The «Иконка и остров» row: DGSimpleSettings.appMarks indices of the icon and of the island, as diff keys.
     case iconAndIsland(Int32, Int32, Int, Int)
@@ -137,12 +139,12 @@ enum DGListEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .checkbox(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _),let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconAndIsland(_, section, _, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
+        case let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .checkbox(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _),let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconAndIsland(_, section, _, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
         }
     }
     var stableId: Int32 {
         switch self {
-        case let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .checkbox(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _),let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconAndIsland(id, _, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
+        case let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .checkbox(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _),let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconAndIsland(id, _, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
         }
     }
     // The tag the row's node reports: the one item(presentationData:arguments:) gives the item,
@@ -209,7 +211,7 @@ enum DGListEntry: ItemListNodeEntry {
             return DGSpeedSliderItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, value: value, updated: { arguments.select("downloadAcceleration:\($0)") })
         case let .stickerSizeSlider(_, _, size):
             return DGStickerAppearanceItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, shapePicker: false, size: size, shape: 0, updated: { arguments.select($0) })
-        case let .stickerPreview(_, _, _, _, _, _, _, sticker, emoji):
+        case let .stickerPreview(_, _, _, _, _, _, _, _, sticker, emoji):
             return donutgramStickerPreviewItem(context: arguments.context, sectionId: self.section, sticker: sticker, emoji: emoji)
         case let .stickerShape(_, _, shape):
             return DGStickerAppearanceItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, shapePicker: true, size: DGSimpleSettings.shared.stickerSize, shape: shape, updated: { arguments.select($0) })

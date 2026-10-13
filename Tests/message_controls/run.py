@@ -36,6 +36,9 @@ def prepare():
     for key in ["hideStickerReplyColors", "hideStickerReplyEmoji", "hideStickerReplyBackground", "hidePremiumReplyEmoji"]:
         assert f'"{key}"' in ui
     assert ".stickerReplies(" not in ui and "dgStickerRepliesController" not in ui
+    # The sticker preview's key holds every setting its bubbles show, the raw reply options included.
+    assert ".stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.stickerReplyOptions, s.stickerShape, s.messagePreviewConfiguration, " in ui
+    assert 'key == "stickerReplies"' in ui and 'focusKey = "hideStickerReplyColors"' in ui
     entries = read("Donutgram/DGSettingsUI/Sources/DGSettingsController.swift")
     assert "ItemListExpandableSwitchItem" not in entries
     assert "DGMessagePreviewConfiguration, TelegramMediaFile?" in entries
@@ -50,6 +53,8 @@ def prepare():
     assert 'text: messageItem.replySticker == nil ? text : ""' in preview
     assert "currentMessages == item.messageItems" not in preview
     assert "zip(previous, item.messageItems).allSatisfy" in preview
+    # Only the Donutgram previews update their bubbles in place; the stock theme screens are unchanged.
+    assert preview.count("updatesMessagesInPlace: true") == 2 and "synchronousLoads: item.updatesMessagesInPlace" in preview
     history = read("submodules/TelegramUI/Sources/ChatHistoryListNode.swift")
     assert "includeAllMessages: stickerRepliesChanged" in history and "|| premiumReplyEmojiChanged)" in history
     contact = read("submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift")

@@ -27,8 +27,14 @@ def prepare():
     assert "if !DGSimpleSettings.shared.hideGiftButton, isTextEmpty, showPremiumGift" in input_context
     settings_items = source("submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift")
     assert "allowsClearing: true" in settings_items
-    for path in ["Donutgram/DGSimpleSettings/Sources/DGSimpleSettings.swift", "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift", "submodules/ChatListUI/Sources/ChatListControllerNode.swift"]:
+    for path in ["Donutgram/DGSimpleSettings/Sources/DGSimpleSettings.swift", "submodules/ChatListUI/Sources/ChatListControllerNode.swift"]:
         assert "openArchiveOnPull" not in source(path)
+    # The switch is gone; its old links lead to the archive switch.
+    features = source("Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift")
+    assert [line.strip() for line in features.splitlines() if "openArchiveOnPull" in line] == ['if page == .chats && key == "openArchiveOnPull" {']
+    assert 'focusKey = "hideArchive"' in features and "updateChatArchiveSettings" not in features
+    controller_node = source("submodules/ChatListUI/Sources/ChatListControllerNode.swift")
+    assert "if isPrimary {\n                                    self.mainContainerNode.currentItemNode.revealScrollHiddenItem()" in controller_node
     return Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8").replace("// PRODUCTION", ghost + "\n" + bulk)
 
 if __name__ == "__main__":

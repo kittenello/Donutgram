@@ -92,8 +92,11 @@ class ThemeSettingsChatPreviewItem: ListViewItem, ItemListItem {
     let dateTimeFormat: PresentationDateTimeFormat
     let nameDisplayOrder: PresentationPersonNameOrder
     let messageItems: [ChatPreviewMessageItem]
+    // Donutgram previews: a setting change updates the bubbles in place (see canReuseNode) and new ones load
+    // synchronously. The stock screens keep recreating them whenever the messages change.
+    let updatesMessagesInPlace: Bool
     
-    init(context: AccountContext, systemStyle: ItemListSystemStyle = .legacy, theme: PresentationTheme, componentTheme: PresentationTheme, strings: PresentationStrings, sectionId: ItemListSectionId, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, wallpaper: TelegramWallpaper, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, messageItems: [ChatPreviewMessageItem]) {
+    init(context: AccountContext, systemStyle: ItemListSystemStyle = .legacy, theme: PresentationTheme, componentTheme: PresentationTheme, strings: PresentationStrings, sectionId: ItemListSectionId, fontSize: PresentationFontSize, chatBubbleCorners: PresentationChatBubbleCorners, wallpaper: TelegramWallpaper, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, messageItems: [ChatPreviewMessageItem], updatesMessagesInPlace: Bool = false) {
         self.context = context
         self.systemStyle = systemStyle
         self.theme = theme
@@ -106,6 +109,7 @@ class ThemeSettingsChatPreviewItem: ListViewItem, ItemListItem {
         self.dateTimeFormat = dateTimeFormat
         self.nameDisplayOrder = nameDisplayOrder
         self.messageItems = messageItems
+        self.updatesMessagesInPlace = updatesMessagesInPlace
     }
     
     func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -157,7 +161,8 @@ public func donutgramMessagePreviewItem(context: AccountContext, sectionId: Item
             ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("И исходящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: true, nameColor: .preset(.blue), backgroundEmojiId: nil),
             ChatPreviewMessageItem(outgoing: false, reply: nil, text: "@donutgram" + DGSimpleSettings.shared.mentionSuffix(isBot: false) + dgLocalized("посмотри новые настройки", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil, entities: [MessageTextEntity(range: 0 ..< 10, type: .Mention)]),
             ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("Пример пересланного сообщения", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.red), backgroundEmojiId: nil, forwardedAt: Int32(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970) + 12 * 60 * 60)
-        ]
+        ],
+        updatesMessagesInPlace: true
     )
 }
 
@@ -179,7 +184,8 @@ public func donutgramStickerPreviewItem(context: AccountContext, sectionId: Item
             ChatPreviewMessageItem(outgoing: false, reply: nil, text: dgLocalized("Вау!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil),
             ChatPreviewMessageItem(outgoing: true, reply: nil, text: sticker == nil ? current.strings.Channel_NotificationLoading : "", nameColor: .preset(.blue), backgroundEmojiId: nil, sticker: sticker),
             ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Стикер", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Ого, какой милый!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.red), backgroundEmojiId: emoji?.fileId.id, replySticker: sticker, backgroundEmojiFile: emoji)
-        ]
+        ],
+        updatesMessagesInPlace: true
     )
 }
 
@@ -305,8 +311,11 @@ class ThemeSettingsChatPreviewItemNode: ListViewItemNode {
             }
             
             var nodes: [ListViewItemNode] = []
-            let canReuseNodes = currentMessages.map { previous in
-                previous.count == item.messageItems.count && zip(previous, item.messageItems).allSatisfy { pair in pair.0.canReuseNode(with: pair.1) }
+            let canReuseNodes = currentMessages.map { previous -> Bool in
+                if !item.updatesMessagesInPlace {
+                    return previous == item.messageItems
+                }
+                return previous.count == item.messageItems.count && zip(previous, item.messageItems).allSatisfy { pair in pair.0.canReuseNode(with: pair.1) }
             } ?? false
             if let messageNodes = currentNodes, canReuseNodes, messageNodes.count == items.count {
                 nodes = messageNodes
@@ -329,7 +338,7 @@ class ThemeSettingsChatPreviewItemNode: ListViewItemNode {
                 var messageNodes: [ListViewItemNode] = []
                 for i in 0 ..< items.count {
                     var itemNode: ListViewItemNode?
-                    items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
+                    items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: item.updatesMessagesInPlace, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                         itemNode = node
                         apply().1(ListViewItemApply())
                     })
