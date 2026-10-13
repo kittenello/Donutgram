@@ -193,8 +193,10 @@ public final class DGSimpleSettings {
         static let commaAfterMention = "donutgram.chats.commaAfterMention"
         static let mentionAvatars = "donutgram.chats.mentionAvatars"
         static let removePings = "donutgram.chats.removePings"
-        static let hideArchive = "donutgram.chats.hideArchive"
-        static let openArchiveOnPull = "donutgram.chats.openArchiveOnPull"
+        // Removes the archive row entirely. Not the older "donutgram.chats.hideArchive": the stock
+        // «Hide» used to set that one too, and it must not take the archive away after an update.
+        static let hideArchive = "donutgram.chats.fullyHideArchive"
+        static let hideGiftButton = "donutgram.chats.hideGiftButton"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
         static let accelerateUpload = "donutgram.network.accelerateUpload"
     }
@@ -414,7 +416,7 @@ public final class DGSimpleSettings {
         get { bool("donutgram.chats.stickers.hideTime") }
         set { setBool(newValue, "donutgram.chats.stickers.hideTime") }
     }
-    // Reply decorations: colors = 1, emoji pattern = 2, background = 4.
+    // Sticker reply decorations: colors = 1, emoji/pattern = 2, background = 4.
     public var stickerReplyOptions: Int {
         get {
             let key = "donutgram.chats.stickers.replyOptions"
@@ -422,6 +424,33 @@ public final class DGSimpleSettings {
         }
         set { setInteger(newValue & 7, "donutgram.chats.stickers.replyOptions") }
     }
+    public var hideStickerReplyColors: Bool {
+        get { stickerReplyOptions & 1 == 0 }
+        set { stickerReplyOptions = newValue ? stickerReplyOptions & ~1 : stickerReplyOptions | 1 }
+    }
+    public var hideStickerReplyEmoji: Bool {
+        get { stickerReplyOptions & 2 == 0 }
+        set { stickerReplyOptions = newValue ? stickerReplyOptions & ~2 : stickerReplyOptions | 2 }
+    }
+    public var hideStickerReplyBackground: Bool {
+        get { stickerReplyOptions & 4 == 0 }
+        set { stickerReplyOptions = newValue ? stickerReplyOptions & ~4 : stickerReplyOptions | 4 }
+    }
+    public var hidePremiumReplyEmoji: Bool {
+        get { bool("donutgram.chats.hidePremiumReplyEmoji") }
+        set { setBool(newValue, "donutgram.chats.hidePremiumReplyEmoji") }
+    }
+    public func replyDecorationOptions(isSticker: Bool) -> Int {
+        let options = isSticker ? stickerReplyOptions : 7
+        return hidePremiumReplyEmoji ? options & ~2 : options
+    }
+    public func mentionSuffix(isBot: Bool) -> String {
+        return commaAfterMention && !isBot ? ", " : " "
+    }
+    public var messagePreviewConfiguration: DGMessagePreviewConfiguration {
+        return DGMessagePreviewConfiguration(removeTails: removeMessageTails, showSeconds: showMessageSeconds, disableReplyColors: disableColoredReplies, editedIcon: editedIcon, hidePremiumEmoji: hidePremiumReplyEmoji, mentionComma: commaAfterMention, mentionAvatars: mentionAvatars, forwardDate: showForwardDate)
+    }
+
     public var stickerShape: Int {
         get { min(2, max(0, integer("donutgram.chats.stickers.shape"))) }
         set { setInteger(min(2, max(0, newValue)), "donutgram.chats.stickers.shape") }
@@ -729,21 +758,40 @@ public final class DGSimpleSettings {
         /// Messages the server counts as unread that are read here; nil when that is not known
         /// (the server read part of them on another device).
         public var readCount: Int32?
+        /// Read here up to this id by «Прочитать все локально». That part survives changes to ghost
+        /// mode; what ghost mode read after it does not. Nil for reads made by ghost mode only.
+        public var explicitMaxIncomingReadId: Int32?
+        /// Messages ghost mode read after the explicit read, which become unread again when it is
+        /// turned off; nil when that is not known.
+        public var readCountAfterExplicit: Int32?
+        public var isExplicit: Bool {
+            return self.explicitMaxIncomingReadId != nil
+        }
 
-        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?) {
+        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?, explicitMaxIncomingReadId: Int32? = nil, readCountAfterExplicit: Int32? = nil) {
             self.maxIncomingReadId = maxIncomingReadId
             self.serverMaxIncomingReadId = serverMaxIncomingReadId
             self.serverMarkedUnread = serverMarkedUnread
             self.readsServerMark = readsServerMark
             self.readCount = readCount
+            self.explicitMaxIncomingReadId = explicitMaxIncomingReadId
+            self.readCountAfterExplicit = readCountAfterExplicit
         }
     }
 
     private let ghostLocalReadLock = NSLock()
     private var ghostLocalReadCache: [Int64: [Int64: GhostLocalRead]] = [:]
+    private var ghostLocalReadBatchDepth: [Int64: Int] = [:]
+    private var ghostLocalReadsWithPendingStore = Set<Int64>()
 
     private func ghostLocalReadsKey(accountPeerId: Int64) -> String {
         return "donutgram.ghost.localReads.\(accountPeerId)"
+    }
+
+    // Explicit reads are stored apart, so that the rows above stay the five values every version
+    // reads: [boundary, readCountAfterExplicit or -1].
+    private func ghostLocalExplicitReadsKey(accountPeerId: Int64) -> String {
+        return "donutgram.ghost.explicitReads.\(accountPeerId)"
     }
 
     // Call with ghostLocalReadLock held.
@@ -751,19 +799,55 @@ public final class DGSimpleSettings {
         if let cached = self.ghostLocalReadCache[accountPeerId] {
             return cached
         }
+        let explicitReads = self.defaults.dictionary(forKey: ghostLocalExplicitReadsKey(accountPeerId: accountPeerId)) ?? [:]
         var reads: [Int64: GhostLocalRead] = [:]
         for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey(accountPeerId: accountPeerId)) ?? [:] {
-            guard let peerId = Int64(key), let values = value as? [Int], values.count == 5 else {
+            guard let peerId = Int64(key), let values = value as? [Int], ((5 ... 7).contains(values.count)) else {
                 continue
             }
             let ids = values.prefix(3).compactMap { Int32(exactly: $0) }
             guard ids.count == 3 else {
                 continue
             }
-            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil)
+            var read = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil)
+            if let explicit = (explicitReads[key] as? [Int])?.compactMap({ Int32(exactly: $0) }), explicit.count == 2 {
+                // A version without explicit reads may have changed the row since: a boundary that
+                // doesn't fit it is left out.
+                if read.serverMaxIncomingReadId <= explicit[0] && explicit[0] <= read.maxIncomingReadId {
+                    read.explicitMaxIncomingReadId = explicit[0]
+                    read.readCountAfterExplicit = explicit[1] >= 0 ? explicit[1] : nil
+                }
+            } else if values.count == 7, values[6] > 0, let boundary = Int32(exactly: values[6]) {
+                // Earlier rows kept the boundary as a seventh value, without the count after it.
+                read.explicitMaxIncomingReadId = boundary
+                read.readCountAfterExplicit = boundary == read.maxIncomingReadId ? 0 : nil
+            } else if values.count == 6 && values[5] != 0 {
+                // Or only a flag: the whole read was explicit.
+                read.explicitMaxIncomingReadId = read.maxIncomingReadId
+                read.readCountAfterExplicit = 0
+            }
+            reads[peerId] = read
         }
         self.ghostLocalReadCache[accountPeerId] = reads
         return reads
+    }
+
+    // Call with ghostLocalReadLock held.
+    private func storeGhostLocalReadsLocked(accountPeerId: Int64) {
+        var stored: [String: [Int]] = [:]
+        var explicitReads: [String: [Int]] = [:]
+        for (peerId, read) in self.ghostLocalReadCache[accountPeerId] ?? [:] {
+            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0]
+            if let explicitMaxIncomingReadId = read.explicitMaxIncomingReadId {
+                explicitReads[String(peerId)] = [Int(explicitMaxIncomingReadId), Int(read.readCountAfterExplicit ?? -1)]
+            }
+        }
+        self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
+        if explicitReads.isEmpty {
+            self.defaults.removeObject(forKey: ghostLocalExplicitReadsKey(accountPeerId: accountPeerId))
+        } else {
+            self.defaults.set(explicitReads, forKey: ghostLocalExplicitReadsKey(accountPeerId: accountPeerId))
+        }
     }
 
     public func hasGhostLocalReads(accountPeerId: Int64) -> Bool {
@@ -788,17 +872,37 @@ public final class DGSimpleSettings {
     public func setGhostLocalRead(_ read: GhostLocalRead?, accountPeerId: Int64, peerId: Int64) {
         self.ghostLocalReadLock.lock()
         defer { self.ghostLocalReadLock.unlock() }
-        var reads = self.ghostLocalReadsLocked(accountPeerId: accountPeerId)
-        guard reads[peerId] != read else {
+        guard self.ghostLocalReadsLocked(accountPeerId: accountPeerId)[peerId] != read else {
             return
         }
-        reads[peerId] = read
-        self.ghostLocalReadCache[accountPeerId] = reads
-        var stored: [String: [Int]] = [:]
-        for (peerId, read) in reads {
-            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0]
+        self.ghostLocalReadCache[accountPeerId, default: [:]][peerId] = read
+        if self.ghostLocalReadBatchDepth[accountPeerId] != nil {
+            self.ghostLocalReadsWithPendingStore.insert(accountPeerId)
+        } else {
+            self.storeGhostLocalReadsLocked(accountPeerId: accountPeerId)
         }
-        self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
+    }
+
+    /// Runs `body` and stores the local reads it changes once, when it returns. Every store writes all
+    /// of the account's reads, and «Прочитать все локально» or turning ghost mode off changes many.
+    public func batchGhostLocalReads<T>(accountPeerId: Int64, _ body: () throws -> T) rethrows -> T {
+        self.ghostLocalReadLock.lock()
+        self.ghostLocalReadBatchDepth[accountPeerId, default: 0] += 1
+        self.ghostLocalReadLock.unlock()
+        defer {
+            self.ghostLocalReadLock.lock()
+            let depth = (self.ghostLocalReadBatchDepth[accountPeerId] ?? 1) - 1
+            if depth > 0 {
+                self.ghostLocalReadBatchDepth[accountPeerId] = depth
+            } else {
+                self.ghostLocalReadBatchDepth.removeValue(forKey: accountPeerId)
+                if self.ghostLocalReadsWithPendingStore.remove(accountPeerId) != nil {
+                    self.storeGhostLocalReadsLocked(accountPeerId: accountPeerId)
+                }
+            }
+            self.ghostLocalReadLock.unlock()
+        }
+        return try body()
     }
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
@@ -900,7 +1004,7 @@ public final class DGSimpleSettings {
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }
-    public var openArchiveOnPull: Bool { get { bool(Key.openArchiveOnPull) } set { setBool(newValue, Key.openArchiveOnPull) } }
+    public var hideGiftButton: Bool { get { bool(Key.hideGiftButton) } set { setBool(newValue, Key.hideGiftButton) } }
     /// 0: standard, 1: fast, 2: ultra. Values outside this range fall back to standard.
     public var downloadAcceleration: Int { get { min(max(integer(Key.downloadAcceleration), 0), 2) } set { setInteger(min(max(newValue, 0), 2), Key.downloadAcceleration) } }
     public var accelerateUpload: Bool { get { bool(Key.accelerateUpload) } set { setBool(newValue, Key.accelerateUpload) } }
@@ -921,4 +1025,16 @@ public final class DGSimpleSettings {
             return !telegramCanTranscribe
         }
     }
+}
+
+/// Every message-preview setting is part of the list row's diff key.
+public struct DGMessagePreviewConfiguration: Equatable {
+    public let removeTails: Bool
+    public let showSeconds: Bool
+    public let disableReplyColors: Bool
+    public let editedIcon: Bool
+    public let hidePremiumEmoji: Bool
+    public let mentionComma: Bool
+    public let mentionAvatars: Bool
+    public let forwardDate: Bool
 }

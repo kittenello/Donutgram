@@ -131,3 +131,28 @@ private func donutgramReadDialogBatches(_ signals: [Signal<Bool, NoError>]) -> S
     }
     return result
 }
+
+/// Main list and archive are enumerated from Postbox: this action performs no RPCs.
+/// Returns the unread chats that can't be read this way and the messages each read chat is now read up to.
+func _internal_donutgramReadAllMessagesLocally(postbox: Postbox, accountPeerId: PeerId) -> Signal<(skipped: Int, readMessageIds: [MessageId]), NoError> {
+    return postbox.transaction { transaction -> (skipped: Int, readMessageIds: [MessageId]) in
+        var unreadPeerIds = Set<PeerId>()
+        for groupId in [PeerGroupId.root, PeerGroupId.group(1)] {
+            unreadPeerIds.formUnion(transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: nil, additionalFilter: nil, stopOnFirstMatch: false))
+        }
+        // Chats ghost mode has read look read already, but turning it off would make them unread again.
+        let peerIds = unreadPeerIds.union(donutgramGhostLocalReadPeerIds(accountPeerId: accountPeerId))
+        return donutgramBatchGhostLocalReads(accountPeerId: accountPeerId) {
+            var skipped = 0
+            var readMessageIds: [MessageId] = []
+            for peerId in peerIds {
+                if let readId = donutgramReadChatLocally(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId) {
+                    readMessageIds.append(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: readId))
+                } else if unreadPeerIds.contains(peerId) {
+                    skipped += 1
+                }
+            }
+            return (skipped, readMessageIds)
+        }
+    }
+}

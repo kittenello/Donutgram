@@ -412,7 +412,7 @@ func settingsEditingItems(data: PeerInfoScreenData?, state: PeerInfoState, conte
             interaction.updateBio(updatedText)
         }, action: {
             interaction.dismissInput()
-        }, maxLength: Int(data.globalSettings?.userLimits.maxAboutLength ?? 70)))
+        }, maxLength: Int(data.globalSettings?.userLimits.maxAboutLength ?? 70), allowsClearing: true))
         
         
         var bioPrivacyInfo = presentationData.strings.Settings_About_PrivacyHelpEmpty

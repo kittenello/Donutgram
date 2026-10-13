@@ -279,6 +279,17 @@ public extension TelegramEngine {
             return _internal_markAllChatsAsRead(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager)
         }
 
+        /// Returns the number of chats that cannot be read locally.
+        public func donutgramReadAllMessagesLocally() -> Signal<Int, NoError> {
+            let stateManager: AccountStateManager = self.account.stateManager
+            return _internal_donutgramReadAllMessagesLocally(postbox: self.account.postbox, accountPeerId: self.account.peerId)
+            |> map { result -> Int in
+                // Notifications of what was read here are removed, as with any other read.
+                stateManager.notifyAppliedIncomingReadMessages(result.readMessageIds)
+                return result.skipped
+            }
+        }
+
         public func donutgramReadAllMessagesOnServer() -> Signal<Bool, NoError> {
             return _internal_donutgramReadAllMessages(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager)
         }

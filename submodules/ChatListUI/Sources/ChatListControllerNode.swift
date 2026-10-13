@@ -248,7 +248,14 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
                 self.didSetupContentOffset = true
                 self.isSettingUpContentOffset = true
                 
-                let _ = itemNode.listNode.scrollToOffsetFromTop(initialScrollingOffset, animated: false)
+                let hasStories: Bool
+                if let controller = self.controller, let subscriptions = controller.orderedStorySubscriptions {
+                    hasStories = shouldDisplayStoriesInChatListHeader(storySubscriptions: subscriptions, isHidden: controller.location == .chatList(groupId: .archive))
+                } else {
+                    hasStories = false
+                }
+                let restoredOffset = donutgramArchiveRestoredOffset(initialScrollingOffset, hideArchive: DGSimpleSettings.shared.hideArchive, hasStories: hasStories)
+                let _ = itemNode.listNode.scrollToOffsetFromTop(restoredOffset, animated: false)
                 
                 let offset = itemNode.listNode.visibleContentOffset()
                 self.contentOffset = offset
@@ -2362,16 +2369,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                                 self.allowOverscrollItemExpansion = false
                                 
                                 if isPrimary {
-                                    // The stock «Hide» turns `hideArchive` on as well, so the pull must keep revealing the hidden
-                                    // row unless `openArchiveOnPull` asks for the archive screen. The DG flags are app-wide, hence
-                                    // the check that this account's archive row is actually hidden.
-                                    if let controller = self.controller, case .chatList(.root) = controller.location,
-                                       DGSimpleSettings.shared.hideArchive && DGSimpleSettings.shared.openArchiveOnPull,
-                                       self.mainContainerNode.currentItemNode.hasItemsToBeRevealed() {
-                                        self.mainContainerNode.groupSelected?(.archive)
-                                    } else {
-                                        self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
-                                    }
+                                    self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
                                 } else {
                                     self.inlineStackContainerNode?.currentItemNode.revealScrollHiddenItem()
                                 }

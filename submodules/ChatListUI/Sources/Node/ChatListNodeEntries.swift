@@ -604,7 +604,7 @@ struct ChatListContactPeer {
     }
 }
 
-func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
+func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, fullyHideArchive: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
     var groupItems = view.groupItems
     if isMainTab && state.archiveStoryState != nil && groupItems.isEmpty {
         groupItems.append(EngineChatList.GroupItem(
@@ -615,6 +615,11 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         ))
     }
     
+    // Remove the archive before computing pinned offsets, not only when appending its row.
+    if fullyHideArchive {
+        groupItems.removeAll { $0.id == .archive }
+    }
+
     var result: [ChatListNodeEntry] = []
     
     var hasContacts = false

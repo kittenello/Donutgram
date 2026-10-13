@@ -1995,6 +1995,15 @@ public final class ChatListNode: ListViewImpl {
         }
         |> distinctUntilChanged
         
+        let fullyHideArchive = Signal<Bool, NoError> { subscriber in
+            let observer = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil) { _ in
+                subscriber.putNext(DGSimpleSettings.shared.hideArchive)
+            }
+            subscriber.putNext(DGSimpleSettings.shared.hideArchive)
+            return ActionDisposable { NotificationCenter.default.removeObserver(observer) }
+        } |> distinctUntilChanged
+        let archiveVisibility = combineLatest(hideArchivedFolderByDefault, fullyHideArchive)
+
         let displayArchiveIntro: Signal<Bool, NoError>
         if case .chatList(.archive) = location {
             let displayArchiveIntroData = context.sharedContext.accountManager.noticeEntry(key: ApplicationSpecificNotice.archiveIntroDismissedKey())
@@ -2213,7 +2222,7 @@ public final class ChatListNode: ListViewImpl {
         |> distinctUntilChanged
         
         let chatListNodeViewTransition = combineLatest(queue: viewProcessingQueue,
-            hideArchivedFolderByDefault,
+            archiveVisibility,
             displayArchiveIntro,
             storageInfo,
             savedMessagesPeer,
@@ -2223,14 +2232,15 @@ public final class ChatListNode: ListViewImpl {
             chatListFilters,
             accountIsPremium
         )
-        |> mapToQueue { (hideArchivedFolderByDefault, displayArchiveIntro, storageInfo, savedMessagesPeer, updateAndFilter, state, contacts, chatListFilters, accountIsPremium) -> Signal<ChatListNodeListViewTransition, NoError> in
+        |> mapToQueue { (archiveVisibility, displayArchiveIntro, storageInfo, savedMessagesPeer, updateAndFilter, state, contacts, chatListFilters, accountIsPremium) -> Signal<ChatListNodeListViewTransition, NoError> in
+            let (hideArchivedFolderByDefault, fullyHideArchive) = archiveVisibility
             let (update, filter) = updateAndFilter
             
             let previousHideArchivedFolderByDefaultValue = previousHideArchivedFolderByDefault.swap(hideArchivedFolderByDefault)
             
             let innerIsMainTab = location == .chatList(groupId: .root) && chatListFilter == nil
             
-            let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, displayArchiveIntro: displayArchiveIntro, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab)
+            let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, fullyHideArchive: fullyHideArchive, displayArchiveIntro: displayArchiveIntro, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab)
             var isEmpty = true
             var entries = rawEntries.filter { entry in
                 switch entry {
@@ -3624,6 +3634,21 @@ public final class ChatListNode: ListViewImpl {
             }
             
             var scrollToItem = transition.scrollToItem
+            // An archive row removed at the top must not leave its previous screen position behind.
+            let removedArchive = (self.chatListView?.filteredEntries.contains { entry in
+                if case let .GroupReferenceEntry(data) = entry { return data.groupId == .archive }
+                return false
+            } ?? false) && !transition.chatListView.filteredEntries.contains { entry in
+                if case let .GroupReferenceEntry(data) = entry { return data.groupId == .archive }
+                return false
+            }
+            let archiveOffset: CGFloat?
+            if case let .known(offset) = self.visibleContentOffset() {
+                archiveOffset = offset
+            } else {
+                archiveOffset = nil
+            }
+            let archiveGap = donutgramArchiveTopGapNeedsReset(hideArchive: DGSimpleSettings.shared.hideArchive, isRoot: self.location == .chatList(groupId: .root), isTracking: self.isTracking, isDecelerating: self.isDeceleratingAfterTracking, storiesInset: self.tempTopInset, offset: archiveOffset, removedArchive: removedArchive)
             if transition.adjustScrollToFirstItem {
                 var offset: CGFloat = 0.0
                 if let visibleTopInset = self.visibleTopInset {
@@ -3639,6 +3664,9 @@ public final class ChatListNode: ListViewImpl {
                 scrollToItem = ListViewScrollToItem(index: 0, position: .top(offset), animated: false, curve: .Default(duration: 0.0), directionHint: .Up)
             }
             
+            if archiveGap {
+                scrollToItem = ListViewScrollToItem(index: 0, position: .top(0.0), animated: false, curve: .Default(duration: 0.0), directionHint: .Up)
+            }
             let updatedOpaqueState: Any? = ChatListOpaqueTransactionState(chatListView: transition.chatListView)
             self.transaction(deleteIndices: transition.deleteItems, insertIndicesAndItems: transition.insertItems, updateIndicesAndItems: transition.updateItems, options: options, scrollToItem: scrollToItem, stationaryItemRange: transition.stationaryItemRange, updateOpaqueState: updatedOpaqueState, completion: completion)
         }

@@ -13,6 +13,7 @@ final class PeerInfoScreenMultilineInputItem: PeerInfoScreenItem {
     let textUpdated: (String) -> Void
     let action: () -> Void
     let maxLength: Int?
+    let allowsClearing: Bool
     
     init(
         id: AnyHashable,
@@ -20,7 +21,8 @@ final class PeerInfoScreenMultilineInputItem: PeerInfoScreenItem {
         placeholder: String,
         textUpdated: @escaping (String) -> Void,
         action: @escaping () -> Void,
-        maxLength: Int?
+        maxLength: Int?,
+        allowsClearing: Bool = false
     ) {
         self.id = id
         self.text = text
@@ -28,6 +30,7 @@ final class PeerInfoScreenMultilineInputItem: PeerInfoScreenItem {
         self.textUpdated = textUpdated
         self.action = action
         self.maxLength = maxLength
+        self.allowsClearing = allowsClearing
     }
     
     func node() -> PeerInfoScreenItemNode {
@@ -67,11 +70,17 @@ final class PeerInfoScreenMultilineInputItemNode: PeerInfoScreenItemNode {
         
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         
+        var clearAction: ItemListMultilineInputInlineAction?
+        if item.allowsClearing && (item.text.count >= 40 || item.text.contains("\n")), let icon = UIImage(bundleImageName: "Components/Search Bar/Clear") {
+            clearAction = ItemListMultilineInputInlineAction(icon: icon, action: {
+                item.textUpdated("")
+            })
+        }
         let inputItem = ItemListMultilineInputItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, text: item.text, placeholder: item.placeholder, maxLength: item.maxLength.flatMap { ItemListMultilineInputItemTextLimit(value: $0, display: true) }, sectionId: 0, style: .blocks, returnKeyType: .done, textUpdated: { updatedText in
             item.textUpdated(updatedText)
         }, action: {
             item.action()
-        }, noInsets: true)
+        }, inlineAction: clearAction, noInsets: true)
             
         let params = ListViewItemLayoutParams(width: width, leftInset: safeInsets.left, rightInset: safeInsets.right, availableHeight: 1000.0)
            

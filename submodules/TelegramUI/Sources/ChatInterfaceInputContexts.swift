@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import TelegramCore
 import Display
@@ -202,7 +203,7 @@ func inputTextPanelStateForChatPresentationInterfaceState(_ chatPresentationInte
                             showPremiumGift = true
                         }
                     }
-                    if isTextEmpty, showPremiumGift, let peer = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, !peer.isDeleted && peer.botInfo == nil && !peer.flags.contains(.isSupport) { //&& chatPresentationInterfaceState.suggestPremiumGift {
+                    if !DGSimpleSettings.shared.hideGiftButton, isTextEmpty, showPremiumGift, let peer = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, !peer.isDeleted && peer.botInfo == nil && !peer.flags.contains(.isSupport) { //&& chatPresentationInterfaceState.suggestPremiumGift {
                         accessoryItems.append(.gift)
                     }
                 }
