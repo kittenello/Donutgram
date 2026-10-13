@@ -5452,7 +5452,6 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             guard let strongSelf = self else {
                 return
             }
-            DGSimpleSettings.shared.hideArchive = updatedValue
             strongSelf.chatListDisplayNode.mainContainerNode.updateState { state in
                 var state = state
                 if updatedValue {

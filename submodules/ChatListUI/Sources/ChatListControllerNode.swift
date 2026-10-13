@@ -2362,14 +2362,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                                 self.allowOverscrollItemExpansion = false
                                 
                                 if isPrimary {
-                                    // The stock «Hide» turns `hideArchive` on as well, so the pull must keep revealing the hidden
-                                    // row unless `openArchiveOnPull` asks for the archive screen. The DG flags are app-wide, hence
-                                    // the check that this account's archive row is actually hidden.
-                                    if let controller = self.controller, case .chatList(.root) = controller.location,
-                                       DGSimpleSettings.shared.hideArchive && DGSimpleSettings.shared.openArchiveOnPull,
-                                       self.mainContainerNode.currentItemNode.hasItemsToBeRevealed() {
-                                        self.mainContainerNode.groupSelected?(.archive)
-                                    } else {
+                                    if !DGSimpleSettings.shared.hideArchive {
                                         self.mainContainerNode.currentItemNode.revealScrollHiddenItem()
                                     }
                                 } else {

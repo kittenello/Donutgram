@@ -194,7 +194,7 @@ public final class DGSimpleSettings {
         static let mentionAvatars = "donutgram.chats.mentionAvatars"
         static let removePings = "donutgram.chats.removePings"
         static let hideArchive = "donutgram.chats.hideArchive"
-        static let openArchiveOnPull = "donutgram.chats.openArchiveOnPull"
+        static let hideGiftButton = "donutgram.chats.hideGiftButton"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
         static let accelerateUpload = "donutgram.network.accelerateUpload"
     }
@@ -729,13 +729,16 @@ public final class DGSimpleSettings {
         /// Messages the server counts as unread that are read here; nil when that is not known
         /// (the server read part of them on another device).
         public var readCount: Int32?
+        /// Explicit local reads survive changes to ghost mode.
+        public var isExplicit: Bool
 
-        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?) {
+        public init(maxIncomingReadId: Int32, serverMaxIncomingReadId: Int32, serverMarkedUnread: Bool, readsServerMark: Bool, readCount: Int32?, isExplicit: Bool = false) {
             self.maxIncomingReadId = maxIncomingReadId
             self.serverMaxIncomingReadId = serverMaxIncomingReadId
             self.serverMarkedUnread = serverMarkedUnread
             self.readsServerMark = readsServerMark
             self.readCount = readCount
+            self.isExplicit = isExplicit
         }
     }
 
@@ -753,14 +756,14 @@ public final class DGSimpleSettings {
         }
         var reads: [Int64: GhostLocalRead] = [:]
         for (key, value) in self.defaults.dictionary(forKey: ghostLocalReadsKey(accountPeerId: accountPeerId)) ?? [:] {
-            guard let peerId = Int64(key), let values = value as? [Int], values.count == 5 else {
+            guard let peerId = Int64(key), let values = value as? [Int], (values.count == 5 || values.count == 6) else {
                 continue
             }
             let ids = values.prefix(3).compactMap { Int32(exactly: $0) }
             guard ids.count == 3 else {
                 continue
             }
-            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil)
+            reads[peerId] = GhostLocalRead(maxIncomingReadId: ids[0], serverMaxIncomingReadId: ids[1], serverMarkedUnread: values[3] != 0, readsServerMark: values[4] != 0, readCount: ids[2] >= 0 ? ids[2] : nil, isExplicit: values.count == 6 && values[5] != 0)
         }
         self.ghostLocalReadCache[accountPeerId] = reads
         return reads
@@ -796,7 +799,7 @@ public final class DGSimpleSettings {
         self.ghostLocalReadCache[accountPeerId] = reads
         var stored: [String: [Int]] = [:]
         for (peerId, read) in reads {
-            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0]
+            stored[String(peerId)] = [Int(read.maxIncomingReadId), Int(read.serverMaxIncomingReadId), Int(read.readCount ?? -1), read.serverMarkedUnread ? 1 : 0, read.readsServerMark ? 1 : 0, read.isExplicit ? 1 : 0]
         }
         self.defaults.set(stored, forKey: ghostLocalReadsKey(accountPeerId: accountPeerId))
     }
@@ -900,7 +903,7 @@ public final class DGSimpleSettings {
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }
-    public var openArchiveOnPull: Bool { get { bool(Key.openArchiveOnPull) } set { setBool(newValue, Key.openArchiveOnPull) } }
+    public var hideGiftButton: Bool { get { bool(Key.hideGiftButton) } set { setBool(newValue, Key.hideGiftButton) } }
     /// 0: standard, 1: fast, 2: ultra. Values outside this range fall back to standard.
     public var downloadAcceleration: Int { get { min(max(integer(Key.downloadAcceleration), 0), 2) } set { setInteger(min(max(newValue, 0), 2), Key.downloadAcceleration) } }
     public var accelerateUpload: Bool { get { bool(Key.accelerateUpload) } set { setBool(newValue, Key.accelerateUpload) } }

@@ -1995,6 +1995,15 @@ public final class ChatListNode: ListViewImpl {
         }
         |> distinctUntilChanged
         
+        let fullyHideArchive = Signal<Bool, NoError> { subscriber in
+            let observer = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil) { _ in
+                subscriber.putNext(DGSimpleSettings.shared.hideArchive)
+            }
+            subscriber.putNext(DGSimpleSettings.shared.hideArchive)
+            return ActionDisposable { NotificationCenter.default.removeObserver(observer) }
+        } |> distinctUntilChanged
+        let archiveVisibility = combineLatest(hideArchivedFolderByDefault, fullyHideArchive)
+
         let displayArchiveIntro: Signal<Bool, NoError>
         if case .chatList(.archive) = location {
             let displayArchiveIntroData = context.sharedContext.accountManager.noticeEntry(key: ApplicationSpecificNotice.archiveIntroDismissedKey())
@@ -2213,7 +2222,7 @@ public final class ChatListNode: ListViewImpl {
         |> distinctUntilChanged
         
         let chatListNodeViewTransition = combineLatest(queue: viewProcessingQueue,
-            hideArchivedFolderByDefault,
+            archiveVisibility,
             displayArchiveIntro,
             storageInfo,
             savedMessagesPeer,
@@ -2223,14 +2232,15 @@ public final class ChatListNode: ListViewImpl {
             chatListFilters,
             accountIsPremium
         )
-        |> mapToQueue { (hideArchivedFolderByDefault, displayArchiveIntro, storageInfo, savedMessagesPeer, updateAndFilter, state, contacts, chatListFilters, accountIsPremium) -> Signal<ChatListNodeListViewTransition, NoError> in
+        |> mapToQueue { (archiveVisibility, displayArchiveIntro, storageInfo, savedMessagesPeer, updateAndFilter, state, contacts, chatListFilters, accountIsPremium) -> Signal<ChatListNodeListViewTransition, NoError> in
+            let (hideArchivedFolderByDefault, fullyHideArchive) = archiveVisibility
             let (update, filter) = updateAndFilter
             
             let previousHideArchivedFolderByDefaultValue = previousHideArchivedFolderByDefault.swap(hideArchivedFolderByDefault)
             
             let innerIsMainTab = location == .chatList(groupId: .root) && chatListFilter == nil
             
-            let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, displayArchiveIntro: displayArchiveIntro, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab)
+            let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, fullyHideArchive: fullyHideArchive, displayArchiveIntro: displayArchiveIntro, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab)
             var isEmpty = true
             var entries = rawEntries.filter { entry in
                 switch entry {

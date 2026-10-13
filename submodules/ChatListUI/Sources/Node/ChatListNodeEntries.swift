@@ -604,7 +604,7 @@ struct ChatListContactPeer {
     }
 }
 
-func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
+func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, fullyHideArchive: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
     var groupItems = view.groupItems
     if isMainTab && state.archiveStoryState != nil && groupItems.isEmpty {
         groupItems.append(EngineChatList.GroupItem(
@@ -921,6 +921,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         
         if !view.hasLater, case .chatList = mode {
             for groupReference in groupItems {
+                if fullyHideArchive && groupReference.id == .archive {
+                    continue
+                }
                 let messageIndex = EngineMessage.Index(id: EngineMessage.Id(peerId: EnginePeer.Id(0), namespace: 0, id: 0), timestamp: 1)
                 var mappedStoryState: ChatListNodeState.StoryState?
                 if let archiveStoryState = state.archiveStoryState {

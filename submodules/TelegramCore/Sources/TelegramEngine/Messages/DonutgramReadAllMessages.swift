@@ -131,3 +131,18 @@ private func donutgramReadDialogBatches(_ signals: [Signal<Bool, NoError>]) -> S
     }
     return result
 }
+
+/// Main list and archive are enumerated from Postbox: this action performs no RPCs.
+func _internal_donutgramReadAllMessagesLocally(postbox: Postbox, accountPeerId: PeerId) -> Signal<Int, NoError> {
+    return postbox.transaction { transaction -> Int in
+        var peerIds = Set<PeerId>()
+        for groupId in [PeerGroupId.root, PeerGroupId.group(1)] {
+            peerIds.formUnion(transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: nil, additionalFilter: nil, stopOnFirstMatch: false))
+        }
+        var skipped = 0
+        for peerId in peerIds {
+            if !donutgramReadChatLocally(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId) { skipped += 1 }
+        }
+        return skipped
+    }
+}

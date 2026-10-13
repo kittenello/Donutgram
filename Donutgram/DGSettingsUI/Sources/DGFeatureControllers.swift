@@ -22,7 +22,7 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         let shadowBanCount = s.shadowBannedPeerIds.count
         result.append(.disclosure(21, 1, "shadowBan", "Теневой бан", shadowBanCount == 0 ? "Выключен" : "\(shadowBanCount)"))
         result.append(contentsOf: [.header(22, 2, "ПЕРЕСЫЛКА"), .toggle(23, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true)])
-        result.append(contentsOf: [.toggle(24, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true), .info(25, 2, "Чаты, группы и каналы с запретом копирования не скрываются на скриншотах и записи экрана. Секретные чаты и медиа с таймером по-прежнему скрыты. Изменение применится, когда чат откроется заново.")])
+        result.append(contentsOf: [.toggle(24, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true)])
         result.append(contentsOf: [.header(26, 3, "УСКОРЕНИЕ ЗАГРУЗКИ"), .speedSlider(27, 3, s.downloadAcceleration), .toggle(28, 3, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true), .info(29, 3, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео."), .header(30, 4, "ДРУГОЕ"), .disclosure(31, 4, "visualPhone", "Визуальный номер", s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"), .disclosure(32, 4, "visualRating", "Визуальный рейтинг", s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"), .disclosure(33, 4, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"), .disclosure(34, 4, "visualId", "Визуальный ID", s.visualProfileId(accountId: accountId).isEmpty ? "Выключен" : s.visualProfileId(accountId: accountId)), .toggle(35, 4, "localPremium", "Локальный TG Premium", s.localPremium(accountId: accountId), true)])
         if s.localPremium(accountId: accountId) {
             result.append(.info(36, 4, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
@@ -93,12 +93,30 @@ private func dgGhostSettingsController(context: AccountContext, focusKey: String
     return dgController(context: context, page: .ghost, title: "Режим призрака", focusKey: focusKey, entries: {
         let count = s.ghostModeEnabled ? [s.ghostReadMessages, s.ghostReadStories, s.ghostSendOnline, s.ghostSendTyping, !s.ghostAutomaticOffline].filter { !$0 }.count : 0
         let silent = ["Никогда", "В режиме призрака", "Всегда"][min(max(s.ghostSendWithoutSound, 0), 2)]
-        return [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .toggle(1, 0, "enabled", "Режим призрака", s.ghostModeEnabled, true), .disclosure(2, 0, "options", "Параметры режима призрака", "\(count)/5"), .toggle(3, 0, "readOnAction", "Читать при действиях", s.ghostReadOnAction, s.ghostModeEnabled), .toggle(4, 0, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, s.ghostModeEnabled), .disclosure(5, 0, "silent", "Отправлять без звука", silent), .toggle(6, 0, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true), .header(10, 1, "ЧТЕНИЕ"), .disclosure(11, 1, "readAll", "Прочитать все на сервере", "")]
+        return [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .toggle(1, 0, "enabled", "Режим призрака", s.ghostModeEnabled, true), .disclosure(2, 0, "options", "Параметры режима призрака", "\(count)/5"), .toggle(3, 0, "readOnAction", "Читать при действиях", s.ghostReadOnAction, s.ghostModeEnabled), .toggle(4, 0, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, s.ghostModeEnabled), .disclosure(5, 0, "silent", "Отправлять без звука", silent), .toggle(6, 0, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true), .header(10, 1, "ЧТЕНИЕ"), .disclosure(11, 1, "readAll", "Прочитать все на сервере", ""), .disclosure(12, 1, "readAllLocal", "Прочитать все локально", "")]
     }, toggle: { key, value in
         switch key { case "enabled": s.ghostModeEnabled = value; case "readOnAction": s.ghostReadOnAction = value; case "scheduled": s.ghostUseScheduledMessages = value; case "stories": s.ghostSuggestForStories = value; default: break }
     }, open: { key in key == "options" ? dgGhostOptionsController(context: context) : (key == "silent" ? dgSilentModeController(context: context) : nil) }, perform: { key, controller in
         if key == "readAll" { dgPresentReadAllOnServer(context: context, controller: controller) }
+        if key == "readAllLocal" { dgPresentReadAllLocally(context: context, controller: controller) }
     })
+}
+
+private func dgPresentReadAllLocally(context: AccountContext, controller: ViewController) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let languageCode = presentationData.strings.primaryComponent.languageCode
+    controller.present(textAlertController(context: context, title: nil, text: dgLocalized("Прочитать все сообщения только на этом устройстве?", languageCode: languageCode), actions: [
+        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+        TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
+            let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
+            controller?.present(progress, in: .window(.root))
+            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] skipped in
+                progress.dismiss()
+                let text = skipped == 0 ? "Все сообщения прочитаны локально" : "Сообщения прочитаны локально. Секретные чаты, темы форумов и чаты с отправляемой отметкой прочтения пропущены."
+                controller?.present(textAlertController(context: context, title: nil, text: dgLocalized(text, languageCode: languageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            })
+        })
+    ]), in: .window(.root))
 }
 
 private func dgPresentReadAllOnServer(context: AccountContext, controller: ViewController) {
@@ -204,12 +222,9 @@ public func dgIconAndIslandController(context: AccountContext, focusKey: String?
             entries.append(contentsOf: [
                 .header(0, 0, "ПРЕДПРОСМОТР"),
                 .iconIslandPreview(1, 0, DGSimpleSettings.appMarkIndex(iconName: iconName), s.islandMarkIndex(iconName: iconName)),
-                .info(2, 0, "Остров прячется под вырезом камеры — его видно только на скриншотах и записи экрана."),
                 .toggle(10, 1, "islandFollowsIcon", "Остров как у иконки", s.islandFollowsIcon, true)
             ])
-            if s.islandFollowsIcon {
-                entries.append(.info(12, 1, "Выбираешь иконку — остров меняется на такой же."))
-            } else {
+            if !s.islandFollowsIcon {
                 // The islands join the switch's block: turning it off shows them right under the finger, next to the
                 // preview, instead of below the six rows of icons.
                 entries.append(contentsOf: [.islandStyles(11, 1, s.islandStyle), .info(12, 1, "Иконка и остров выбираются отдельно.")])
@@ -335,9 +350,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .header(80, 11, "ДРУГОЕ"),
             .toggle(81, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
-        if s.hideArchive {
-            result.append(.toggle(82, 11, "openArchiveOnPull", "Открывать архив при вытягивании", s.openArchiveOnPull, true))
-        }
+        result.append(.toggle(82, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
         result.append(.disclosure(83, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
@@ -377,7 +390,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
                 current.isHiddenByDefault = value
                 return current
             }).startStandalone()
-        case "openArchiveOnPull": s.openArchiveOnPull = value
+        case "hideGiftButton": s.hideGiftButton = value
         default: break
         }
     }, select: { key in
@@ -607,9 +620,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
         return nil
     }
     let focusKey: String
-    if page == .chats && key == "openArchiveOnPull" && !DGSimpleSettings.shared.hideArchive {
-        focusKey = "hideArchive"
-    } else if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {
+    if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {
         focusKey = "profileId"
     } else if page == .general && key == "saveOwnDeleted" && !DGSimpleSettings.shared.saveDeletedMessages {
         focusKey = "saveDeleted"

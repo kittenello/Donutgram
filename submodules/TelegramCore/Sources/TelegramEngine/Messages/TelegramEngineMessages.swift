@@ -279,6 +279,11 @@ public extension TelegramEngine {
             return _internal_markAllChatsAsRead(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager)
         }
 
+        /// Returns the number of chats that cannot be read locally.
+        public func donutgramReadAllMessagesLocally() -> Signal<Int, NoError> {
+            return _internal_donutgramReadAllMessagesLocally(postbox: self.account.postbox, accountPeerId: self.account.peerId)
+        }
+
         public func donutgramReadAllMessagesOnServer() -> Signal<Bool, NoError> {
             return _internal_donutgramReadAllMessages(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager)
         }
