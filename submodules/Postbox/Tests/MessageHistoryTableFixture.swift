@@ -118,6 +118,8 @@ final class MessageHistoryTableFixture {
     var messageHistoryIndexTable: MessageHistoryIndexTable { return self.tables!.messageHistoryIndexTable }
 
     static let messageNamespace: MessageId.Namespace = 0
+    /// A local tag that keeps a message in the history but takes it out of the unread count.
+    static let unreadExcludedLocalTag = LocalMessageTags(rawValue: 1 << 29)
 
     static func makeSeedConfiguration() -> SeedConfiguration {
         return SeedConfiguration(
@@ -148,7 +150,8 @@ final class MessageHistoryTableFixture {
             isPeerUpgradeMessage: { _ in false },
             automaticThreadIndexInfo: { _, _ in nil },
             customTagsFromAttributes: { _ in [] },
-            displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey(length: 0)
+            displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey(length: 0),
+            localTagsExcludedFromUnreadCount: [unreadExcludedLocalTag]
         )
     }
 
@@ -187,8 +190,8 @@ final class MessageHistoryTableFixture {
         return MessageId(peerId: peerId(peer), namespace: messageNamespace, id: id)
     }
 
-    static func storeMessage(id: MessageId, timestamp: Int32, text: String = "", media: [Media] = [], flags: StoreMessageFlags = [], tags: MessageTags = [], globalTags: GlobalMessageTags = []) -> StoreMessage {
-        return StoreMessage(id: id, customStableId: nil, globallyUniqueId: nil, groupingKey: nil, threadId: nil, timestamp: timestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: [], forwardInfo: nil, authorId: nil, text: text, attributes: [], media: media)
+    static func storeMessage(id: MessageId, timestamp: Int32, text: String = "", media: [Media] = [], flags: StoreMessageFlags = [], tags: MessageTags = [], globalTags: GlobalMessageTags = [], localTags: LocalMessageTags = []) -> StoreMessage {
+        return StoreMessage(id: id, customStableId: nil, globallyUniqueId: nil, groupingKey: nil, threadId: nil, timestamp: timestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: localTags, forwardInfo: nil, authorId: nil, text: text, attributes: [], media: media)
     }
 
     /// Every by-product an add/update/remove call reports; tests inspect what they need.

@@ -103,4 +103,43 @@ final class MessageHistoryReadStateTableTests: XCTestCase {
         XCTAssertEqual(self.storedUnreadCount(), 0)
         XCTAssertEqual(operations.updatedPeerReadStateOperations[self.peer] ?? nil, .Validate)
     }
+
+    // MARK: - Messages that stay in the history but stop counting
+
+    private func incomingMessage(_ id: Int32, localTags: LocalMessageTags = []) -> StoreMessage {
+        return MessageHistoryTableFixture.storeMessage(id: MessageId(peerId: self.peer, namespace: self.namespace, id: id), timestamp: 1000 + id, text: "m\(id)", flags: [.Incoming], localTags: localTags)
+    }
+
+    /// Three unread incoming messages, the second of which is then tagged out of the count.
+    private func addThreeUnreadMessagesExcludingTheSecond() {
+        self.setUnreadCount(0)
+        self.fixture.addMessages((1 ... 3).map { self.incomingMessage($0) })
+        self.setUnreadCount(3)
+        self.fixture.updateMessage(MessageId(peerId: self.peer, namespace: self.namespace, id: 2), message: self.incomingMessage(2, localTags: MessageHistoryTableFixture.unreadExcludedLocalTag))
+    }
+
+    func testTaggingAnUnreadMessageSubtractsItAsRemovingItWould() {
+        self.addThreeUnreadMessagesExcludingTheSecond()
+
+        XCTAssertEqual(self.storedUnreadCount(), 2)
+    }
+
+    func testReadingPastAnExcludedMessageDoesNotSubtractItAgain() {
+        self.addThreeUnreadMessagesExcludingTheSecond()
+
+        // Reads the first message and the excluded second one; the third stays unread.
+        self.fixture.transaction { table, ops in
+            table.applyIncomingReadMaxId(MessageId(peerId: self.peer, namespace: self.namespace, id: 2), operationsByPeerId: &ops.operationsByPeerId, updatedPeerReadStateOperations: &ops.updatedPeerReadStateOperations)
+        }
+
+        XCTAssertEqual(self.storedUnreadCount(), 1)
+    }
+
+    func testRemovingAnExcludedMessageDoesNotSubtractItAgain() {
+        self.addThreeUnreadMessagesExcludingTheSecond()
+
+        self.fixture.removeMessages([MessageId(peerId: self.peer, namespace: self.namespace, id: 2)])
+
+        XCTAssertEqual(self.storedUnreadCount(), 2)
+    }
 }

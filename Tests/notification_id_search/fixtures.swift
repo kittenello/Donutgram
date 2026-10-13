@@ -95,6 +95,7 @@ final class Transaction {
     var peers: [PeerId: Peer] = [:]
     var messages: [MessageId: Message] = [:]
     var deleted: [MessageId] = []
+    var clearedUnseenMarks: [MessageId] = []
     var state: AccountState?
     func getState() -> AccountState? { self.state }
     func getPeer(_ id: PeerId) -> Peer? { self.peers[id] }
@@ -107,6 +108,9 @@ final class Transaction {
     }
 }
 final class MediaBox {}
+func donutgramClearUnseenMarks(transaction: Transaction, messageId: MessageId) {
+    transaction.clearedUnseenMarks.append(messageId)
+}
 func _internal_deleteMessages(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId], deleteMedia: Bool) {
     for id in ids { transaction.messages.removeValue(forKey: id) }
     transaction.deleted.append(contentsOf: ids)
@@ -209,8 +213,10 @@ expect(retained.text == firstProcess.messages[id]!.text, "full text survives del
 expect(retained.media == ["photo"] && retained.attributes == ["entities", "reply"], "media and entities survive deletion")
 expect(retained.groupingKey == 8 && retained.threadId == 9 && retained.timestamp == 123, "album/topic/date survive deletion")
 expect(reopenedTransaction.deleted.isEmpty, "retained record never reaches generic deletion")
+expect(reopenedTransaction.clearedUnseenMarks == [id], "a saved message stops counting as an unread mention or reaction")
 expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]).isEmpty, "duplicate delete push keeps the notification")
 expect(reopenedTransaction.deleted.isEmpty, "duplicate delete push is idempotent")
+expect(reopenedTransaction.clearedUnseenMarks == [id], "a message saved before is not saved again")
 let missing = MessageId(peerId: alice.id, namespace: 0, id: 101)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: missing), "missing text is not reconstructed")
 let botId = MessageId(peerId: bot.id, namespace: 0, id: 102)

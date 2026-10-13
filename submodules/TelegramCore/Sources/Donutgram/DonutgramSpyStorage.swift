@@ -110,7 +110,52 @@ func donutgramPreserveDeletedMessage(transaction: Transaction, messageId: Messag
         localTags.insert(.donutgramDeleted)
         return .update(donutgramMessageWithUpdatedLocalTags(currentMessage, localTags: localTags))
     })
+    donutgramClearUnseenMarks(transaction: transaction, messageId: messageId)
     return true
+}
+
+/// The server can no longer read a saved deleted message, so it leaves the chat's mention, reaction
+/// and poll vote badges as its deletion would have. The unread count leaves it out on its own
+/// (`localTagsExcludedFromUnreadCount`).
+private func donutgramClearUnseenMarks(transaction: Transaction, messageId: MessageId) {
+    guard let message = transaction.getMessage(messageId) else {
+        return
+    }
+    let unseenTags: MessageTags = [.unseenPersonalMessage, .unseenReaction, .unseenPollVote]
+    var hasUnconsumedMention = false
+    var hasPendingMention = false
+    for attribute in message.attributes {
+        if let attribute = attribute as? ConsumablePersonalMentionMessageAttribute, !attribute.consumed {
+            hasUnconsumedMention = true
+            hasPendingMention = attribute.pending
+        }
+    }
+    if message.tags.isDisjoint(with: unseenTags) && !hasUnconsumedMention {
+        return
+    }
+    // A mention already read here but not yet on the server leaves the badge through its pending action.
+    if hasPendingMention {
+        transaction.setPendingMessageAction(type: .consumeUnseenPersonalMessage, id: messageId, action: nil)
+    }
+    transaction.updateMessage(messageId, update: { currentMessage in
+        var attributes = currentMessage.attributes
+        for i in 0 ..< attributes.count {
+            if let attribute = attributes[i] as? ConsumablePersonalMentionMessageAttribute, !attribute.consumed {
+                attributes[i] = ConsumablePersonalMentionMessageAttribute(consumed: true, pending: false)
+            } else if let attribute = attributes[i] as? ReactionsMessageAttribute, attribute.hasUnseen {
+                attributes[i] = attribute.withAllSeen()
+            }
+        }
+        let media = currentMessage.media.map { item -> Media in
+            if let poll = item as? TelegramMediaPoll, poll.results.hasUnseenVotes == true {
+                return poll.withoutUnreadResults()
+            }
+            return item
+        }
+        var tags = currentMessage.tags
+        tags.subtract(unseenTags)
+        return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init), authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: media))
+    })
 }
 
 /// Removes the stored messages of a chat in `minId ... maxId`, as the server does when it moves a
