@@ -25,8 +25,8 @@ struct MessageIndex { let id: MessageId }
 struct FixturePeer { var isForumOrMonoForum = false }
 enum PeerReadState: Equatable {
     case idBased(maxIncomingReadId: Int32, maxOutgoingReadId: Int32, maxKnownId: Int32, count: Int32, markedUnread: Bool)
-    var count: Int32 { if case let .idBased(_, _, _, count, _) = self { return count } }
-    var isUnread: Bool { if case let .idBased(_, _, _, count, mark) = self { return count > 0 || mark } }
+    var count: Int32 { switch self { case let .idBased(_, _, _, count, _): return count } }
+    var isUnread: Bool { switch self { case let .idBased(_, _, _, count, mark): return count > 0 || mark } }
 }
 enum PeerReadStateSynchronizationOperation { case Push; case Validate }
 final class Transaction {
