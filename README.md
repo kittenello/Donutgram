@@ -1,3 +1,21 @@
+<div align="center">
+
+# donutgram
+
+**Ghost mode, save deleted messages**
+
+a multifunctional ios client with deeper customization
+
+---
+
+<sub>inspired by the work of</sub>
+
+[swiftgram](https://github.com/Swiftgram/Telegram-iOS) ·
+[ayugram](https://github.com/AyuGram/AyuGramDesktop) ·
+[exteragram](https://t.me/exteraGram)
+
+</div>
+
 # Telegram iOS Source Code Compilation Guide
 
 We welcome all developers to use our API and source code to create applications on our platform.
