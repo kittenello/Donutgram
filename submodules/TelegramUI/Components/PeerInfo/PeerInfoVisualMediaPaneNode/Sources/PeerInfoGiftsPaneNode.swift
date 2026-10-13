@@ -126,6 +126,12 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
     public var giftsContext: ProfileGiftsContext {
         return self.giftsListView.profileGifts
     }
+
+    public var isCurrentPane = false {
+        didSet {
+            self.giftsListView.isCurrentPane = self.isCurrentPane
+        }
+    }
     
     public var openShareLink: ((String) -> Void)?
     
@@ -469,6 +475,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             self.contextAction(gift: gift, view: view, gesture: gesture)
         }
         self.giftsListView.parentController = self.parentController
+        self.giftsListView.isCurrentPane = self.isCurrentPane
         self.giftsListView.frame = previousGiftsListView.frame
                                         
         self.scrollNode.view.insertSubview(self.giftsListView, aboveSubview: previousGiftsListView)

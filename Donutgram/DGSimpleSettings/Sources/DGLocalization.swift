@@ -296,5 +296,7 @@ private let dgEnglishStrings: [String: String] = [
     "Удалить все сохраненные удаленки?": "Delete all saved deleted messages?",
     "Сообщения, их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.": "The messages, their edit history and downloaded files will be deleted from this device. This can't be undone.",
     "Удалить сохраненные удаленки?": "Delete saved deleted messages?",
-    "Сохраненные удаленки из «%@», их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.": "Saved deleted messages from %@, their edit history and downloaded files will be deleted from this device. This can't be undone."
+    "Сохраненные удаленки из «%@», их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.": "Saved deleted messages from %@, their edit history and downloaded files will be deleted from this device. This can't be undone.",
+    "Последний раз был в профиле %@": "Last seen in the profile on %@",
+    "Подарка больше нет в профиле": "This gift is no longer in the profile"
 ]

@@ -160,9 +160,8 @@ final class GiftsListView: UIView {
             let isFirstTime = self.starsProducts == nil
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             var giftCountText = presentationData.strings.SharedMedia_GiftCount(state.count ?? 0)
-            if self.peerId == self.context.account.peerId, let total = state.count, case .ready(false, _) = state.dataState, state.gifts.count >= Int(total) {
-                let visible = state.gifts.filter { $0.savedToProfile }.count
-                giftCountText = "\(visible) (\(total)) подарков"
+            if let displayed = state.displayedCount, let total = state.count, state.filter == .All {
+                giftCountText = displayedGiftCountText(displayed: displayed, total: total, languageCode: presentationData.strings.primaryComponent.languageCode)
             }
             self.statusPromise.set(.single(PeerInfoStatusData(text: giftCountText, isActivity: true, key: .gifts)))
             self.disappearedItemDates = [:]
@@ -200,20 +199,14 @@ final class GiftsListView: UIView {
             } else {
                 self.starsProducts = state.filteredGifts
                 self.pinnedReferences = Array(state.gifts.filter { $0.pinnedToTop }.compactMap { $0.reference })
-                if self.showingDisappearedGifts && !self.canSelect && self.profileGifts.collectionId == nil && self.peerId != self.context.account.peerId && state.filter == .All && state.sorting == .date {
-                    self.starsProducts = self.giftsWithDisappeared(current: state.filteredGifts, history: state.disappearedGifts)
+                if self.showingDisappearedGifts && !self.canSelect && self.profileGifts.collectionId == nil && self.peerId != self.context.account.peerId && state.filter == .All && state.sorting == .date && !state.disappearedGifts.isEmpty {
+                    self.starsProducts = self.giftsWithDisappeared(current: state.filteredGifts, history: state.disappearedGifts, isComplete: state.hasAllGifts)
                 }
             }
             
             self.resultsAreEmpty = state.filter == .All && (self.starsProducts?.isEmpty ?? true) && state.dataState != .loading
             self.filteredResultsAreEmpty = state.filter != .All && state.filteredGifts.isEmpty
-            if !self.canSelect && self.profileGifts.collectionId == nil && state.filter == .All && state.sorting == .date {
-                if case .ready(true, _) = state.dataState {
-                    Queue.mainQueue().justDispatch { [weak self] in
-                        self?.profileGifts.loadMore()
-                    }
-                }
-            }
+            self.loadAllGiftsIfNeeded(state: state)
         
             if !self.didSetReady {
                 self.didSetReady = true
@@ -269,7 +262,7 @@ final class GiftsListView: UIView {
             let enabled = DGSimpleSettings.shared.showDisappearedGifts
             if enabled != self.showingDisappearedGifts {
                 self.showingDisappearedGifts = enabled
-                self.profileGifts.reload()
+                self.profileGifts.updateTracksDisappearedGifts(enabled)
             }
         }
     }
@@ -297,8 +290,8 @@ final class GiftsListView: UIView {
         return "\(stableId)_\(info)"
     }
 
-    private func giftsWithDisappeared(current: [ProfileGiftsContext.State.StarGift], history: [ProfileGiftsContext.State.DisappearedGift]) -> [ProfileGiftsContext.State.StarGift] {
-        let result = ProfileGiftsContext.State.giftsWithDisappeared(current: current, history: history)
+    private func giftsWithDisappeared(current: [ProfileGiftsContext.State.StarGift], history: [ProfileGiftsContext.State.DisappearedGift], isComplete: Bool) -> [ProfileGiftsContext.State.StarGift] {
+        let result = ProfileGiftsContext.State.giftsWithDisappeared(current: current, history: history, isComplete: isComplete)
 
         self.disappearedItemDates = [:]
         for (index, value) in result.enumerated() {
@@ -309,23 +302,67 @@ final class GiftsListView: UIView {
         return result.map { $0.gift }
     }
 
-    private func openDisappearedGift(_ gift: ProfileGiftsContext.State.StarGift) {
+    // The gifts that are in the profile now, without the disappeared ones mixed in.
+    private var liveProducts: [ProfileGiftsContext.State.StarGift] {
+        guard let starsProducts = self.starsProducts else {
+            return []
+        }
+        if self.disappearedItemDates.isEmpty {
+            return starsProducts
+        }
+        return starsProducts.enumerated().filter { index, gift in
+            return self.disappearedItemDates[self.giftItemStableId(gift, index: Int32(index))] == nil
+        }.map { $0.element }
+    }
+
+    // While the gifts pane is on screen and disappeared gifts are tracked, the
+    // list is loaded to its end: only the whole list tells which gifts are
+    // gone and where each of them stood.
+    var isCurrentPane = false {
+        didSet {
+            if self.isCurrentPane != oldValue, let state = self.profileGifts.currentState {
+                self.loadAllGiftsIfNeeded(state: state)
+            }
+        }
+    }
+
+    private func loadAllGiftsIfNeeded(state: ProfileGiftsContext.State) {
+        guard self.isCurrentPane, self.showingDisappearedGifts, !self.canSelect, state.wantsAllGifts, state.filter == .All, state.sorting == .date, case .ready(true, _) = state.dataState else {
+            return
+        }
+        Queue.mainQueue().justDispatch { [weak self] in
+            self?.profileGifts.loadMore()
+        }
+    }
+
+    private func openDisappearedGift(_ gift: ProfileGiftsContext.State.StarGift, lastSeen: Int32) {
         if let previousController = self.disappearedGiftController {
             previousController.dismiss(animated: false, completion: nil)
             self.disappearedGiftController = nil
         }
         
-        let subject = GiftViewScreen.Subject.profileGift(self.peerId, gift)
+        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+        let languageCode = presentationData.strings.primaryComponent.languageCode
+        let headerText: String
+        if lastSeen > 0 {
+            let dateText = stringForMediumDate(timestamp: lastSeen, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, withTime: false)
+            headerText = dgLocalized("Последний раз был в профиле %@", languageCode: languageCode).replacingOccurrences(of: "%@", with: dateText)
+        } else {
+            headerText = dgLocalized("Подарка больше нет в профиле", languageCode: languageCode)
+        }
+
+        // A snapshot with no actions: the gift is no longer this profile's to
+        // buy, upgrade or manage, so no profile context is passed either.
+        let subject = GiftViewScreen.Subject.profileGift(self.peerId, gift.withoutActions())
         let controller = GiftViewScreen(
             context: self.context,
             subject: subject,
             allSubjects: [subject],
             index: 0,
-            headerText: "Подарок был скрыт или был продан.",
+            headerText: headerText,
             deleteDisappearedGift: { [weak self] in
                 self?.profileGifts.removeDisappearedGift(gift)
-            },
-            profileGiftsContext: self.profileGifts
+            }
         )
         self.disappearedGiftController = controller
         controller.disposed = { [weak self, weak controller] in
@@ -585,9 +622,11 @@ final class GiftsListView: UIView {
                     } else {
                         peer = nil
                     }
-                    resellAmount = gift.resellAmounts?.first(where: { $0.currency == .stars })
+                    // A disappeared gift's last price is not an offer anymore.
+                    let resellAmounts = disappearedDate == nil ? (gift.resellAmounts ?? []) : []
+                    resellAmount = resellAmounts.first(where: { $0.currency == .stars })
                     
-                    if !(gift.resellAmounts ?? []).isEmpty {
+                    if !resellAmounts.isEmpty {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_Sale
                         ribbonFont = .larger
                         ribbonColor = .green
@@ -631,17 +670,17 @@ final class GiftsListView: UIView {
                             subject: subject,
                             ribbon: ribbonText.flatMap { GiftItemComponent.Ribbon(text: $0, font: ribbonFont, color: ribbonColor, outline: ribbonOutline) },
                             resellPrice: resellAmount?.amount.value,
-                            isHidden: !product.savedToProfile,
+                            isHidden: disappearedDate == nil && !product.savedToProfile,
                             isSelected: self.selectedItemIds.contains(itemReferenceId),
-                            isPinned: !self.canSelect && product.pinnedToTop,
+                            isPinned: disappearedDate == nil && !self.canSelect && product.pinnedToTop,
                             isEditing: self.isReordering && !self.isCollection,
                             mode: self.canSelect && !isAdded ? .select : .profile,
                             action: { [weak self] in
                                 guard let self, !isAdded, let presentationData = self.currentParams?.presentationData else {
                                     return
                                 }
-                                if disappearedDate != nil {
-                                    self.openDisappearedGift(product)
+                                if let disappearedDate {
+                                    self.openDisappearedGift(product, lastSeen: disappearedDate)
                                     return
                                 }
                                 if self.canSelect {
@@ -685,8 +724,10 @@ final class GiftsListView: UIView {
                                         }
                                     }
                                 } else {
-                                    let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).map { .profileGift(self.peerId, $0) }
-                                    let index = self.starsProducts?.firstIndex(where: { $0 == product }) ?? 0
+                                    // Disappeared gifts are not paged to: they open on their own, without actions.
+                                    let liveProducts = self.liveProducts
+                                    let allSubjects: [GiftViewScreen.Subject] = liveProducts.map { .profileGift(self.peerId, $0) }
+                                    let index = liveProducts.firstIndex(where: { $0 == product }) ?? 0
                                     
                                     var dismissImpl: (() -> Void)?
                                     let controller = GiftViewScreen(
@@ -1351,4 +1392,25 @@ private final class ReorderGestureRecognizer: UIGestureRecognizer {
             }
         }
     }
+}
+
+// "5 (12) gifts": the gifts shown on the profile, then all of them, hidden
+// ones included. The noun agrees with the total, which it follows.
+private func displayedGiftCountText(displayed: Int32, total: Int32, languageCode: String) -> String {
+    let language = languageCode.lowercased().replacingOccurrences(of: "_", with: "-")
+    let noun: String
+    if language == "ru" || language.hasPrefix("ru-") {
+        let remainder10 = total % 10
+        let remainder100 = total % 100
+        if remainder10 == 1 && remainder100 != 11 {
+            noun = "подарок"
+        } else if (2 ... 4).contains(remainder10) && !(12 ... 14).contains(remainder100) {
+            noun = "подарка"
+        } else {
+            noun = "подарков"
+        }
+    } else {
+        noun = total == 1 ? "gift" : "gifts"
+    }
+    return "\(displayed) (\(total)) \(noun)"
 }
