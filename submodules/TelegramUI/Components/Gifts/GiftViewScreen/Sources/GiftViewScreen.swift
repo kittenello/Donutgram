@@ -1960,9 +1960,10 @@ private final class GiftViewSheetContent: CombinedComponent {
             if let deleteDisappearedGift = controller.deleteDisappearedGift {
                 let items: [ContextMenuItem] = [
                     .action(ContextMenuActionItem(
-                        text: "Удалить",
+                        text: presentationData.strings.Common_Delete,
+                        textColor: .destructive,
                         icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.primaryColor)
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor)
                         },
                         action: { [weak controller] c, _ in
                             c?.dismiss(completion: {
@@ -3150,6 +3151,18 @@ private final class GiftViewSheetContent: CombinedComponent {
                 isDismantled = true
             }
 
+            // A gift that has disappeared from a profile is only a record of
+            // it: nothing on it can be bought, upgraded or managed anymore.
+            let isDisappearedGift = (controller() as? GiftViewScreen)?.deleteDisappearedGift != nil
+            if isDisappearedGift {
+                incoming = false
+                isChannelGift = false
+                isMyOwnedUniqueGift = false
+                isMyHostedUniqueGift = false
+                canGiftUpgrade = false
+                canUpgrade = false
+            }
+
             let giftMessageNameHidden: Bool
             if case .message = subject {
                 giftMessageNameHidden = false
@@ -3259,7 +3272,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 giftMessageHeaderHeight = 258.0 + bubbleHeight
             }
             
-            if !canUpgrade, let gift = state.starGiftsMap[giftId], let _ = gift.upgradeStars {
+            if !canUpgrade, !isDisappearedGift, let gift = state.starGiftsMap[giftId], let _ = gift.upgradeStars {
                 canUpgrade = true
             }
                                     
@@ -3427,7 +3440,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             var resellAmount: CurrencyAmount?
             var selling = false
-            if let uniqueGift {
+            if let uniqueGift, !isDisappearedGift {
                 if uniqueGift.resellForTonOnly {
                     resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == .ton })
                 } else {
@@ -6004,9 +6017,10 @@ private final class GiftViewSheetContent: CombinedComponent {
             ))
             
             var rightControlItems: [GlassControlGroupComponent.Item] = []
-            let hasCustomMoreAction = (controller() as? GiftViewScreen)?.deleteDisappearedGift != nil
-            if (uniqueGift != nil || hasCustomMoreAction) && !showWearPreview && !isDismantled {
-                if uniqueGift != nil, let _ = component.subject.arguments?.canCraftDate {
+            // A disappeared gift keeps its menu, to be deleted from the
+            // history, even once it has been dismantled.
+            if ((uniqueGift != nil && !isDismantled) || isDisappearedGift) && !showWearPreview {
+                if uniqueGift != nil, !isDisappearedGift, let _ = component.subject.arguments?.canCraftDate {
                     rightControlItems.append(GlassControlGroupComponent.Item(
                         id: AnyHashable("craft"),
                         content: .icon("Premium/Craft"),
@@ -6855,7 +6869,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         self.navigationPresentation = .flatModal
         self.automaticallyControlPresentationContextLayout = false
         
-        if let gift = subject.arguments?.gift, case .generic = gift {
+        if deleteDisappearedGift == nil, let gift = subject.arguments?.gift, case .generic = gift {
             let upgradableGiftsContext = ProfileGiftsContext(account: context.account, peerId: context.account.peerId, collectionId: nil, sorting: .date, filter: [.displayed, .hidden, .limitedUpgradable], limit: 50)
             self.upgradableDisposable = (upgradableGiftsContext.state
             |> deliverOnMainQueue).start(next: { [weak self] state in
