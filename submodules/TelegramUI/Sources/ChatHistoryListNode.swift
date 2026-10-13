@@ -744,6 +744,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
 
     private let donutgramShadowBanPromise = ValuePromise<DonutgramShadowBan.State>(DonutgramShadowBan.State.current, ignoreRepeated: true)
     private var donutgramShadowBanObserver: NSObjectProtocol?
+    private var donutgramDeletedMessagesAppearanceObserver: NSObjectProtocol?
     private var donutgramHiddenWindowWalk = DonutgramShadowBan.HiddenWindowWalk()
     private var donutgramHiddenWindowWalkProgressIndex: MessageIndex?
     private var donutgramReadIndexCache: (view: ObjectIdentifier, windowEnd: MessageIndex?, index: MessageIndex, result: MessageIndex)?
@@ -1506,6 +1507,11 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             self.donutgramShadowBanPromise.set(DonutgramShadowBan.State.current)
             self.updateLoadedMessageItems(includeAllMessages: true)
         })
+
+        // «Полупрозрачные удаленки» changed: draw the loaded saved deleted messages again.
+        self.donutgramDeletedMessagesAppearanceObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.deletedMessagesAppearanceDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.updateLoadedMessageItems(includeDeletedMessages: true)
+        })
     }
 
     deinit {
@@ -1514,6 +1520,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         }
         if let donutgramShadowBanObserver = self.donutgramShadowBanObserver {
             NotificationCenter.default.removeObserver(donutgramShadowBanObserver)
+        }
+        if let donutgramDeletedMessagesAppearanceObserver = self.donutgramDeletedMessagesAppearanceObserver {
+            NotificationCenter.default.removeObserver(donutgramDeletedMessagesAppearanceObserver)
         }
         self.historyDisposable.dispose()
         self.readHistoryDisposable.dispose()
@@ -5258,7 +5267,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     }
     
     // Refresh loaded media and reply decorations when their settings change.
-    private func updateLoadedMessageItems(includeChannelPosts: Bool = false, includeStickers: Bool = false, includeAllMessages: Bool = false) {
+    private func updateLoadedMessageItems(includeChannelPosts: Bool = false, includeStickers: Bool = false, includeDeletedMessages: Bool = false, includeAllMessages: Bool = false) {
         var messageIds: [MessageId] = []
         self.forEachItemNode { itemNode in
             if let itemNode = itemNode as? ChatMessageItemView, let item = itemNode.item {
@@ -5277,7 +5286,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 if includeChannelPosts, let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
                     isChannelPost = true
                 }
-                if hasTranscribableMedia || isChannelPost || hasSticker || includeAllMessages {
+                let isDeleted = includeDeletedMessages && item.content.contains(where: { $0.0.localTags.contains(.donutgramDeleted) })
+                if hasTranscribableMedia || isChannelPost || hasSticker || isDeleted || includeAllMessages {
                     messageIds.append(message.id)
                 }
             }

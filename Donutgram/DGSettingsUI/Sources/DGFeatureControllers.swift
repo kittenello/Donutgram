@@ -12,9 +12,9 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
     let accountId = context.account.peerId.toInt64()
     return dgController(context: context, page: .general, title: "Основные", focusKey: focusKey, entries: {
         var result: [DGListEntry] = [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .disclosure(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Включен" : "Выключен"), .header(10, 1, "ОСНОВНЫЕ"), .toggle(11, 1, "saveDeleted", "Сохранять удаленки", s.saveDeletedMessages, true)]
-        if s.saveDeletedMessages { result.append(contentsOf: [.toggle(12, 1, "saveOwnDeleted", "Сохранять свои удаленки", s.saveOwnDeletedMessages, true), .toggle(13, 1, "transparentDeleted", "Полупрозрачные удаленки", s.semiTransparentDeletedMessages, true)]) }
-        // Shown with saving off as well: what was saved before stays until it is deleted here.
-        result.append(.disclosure(14, 1, "savedDeleted", "Сохраненные удаленки", ""))
+        if s.saveDeletedMessages { result.append(.toggle(12, 1, "saveOwnDeleted", "Сохранять свои удаленки", s.saveOwnDeletedMessages, true)) }
+        // Shown with saving off as well: what was saved before stays, and keeps its look, until it is deleted here.
+        result.append(contentsOf: [.toggle(13, 1, "transparentDeleted", "Полупрозрачные удаленки", s.semiTransparentDeletedMessages, true), .disclosure(14, 1, "savedDeleted", "Сохраненные удаленки", "")])
         result.append(contentsOf: [.toggle(15, 1, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true), .toggle(16, 1, "saveOnce", "Сохранять одноразки", s.saveViewOnceMedia, true), .toggle(17, 1, "saveBots", "Сохранять в чатах с ботами", s.saveInBotChats, true), .toggle(18, 1, "disappearedGifts", "Видеть удаленные подарки", s.showDisappearedGifts, true), .toggle(19, 1, "saveProtectedStories", "Сохранять запрещенные истории", s.saveProtectedStories, true), .toggle(20, 1, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true)])
         // Its own append: one more case with a ternary in the literal above risks the compiler's type-check time limit.
         let shadowBanCount = s.shadowBannedPeerIds.count
@@ -592,7 +592,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
         focusKey = "hideArchive"
     } else if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {
         focusKey = "profileId"
-    } else if page == .general && (key == "transparentDeleted" || key == "saveOwnDeleted") && !DGSimpleSettings.shared.saveDeletedMessages {
+    } else if page == .general && key == "saveOwnDeleted" && !DGSimpleSettings.shared.saveDeletedMessages {
         focusKey = "saveDeleted"
     } else {
         focusKey = key

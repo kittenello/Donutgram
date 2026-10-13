@@ -53,6 +53,8 @@ public final class DGSimpleSettings {
     /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
     /// send account.updateStatus.
     public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
+    /// «Полупрозрачные удаленки» changed. Separate from didChangeNotification for the same reason.
+    public static let deletedMessagesAppearanceDidChangeNotification = Notification.Name("donutgram.deletedMessages.appearanceDidChange")
 
     public enum TranscriptionBackend: String, CaseIterable {
         case telegram
@@ -259,7 +261,11 @@ public final class DGSimpleSettings {
             return self.defaults.bool(forKey: Key.semiTransparentDeletedMessages)
         }
         set {
+            if self.defaults.bool(forKey: Key.semiTransparentDeletedMessages) == newValue {
+                return
+            }
             self.defaults.set(newValue, forKey: Key.semiTransparentDeletedMessages)
+            NotificationCenter.default.post(name: DGSimpleSettings.deletedMessagesAppearanceDidChangeNotification, object: self)
         }
     }
 
