@@ -261,6 +261,7 @@ private func dgDialogIdFormatController(context: AccountContext, focusKey: Strin
 func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     var previewSticker: TelegramMediaFile?
+    var previewEmoji: TelegramMediaFile?
     let stickerSource: Signal<TelegramMediaFile?, NoError> = context.account.postbox.transaction { transaction -> TelegramMediaFile? in
         for entry in transaction.getOrderedListItems(collectionId: Namespaces.OrderedItemList.CloudSavedStickers) {
             if let file = entry.contents.get(SavedStickerItem.self)?.file._parse(), file.isSticker, !file.isPremiumSticker {
@@ -278,9 +279,20 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         if let file { return .single(file) }
         return context.engine.stickers.randomGreetingSticker() |> map { $0?.file }
     }
-    let previewUpdates = (Signal<TelegramMediaFile?, NoError>.single(nil) |> then(stickerSource))
+    let emojiSource = context.engine.stickers.loadedStickerPack(reference: .iconStatusEmoji, forceActualized: false)
+    |> map { result -> TelegramMediaFile? in
+        if case let .result(_, items, _) = result { return items.first?.file._parse() }
+        return nil
+    }
+    let previewUpdates = combineLatest(
+        Signal<TelegramMediaFile?, NoError>.single(nil) |> then(stickerSource),
+        Signal<TelegramMediaFile?, NoError>.single(nil) |> then(emojiSource)
+    )
     |> deliverOnMainQueue
-    |> map { file -> Void in previewSticker = file }
+    |> map { sticker, emoji -> Void in
+        previewSticker = sticker
+        previewEmoji = emoji
+    }
     return dgController(context: context, page: .chats, title: "Внешний вид", focusKey: focusKey, entries: {
         let hiddenCount = [1, 2, 4].filter { s.hiddenReactions & $0 != 0 }.count
         let transcription = dgTranscriptionBackendTitle(s.transcriptionBackend)
@@ -294,14 +306,16 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         var result: [DGListEntry] = [
             .header(-30, 0, "СТИКЕРЫ"),
             .stickerSizeSlider(-29, 0, s.stickerSize),
-            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.stickerReplyOptions, s.stickerShape, previewSticker),
+            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.replyDecorationOptions(isSticker: true), s.stickerShape, previewSticker, previewEmoji),
             .toggle(-27, 0, "hideStickerTime", "Скрыть время на стикерах", s.hideStickerTime, true),
             .toggle(-26, 0, "hideStickerChecks", "Скрыть галочки на стикерах", s.hideStickerChecks, true),
-            .stickerReplies(-25, 0, s.stickerReplyOptions)
+            .toggle(-25, 0, "hideStickerReplyColors", "Скрыть цвета", s.hideStickerReplyColors, true),
+            .toggle(-24, 0, "hideStickerReplyEmoji", "Скрыть эмодзи", s.hideStickerReplyEmoji, true),
+            .toggle(-23, 0, "hideStickerReplyBackground", "Скрыть фон", s.hideStickerReplyBackground, true)
         ]
         result.append(contentsOf: [
-            .header(-23, 1, "ФОРМА СТИКЕРОВ"),
-            .stickerShape(-22, 1, s.stickerShape),
+            .header(-22, 1, "ФОРМА СТИКЕРОВ"),
+            .stickerShape(-21, 1, s.stickerShape),
             .header(0, 2, "СТИКЕРЫ И ЭМОДЗИ"),
             .toggle(1, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
             .toggle(2, 2, "recent", "Беск. недавние стикеры", s.infiniteRecentStickers, true),
@@ -310,10 +324,11 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .header(7, 3, "ВНЕШНИЙ ВИД"),
             .disclosure(8, 3, "chatListAppearance", "Внешний вид", ""),
             .header(10, 4, "СООБЩЕНИЯ"),
-            .messagePreview(11, 4, s.removeMessageTails, s.showMessageSeconds, s.disableColoredReplies, s.editedIcon),
+            .messagePreview(11, 4, s.messagePreviewConfiguration, previewEmoji),
             .toggle(12, 4, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
             .toggle(13, 4, "seconds", "Показывать секунды", s.showMessageSeconds, true),
             .toggle(14, 4, "replies", "Отключить цветные ответы", s.disableColoredReplies, true),
+            .toggle(25, 4, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
             .toggle(15, 4, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
             .toggle(16, 4, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
             .toggle(17, 4, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
@@ -364,7 +379,10 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "recent": s.infiniteRecentStickers = value
         case "hideStickerTime": s.hideStickerTime = value
         case "hideStickerChecks": s.hideStickerChecks = value
-        case "stickerReplies": s.stickerReplyOptions = value ? 7 : 0
+        case "hideStickerReplyColors": s.hideStickerReplyColors = value
+        case "hideStickerReplyEmoji": s.hideStickerReplyEmoji = value
+        case "hideStickerReplyBackground": s.hideStickerReplyBackground = value
+        case "hidePremiumReplyEmoji": s.hidePremiumReplyEmoji = value
         case "tails": s.removeMessageTails = value
         case "seconds": s.showMessageSeconds = value
         case "replies": s.disableColoredReplies = value
@@ -408,7 +426,6 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         switch key {
         case "reactions": return dgHiddenReactionsController(context: context)
         case "channelBottomButton": return dgChannelBottomButtonController(context: context)
-        case "stickerReplyOptions": return dgStickerRepliesController(context: context)
         case "glow": return dgGlowController(context: context)
         case "transcription": return dgTranscriptionController(context: context)
         case "camera": return dgRoundVideoCameraController(context: context)
@@ -449,17 +466,6 @@ private func dgGlowController(context: AccountContext, focusKey: String? = nil) 
     }, toggle: { key, value in
         if key == "avatarGlow" { settings.avatarGlow = value }
         else if key == "reactionGlow" { settings.reactionGlow = value }
-    })
-}
-
-private func dgStickerRepliesController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    return dgController(context: context, page: .stickerReplies, title: "Ответы на стикеры", focusKey: focusKey, entries: {
-        [.checkbox(0, 0, "1", "Цвета", settings.stickerReplyOptions & 1 != 0),
-         .checkbox(1, 0, "2", "Эмодзи", settings.stickerReplyOptions & 2 != 0),
-         .checkbox(2, 0, "4", "Фон", settings.stickerReplyOptions & 4 != 0)]
-    }, select: { key in
-        if let option = Int(key), [1, 2, 4].contains(option) { settings.stickerReplyOptions ^= option }
     })
 }
 
@@ -649,7 +655,9 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     case .downloads: makeController = dgDownloadsSettingsController
     case .transcription: makeController = dgTranscriptionController
     case .reactions: makeController = dgHiddenReactionsController
-    case .stickerReplies: makeController = dgStickerRepliesController
+    case .stickerReplies: makeController = { context, _ in
+        dgChatsSettingsController(context: context, focusKey: "hideStickerReplyColors")
+    }
     case .glow: makeController = dgGlowController
     case .visualId: makeController = dgVisualIdController
     case .visualRating: makeController = dgVisualRatingController

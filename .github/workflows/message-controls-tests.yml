@@ -1,0 +1,28 @@
+name: Message controls tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/DGSimpleSettings/**'
+      - 'Donutgram/DGSettingsUI/**'
+      - 'submodules/SettingsUI/Sources/Themes/ThemeSettingsChatPreviewItem.swift'
+      - 'submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/**'
+      - 'submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/**'
+      - 'submodules/TelegramUI/Sources/ChatHistoryListNode.swift'
+      - 'submodules/ChatPresentationInterfaceState/Sources/ChatTextFormat.swift'
+      - 'Tests/message_controls/**'
+      - '.github/workflows/message-controls-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check message settings, cat emoji and persistence
+        run: python3 Tests/message_controls/run.py

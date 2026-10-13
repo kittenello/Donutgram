@@ -223,8 +223,8 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             ) : arguments
             let isStickerReply = [arguments.message, Optional(arguments.parentMessage)].compactMap { $0 }.contains { message in
                 message.media.contains { ($0 as? TelegramMediaFile)?.isSticker == true }
-            }
-            let replyOptions = isStickerReply ? DGSimpleSettings.shared.stickerReplyOptions : 7
+            } || (arguments.replyForward?.quote?.media as? TelegramMediaFile)?.isSticker == true
+            let replyOptions = DGSimpleSettings.shared.replyDecorationOptions(isSticker: isStickerReply)
             let fontSize = floor(arguments.presentationData.fontSize.baseDisplaySize * 14.0 / 17.0)
             let titleFont = Font.semibold(fontSize)
             let textFont = Font.regular(fontSize)
@@ -397,7 +397,11 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 }
                 
                 let (textStringValue, isMediaValue, isTextValue) = descriptionStringForMessage(contentSettings: arguments.context.currentContentSettings.with { $0 }, message: EngineMessage(message), strings: arguments.strings, nameDisplayOrder: arguments.presentationData.nameDisplayOrder, dateTimeFormat: arguments.presentationData.dateTimeFormat, accountPeerId: arguments.context.account.peerId)
-                textString = textStringValue
+                if isMediaValue && DGSimpleSettings.shared.hideStickerReplyEmoji && message.media.contains(where: { ($0 as? TelegramMediaFile)?.isSticker == true }) {
+                    textString = NSAttributedString(string: arguments.strings.Message_Sticker)
+                } else {
+                    textString = textStringValue
+                }
                 isMedia = isMediaValue
                 isText = isTextValue
             } else if let replyForward = arguments.replyForward {
@@ -414,7 +418,9 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     if let text = replyForward.quote?.text, !text.isEmpty {
                         isMedia = false
                     } else {
-                        if let contentKind = mediaContentKind(EngineMedia(media), message: nil, strings: arguments.strings, nameDisplayOrder: arguments.presentationData.nameDisplayOrder, dateTimeFormat: arguments.presentationData.dateTimeFormat, accountPeerId: arguments.context.account.peerId) {
+                        if DGSimpleSettings.shared.hideStickerReplyEmoji, (media as? TelegramMediaFile)?.isSticker == true {
+                            textString = NSAttributedString(string: arguments.strings.Message_Sticker)
+                        } else if let contentKind = mediaContentKind(EngineMedia(media), message: nil, strings: arguments.strings, nameDisplayOrder: arguments.presentationData.nameDisplayOrder, dateTimeFormat: arguments.presentationData.dateTimeFormat, accountPeerId: arguments.context.account.peerId) {
                             let (string, _) = stringForMediaKind(contentKind, strings: arguments.strings)
                             textString = string
                         } else {

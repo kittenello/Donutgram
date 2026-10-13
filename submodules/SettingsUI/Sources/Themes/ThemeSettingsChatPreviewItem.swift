@@ -38,6 +38,9 @@ struct ChatPreviewMessageItem: Equatable {
         if lhs.sticker != rhs.sticker || lhs.replySticker != rhs.replySticker {
             return false
         }
+        if lhs.backgroundEmojiFile != rhs.backgroundEmojiFile || lhs.entities != rhs.entities || lhs.forwardedAt != rhs.forwardedAt {
+            return false
+        }
         return true
     }
     
@@ -50,8 +53,11 @@ struct ChatPreviewMessageItem: Equatable {
     let backgroundEmojiId: Int64?
     let sticker: TelegramMediaFile?
     let replySticker: TelegramMediaFile?
+    let backgroundEmojiFile: TelegramMediaFile?
+    let entities: [MessageTextEntity]
+    let forwardedAt: Int32?
 
-    init(outgoing: Bool, reply: (String, String)?, text: String, timestamp: Int32 = 66000, edited: Bool = false, nameColor: PeerColor, backgroundEmojiId: Int64?, sticker: TelegramMediaFile? = nil, replySticker: TelegramMediaFile? = nil) {
+    init(outgoing: Bool, reply: (String, String)?, text: String, timestamp: Int32 = 66000, edited: Bool = false, nameColor: PeerColor, backgroundEmojiId: Int64?, sticker: TelegramMediaFile? = nil, replySticker: TelegramMediaFile? = nil, backgroundEmojiFile: TelegramMediaFile? = nil, entities: [MessageTextEntity] = [], forwardedAt: Int32? = nil) {
         self.outgoing = outgoing
         self.reply = reply
         self.text = text
@@ -61,6 +67,9 @@ struct ChatPreviewMessageItem: Equatable {
         self.backgroundEmojiId = backgroundEmojiId
         self.sticker = sticker
         self.replySticker = replySticker
+        self.backgroundEmojiFile = backgroundEmojiFile
+        self.entities = entities
+        self.forwardedAt = forwardedAt
     }
 }
 
@@ -121,7 +130,7 @@ class ThemeSettingsChatPreviewItem: ListViewItem, ItemListItem {
     }
 }
 
-public func donutgramMessagePreviewItem(context: AccountContext, sectionId: ItemListSectionId) -> ListViewItem {
+public func donutgramMessagePreviewItem(context: AccountContext, sectionId: ItemListSectionId, emoji: TelegramMediaFile? = nil) -> ListViewItem {
     let current = context.sharedContext.currentPresentationData.with { $0 }
     // The bubbles apply the Donutgram tail/seconds/reply settings themselves, so keep the real corners (hasTails = false
     // would also hide the time) and a non-blue reply author, which stays distinguishable from the accent when colors are off.
@@ -138,13 +147,15 @@ public func donutgramMessagePreviewItem(context: AccountContext, sectionId: Item
         dateTimeFormat: current.dateTimeFormat,
         nameDisplayOrder: current.nameDisplayOrder,
         messageItems: [
-            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Настройки сообщений", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Так будет выглядеть входящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: false, nameColor: .preset(.red), backgroundEmojiId: nil),
-            ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("И исходящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: true, nameColor: .preset(.blue), backgroundEmojiId: nil)
+            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Настройки сообщений", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Так будет выглядеть входящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: false, nameColor: .preset(.red), backgroundEmojiId: emoji?.fileId.id, backgroundEmojiFile: emoji),
+            ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("И исходящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: true, nameColor: .preset(.blue), backgroundEmojiId: nil),
+            ChatPreviewMessageItem(outgoing: false, reply: nil, text: "@donutgram" + DGSimpleSettings.shared.mentionSuffix(isBot: false) + dgLocalized("посмотри новые настройки", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil, entities: [MessageTextEntity(range: 0 ..< 10, type: .Mention)]),
+            ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("Пример пересланного сообщения", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.red), backgroundEmojiId: nil, forwardedAt: Int32(Date().timeIntervalSince1970) - 3600)
         ]
     )
 }
 
-public func donutgramStickerPreviewItem(context: AccountContext, sectionId: ItemListSectionId, sticker: TelegramMediaFile?) -> ListViewItem {
+public func donutgramStickerPreviewItem(context: AccountContext, sectionId: ItemListSectionId, sticker: TelegramMediaFile?, emoji: TelegramMediaFile? = nil) -> ListViewItem {
     let current = context.sharedContext.currentPresentationData.with { $0 }
     return ThemeSettingsChatPreviewItem(
         context: context,
@@ -161,7 +172,7 @@ public func donutgramStickerPreviewItem(context: AccountContext, sectionId: Item
         messageItems: [
             ChatPreviewMessageItem(outgoing: false, reply: nil, text: dgLocalized("Вау!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil),
             ChatPreviewMessageItem(outgoing: true, reply: nil, text: sticker == nil ? current.strings.Channel_NotificationLoading : "", nameColor: .preset(.blue), backgroundEmojiId: nil, sticker: sticker),
-            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Стикер", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Ого, какой милый!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil, replySticker: sticker)
+            ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Стикер", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Ого, какой милый!", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.red), backgroundEmojiId: emoji?.fileId.id, replySticker: sticker, backgroundEmojiFile: emoji)
         ]
     )
 }
@@ -260,17 +271,30 @@ class ThemeSettingsChatPreviewItemNode: ListViewItemNode {
                 let replyMessageId = EngineMessage.Id(peerId: peerId, namespace: 0, id: Int32(100 + messageIndex))
                 if let (author, text) = messageItem.reply {
                     peers[peerId] = TelegramUser(id: peerId, accessHash: nil, firstName: author, lastName: "", username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: messageItem.nameColor, backgroundEmojiId: messageItem.backgroundEmojiId, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
-                    messages[replyMessageId] = EngineRawMessage(stableId: UInt32(100 + messageIndex), stableVersion: 0, id: replyMessageId, globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 66000, flags: [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: peers[peerId], text: text, attributes: [], media: messageItem.replySticker.map { [$0 as Media] } ?? [], peers: peers, associatedMessages: EngineSimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
+                    messages[replyMessageId] = EngineRawMessage(stableId: UInt32(100 + messageIndex), stableVersion: 0, id: replyMessageId, globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 66000, flags: [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: peers[peerId], text: messageItem.replySticker == nil ? text : "", attributes: [], media: messageItem.replySticker.map { [$0 as Media] } ?? [], peers: peers, associatedMessages: EngineSimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
                 }
                 
                 var attributes: [MessageAttribute] = []
+                if !messageItem.entities.isEmpty {
+                    let mentionPeerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(3))
+                    peers[mentionPeerId] = TelegramUser(id: mentionPeerId, accessHash: nil, firstName: "Donutgram", lastName: "", username: "donutgram", phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
+                    attributes.append(TextEntitiesMessageAttribute(entities: messageItem.entities))
+                }
+                var associatedMedia: [MediaId: Media] = [:]
+                if let emoji = messageItem.backgroundEmojiFile { associatedMedia[emoji.fileId] = emoji }
+                var forwardInfo: MessageForwardInfo?
+                if let forwardedAt = messageItem.forwardedAt {
+                    let forwardPeer = TelegramUser(id: peerId, accessHash: nil, firstName: "Donutgram", lastName: "", username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: messageItem.nameColor, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
+                    peers[peerId] = forwardPeer
+                    forwardInfo = MessageForwardInfo(author: forwardPeer, source: nil, sourceMessageId: nil, date: forwardedAt, authorSignature: nil, psaType: nil, flags: [])
+                }
                 if messageItem.reply != nil {
                     attributes.append(ReplyMessageAttribute(messageId: replyMessageId, threadMessageId: nil, quote: nil, isQuote: false, innerSubject: nil))
                 }
                 if messageItem.edited {
                     attributes.append(EditedMessageAttribute(date: messageItem.timestamp, isHidden: false))
                 }
-                let message = EngineRawMessage(stableId: UInt32(messageIndex + 1), stableVersion: 0, id: EngineMessage.Id(peerId: messageItem.outgoing ? otherPeerId : peerId, namespace: 0, id: Int32(messageIndex + 1)), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: messageItem.timestamp, flags: messageItem.outgoing ? [] : [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: messageItem.outgoing ? TelegramUser(id: otherPeerId, accessHash: nil, firstName: "", lastName: "", username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil) : nil, text: messageItem.text, attributes: attributes, media: messageItem.sticker.map { [$0 as Media] } ?? [], peers: peers, associatedMessages: messages, associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
+                let message = EngineRawMessage(stableId: UInt32(messageIndex + 1), stableVersion: 0, id: EngineMessage.Id(peerId: messageItem.outgoing ? otherPeerId : peerId, namespace: 0, id: Int32(messageIndex + 1)), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: messageItem.timestamp, flags: messageItem.outgoing ? [] : [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: forwardInfo, author: messageItem.outgoing ? TelegramUser(id: otherPeerId, accessHash: nil, firstName: "", lastName: "", username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil) : nil, text: messageItem.text, attributes: attributes, media: messageItem.sticker.map { [$0 as Media] } ?? [], peers: peers, associatedMessages: messages, associatedMessageIds: [], associatedMedia: associatedMedia, associatedThreadInfo: nil, associatedStories: [:])
                 items.append(item.context.sharedContext.makeChatMessagePreviewItem(context: item.context, messages: [message], theme: item.componentTheme, strings: item.strings, wallpaper: item.wallpaper, fontSize: item.fontSize, chatBubbleCorners: item.chatBubbleCorners, dateTimeFormat: item.dateTimeFormat, nameOrder: item.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: currentBackgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false))
             }
             

@@ -875,6 +875,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private var donutgramHidePaidReactions = DGSimpleSettings.shared.hidePaidReactions
     private var donutgramHideViaBot = DGSimpleSettings.shared.hideViaBot
     private var donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
+    private var donutgramHidePremiumReplyEmoji = DGSimpleSettings.shared.hidePremiumReplyEmoji
     
     private var visibleMessageRange = Atomic<VisibleMessageRange?>(value: nil)
     
@@ -1485,8 +1486,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             let wideChannelPostsChanged = self.donutgramWideChannelPosts != DGSimpleSettings.shared.wideChannelPosts
             let hidePaidReactionsChanged = self.donutgramHidePaidReactions != DGSimpleSettings.shared.hidePaidReactions
             let hideViaBotChanged = self.donutgramHideViaBot != DGSimpleSettings.shared.hideViaBot
+            let premiumReplyEmojiChanged = self.donutgramHidePremiumReplyEmoji != DGSimpleSettings.shared.hidePremiumReplyEmoji
             let mentionAvatarsChanged = self.donutgramMentionAvatars != DGSimpleSettings.shared.mentionAvatars
-            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged {
+            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || premiumReplyEmojiChanged {
                 self.donutgramTranscriptionBackend = transcriptionBackend
                 self.donutgramStickerAppearance = stickerAppearance
                 self.donutgramShowChannelForwardCount = showChannelForwardCount
@@ -1495,7 +1497,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 self.donutgramHidePaidReactions = DGSimpleSettings.shared.hidePaidReactions
                 self.donutgramHideViaBot = DGSimpleSettings.shared.hideViaBot
                 self.donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
-                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged)
+                self.donutgramHidePremiumReplyEmoji = DGSimpleSettings.shared.hidePremiumReplyEmoji
+                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || premiumReplyEmojiChanged)
             }
         })
 

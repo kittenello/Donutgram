@@ -225,7 +225,7 @@ public func chatTextInputAddMentionAttribute(_ state: ChatTextInputState, peer: 
     let inputText = NSMutableAttributedString(attributedString: state.inputText)
     let isBot: Bool
     if case let .user(user) = peer { isBot = user.botInfo != nil } else { isBot = false }
-    let mentionSuffix = DGSimpleSettings.shared.commaAfterMention && !isBot ? ", " : " "
+    let mentionSuffix = DGSimpleSettings.shared.mentionSuffix(isBot: isBot)
     
     let range = NSMakeRange(state.selectionRange.startIndex, state.selectionRange.endIndex - state.selectionRange.startIndex)
     

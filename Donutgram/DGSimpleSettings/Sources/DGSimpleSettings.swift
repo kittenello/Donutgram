@@ -414,7 +414,7 @@ public final class DGSimpleSettings {
         get { bool("donutgram.chats.stickers.hideTime") }
         set { setBool(newValue, "donutgram.chats.stickers.hideTime") }
     }
-    // Reply decorations: colors = 1, emoji pattern = 2, background = 4.
+    // Sticker reply decorations: colors = 1, emoji/pattern = 2, background = 4.
     public var stickerReplyOptions: Int {
         get {
             let key = "donutgram.chats.stickers.replyOptions"
@@ -422,6 +422,33 @@ public final class DGSimpleSettings {
         }
         set { setInteger(newValue & 7, "donutgram.chats.stickers.replyOptions") }
     }
+    public var hideStickerReplyColors: Bool {
+        get { stickerReplyOptions & 1 == 0 }
+        set { stickerReplyOptions = newValue ? stickerReplyOptions & ~1 : stickerReplyOptions | 1 }
+    }
+    public var hideStickerReplyEmoji: Bool {
+        get { stickerReplyOptions & 2 == 0 }
+        set { stickerReplyOptions = newValue ? stickerReplyOptions & ~2 : stickerReplyOptions | 2 }
+    }
+    public var hideStickerReplyBackground: Bool {
+        get { stickerReplyOptions & 4 == 0 }
+        set { stickerReplyOptions = newValue ? stickerReplyOptions & ~4 : stickerReplyOptions | 4 }
+    }
+    public var hidePremiumReplyEmoji: Bool {
+        get { bool("donutgram.chats.hidePremiumReplyEmoji") }
+        set { setBool(newValue, "donutgram.chats.hidePremiumReplyEmoji") }
+    }
+    public func replyDecorationOptions(isSticker: Bool) -> Int {
+        let options = isSticker ? stickerReplyOptions : 7
+        return hidePremiumReplyEmoji ? options & ~2 : options
+    }
+    public func mentionSuffix(isBot: Bool) -> String {
+        return commaAfterMention && !isBot ? ", " : " "
+    }
+    public var messagePreviewConfiguration: DGMessagePreviewConfiguration {
+        return DGMessagePreviewConfiguration(removeTails: removeMessageTails, showSeconds: showMessageSeconds, disableReplyColors: disableColoredReplies, editedIcon: editedIcon, hidePremiumEmoji: hidePremiumReplyEmoji, mentionComma: commaAfterMention, mentionAvatars: mentionAvatars, forwardDate: showForwardDate)
+    }
+
     public var stickerShape: Int {
         get { min(2, max(0, integer("donutgram.chats.stickers.shape"))) }
         set { setInteger(min(2, max(0, newValue)), "donutgram.chats.stickers.shape") }
@@ -924,4 +951,16 @@ public final class DGSimpleSettings {
             return !telegramCanTranscribe
         }
     }
+}
+
+/// Every message-preview setting is part of the list row's diff key.
+public struct DGMessagePreviewConfiguration: Equatable {
+    public let removeTails: Bool
+    public let showSeconds: Bool
+    public let disableReplyColors: Bool
+    public let editedIcon: Bool
+    public let hidePremiumEmoji: Bool
+    public let mentionComma: Bool
+    public let mentionAvatars: Bool
+    public let forwardDate: Bool
 }
