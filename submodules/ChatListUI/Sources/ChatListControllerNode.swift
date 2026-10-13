@@ -248,7 +248,14 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
                 self.didSetupContentOffset = true
                 self.isSettingUpContentOffset = true
                 
-                let _ = itemNode.listNode.scrollToOffsetFromTop(initialScrollingOffset, animated: false)
+                let hasStories: Bool
+                if let controller = self.controller, let subscriptions = controller.orderedStorySubscriptions {
+                    hasStories = shouldDisplayStoriesInChatListHeader(storySubscriptions: subscriptions, isHidden: controller.location == .chatList(groupId: .archive))
+                } else {
+                    hasStories = false
+                }
+                let restoredOffset = donutgramArchiveRestoredOffset(initialScrollingOffset, hideArchive: DGSimpleSettings.shared.hideArchive, hasStories: hasStories)
+                let _ = itemNode.listNode.scrollToOffsetFromTop(restoredOffset, animated: false)
                 
                 let offset = itemNode.listNode.visibleContentOffset()
                 self.contentOffset = offset

@@ -44,6 +44,12 @@ struct ChatPreviewMessageItem: Equatable {
         return true
     }
     
+    // Text and decorations can change without replacing the bubble or restarting its resources.
+    func canReuseNode(with other: ChatPreviewMessageItem) -> Bool {
+        return self.sticker?.isAnimatedSticker == other.sticker?.isAnimatedSticker
+            && self.sticker?.isVideoSticker == other.sticker?.isVideoSticker
+    }
+
     let outgoing: Bool
     let reply: (String, String)?
     let text: String
@@ -150,7 +156,7 @@ public func donutgramMessagePreviewItem(context: AccountContext, sectionId: Item
             ChatPreviewMessageItem(outgoing: false, reply: ("Donutgram", dgLocalized("Настройки сообщений", languageCode: current.strings.primaryComponent.languageCode)), text: dgLocalized("Так будет выглядеть входящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: false, nameColor: .preset(.red), backgroundEmojiId: emoji?.fileId.id, backgroundEmojiFile: emoji),
             ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("И исходящее сообщение", languageCode: current.strings.primaryComponent.languageCode), timestamp: 66000, edited: true, nameColor: .preset(.blue), backgroundEmojiId: nil),
             ChatPreviewMessageItem(outgoing: false, reply: nil, text: "@donutgram" + DGSimpleSettings.shared.mentionSuffix(isBot: false) + dgLocalized("посмотри новые настройки", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.blue), backgroundEmojiId: nil, entities: [MessageTextEntity(range: 0 ..< 10, type: .Mention)]),
-            ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("Пример пересланного сообщения", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.red), backgroundEmojiId: nil, forwardedAt: Int32(Date().timeIntervalSince1970) - 3600)
+            ChatPreviewMessageItem(outgoing: true, reply: nil, text: dgLocalized("Пример пересланного сообщения", languageCode: current.strings.primaryComponent.languageCode), nameColor: .preset(.red), backgroundEmojiId: nil, forwardedAt: Int32(Calendar.current.startOfDay(for: Date()).timeIntervalSince1970) + 12 * 60 * 60)
         ]
     )
 }
@@ -299,7 +305,10 @@ class ThemeSettingsChatPreviewItemNode: ListViewItemNode {
             }
             
             var nodes: [ListViewItemNode] = []
-            if let messageNodes = currentNodes, currentMessages == item.messageItems, messageNodes.count == items.count {
+            let canReuseNodes = currentMessages.map { previous in
+                previous.count == item.messageItems.count && zip(previous, item.messageItems).allSatisfy { pair in pair.0.canReuseNode(with: pair.1) }
+            } ?? false
+            if let messageNodes = currentNodes, canReuseNodes, messageNodes.count == items.count {
                 nodes = messageNodes
                 for i in 0 ..< items.count {
                     let itemNode = messageNodes[i]
@@ -320,7 +329,7 @@ class ThemeSettingsChatPreviewItemNode: ListViewItemNode {
                 var messageNodes: [ListViewItemNode] = []
                 for i in 0 ..< items.count {
                     var itemNode: ListViewItemNode?
-                    items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: false, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
+                    items[i].nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, neighbors: ListViewItemNeighbors(previous: i == 0 ? nil : items[i - 1].neighborDescriptor, next: i == (items.count - 1) ? nil : items[i + 1].neighborDescriptor), completion: { node, apply in
                         itemNode = node
                         apply().1(ListViewItemApply())
                     })

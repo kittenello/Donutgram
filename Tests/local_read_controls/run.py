@@ -20,7 +20,7 @@ def prepare():
     push = source("submodules/TelegramCore/Sources/State/SynchronizePeerReadState.swift")
     assert "if donutgramGhostLocalReadState(accountPeerId:" in push
     entries = source("submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift")
-    assert "if fullyHideArchive && groupReference.id == .archive" in entries
+    assert "groupItems.removeAll { $0.id == .archive }" in entries
     node = source("submodules/ChatListUI/Sources/Node/ChatListNode.swift")
     assert "combineLatest(hideArchivedFolderByDefault, fullyHideArchive)" in node
     input_context = source("submodules/TelegramUI/Sources/ChatInterfaceInputContexts.swift")

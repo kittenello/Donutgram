@@ -11,6 +11,8 @@ on:
       - 'submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/**'
       - 'submodules/TelegramUI/Sources/ChatHistoryListNode.swift'
       - 'submodules/ChatPresentationInterfaceState/Sources/ChatTextFormat.swift'
+      - 'submodules/ChatListUI/**'
+      - 'submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/**'
       - 'Tests/message_controls/**'
       - '.github/workflows/message-controls-tests.yml'
   workflow_dispatch:

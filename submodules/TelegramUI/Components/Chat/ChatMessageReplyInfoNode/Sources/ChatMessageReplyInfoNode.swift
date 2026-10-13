@@ -286,14 +286,15 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             
             switch arguments.type {
             case let .bubble(incoming):
-                titleColor = incoming ? (authorNameColor ?? arguments.presentationData.theme.theme.chat.message.incoming.accentTextColor) : arguments.presentationData.theme.theme.chat.message.outgoing.accentTextColor
-                if incoming {
+                let accentColor = incoming ? arguments.presentationData.theme.theme.chat.message.incoming.accentTextColor : arguments.presentationData.theme.theme.chat.message.outgoing.accentTextColor
+                titleColor = incoming || isStickerReply ? (authorNameColor ?? accentColor) : accentColor
+                if incoming || isStickerReply {
                     if let authorNameColor {
                         mainColor = authorNameColor
                         secondaryColor = dashSecondaryColor
                         tertiaryColor = dashTertiaryColor
                     } else {
-                        mainColor = arguments.presentationData.theme.theme.chat.message.incoming.accentTextColor
+                        mainColor = accentColor
                     }
                 } else {
                     mainColor = arguments.presentationData.theme.theme.chat.message.outgoing.accentTextColor
@@ -308,15 +309,10 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 placeholderColor = incoming ? arguments.presentationData.theme.theme.chat.message.incoming.mediaPlaceholderColor : arguments.presentationData.theme.theme.chat.message.outgoing.mediaPlaceholderColor
             case .standalone:
                 let serviceColor = serviceMessageColorComponents(theme: arguments.presentationData.theme.theme, wallpaper: arguments.presentationData.theme.wallpaper)
-                titleColor = serviceColor.primaryText
-                if dashSecondaryColor != nil {
-                    secondaryColor = .clear
-                }
-                if dashTertiaryColor != nil {
-                    tertiaryColor = .clear
-                }
-                
-                mainColor = serviceMessageColorComponents(chatTheme: arguments.presentationData.theme.theme.chat, wallpaper: arguments.presentationData.theme.wallpaper).primaryText
+                titleColor = authorNameColor ?? serviceColor.primaryText
+                secondaryColor = dashSecondaryColor
+                tertiaryColor = dashTertiaryColor
+                mainColor = authorNameColor ?? serviceMessageColorComponents(chatTheme: arguments.presentationData.theme.theme.chat, wallpaper: arguments.presentationData.theme.wallpaper).primaryText
                 dustColor = titleColor
                 placeholderColor = serviceColor.primaryText.withAlphaComponent(0.2)
             }

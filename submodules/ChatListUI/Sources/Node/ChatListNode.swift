@@ -3634,6 +3634,21 @@ public final class ChatListNode: ListViewImpl {
             }
             
             var scrollToItem = transition.scrollToItem
+            // An archive row removed at the top must not leave its previous screen position behind.
+            let removedArchive = (self.chatListView?.filteredEntries.contains { entry in
+                if case let .GroupReferenceEntry(data) = entry { return data.groupId == .archive }
+                return false
+            } ?? false) && !transition.chatListView.filteredEntries.contains { entry in
+                if case let .GroupReferenceEntry(data) = entry { return data.groupId == .archive }
+                return false
+            }
+            let archiveOffset: CGFloat?
+            if case let .known(offset) = self.visibleContentOffset() {
+                archiveOffset = offset
+            } else {
+                archiveOffset = nil
+            }
+            let archiveGap = donutgramArchiveTopGapNeedsReset(hideArchive: DGSimpleSettings.shared.hideArchive, isRoot: self.location == .chatList(groupId: .root), isTracking: self.isTracking, isDecelerating: self.isDeceleratingAfterTracking, storiesInset: self.tempTopInset, offset: archiveOffset, removedArchive: removedArchive)
             if transition.adjustScrollToFirstItem {
                 var offset: CGFloat = 0.0
                 if let visibleTopInset = self.visibleTopInset {
@@ -3649,6 +3664,9 @@ public final class ChatListNode: ListViewImpl {
                 scrollToItem = ListViewScrollToItem(index: 0, position: .top(offset), animated: false, curve: .Default(duration: 0.0), directionHint: .Up)
             }
             
+            if archiveGap {
+                scrollToItem = ListViewScrollToItem(index: 0, position: .top(0.0), animated: false, curve: .Default(duration: 0.0), directionHint: .Up)
+            }
             let updatedOpaqueState: Any? = ChatListOpaqueTransactionState(chatListView: transition.chatListView)
             self.transaction(deleteIndices: transition.deleteItems, insertIndicesAndItems: transition.insertItems, updateIndicesAndItems: transition.updateItems, options: options, scrollToItem: scrollToItem, stationaryItemRange: transition.stationaryItemRange, updateOpaqueState: updatedOpaqueState, completion: completion)
         }

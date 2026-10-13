@@ -13,6 +13,15 @@ PREVIEW = "submodules/SettingsUI/Sources/Themes/ThemeSettingsChatPreviewItem.swi
 def read(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
+def block(source, marker):
+    start = source.index(marker)
+    opening = source.index("{", start)
+    depth, end = 1, opening + 1
+    while depth:
+        depth += (source[end] == "{") - (source[end] == "}")
+        end += 1
+    return source[start:end]
+
 def prepare():
     reply = read(REPLY)
     start = reply.index("                if isMediaValue && DGSimpleSettings.shared.hideStickerReplyEmoji")
@@ -39,11 +48,22 @@ def prepare():
     assert "MessageForwardInfo(author: forwardPeer" in preview
     assert "associatedMedia[emoji.fileId] = emoji" in preview
     assert 'text: messageItem.replySticker == nil ? text : ""' in preview
+    assert "currentMessages == item.messageItems" not in preview
+    assert "zip(previous, item.messageItems).allSatisfy" in preview
     history = read("submodules/TelegramUI/Sources/ChatHistoryListNode.swift")
     assert "includeAllMessages: stickerRepliesChanged" in history and "|| premiumReplyEmojiChanged)" in history
     contact = read("submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift")
     assert "if !DGSimpleSettings.shared.hidePremiumReplyEmoji, let contactPeer" in contact
-    return Path(__file__).with_name("main.swift").read_text(encoding="utf-8").replace("// PRODUCTION_DESCRIPTION", description)
+    bg = read("submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/Sources/MessageInlineBlockBackgroundView.swift")
+    predicate = next(line.strip()[3:-2] for line in bg.splitlines() if line.strip().startswith("if previousParams?.primaryColor != params.primaryColor ||"))
+    colors = block(reply, "switch arguments.type {\n            case let .bubble(incoming):")
+    archive = read("submodules/ChatListUI/Sources/Node/DonutgramArchiveLayout.swift")
+    template = Path(__file__).with_name("main.swift").read_text(encoding="utf-8")
+    return (template.replace("// PRODUCTION_DESCRIPTION", description)
+        .replace("// PRODUCTION_REUSE", block(preview, "func canReuseNode("))
+        .replace("// PRODUCTION_BACKGROUND_CONDITION", predicate)
+        .replace("// PRODUCTION_REPLY_COLORS", colors)
+        .replace("// PRODUCTION_ARCHIVE_LAYOUT", archive))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -66,6 +86,6 @@ if __name__ == "__main__":
             suite = "donutgram-message-controls-" + uuid.uuid4().hex
             for mode in ["write", "read"]:
                 subprocess.run([str(executable), mode, suite], check=True)
-            paths = [REPLY, PREVIEW, "Donutgram/DGSettingsUI/Sources/DGSettingsController.swift", "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift", "submodules/TelegramUI/Sources/ChatHistoryListNode.swift", "submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift", "submodules/ChatPresentationInterfaceState/Sources/ChatTextFormat.swift"]
+            paths = [REPLY, PREVIEW, "Donutgram/DGSettingsUI/Sources/DGSettingsController.swift", "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift", "submodules/TelegramUI/Sources/ChatHistoryListNode.swift", "submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift", "submodules/ChatPresentationInterfaceState/Sources/ChatTextFormat.swift", "submodules/ChatListUI/Sources/Node/ChatListNode.swift", "submodules/ChatListUI/Sources/ChatListControllerNode.swift", "submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift", "submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/Sources/MessageInlineBlockBackgroundView.swift"]
             for path in paths:
                 subprocess.run([swift, "-frontend", "-parse", str(ROOT / path)], check=True)

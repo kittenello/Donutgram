@@ -5,7 +5,68 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
 }
 final class TelegramMediaFile {
     let isSticker: Bool
-    init(isSticker: Bool) { self.isSticker = isSticker }
+    let isAnimatedSticker: Bool
+    let isVideoSticker: Bool
+    init(isSticker: Bool, animated: Bool = false, video: Bool = false) {
+        self.isSticker = isSticker
+        self.isAnimatedSticker = animated
+        self.isVideoSticker = video
+    }
+}
+struct ChatPreviewMessageItem {
+    let sticker: TelegramMediaFile?
+    // PRODUCTION_REUSE
+}
+struct FixtureBackground {
+    var primaryColor = "blue"
+    var secondaryColor: String?
+    var backgroundColor: String?
+    var isTransparent = false
+}
+func refreshBackground(previousParams: FixtureBackground?, params: FixtureBackground) -> Bool {
+    return // PRODUCTION_BACKGROUND_CONDITION
+}
+// PRODUCTION_ARCHIVE_LAYOUT
+
+struct FixtureColor: Equatable {
+    let name: String
+    static let clear = FixtureColor(name: "clear")
+    func withAlphaComponent(_ alpha: CGFloat) -> FixtureColor { FixtureColor(name: name + " alpha") }
+}
+typealias UIColor = FixtureColor
+struct FixtureMessageColors {
+    let accentTextColor: UIColor
+    let secondaryTextColor = FixtureColor(name: "secondary")
+    let mediaPlaceholderColor = FixtureColor(name: "placeholder")
+}
+struct FixtureChatTheme {
+    struct Message {
+        let incoming = FixtureMessageColors(accentTextColor: FixtureColor(name: "incoming"))
+        let outgoing = FixtureMessageColors(accentTextColor: FixtureColor(name: "outgoing"))
+    }
+    let message = Message()
+}
+struct FixtureTheme { let chat = FixtureChatTheme() }
+struct FixtureThemeWrapper { let theme = FixtureTheme(); let wallpaper = 0 }
+struct FixturePresentation { let theme = FixtureThemeWrapper() }
+enum FixtureReplyType { case bubble(incoming: Bool); case standalone }
+struct FixtureReplyArguments { let type: FixtureReplyType; let presentationData = FixturePresentation() }
+struct FixtureServiceColors { let primaryText = FixtureColor(name: "service") }
+func serviceMessageColorComponents(theme: FixtureTheme, wallpaper: Int) -> FixtureServiceColors { FixtureServiceColors() }
+func serviceMessageColorComponents(chatTheme: FixtureChatTheme, wallpaper: Int) -> FixtureServiceColors { FixtureServiceColors() }
+func replyColors(type: FixtureReplyType, isStickerReply: Bool, authorNameColor: UIColor?) -> (UIColor, UIColor) {
+    let arguments = FixtureReplyArguments(type: type)
+    let titleColor: UIColor
+    let mainColor: UIColor
+    let dustColor: UIColor
+    let placeholderColor: UIColor
+    let dashSecondaryColor: UIColor? = nil
+    let dashTertiaryColor: UIColor? = nil
+    var secondaryColor: UIColor?
+    var tertiaryColor: UIColor?
+    // PRODUCTION_REPLY_COLORS
+    _ = (dustColor, placeholderColor, secondaryColor, tertiaryColor)
+    return (titleColor, mainColor)
 }
 struct FixtureMessage { let media: [Any] }
 struct FixtureArguments {
@@ -75,6 +136,40 @@ if mode == "write" {
         check(replyDescription(isMediaValue: true, message: sticker, textStringValue: cat) === cat, "emoji restored when toggle is off")
     }
     checkDescriptions()
+
+    let bubble = ChatPreviewMessageItem(sticker: nil)
+    let staticSticker = ChatPreviewMessageItem(sticker: TelegramMediaFile(isSticker: true))
+    let animatedSticker = ChatPreviewMessageItem(sticker: TelegramMediaFile(isSticker: true, animated: true))
+    check(bubble.canReuseNode(with: bubble), "message preview updates reuse the same bubble")
+    check(staticSticker.canReuseNode(with: staticSticker), "sticker decoration changes reuse the sticker node")
+    check(!bubble.canReuseNode(with: staticSticker) && !staticSticker.canReuseNode(with: animatedSticker), "media kind changes require a compatible node")
+    let originalBackground = FixtureBackground()
+    var changedBackground = originalBackground
+    check(!refreshBackground(previousParams: originalBackground, params: changedBackground), "unchanged backgrounds stay cached")
+    changedBackground.backgroundColor = "clear"
+    check(refreshBackground(previousParams: originalBackground, params: changedBackground), "hide background refreshes even with unchanged colors")
+    check(refreshBackground(previousParams: changedBackground, params: originalBackground), "background restoration refreshes the fill")
+    changedBackground = originalBackground
+    changedBackground.isTransparent = true
+    check(refreshBackground(previousParams: originalBackground, params: changedBackground), "transparent backgrounds refresh")
+    let red = FixtureColor(name: "red")
+    for type in [FixtureReplyType.bubble(incoming: true), .bubble(incoming: false), .standalone] {
+        let visible = replyColors(type: type, isStickerReply: true, authorNameColor: red)
+        let hidden = replyColors(type: type, isStickerReply: true, authorNameColor: nil)
+        check(visible.0 == red && visible.1 == red, "sticker replies show author colors in every layout")
+        check(hidden.0 != red && hidden.1 != red, "hiding sticker colors restores the theme colors")
+    }
+    check(replyColors(type: .bubble(incoming: false), isStickerReply: false, authorNameColor: red).0.name == "outgoing", "ordinary outgoing reply colors remain unchanged")
+    check(donutgramArchiveRestoredOffset(-80, hideArchive: true, hasStories: false) == 0, "old archive offset cannot leave a blank row after restart")
+    check(donutgramArchiveRestoredOffset(-80, hideArchive: true, hasStories: true) == -80, "visible stories keep their offset")
+    check(donutgramArchiveRestoredOffset(100, hideArchive: true, hasStories: false) == 100, "scrolled-away chats keep their position")
+    check(donutgramArchiveTopGapNeedsReset(hideArchive: true, isRoot: true, isTracking: false, isDecelerating: false, storiesInset: 0, offset: -80, removedArchive: true), "archive gap resets at the top")
+    for dragging in [false, true] {
+        for storiesInset in [CGFloat(0), CGFloat(80)] {
+            let reset = donutgramArchiveTopGapNeedsReset(hideArchive: true, isRoot: true, isTracking: dragging, isDecelerating: false, storiesInset: storiesInset, offset: -80, removedArchive: true)
+            check(reset == (!dragging && storiesInset == 0), "dragging and story expansion are respected")
+        }
+    }
     settings.hideStickerReplyColors = true
     settings.hideStickerReplyEmoji = true
     settings.hideStickerReplyBackground = false

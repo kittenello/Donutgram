@@ -615,6 +615,11 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         ))
     }
     
+    // Remove the archive before computing pinned offsets, not only when appending its row.
+    if fullyHideArchive {
+        groupItems.removeAll { $0.id == .archive }
+    }
+
     var result: [ChatListNodeEntry] = []
     
     var hasContacts = false
@@ -921,9 +926,6 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         
         if !view.hasLater, case .chatList = mode {
             for groupReference in groupItems {
-                if fullyHideArchive && groupReference.id == .archive {
-                    continue
-                }
                 let messageIndex = EngineMessage.Index(id: EngineMessage.Id(peerId: EnginePeer.Id(0), namespace: 0, id: 0), timestamp: 1)
                 var mappedStoryState: ChatListNodeState.StoryState?
                 if let archiveStoryState = state.archiveStoryState {
