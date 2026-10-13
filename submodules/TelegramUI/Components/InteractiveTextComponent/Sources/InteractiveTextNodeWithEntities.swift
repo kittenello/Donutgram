@@ -68,6 +68,10 @@ private final class MentionAvatarItem: Hashable {
     /// character that carries an embedded item.
     let glyphLine: CTLine
     let glyphWidth: CGFloat
+    /// The text node would underline (or strike through) the whole run, avatar included, so the
+    /// run carries neither and the avatar view draws them under the character alone.
+    let underlineColor: UIColor?
+    let strikethroughColor: UIColor?
     let width: CGFloat
 
     init(peer: EnginePeer?, username: String?, glyph: NSAttributedString, font: UIFont) {
@@ -76,7 +80,17 @@ private final class MentionAvatarItem: Hashable {
         self.glyph = glyph
         self.font = font
         self.avatarSize = ceil(font.pointSize)
-        // The text node draws underlines and strikethroughs across the whole mention itself.
+        let textColor = glyph.length == 0 ? nil : glyph.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        if glyph.length != 0, let style = glyph.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? Int, style != 0 {
+            self.underlineColor = (glyph.attribute(.underlineColor, at: 0, effectiveRange: nil) as? UIColor) ?? textColor ?? .black
+        } else {
+            self.underlineColor = nil
+        }
+        if glyph.length != 0, let style = glyph.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int, style != 0 {
+            self.strikethroughColor = (glyph.attribute(.strikethroughColor, at: 0, effectiveRange: nil) as? UIColor) ?? textColor ?? .black
+        } else {
+            self.strikethroughColor = nil
+        }
         let drawnGlyph = NSMutableAttributedString(attributedString: glyph)
         let glyphRange = NSRange(location: 0, length: drawnGlyph.length)
         drawnGlyph.removeAttribute(.underlineStyle, range: glyphRange)
@@ -194,6 +208,8 @@ public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePee
         if let delegate = CTRunDelegateCreate(&callbacks, retainedMetrics.toOpaque()) {
             result.addAttribute(NSAttributedString.Key(kCTRunDelegateAttributeName as String), value: delegate, range: range)
             result.addAttribute(NSAttributedString.Key("Attribute__EmbeddedItem"), value: AnyHashable(item), range: range)
+            result.removeAttribute(.underlineStyle, range: range)
+            result.removeAttribute(.strikethroughStyle, range: range)
             count += 1
         } else {
             retainedMetrics.release()
@@ -207,6 +223,9 @@ private final class MentionGlyphView: UIView {
     static let padding: CGFloat = 2.0
 
     private let line: CTLine
+    private let width: CGFloat
+    private let underlineColor: UIColor?
+    private let strikethroughColor: UIColor?
     var baseline: CGFloat = 0.0 {
         didSet {
             if self.baseline != oldValue {
@@ -215,8 +234,11 @@ private final class MentionGlyphView: UIView {
         }
     }
 
-    init(line: CTLine) {
+    init(line: CTLine, width: CGFloat, underlineColor: UIColor?, strikethroughColor: UIColor?) {
         self.line = line
+        self.width = width
+        self.underlineColor = underlineColor
+        self.strikethroughColor = strikethroughColor
         super.init(frame: .zero)
         self.isOpaque = false
         self.backgroundColor = nil
@@ -238,6 +260,15 @@ private final class MentionGlyphView: UIView {
         context.textPosition = CGPoint(x: MentionGlyphView.padding, y: self.baseline)
         CTLineDraw(self.line, context)
         context.restoreGState()
+        // At the offsets the text node uses for the rest of the mention: the view is as tall as the line.
+        if let underlineColor = self.underlineColor {
+            context.setFillColor(underlineColor.cgColor)
+            context.fill(CGRect(x: MentionGlyphView.padding, y: self.bounds.height - 2.0, width: self.width + 0.5, height: 1.0))
+        }
+        if let strikethroughColor = self.strikethroughColor {
+            context.setFillColor(strikethroughColor.cgColor)
+            context.fill(CGRect(x: MentionGlyphView.padding, y: self.bounds.midY, width: self.width + 0.5, height: 1.0))
+        }
     }
 }
 
@@ -253,7 +284,7 @@ private final class MentionAvatarView: UIView {
     init(context: AccountContext, item: MentionAvatarItem, synchronousLoad: Bool) {
         self.item = item
         self.avatarNode = AvatarNode(font: Font.regular(max(8.0, item.avatarSize * 0.5)))
-        self.glyphView = MentionGlyphView(line: item.glyphLine)
+        self.glyphView = MentionGlyphView(line: item.glyphLine, width: item.glyphWidth, underlineColor: item.underlineColor, strikethroughColor: item.strikethroughColor)
         super.init(frame: .zero)
         self.isUserInteractionEnabled = false
         self.addSubview(self.avatarNode.view)
