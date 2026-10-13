@@ -3051,6 +3051,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             var releasedByPeer: EnginePeer?
             var canGiftUpgrade = false
             var isDismantled = false
+            let isDisappearedGift = (controller() as? GiftViewScreen)?.deleteDisappearedGift != nil
             
             if case let .soldOutGift(gift) = subject {
                 animationFile = gift.file
@@ -3133,7 +3134,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else if isSelfGift {
                     titleString = strings.Gift_View_Self_Title
                 } else {
-                    titleString = incoming ? strings.Gift_View_ReceivedTitle : strings.Gift_View_Title
+                    titleString = incoming && !isDisappearedGift ? strings.Gift_View_ReceivedTitle : strings.Gift_View_Title
                 }
             } else {
                 animationFile = nil
@@ -3153,7 +3154,6 @@ private final class GiftViewSheetContent: CombinedComponent {
 
             // A gift that has disappeared from a profile is only a record of
             // it: nothing on it can be bought, upgraded or managed anymore.
-            let isDisappearedGift = (controller() as? GiftViewScreen)?.deleteDisappearedGift != nil
             if isDisappearedGift {
                 incoming = false
                 isChannelGift = false
