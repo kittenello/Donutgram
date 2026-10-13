@@ -124,7 +124,7 @@ private final class DGTabBarPreviewItemNode: ListViewItemNode, ItemListItemNode 
                 isLiftedStateEnabled: false,
                 strings: item.strings,
                 items: visibleTabs.map { TabBarComponent.Item(content: .tabBarItem($0), action: { _ in }, doubleTapAction: nil, contextAction: nil) },
-                search: TabBarComponent.Search(isActive: false, activate: {}, deactivate: {}),
+                search: nil,
                 selectedId: AnyHashable(ObjectIdentifier(self.tabs[2])),
                 outerInsets: .zero,
                 layout: item.layout
