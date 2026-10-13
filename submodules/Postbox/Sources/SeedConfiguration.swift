@@ -81,6 +81,9 @@ public final class SeedConfiguration {
     public let automaticThreadIndexInfo: (PeerId, Int64) -> StoredMessageHistoryThreadInfo?
     public let customTagsFromAttributes: ([MessageAttribute]) -> [MemoryBuffer]
     public let displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey
+    /// A message that carries any of these local tags stays in the history but no longer counts as
+    /// unread: for the read state, tagging the message removes it and untagging it inserts it back.
+    public let localTagsExcludedFromUnreadCount: LocalMessageTags
     
     public init(
         globalMessageIdsPeerIdNamespaces: Set<GlobalMessageIdsNamespace>,
@@ -111,7 +114,8 @@ public final class SeedConfiguration {
         isPeerUpgradeMessage: @escaping (Message) -> Bool,
         automaticThreadIndexInfo: @escaping (PeerId, Int64) -> StoredMessageHistoryThreadInfo?,
         customTagsFromAttributes: @escaping ([MessageAttribute]) -> [MemoryBuffer],
-        displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey
+        displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey,
+        localTagsExcludedFromUnreadCount: LocalMessageTags = []
     ) {
         self.globalMessageIdsPeerIdNamespaces = globalMessageIdsPeerIdNamespaces
         self.initializeChatListWithHole = initializeChatListWithHole
@@ -138,5 +142,6 @@ public final class SeedConfiguration {
         self.automaticThreadIndexInfo = automaticThreadIndexInfo
         self.customTagsFromAttributes = customTagsFromAttributes
         self.displaySavedMessagesAsTopicListPreferencesKey = displaySavedMessagesAsTopicListPreferencesKey
+        self.localTagsExcludedFromUnreadCount = localTagsExcludedFromUnreadCount
     }
 }

@@ -150,4 +150,88 @@ final class SparseMessageListLayoutTests: XCTestCase {
             .message(index: 2, id: SparseFixtures.messageId(self.channelId, 8), isLocal: true)
         ])
     }
+
+    func testPreservedMessagesTakeCellsBetweenAdjacentCells() {
+        // Messages 9 and 8 were deleted on the server and saved; the server does not count them.
+        let ids: [Int32] = [10, 7, 6]
+        let top = ids.map { SparseFixtures.message(self.channelId, $0, timestamp: $0) }
+        let layout = sparseMessageListSegmentItems(peerId: self.channelId, topMessages: top, skeleton: SparseMessageSkeleton(items: []))
+        let preserved = [
+            SparseFixtures.message(self.channelId, 9, timestamp: 9),
+            SparseFixtures.message(self.channelId, 8, timestamp: 8)
+        ]
+
+        let result = sparseMessageListSegmentItemsAddingPreserved(preserved, items: layout.items, totalCount: layout.totalCount, endIsLoaded: true)
+
+        XCTAssertEqual(result.totalCount, 5)
+        XCTAssertEqual(SparseFixtures.cells(result.items), [
+            .message(index: 0, id: SparseFixtures.messageId(self.channelId, 10), isLocal: true),
+            .message(index: 1, id: SparseFixtures.messageId(self.channelId, 9), isLocal: true),
+            .message(index: 2, id: SparseFixtures.messageId(self.channelId, 8), isLocal: true),
+            .message(index: 3, id: SparseFixtures.messageId(self.channelId, 7), isLocal: true),
+            .message(index: 4, id: SparseFixtures.messageId(self.channelId, 6), isLocal: true)
+        ])
+    }
+
+    func testPreservedMessageInsideAnUnloadedRunWaitsForIt() {
+        let skeleton = SparseMessageSkeleton(items: [
+            .anchor(id: SparseFixtures.messageId(self.channelId, 100), timestamp: 100, message: nil),
+            .range(count: 5),
+            .anchor(id: SparseFixtures.messageId(self.channelId, 50), timestamp: 50, message: nil),
+            .range(count: 3)
+        ])
+        let layout = sparseMessageListSegmentItems(peerId: self.channelId, topMessages: [], skeleton: skeleton)
+        let preserved = [
+            SparseFixtures.message(self.channelId, 120, timestamp: 120),
+            SparseFixtures.message(self.channelId, 70, timestamp: 70),
+            SparseFixtures.message(self.channelId, 40, timestamp: 40)
+        ]
+
+        let result = sparseMessageListSegmentItemsAddingPreserved(preserved, items: layout.items, totalCount: layout.totalCount, endIsLoaded: true)
+
+        // 120 is newer than the first cell, so its cell is known. 70 and 40 fall inside runs
+        // whose messages are not loaded yet; before, they were put before the next known cell
+        // and moved once the run loaded.
+        XCTAssertEqual(result.totalCount, 11)
+        XCTAssertEqual(SparseFixtures.cells(result.items), [
+            .message(index: 0, id: SparseFixtures.messageId(self.channelId, 120), isLocal: true),
+            .placeholder(index: 1, id: SparseFixtures.messageId(self.channelId, 100)),
+            .placeholder(index: 7, id: SparseFixtures.messageId(self.channelId, 50))
+        ])
+    }
+
+    func testPreservedMessageOlderThanEveryCellGoesLastOnlyOnceTheEndIsLoaded() {
+        let layout = sparseMessageListSegmentItems(peerId: self.channelId, topMessages: self.channelMessages(8 ... 10), skeleton: nil)
+        let preserved = [SparseFixtures.message(self.channelId, 5, timestamp: 5)]
+
+        // The skeleton has not arrived, so older messages may still follow the top section.
+        let pending = sparseMessageListSegmentItemsAddingPreserved(preserved, items: layout.items, totalCount: layout.totalCount, endIsLoaded: false)
+        XCTAssertEqual(pending.totalCount, 3)
+        XCTAssertEqual(pending.items.count, 3)
+
+        let loaded = sparseMessageListSegmentItemsAddingPreserved(preserved, items: layout.items, totalCount: layout.totalCount, endIsLoaded: true)
+        XCTAssertEqual(loaded.totalCount, 4)
+        XCTAssertEqual(SparseFixtures.cells(Array(loaded.items.suffix(1))), [
+            .message(index: 3, id: SparseFixtures.messageId(self.channelId, 5), isLocal: true)
+        ])
+    }
+
+    func testPreservedMessageTheSkeletonStillHoldsKeepsItsCell() {
+        // The skeleton was read before message 90 was deleted on the server.
+        let skeleton = SparseMessageSkeleton(items: [
+            .anchor(id: SparseFixtures.messageId(self.channelId, 100), timestamp: 100, message: nil),
+            .range(count: 2),
+            .anchor(id: SparseFixtures.messageId(self.channelId, 90), timestamp: 90, message: nil)
+        ])
+        let layout = sparseMessageListSegmentItems(peerId: self.channelId, topMessages: [], skeleton: skeleton)
+        let preserved = [SparseFixtures.message(self.channelId, 90, timestamp: 90)]
+
+        let result = sparseMessageListSegmentItemsAddingPreserved(preserved, items: layout.items, totalCount: layout.totalCount, endIsLoaded: true)
+
+        XCTAssertEqual(result.totalCount, 4)
+        XCTAssertEqual(SparseFixtures.cells(result.items), [
+            .placeholder(index: 0, id: SparseFixtures.messageId(self.channelId, 100)),
+            .message(index: 3, id: SparseFixtures.messageId(self.channelId, 90), isLocal: true)
+        ])
+    }
 }

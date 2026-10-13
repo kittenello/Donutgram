@@ -82,18 +82,27 @@ func donutgramPreserveDeletedMessage(transaction: Transaction, messageId: Messag
     guard messageId.namespace == Namespaces.Message.Cloud else {
         return false
     }
+    guard let message = transaction.getMessage(messageId) else {
+        return false
+    }
+    // A message that is already saved stays saved: the settings decide only about new deletions.
+    if message.localTags.contains(.donutgramDeleted) {
+        return true
+    }
     guard donutgramAllowsSavingInPeer(transaction: transaction, peerId: messageId.peerId) else {
         return false
     }
-    guard let message = transaction.getMessage(messageId) else {
+    // Saved Messages are cleared by the account itself, on this or another device.
+    if let accountState = transaction.getState() as? AuthorizedAccountState, accountState.peerId == messageId.peerId {
         return false
     }
     guard DGSimpleSettings.shared.saveDeletedMessages || message.localTags.contains(.donutgramSavedViewOnce) else {
         return false
     }
-
-    if message.localTags.contains(.donutgramDeleted) {
-        return true
+    // The update does not say who deleted an own message: the account on another device or, in a
+    // private chat, the other side for both. Keeping them is a setting of its own.
+    if !message.flags.contains(.Incoming) && !DGSimpleSettings.shared.saveOwnDeletedMessages {
+        return false
     }
 
     transaction.updateMessage(messageId, update: { currentMessage in
@@ -101,7 +110,79 @@ func donutgramPreserveDeletedMessage(transaction: Transaction, messageId: Messag
         localTags.insert(.donutgramDeleted)
         return .update(donutgramMessageWithUpdatedLocalTags(currentMessage, localTags: localTags))
     })
+    donutgramClearUnseenMarks(transaction: transaction, messageId: messageId)
     return true
+}
+
+/// The server can no longer read a saved deleted message, so it leaves the chat's mention, reaction
+/// and poll vote badges as its deletion would have. The unread count leaves it out on its own
+/// (`localTagsExcludedFromUnreadCount`).
+private func donutgramClearUnseenMarks(transaction: Transaction, messageId: MessageId) {
+    guard let message = transaction.getMessage(messageId) else {
+        return
+    }
+    let unseenTags: MessageTags = [.unseenPersonalMessage, .unseenReaction, .unseenPollVote]
+    var hasUnconsumedMention = false
+    var hasPendingMention = false
+    for attribute in message.attributes {
+        if let attribute = attribute as? ConsumablePersonalMentionMessageAttribute, !attribute.consumed {
+            hasUnconsumedMention = true
+            hasPendingMention = attribute.pending
+        }
+    }
+    if message.tags.isDisjoint(with: unseenTags) && !hasUnconsumedMention {
+        return
+    }
+    // A mention already read here but not yet on the server leaves the badge through its pending action.
+    if hasPendingMention {
+        transaction.setPendingMessageAction(type: .consumeUnseenPersonalMessage, id: messageId, action: nil)
+    }
+    transaction.updateMessage(messageId, update: { currentMessage in
+        var attributes = currentMessage.attributes
+        for i in 0 ..< attributes.count {
+            if let attribute = attributes[i] as? ConsumablePersonalMentionMessageAttribute, !attribute.consumed {
+                attributes[i] = ConsumablePersonalMentionMessageAttribute(consumed: true, pending: false)
+            } else if let attribute = attributes[i] as? ReactionsMessageAttribute, attribute.hasUnseen {
+                attributes[i] = attribute.withAllSeen()
+            }
+        }
+        let media = currentMessage.media.map { item -> Media in
+            if let poll = item as? TelegramMediaPoll, poll.results.hasUnseenVotes == true {
+                return poll.withoutUnreadResults()
+            }
+            return item
+        }
+        var tags = currentMessage.tags
+        tags.subtract(unseenTags)
+        return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init), authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: media))
+    })
+}
+
+/// Removes the stored messages of a chat in `minId ... maxId`, as the server does when it moves a
+/// supergroup's first available message (its history was cleared). Saved deleted messages stay,
+/// and the cleared messages are saved like any other deletion while saving is on.
+func donutgramDeleteMessagesInRange(transaction: Transaction, peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id, forEachMedia: ((Media) -> Void)?) {
+    var keptIds: [MessageId.Id] = []
+    for id in transaction.getMessageIdsInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId) {
+        if donutgramPreserveDeletedMessage(transaction: transaction, messageId: id) {
+            keptIds.append(id.id)
+        }
+    }
+    if keptIds.isEmpty {
+        transaction.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId, forEachMedia: forEachMedia)
+        return
+    }
+
+    var lowerBound = minId
+    for keptId in keptIds.sorted() {
+        if lowerBound < keptId {
+            transaction.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: lowerBound, maxId: keptId - 1, forEachMedia: forEachMedia)
+        }
+        lowerBound = keptId + 1
+    }
+    if lowerBound <= maxId {
+        transaction.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: lowerBound, maxId: maxId, forEachMedia: forEachMedia)
+    }
 }
 
 /// Stores the version that is about to be replaced by an incoming edit.
@@ -160,6 +241,75 @@ public func donutgramMessageRevisions(
         return transaction.retrieveItemCacheEntry(id: cacheId)?
             .get(DonutgramMessageRevisionList.self)?
             .revisions ?? []
+    }
+}
+
+/// `updated`, a server copy about to replace the stored `previous`, with its edit history kept:
+/// the text it replaces is stored as a revision and the edit-history marker stays.
+func donutgramPreservingEditHistory(transaction: Transaction, previous: Message, updated: StoreMessage) -> StoreMessage {
+    guard donutgramStorePreviousMessageRevision(transaction: transaction, previousMessage: previous, updatedText: updated.text), !updated.localTags.contains(.donutgramHasEditHistory) else {
+        return updated
+    }
+    var localTags = updated.localTags
+    localTags.insert(.donutgramHasEditHistory)
+    return updated.withUpdatedLocalTags(localTags)
+}
+
+/// Stores the revisions that `messages`, server copies passed to `Transaction.addMessages`, are
+/// about to replace. `addMessages` keeps the local tags of a stored message, so the marker goes
+/// on the stored message first.
+func donutgramStoreRevisionsOfReplacedMessages(transaction: Transaction, messages: [StoreMessage]) {
+    guard DGSimpleSettings.shared.saveEditHistory else {
+        return
+    }
+    for message in messages {
+        // A copy without an edit date still has the text it was sent with.
+        guard case let .Id(id) = message.id, id.namespace == Namespaces.Message.Cloud, message.attributes.contains(where: { $0 is EditedMessageAttribute }), let previous = transaction.getMessage(id) else {
+            continue
+        }
+        if donutgramStorePreviousMessageRevision(transaction: transaction, previousMessage: previous, updatedText: message.text) && !previous.localTags.contains(.donutgramHasEditHistory) {
+            transaction.updateMessage(id, update: { currentMessage in
+                var localTags = currentMessage.localTags
+                localTags.insert(.donutgramHasEditHistory)
+                return .update(donutgramMessageWithUpdatedLocalTags(currentMessage, localTags: localTags))
+            })
+        }
+    }
+}
+
+func donutgramRemoveMessageRevisions(transaction: Transaction, messageIds: [MessageId]) {
+    for id in messageIds {
+        transaction.removeItemCacheEntry(id: donutgramRevisionCacheId(id))
+    }
+}
+
+/// Drops the edit history of messages that are no longer stored (deleted, or removed with their
+/// chat): nothing can show it, and the item cache never evicts it. A few hundred entries are
+/// checked per transaction, so a long history does not hold the Postbox queue.
+func donutgramRemoveOrphanedMessageRevisions(postbox: Postbox) -> Signal<Never, NoError> {
+    let collectionId = Namespaces.CachedItemCollection.donutgramEditHistory
+    return postbox.transaction { transaction -> [ValueBoxKey] in
+        return transaction.getItemCacheEntryKeys(collectionId: collectionId)
+    }
+    |> mapToSignal { keys -> Signal<Never, NoError> in
+        let chunkSize = 256
+        var signal: Signal<Never, NoError> = .complete()
+        var chunkStart = 0
+        while chunkStart < keys.count {
+            let chunk = keys[chunkStart ..< min(chunkStart + chunkSize, keys.count)]
+            chunkStart += chunkSize
+            signal = signal
+            |> then(postbox.transaction { transaction -> Void in
+                for key in chunk where key.length == 16 {
+                    let messageId = MessageId(peerId: PeerId(key.getInt64(0)), namespace: key.getInt32(8), id: key.getInt32(12))
+                    if !transaction.messageExists(id: messageId) {
+                        transaction.removeItemCacheEntry(id: ItemCacheEntryId(collectionId: collectionId, key: key))
+                    }
+                }
+            }
+            |> ignoreValues)
+        }
+        return signal
     }
 }
 

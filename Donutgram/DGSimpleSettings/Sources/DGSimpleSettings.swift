@@ -53,6 +53,8 @@ public final class DGSimpleSettings {
     /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
     /// send account.updateStatus.
     public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
+    /// «Полупрозрачные удаленки» changed. Separate from didChangeNotification for the same reason.
+    public static let deletedMessagesAppearanceDidChangeNotification = Notification.Name("donutgram.deletedMessages.appearanceDidChange")
 
     public enum TranscriptionBackend: String, CaseIterable {
         case telegram
@@ -107,6 +109,7 @@ public final class DGSimpleSettings {
         static let saveProtectedStories = "donutgram.spy.saveProtectedStories"
         static let gifUnlock = "donutgram.general.gifUnlock"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
+        static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
 
         static let ghostModeEnabled = "donutgram.ghost.enabled"
@@ -234,6 +237,9 @@ public final class DGSimpleSettings {
         if defaults.object(forKey: Key.saveInBotChats) == nil {
             defaults.set(false, forKey: Key.saveInBotChats)
         }
+        if defaults.object(forKey: Key.saveOwnDeletedMessages) == nil {
+            defaults.set(true, forKey: Key.saveOwnDeletedMessages)
+        }
         let enabledByDefault = [Key.ghostReadMessages, Key.ghostReadStories, Key.ghostSendOnline, Key.ghostSendTyping, Key.showContactsTab, Key.showCallsTab, Key.showProfileId]
         for key in enabledByDefault where defaults.object(forKey: key) == nil {
             defaults.set(true, forKey: key)
@@ -255,7 +261,11 @@ public final class DGSimpleSettings {
             return self.defaults.bool(forKey: Key.semiTransparentDeletedMessages)
         }
         set {
+            if self.defaults.bool(forKey: Key.semiTransparentDeletedMessages) == newValue {
+                return
+            }
             self.defaults.set(newValue, forKey: Key.semiTransparentDeletedMessages)
+            NotificationCenter.default.post(name: DGSimpleSettings.deletedMessagesAppearanceDidChangeNotification, object: self)
         }
     }
 
@@ -286,6 +296,17 @@ public final class DGSimpleSettings {
         set {
             self.defaults.set(newValue, forKey: Key.saveInBotChats)
             self.preservationSettings?.saveInBotChats = newValue
+        }
+    }
+
+    /// Whether the account's own messages are saved when they are deleted elsewhere.
+    public var saveOwnDeletedMessages: Bool {
+        get {
+            return self.preservationSettings?.saveOwnDeletedMessages ?? self.defaults.bool(forKey: Key.saveOwnDeletedMessages)
+        }
+        set {
+            self.defaults.set(newValue, forKey: Key.saveOwnDeletedMessages)
+            self.preservationSettings?.saveOwnDeletedMessages = newValue
         }
     }
 

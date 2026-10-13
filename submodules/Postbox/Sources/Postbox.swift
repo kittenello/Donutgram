@@ -152,6 +152,15 @@ public final class Transaction {
         self.postbox?.deleteMessagesInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId, forEachMedia: forEachMedia)
     }
     
+    /// The ids of the stored messages in `minId ... maxId`, read from the index without rendering them.
+    public func getMessageIdsInRange(peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id) -> [MessageId] {
+        assert(!self.disposed)
+        guard let postbox = self.postbox else {
+            return []
+        }
+        return postbox.messageHistoryIndexTable.messageIdsInRange(peerId: peerId, namespace: namespace, minId: minId, maxId: maxId)
+    }
+    
     public func withAllMessages(peerId: PeerId, namespace: MessageId.Namespace? = nil, _ f: (Message) -> Bool) {
         self.postbox?.withAllMessages(peerId: peerId, namespace: namespace, f)
     }
@@ -813,6 +822,12 @@ public final class Transaction {
         self.postbox?.clearItemCacheCollection(collectionId: collectionId)
     }
     
+    /// The keys of every entry in a collection, without reading the entries.
+    public func getItemCacheEntryKeys(collectionId: ItemCacheCollectionId) -> [ValueBoxKey] {
+        assert(!self.disposed)
+        return self.postbox?.itemCacheTable.keys(collectionId: collectionId) ?? []
+    }
+    
     public func operationLogGetNextEntryLocalIndex(peerId: PeerId, tag: PeerOperationLogTag) -> Int32 {
         assert(!self.disposed)
         if let postbox = self.postbox {
@@ -980,14 +995,22 @@ public final class Transaction {
         self.postbox?.replaceGlobalMessageTagsHole(transaction: self, globalTags: globalTags, index: index, with: updatedIndex, messages: messages)
     }
     
-    /// Reads the persistent local-tag index, filtering peer ids before rendering messages.
-    public func getMessagesWithLocalTag(_ tag: LocalMessageTags, peerId: PeerId) -> [Message] {
+    /// Reads the persistent local-tag index of every peer without rendering messages.
+    public func getMessageIdsWithLocalTag(_ tag: LocalMessageTags) -> [MessageId] {
         assert(!self.disposed)
         guard let postbox = self.postbox else {
             return []
         }
         return postbox.localMessageHistoryTagsTable.get(tag: tag)
-            .filter { $0.peerId == peerId }
+    }
+
+    /// A peer's messages with `tag`. The index is read once per tag and then kept grouped by peer.
+    public func getMessagesWithLocalTag(_ tag: LocalMessageTags, peerId: PeerId) -> [Message] {
+        assert(!self.disposed)
+        guard let postbox = self.postbox else {
+            return []
+        }
+        return postbox.localMessageHistoryTagsTable.get(tag: tag, peerId: peerId)
             .compactMap { postbox.getMessage($0) }
     }
 

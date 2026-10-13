@@ -337,6 +337,7 @@ private final class TimeBasedCleanupImpl {
     private let generalPaths: [String]
     private let totalSizeBasedPath: String
     private let shortLivedPaths: [String]
+    private let protectedResourceFileNames: Atomic<Set<String>>
     
     private var scheduledTouches = Set<String>()
     private var scheduledTouchesTimer: SignalKitTimer?
@@ -348,13 +349,14 @@ private final class TimeBasedCleanupImpl {
     private let scanQueue = Queue(name: "TimeBasedCleanupScan", qos: .background)
     private let scanDelay: Double
     
-    init(queue: Queue, storageBox: StorageBox, cacheStorageBox: StorageBox, generalPaths: [String], totalSizeBasedPath: String, shortLivedPaths: [String], scanDelay: Double) {
+    init(queue: Queue, storageBox: StorageBox, cacheStorageBox: StorageBox, generalPaths: [String], totalSizeBasedPath: String, shortLivedPaths: [String], protectedResourceFileNames: Atomic<Set<String>>, scanDelay: Double) {
         self.queue = queue
         self.storageBox = storageBox
         self.cacheStorageBox = cacheStorageBox
         self.generalPaths = generalPaths
         self.totalSizeBasedPath = totalSizeBasedPath
         self.shortLivedPaths = shortLivedPaths
+        self.protectedResourceFileNames = protectedResourceFileNames
         self.scanDelay = scanDelay
     }
     
@@ -384,6 +386,7 @@ private final class TimeBasedCleanupImpl {
         let generalPaths = self.generalPaths
         let totalSizeBasedPath = self.totalSizeBasedPath
         let shortLivedPaths = self.shortLivedPaths
+        let protectedResourceFileNames = self.protectedResourceFileNames
         let storageBox = self.storageBox
         let cacheStorageBox = self.cacheStorageBox
         let scanQueue = self.scanQueue
@@ -520,9 +523,16 @@ private final class TimeBasedCleanupImpl {
                 if totalLimitSize > bytesLimit && !isCancelled() {
                     var remainingSize = Int64(totalLimitSize)
                     var unlinkedResourceIdSet = Set<Data>()
+                    let protectedFileNames = protectedResourceFileNames.with { $0 }
                     tempDatabase.topByAccessTime { size, filePaths in
                         if isCancelled() {
                             return false
+                        }
+                        let isProtected = filePaths.contains(where: { filePath in
+                            return (filePath as NSString).deletingLastPathComponent == totalSizeBasedPath && protectedFileNames.contains(MediaBox.idForFileName(name: (filePath as NSString).lastPathComponent))
+                        })
+                        if isProtected {
+                            return true
                         }
                         remainingSize -= size
                         
@@ -614,12 +624,19 @@ private final class TimeBasedCleanupImpl {
 final class TimeBasedCleanup {
     private let queue = Queue()
     private let impl: QueueLocalObject<TimeBasedCleanupImpl>
+    private let protectedResourceFileNames = Atomic<Set<String>>(value: Set())
     
     init(storageBox: StorageBox, cacheStorageBox: StorageBox, generalPaths: [String], totalSizeBasedPath: String, shortLivedPaths: [String], scanDelay: Double = 10.0) {
         let queue = self.queue
+        let protectedResourceFileNames = self.protectedResourceFileNames
         self.impl = QueueLocalObject(queue: self.queue, generate: {
-            return TimeBasedCleanupImpl(queue: queue, storageBox: storageBox, cacheStorageBox: cacheStorageBox, generalPaths: generalPaths, totalSizeBasedPath: totalSizeBasedPath, shortLivedPaths: shortLivedPaths, scanDelay: scanDelay)
+            return TimeBasedCleanupImpl(queue: queue, storageBox: storageBox, cacheStorageBox: cacheStorageBox, generalPaths: generalPaths, totalSizeBasedPath: totalSizeBasedPath, shortLivedPaths: shortLivedPaths, protectedResourceFileNames: protectedResourceFileNames, scanDelay: scanDelay)
         })
+    }
+    
+    /// File names in the size-based directory that the total size limit never removes.
+    func setProtectedResourceFileNames(_ fileNames: Set<String>) {
+        let _ = self.protectedResourceFileNames.swap(fileNames)
     }
     
     func touch(paths: [String]) {

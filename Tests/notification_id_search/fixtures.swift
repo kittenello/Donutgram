@@ -86,10 +86,18 @@ struct Message {
     }
 }
 enum MessageUpdate { case update(StoreMessage) }
+class AccountState {}
+final class AuthorizedAccountState: AccountState {
+    let peerId: PeerId
+    init(peerId: PeerId) { self.peerId = peerId }
+}
 final class Transaction {
     var peers: [PeerId: Peer] = [:]
     var messages: [MessageId: Message] = [:]
     var deleted: [MessageId] = []
+    var clearedUnseenMarks: [MessageId] = []
+    var state: AccountState?
+    func getState() -> AccountState? { self.state }
     func getPeer(_ id: PeerId) -> Peer? { self.peers[id] }
     func getMessage(_ id: MessageId) -> Message? { self.messages[id] }
     func updateMessage(_ id: MessageId, update: (Message) -> MessageUpdate) {
@@ -100,6 +108,9 @@ final class Transaction {
     }
 }
 final class MediaBox {}
+func donutgramClearUnseenMarks(transaction: Transaction, messageId: MessageId) {
+    transaction.clearedUnseenMarks.append(messageId)
+}
 func _internal_deleteMessages(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId], deleteMedia: Bool) {
     for id in ids { transaction.messages.removeValue(forKey: id) }
     transaction.deleted.append(contentsOf: ids)
@@ -195,20 +206,22 @@ firstProcess.messages[id] = Message(store(id), author: alice)
 let reopenedTransaction = Transaction()
 reopenedTransaction.peers = firstProcess.peers
 reopenedTransaction.messages = firstProcess.messages
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]).isEmpty, "a retained message keeps its notification")
 let retained = reopenedTransaction.getMessage(id)!
 expect(retained.localTags.contains(.donutgramDeleted), "delete push marks retained message")
 expect(retained.text == firstProcess.messages[id]!.text, "full text survives deletion")
 expect(retained.media == ["photo"] && retained.attributes == ["entities", "reply"], "media and entities survive deletion")
 expect(retained.groupingKey == 8 && retained.threadId == 9 && retained.timestamp == 123, "album/topic/date survive deletion")
 expect(reopenedTransaction.deleted.isEmpty, "retained record never reaches generic deletion")
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])
+expect(reopenedTransaction.clearedUnseenMarks == [id], "a saved message stops counting as an unread mention or reaction")
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]).isEmpty, "duplicate delete push keeps the notification")
 expect(reopenedTransaction.deleted.isEmpty, "duplicate delete push is idempotent")
+expect(reopenedTransaction.clearedUnseenMarks == [id], "a message saved before is not saved again")
 let missing = MessageId(peerId: alice.id, namespace: 0, id: 101)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: missing), "missing text is not reconstructed")
 let botId = MessageId(peerId: bot.id, namespace: 0, id: 102)
 reopenedTransaction.messages[botId] = Message(store(botId), author: bot)
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [botId])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [botId]) == [botId], "a deleted message loses its notification")
 expect(reopenedTransaction.getMessage(botId) == nil, "disabled bot retention applies to extension")
 DGSimpleSettings.shared.saveInBotChats = true
 reopenedTransaction.messages[botId] = Message(store(botId), author: bot)
@@ -216,12 +229,36 @@ expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, message
 let secretId = MessageId(peerId: secret.id, namespace: 0, id: 103)
 reopenedTransaction.messages[secretId] = Message(store(secretId), author: secret)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: secretId), "secret chats excluded")
+let me = TelegramUser(PeerId(namespace: 0, value: 999))
+reopenedTransaction.peers[me.id] = me
+reopenedTransaction.state = AuthorizedAccountState(peerId: me.id)
+let savedMessagesId = MessageId(peerId: me.id, namespace: 0, id: 105)
+reopenedTransaction.messages[savedMessagesId] = Message(store(savedMessagesId, flags: []), author: me)
+expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: savedMessagesId), "Saved Messages cleared on another device are not saved")
+let ownId = MessageId(peerId: alice.id, namespace: 0, id: 106)
+reopenedTransaction.messages[ownId] = Message(store(ownId, flags: []), author: me)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: ownId), "own messages are saved unless switched off")
+DGSimpleSettings.shared.saveOwnDeletedMessages = false
+let otherOwnId = MessageId(peerId: alice.id, namespace: 0, id: 107)
+reopenedTransaction.messages[otherOwnId] = Message(store(otherOwnId, flags: []), author: me)
+expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: otherOwnId), "own messages follow their switch")
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: ownId), "an own message saved before stays saved")
+let incomingId = MessageId(peerId: alice.id, namespace: 0, id: 108)
+reopenedTransaction.messages[incomingId] = Message(store(incomingId), author: alice)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: incomingId), "incoming messages ignore the own-message switch")
+DGSimpleSettings.shared.saveOwnDeletedMessages = true
+reopenedTransaction.state = nil
 DGSimpleSettings.shared.saveDeletedMessages = false
 reopenedTransaction.messages[id] = Message(store(id), author: alice)
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]) == [id], "disabled retention removes the notification")
 expect(reopenedTransaction.getMessage(id) == nil, "disabled retention follows normal deletion")
 reopenedTransaction.messages[id] = Message(store(id, tags: [.donutgramSavedViewOnce]), author: alice)
 expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: id), "previously saved view-once copy stays retained")
+reopenedTransaction.messages[id] = Message(store(id, tags: [.donutgramDeleted]), author: alice)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: id), "a saved message stays saved after saving is switched off")
+DGSimpleSettings.shared.saveInBotChats = false
+reopenedTransaction.messages[botId] = Message(store(botId, tags: [.donutgramDeleted]), author: bot)
+expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: botId), "a saved bot-chat message stays saved after bot saving is switched off")
 let localId = MessageId(peerId: alice.id, namespace: 1, id: 104)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: localId), "local message ids excluded")
 expect(donutgramIsNotificationMessage(store(id), expectedId: id), "matching incoming API message accepted")

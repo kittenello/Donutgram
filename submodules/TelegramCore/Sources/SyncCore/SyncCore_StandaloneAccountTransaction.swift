@@ -276,7 +276,9 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             
             return result
         },
-        displaySavedMessagesAsTopicListPreferencesKey: PreferencesKeys.displaySavedChatsAsTopics()
+        displaySavedMessagesAsTopicListPreferencesKey: PreferencesKeys.displaySavedChatsAsTopics(),
+        // Donutgram: the server no longer has a saved deleted message, so it is not unread there either.
+        localTagsExcludedFromUnreadCount: [.donutgramDeleted]
     )
 }()
 

@@ -4595,7 +4595,7 @@ func replayFinalState(
                 for message in messages {
                     if case let .Id(id) = message.id, let _ = transaction.getMessage(id) {
                         transaction.updateMessage(id) { currentMessage -> PostboxUpdateMessage in
-                            return .update(donutgramPreservingLocalState(previous: currentMessage, updated: message))
+                            return .update(donutgramPreservingLocalState(transaction: transaction, previous: currentMessage, updated: message))
                         }
                     } else {
                         let _ = transaction.addMessages(donutgramPreservingLocalState(transaction: transaction, messages: messages), location: .Random)
@@ -4658,7 +4658,8 @@ func replayFinalState(
                     updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: id.peerId, minTimestamp: message.timestamp, forceRootGroupIfNotExists: false)
                 }
                 var resourceIds: [MediaResourceId] = []
-                transaction.deleteMessagesInRange(peerId: id.peerId, namespace: id.namespace, minId: 1, maxId: id.id, forEachMedia: { media in
+                // Donutgram: saved deleted messages stay, and the cleared ones are saved while saving is on.
+                donutgramDeleteMessagesInRange(transaction: transaction, peerId: id.peerId, namespace: id.namespace, minId: 1, maxId: id.id, forEachMedia: { media in
                     addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
                 })
                 if !resourceIds.isEmpty {

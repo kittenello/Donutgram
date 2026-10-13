@@ -11,7 +11,8 @@ public final class DGMessagePreservationSettings {
         static let viewOnce = "donutgram.spy.saveViewOnceMedia"
         static let bots = "donutgram.spy.saveInBotChats"
         static let removePings = "donutgram.chats.removePings"
-        static let all = [deleted, edits, viewOnce, bots, removePings]
+        static let own = "donutgram.spy.saveOwnDeletedMessages"
+        static let all = [deleted, edits, viewOnce, bots, removePings, own]
     }
 
     public init(sharedDefaults: UserDefaults, legacyDefaults: UserDefaults, migrateLegacyValues: Bool) {
@@ -55,5 +56,11 @@ public final class DGMessagePreservationSettings {
     public var saveInBotChats: Bool {
         get { self.defaults.bool(forKey: Key.bots) }
         set { self.set(newValue, forKey: Key.bots) }
+    }
+
+    /// On until switched off: an extension can run before the app has written the preference.
+    public var saveOwnDeletedMessages: Bool {
+        get { (self.defaults.object(forKey: Key.own) as? Bool) ?? true }
+        set { self.set(newValue, forKey: Key.own) }
     }
 }

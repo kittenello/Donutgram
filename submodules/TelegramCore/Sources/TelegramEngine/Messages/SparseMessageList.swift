@@ -159,12 +159,13 @@ public final class SparseMessageList {
                 })
             }
 
-            self.preservedMessagesDisposable = (account.postbox.combinedView(keys: [.localMessageTag(.donutgramDeleted)])
+            // Only this peer's saved deleted messages are read, not the whole account's.
+            let preservedMessagesKey: PostboxViewKey = .localMessageTagInPeer(tag: .donutgramDeleted, peerId: peerId)
+            self.preservedMessagesDisposable = (account.postbox.combinedView(keys: [preservedMessagesKey])
             |> deliverOn(self.queue)).start(next: { [weak self] views in
-                guard let self, let view = views.views[.localMessageTag(.donutgramDeleted)] as? LocalMessageTagsView else { return }
+                guard let self, let view = views.views[preservedMessagesKey] as? LocalMessageTagsView else { return }
                 self.preservedMessages = view.messages.values.filter { message in
-                    message.id.peerId == self.peerId && message.tags.contains(self.messageTag)
-                        && (self.threadId == nil || message.threadId == self.threadId)
+                    message.tags.contains(self.messageTag) && (self.threadId == nil || message.threadId == self.threadId)
                 }.sorted { $0.id > $1.id }
                 self.updateState()
             })
@@ -633,40 +634,18 @@ public final class SparseMessageList {
                 return
             }
 
-            let layout = sparseMessageListSegmentItems(peerId: self.peerId, topMessages: self.topSection?.messages ?? [], skeleton: self.sparseItems)
-            var items = layout.items
-            var totalCount = layout.totalCount
-
-            // Insert local media into the sparse server positions, shifting later
-            // grid indices. Include old deletions beyond the loaded top section.
-            for message in self.preservedMessages {
-                if let existing = items.firstIndex(where: { item in
-                    switch item.content {
-                    case let .message(value, _): return value.id == message.id
-                    case let .placeholder(id, _): return id == message.id
-                    }
-                }) {
-                    items[existing] = State.Item(index: items[existing].index, content: .message(message: message, isLocal: true))
-                    continue
-                }
-                let position = items.firstIndex { item in
-                    switch item.content {
-                    case let .message(value, _): return value.id < message.id
-                    case let .placeholder(id, _): return id < message.id
-                    }
-                } ?? items.count
-                let index = position < items.count ? items[position].index : totalCount
-                for i in position ..< items.count {
-                    items[i] = State.Item(index: items[i].index + 1, content: items[i].content)
-                }
-                items.insert(State.Item(index: index, content: .message(message: message, isLocal: true)), at: position)
-                totalCount += 1
+            var layout = sparseMessageListSegmentItems(peerId: self.peerId, topMessages: self.topSection?.messages ?? [], skeleton: self.sparseItems)
+            // Saved deleted messages join once the top section has loaded: until then their
+            // places are not known, and a list of them alone would read as the loaded list.
+            if self.topSection != nil {
+                // A thread's list is its top section and never loads more.
+                layout = sparseMessageListSegmentItemsAddingPreserved(self.preservedMessages, items: layout.items, totalCount: layout.totalCount, endIsLoaded: self.threadId != nil || self.countIsFinal)
             }
 
             stateUpdated(SparseMessageList.State(
-                items: items,
-                totalCount: totalCount,
-                isLoading: self.topSection == nil && self.preservedMessages.isEmpty
+                items: layout.items,
+                totalCount: layout.totalCount,
+                isLoading: self.topSection == nil
             ))
         }
     }

@@ -325,6 +325,15 @@ func _internal_renderStorageUsageStatsMessages(account: Account, stats: StorageU
 }
 
 func _internal_clearStorage(account: Account, peerId: EnginePeer.Id?, categories: [StorageUsageStats.CategoryKey], includeMessages: [Message], excludeMessages: [Message]) -> Signal<Float, NoError> {
+    // Donutgram: the files of saved deleted messages cannot be downloaded again, so they are kept
+    // unless they were picked one by one.
+    return donutgramPreservedMessageResourceIds(postbox: account.postbox)
+    |> mapToSignal { preservedResourceIds -> Signal<Float, NoError> in
+        return clearStorageKeepingResources(account: account, peerId: peerId, categories: categories, includeMessages: includeMessages, excludeMessages: excludeMessages, keepResourceIds: donutgramResourceIds(preservedResourceIds, notPickedIn: includeMessages))
+    }
+}
+
+private func clearStorageKeepingResources(account: Account, peerId: EnginePeer.Id?, categories: [StorageUsageStats.CategoryKey], includeMessages: [Message], excludeMessages: [Message], keepResourceIds: Set<MediaResourceId>) -> Signal<Float, NoError> {
     let mediaBox = account.postbox.mediaBox
     return Signal { subscriber in
         var includeResourceIds = Set<MediaResourceId>()
@@ -338,7 +347,7 @@ func _internal_clearStorage(account: Account, peerId: EnginePeer.Id?, categories
             }
         }
         
-        var excludeResourceIds = Set<MediaResourceId>()
+        var excludeResourceIds = keepResourceIds
         for message in excludeMessages {
             extractMediaResourceIds(message: message, resourceIds: &excludeResourceIds)
         }
@@ -419,6 +428,15 @@ func _internal_clearStorage(account: Account, peerId: EnginePeer.Id?, categories
 }
 
 func _internal_clearStorage(account: Account, peerIds: Set<EnginePeer.Id>, includeMessages: [Message], excludeMessages: [Message]) -> Signal<Float, NoError> {
+    // Donutgram: the files of saved deleted messages cannot be downloaded again, so they are kept
+    // unless they were picked one by one.
+    return donutgramPreservedMessageResourceIds(postbox: account.postbox)
+    |> mapToSignal { preservedResourceIds -> Signal<Float, NoError> in
+        return clearStorageKeepingResources(account: account, peerIds: peerIds, includeMessages: includeMessages, excludeMessages: excludeMessages, keepResourceIds: donutgramResourceIds(preservedResourceIds, notPickedIn: includeMessages))
+    }
+}
+
+private func clearStorageKeepingResources(account: Account, peerIds: Set<EnginePeer.Id>, includeMessages: [Message], excludeMessages: [Message], keepResourceIds: Set<MediaResourceId>) -> Signal<Float, NoError> {
     let mediaBox = account.postbox.mediaBox
     return Signal { subscriber in
         var includeResourceIds = Set<MediaResourceId>()
@@ -432,7 +450,7 @@ func _internal_clearStorage(account: Account, peerIds: Set<EnginePeer.Id>, inclu
             }
         }
         
-        var excludeResourceIds = Set<MediaResourceId>()
+        var excludeResourceIds = keepResourceIds
         for message in excludeMessages {
             extractMediaResourceIds(message: message, resourceIds: &excludeResourceIds)
         }
@@ -898,5 +916,9 @@ func _internal_collectCacheUsageStats(account: Account, peerId: PeerId? = nil, a
 }
 
 func _internal_clearCachedMediaResources(account: Account, mediaResourceIds: Set<MediaResourceId>) -> Signal<Float, NoError> {
-    return account.postbox.mediaBox.removeCachedResources(Array(mediaResourceIds))
+    // Donutgram: the files of saved deleted messages cannot be downloaded again.
+    return donutgramPreservedMessageResourceIds(postbox: account.postbox)
+    |> mapToSignal { preservedResourceIds -> Signal<Float, NoError> in
+        return account.postbox.mediaBox.removeCachedResources(Array(mediaResourceIds.subtracting(preservedResourceIds)))
+    }
 }

@@ -129,7 +129,8 @@ extension ChatControllerImpl {
                 actions.context = self.context
                 actions.animationCache = self.controllerInteraction?.presentationContext.animationCache
                                                          
-                if canAddMessageReactions(message: EngineMessage(topMessage)), let allowedReactions = allowedReactions, !topReactions.isEmpty {
+                // Donutgram: the server no longer has a saved deleted message and would roll a reaction back.
+                if canAddMessageReactions(message: EngineMessage(topMessage)), !topMessage.localTags.contains(.donutgramDeleted), let allowedReactions = allowedReactions, !topReactions.isEmpty {
                     actions.reactionItems = topReactions.map { ReactionContextItem.reaction(item: $0, icon: .none) }
                     actions.selectedReactionItems = selectedReactions.reactions
                     if message.areReactionsTags(accountPeerId: self.context.account.peerId) {

@@ -221,6 +221,12 @@ public final class MediaBox {
         self.timeBasedCleanup.setMaxStoreTimes(general: general, shortLived: shortLived, gigabytesLimit: gigabytesLimit)
     }
     
+    /// Resources the total size limit of the cache never removes, for files that could not be
+    /// downloaded again. A scan that already started keeps the set it read.
+    public func setProtectedResourceIds(_ ids: Set<MediaResourceId>) {
+        self.timeBasedCleanup.setProtectedResourceFileNames(Set(ids.map { self.fileNameForId($0) }))
+    }
+    
     public static func idForFileName(name: String) -> String {
         if name.hasSuffix("_partial.meta") {
             return String(name[name.startIndex ..< name.index(name.endIndex, offsetBy: -13)])

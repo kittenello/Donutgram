@@ -72,6 +72,7 @@ public enum PostboxViewKey: Hashable {
     case pendingPeerNotificationSettings
     case messageOfInterestHole(location: MessageOfInterestViewLocation, namespace: MessageId.Namespace, count: Int)
     case localMessageTag(LocalMessageTags)
+    case localMessageTagInPeer(tag: LocalMessageTags, peerId: PeerId)
     case messages(Set<MessageId>)
     case additionalChatListItems
     case cachedItem(ItemCacheEntryId)
@@ -165,6 +166,10 @@ public enum PostboxViewKey: Hashable {
             hasher.combine(count)
         case let .localMessageTag(tag):
             hasher.combine(tag)
+        case let .localMessageTagInPeer(tag, peerId):
+            hasher.combine(25)
+            hasher.combine(tag)
+            hasher.combine(peerId)
         case .messages:
             hasher.combine(10)
         case .additionalChatListItems:
@@ -368,6 +373,12 @@ public enum PostboxViewKey: Hashable {
             }
         case let .localMessageTag(tag):
             if case .localMessageTag(tag) = rhs {
+                return true
+            } else {
+                return false
+            }
+        case let .localMessageTagInPeer(tag, peerId):
+            if case .localMessageTagInPeer(tag, peerId) = rhs {
                 return true
             } else {
                 return false
@@ -613,7 +624,9 @@ func postboxViewForKey(postbox: PostboxImpl, key: PostboxViewKey) -> MutablePost
     case let .messageOfInterestHole(location, namespace, count):
         return MutableMessageOfInterestHolesView(postbox: postbox, location: location, namespace: namespace, count: count)
     case let .localMessageTag(tag):
-        return MutableLocalMessageTagsView(postbox: postbox, tag: tag)
+        return MutableLocalMessageTagsView(postbox: postbox, tag: tag, peerId: nil)
+    case let .localMessageTagInPeer(tag, peerId):
+        return MutableLocalMessageTagsView(postbox: postbox, tag: tag, peerId: peerId)
     case let .messages(ids):
         return MutableMessagesView(postbox: postbox, ids: ids)
     case .additionalChatListItems:

@@ -4,6 +4,11 @@ import TelegramCore
 /// Whether the account may edit `message`: the rule behind the Edit context-menu item, up-arrow
 /// editing and rescheduling. `reschedule` skips the uneditable-content checks and the time limit.
 public func canEditMessage(accountPeerId: EnginePeer.Id, limitsConfiguration: EngineConfiguration.Limits, message: EngineRawMessage, reschedule: Bool = false) -> Bool {
+    // Donutgram: a saved deleted message no longer exists on the server, so an edit would be refused.
+    if message.localTags.contains(.donutgramDeleted) {
+        return false
+    }
+
     var hasEditRights = false
     var unlimitedInterval = reschedule
 

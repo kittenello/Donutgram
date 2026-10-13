@@ -190,6 +190,75 @@ func sparseMessageListSegmentItems(peerId: PeerId, topMessages: [Message], skele
     return (items, totalCount)
 }
 
+private func sparseMessageListItemId(_ item: SparseMessageList.State.Item) -> MessageId {
+    switch item.content {
+    case let .message(message, _):
+        return message.id
+    case let .placeholder(id, _):
+        return id
+    }
+}
+
+/// Adds a segment's saved deleted messages (`preserved`, newest first) to its layout. The server
+/// does not count them, so each takes a cell of its own and moves every later cell one further;
+/// one the layout already holds (a skeleton read before the deletion) keeps its cell.
+///
+/// A message goes in only where its cell is known: between two adjacent cells, or past the last
+/// one when `endIsLoaded` (nothing will load after it). One that falls inside a run not loaded
+/// yet waits for that run: its place among the unknown messages is not known, and a guess would
+/// move once they arrive.
+func sparseMessageListSegmentItemsAddingPreserved(_ preserved: [Message], items: [SparseMessageList.State.Item], totalCount: Int, endIsLoaded: Bool) -> (items: [SparseMessageList.State.Item], totalCount: Int) {
+    if preserved.isEmpty {
+        return (items, totalCount)
+    }
+
+    var result: [SparseMessageList.State.Item] = []
+    result.reserveCapacity(items.count + preserved.count)
+    var shift = 0
+    var itemIndex = 0
+
+    func appendItem(_ item: SparseMessageList.State.Item) {
+        if shift == 0 {
+            result.append(item)
+        } else {
+            result.append(SparseMessageList.State.Item(index: item.index + shift, content: item.content))
+        }
+    }
+
+    for message in preserved {
+        while itemIndex < items.count && sparseMessageListItemId(items[itemIndex]) > message.id {
+            appendItem(items[itemIndex])
+            itemIndex += 1
+        }
+        if itemIndex < items.count && sparseMessageListItemId(items[itemIndex]) == message.id {
+            result.append(SparseMessageList.State.Item(index: items[itemIndex].index + shift, content: .message(message: message, isLocal: true)))
+            itemIndex += 1
+            continue
+        }
+
+        let newerIndex = itemIndex > 0 ? items[itemIndex - 1].index : -1
+        let olderIndex: Int
+        if itemIndex < items.count {
+            olderIndex = items[itemIndex].index
+        } else if endIsLoaded {
+            olderIndex = totalCount
+        } else {
+            continue
+        }
+        if olderIndex != newerIndex + 1 {
+            continue
+        }
+        result.append(SparseMessageList.State.Item(index: olderIndex + shift, content: .message(message: message, isLocal: true)))
+        shift += 1
+    }
+    while itemIndex < items.count {
+        appendItem(items[itemIndex])
+        itemIndex += 1
+    }
+
+    return (result, totalCount + shift)
+}
+
 /// Whether a segment's count is its full length. Its server positions give it; so does a local
 /// window (`topMessages`, the history view before the peer filter) that reaches another peer's
 /// messages: a channel's `.associated` view continues into the group it was migrated from, every
