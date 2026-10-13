@@ -110,14 +110,9 @@ private func dgPresentReadAllLocally(context: AccountContext, controller: ViewCo
         TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
             let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
             controller?.present(progress, in: .window(.root))
-            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] skipped in
+            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] _ in
                 progress.dismiss()
-                let text: String
-                if skipped == 0 {
-                    text = dgLocalized("Все сообщения прочитаны", languageCode: languageCode)
-                } else {
-                    text = dgLocalized("Прочитано. Пропущено чатов: %@. Секретные чаты, форумы и чаты, где прочтение ещё отправляется на сервер, нельзя прочитать локально.", languageCode: languageCode).replacingOccurrences(of: "%@", with: "\(skipped)")
-                }
+                let text = dgLocalized("Все сообщения прочитаны", languageCode: languageCode)
                 controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             })
         })
