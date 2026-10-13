@@ -8,12 +8,25 @@ import UndoUI
 import AccountContext
 import ChatControllerInteraction
 import TelegramStringFormatting
+import DGSimpleSettings
 
 extension ChatControllerImpl {
     func displaySendReactionRestrictedToast() {
         self.controllerInteraction?.presentControllerInCurrent(UndoOverlayController(
             presentationData: self.presentationData,
             content: .banned(text: self.presentationData.strings.Chat_SendReactionRestricted),
+            elevatedLayout: false,
+            position: .bottom,
+            animateInAsReplacement: false,
+            action: { _ in return true }
+        ), nil)
+    }
+    
+    /// Shown instead of a reaction, a vote or a thread of a saved deleted message, which the server no longer has.
+    func displayDonutgramDeletedMessageToast() {
+        self.controllerInteraction?.presentControllerInCurrent(UndoOverlayController(
+            presentationData: self.presentationData,
+            content: .info(title: nil, text: dgLocalized("Сообщение удалено", languageCode: self.presentationData.strings.primaryComponent.languageCode), timeout: nil, customUndoText: nil),
             elevatedLayout: false,
             position: .bottom,
             animateInAsReplacement: false,

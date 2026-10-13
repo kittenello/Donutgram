@@ -290,6 +290,7 @@ private let dgEnglishStrings: [String: String] = [
     "Удалить все": "Delete All",
     "Удаление…": "Deleting…",
     "Удалить": "Delete",
+    "Сообщение удалено": "This message was deleted",
     "Сохраненные удаленки хранятся только на этом устройстве. Если выключить «Сохранять удаленки», уже сохраненные останутся.": "Saved deleted messages are stored on this device only. Turning off Save Deleted Messages keeps the ones already saved.",
     "Удалить все сохраненные удаленки?": "Delete all saved deleted messages?",
     "Сообщения, их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.": "The messages, their edit history and downloaded files will be deleted from this device. This can't be undone.",

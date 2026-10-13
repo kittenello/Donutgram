@@ -711,7 +711,7 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 /// as this account, so it is refused where that does more than repeat the message: a dice with a TON
 /// stake would place a new stake from this account's balance, and view-once or short-timer media
 /// (also once saved by "Save View-Once Media") would arrive without its timer.
-private func donutgramCanSendProtectedForwardAsCopy(_ message: Message) -> Bool {
+public func donutgramCanSendForwardAsCopy(_ message: Message) -> Bool {
     if message.localTags.contains(.donutgramSavedViewOnce) || message.containsSecretMedia {
         return false
     }
@@ -721,6 +721,19 @@ private func donutgramCanSendProtectedForwardAsCopy(_ message: Message) -> Bool 
         }
     }
     return true
+}
+
+/// Whether a forward of `sourceMessage` goes out as a copy. The server refuses a real forward of a
+/// saved deleted message, which it no longer has, and of a protected one, which is copied only while
+/// "bypass forward restrictions" is on.
+private func donutgramForwardsAsCopy(transaction: Transaction, sourceMessage: Message) -> Bool {
+    if !donutgramCanSendForwardAsCopy(sourceMessage) {
+        return false
+    }
+    if sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction) {
+        return DGSimpleSettings.shared.bypassForwardRestrictions
+    }
+    return sourceMessage.localTags.contains(.donutgramDeleted)
 }
 
 /// The media a protected forward's copy carries. A live location becomes a static point: as a live
@@ -788,7 +801,7 @@ private func localCopyOfProtectedMedia(account: Account, sourceMessage: Message,
 private func prepareProtectedForwardCopies(account: Account, messages: [EnqueueMessage]) -> Signal<[EnqueueMessage], NoError> {
     return account.postbox.transaction { transaction -> [PreparedProtectedForward] in
         return messages.map { message in
-            guard DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = message, let sourceMessage = transaction.getMessage(source), sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction), donutgramCanSendProtectedForwardAsCopy(sourceMessage) else {
+            guard case let .forward(source, threadId, _, forwardedAttributes, correlationId) = message, let sourceMessage = transaction.getMessage(source), donutgramForwardsAsCopy(transaction: transaction, sourceMessage: sourceMessage) else {
                 return PreparedProtectedForward(message: message, sourceMessage: nil)
             }
             var copiedAttributes = sourceMessage.attributes.filter { attribute in
@@ -999,7 +1012,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     var updatedMessages: [(Bool, EnqueueMessage)] = []
     outer: for (transformedMedia, message) in messages {
         var updatedMessage = message
-        if DGSimpleSettings.shared.bypassForwardRestrictions, case let .forward(source, threadId, _, forwardedAttributes, correlationId) = updatedMessage, let sourceMessage = transaction.getMessage(source), sourceMessage.isForwardProtectedIgnoringDonutgramSetting(transaction: transaction), donutgramCanSendProtectedForwardAsCopy(sourceMessage) {
+        if case let .forward(source, threadId, _, forwardedAttributes, correlationId) = updatedMessage, let sourceMessage = transaction.getMessage(source), donutgramForwardsAsCopy(transaction: transaction, sourceMessage: sourceMessage) {
             var copiedAttributes = sourceMessage.attributes.filter { attribute in
                 return !(attribute is ReplyMessageAttribute) && !(attribute is ReplyThreadMessageAttribute) && !(attribute is ViewCountMessageAttribute) && !(attribute is ForwardCountMessageAttribute) && !(attribute is ReactionsMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute) && !(attribute is AutoremoveTimeoutMessageAttribute) && !(attribute is EffectMessageAttribute) && !(attribute is PaidStarsMessageAttribute) && !(attribute is NotificationInfoMessageAttribute)
             }

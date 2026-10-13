@@ -1798,6 +1798,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
                 return
             }
+            // Donutgram: the server no longer has a saved deleted message and would roll the reaction back.
+            if message.localTags.contains(.donutgramDeleted) {
+                strongSelf.displayDonutgramDeletedMessageToast()
+                return
+            }
             if case .default = reaction, strongSelf.chatLocation.peerId == strongSelf.context.account.peerId {
                 return
             }
@@ -4096,6 +4101,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return
             }
             
+            if strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(id)?.localTags.contains(.donutgramDeleted) == true {
+                strongSelf.displayDonutgramDeletedMessageToast()
+                return
+            }
+            
             if let message = strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(id)?._asMessage(), controllerInteraction.pollActionState.pollMessageIdsInProgress[id] == nil {
                 controllerInteraction.pollActionState.pollMessageIdsInProgress[id] = opaqueIdentifiers
                 strongSelf.chatDisplayNode.historyNode.requestMessageUpdate(id)
@@ -4814,6 +4824,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             })
         }, openMessageReplies: { [weak self] messageId, isChannelPost, displayModalProgress in
             guard let strongSelf = self else {
+                return
+            }
+            
+            // Donutgram: the thread of a saved deleted message is looked up by that message on the server.
+            if strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?.localTags.contains(.donutgramDeleted) == true {
+                strongSelf.displayDonutgramDeletedMessageToast()
                 return
             }
             
@@ -5797,6 +5813,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.updateChatLocationThread(threadId: threadId, animationDirection: animationDirection ?? defaultDirection)
         }, requestToggleTodoMessageItem: { [weak self] messageId, itemId, value in
             guard let self else {
+                return
+            }
+            
+            if self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?.localTags.contains(.donutgramDeleted) == true {
+                // The checkbox has already toggled itself: drawing the message again puts it back.
+                self.chatDisplayNode.historyNode.requestMessageUpdate(messageId)
+                self.displayDonutgramDeletedMessageToast()
                 return
             }
 

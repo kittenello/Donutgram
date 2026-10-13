@@ -131,6 +131,10 @@ func deleteMessagesInteractively(transaction: Transaction, stateManager: Account
                 if id.namespace == Namespaces.Message.Local || id.namespace == Namespaces.Message.ScheduledLocal || id.namespace == Namespaces.Message.QuickReplyLocal || id.namespace == Namespaces.Message.EphemeralLocal || Namespaces.Message.allWelcomeMessages.contains(id.namespace) {
                     return false
                 }
+                // Donutgram: a saved deleted message is already gone from the server.
+                if let message = transaction.getMessage(id), message.localTags.contains(.donutgramDeleted) {
+                    return false
+                }
                 return true
             }
             if !remoteMessageIds.isEmpty {

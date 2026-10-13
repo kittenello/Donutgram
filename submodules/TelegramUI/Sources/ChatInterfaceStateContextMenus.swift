@@ -760,6 +760,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     
     let message = messages[0]
     let isNonReplyableEphemeralMessage = Namespaces.Message.allEphemeral.contains(message.id.namespace) && !canReplyToEphemeralMessage(message)
+    // Donutgram: the server no longer has a saved deleted message, so the actions that address it there
+    // are hidden. A reply is sent as a quote (see EnqueueMessage) and editing is refused by canEditMessage.
+    let isDonutgramDeleted = messages.contains(where: { $0.localTags.contains(.donutgramDeleted) })
     
     if case .peer = chatPresentationInterfaceState.chatLocation, let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum {
         if message.threadId == nil {
@@ -826,6 +829,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 canPin = false
             }
         }
+    }
+    
+    if isDonutgramDeleted {
+        canPin = false
     }
     
     var loadStickerSaveStatusSignal: Signal<Bool?, NoError> = .single(nil)
@@ -1085,7 +1092,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         var hasRateTranscription = false
-        if hasExpandedAudioTranscription, let audioTranscription = audioTranscription, !didRateAudioTranscription {
+        if hasExpandedAudioTranscription, let audioTranscription = audioTranscription, !didRateAudioTranscription, !isDonutgramDeleted {
             hasRateTranscription = true
             actions.insert(.custom(ChatRateTranscriptionContextItem(context: context, message: message, action: { [weak context] value in
                 guard let context = context else {
@@ -1600,7 +1607,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        if let _ = threadId, !isPinnedMessages {
+        if let _ = threadId, !isPinnedMessages, !isDonutgramDeleted {
             let text: String
             if threadMessageCount != 0 {
                 text = chatPresentationInterfaceState.strings.Conversation_ContextViewReplies(Int32(threadMessageCount))
@@ -1634,6 +1641,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 activeTodo = todo
             }
         }
+        if isDonutgramDeleted {
+            activePoll = nil
+            activeTodo = nil
+        }
         
         if data.canEdit && !isPinnedMessages && !isMigrated {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_MessageDialogEdit, icon: { theme in
@@ -1650,7 +1661,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
         
-        if let message = messages.first, message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.isMonoForum {
+        if let message = messages.first, message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.isMonoForum, !isDonutgramDeleted {
             var canSuggestPost = true
             for media in message.media {
                 if media is TelegramMediaAction {
@@ -1808,7 +1819,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        if let message = messages.first, message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, !channel.isMonoForum, !(message.media.first is TelegramMediaAction), !isReplyThreadHead, !isMigrated {
+        if let message = messages.first, message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, !channel.isMonoForum, !(message.media.first is TelegramMediaAction), !isReplyThreadHead, !isMigrated, !isDonutgramDeleted {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuCopyLink, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
@@ -1921,6 +1932,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 }
             }
         }
+        // A saved deleted service message is deleted on this device only, which needs no rights.
+        if isDonutgramDeleted {
+            isUnremovableAction = false
+        }
         
         var editStickerFile: TelegramMediaFile?
         for media in messages[0].media {
@@ -1964,7 +1979,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }, action: { controller, f in
                 interfaceInteraction.reportMessages(messages, controller)
             })))
-        } else if message.id.peerId.isReplies {
+        } else if message.id.peerId.isReplies && !isDonutgramDeleted {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuBlock, textColor: .destructive, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.actionSheet.destructiveActionTextColor)
             }, action: { controller, f in
@@ -2000,7 +2015,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 }
             }
             
-            if infoSummaryData.canViewStats, forwards >= 1 || views >= 100 {
+            if infoSummaryData.canViewStats, forwards >= 1 || views >= 100, !isDonutgramDeleted {
                 actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextViewStats, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.actionSheet.primaryTextColor)
                 }, action: { c, _ in
@@ -2014,7 +2029,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             clearCacheAsDelete = true
         }
         
-        if !hasViewStats, messages[0].forwardInfo == nil {
+        if !hasViewStats, messages[0].forwardInfo == nil, !isDonutgramDeleted {
             for media in message.media {
                 if let poll = media as? TelegramMediaPoll, message.id.namespace == Namespaces.Message.Cloud, poll.pollId.namespace == Namespaces.Media.CloudPoll, poll.results.canViewStats {
                     actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ViewPollStats, icon: { theme in
@@ -2030,7 +2045,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        if message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info, canEditFactCheck(appConfig: appConfig) {
+        if message.id.namespace == Namespaces.Message.Cloud, let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info, canEditFactCheck(appConfig: appConfig), !isDonutgramDeleted {
             var canAddFactCheck = true
             if message.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaGiveaway }) {
                 canAddFactCheck = false
@@ -2194,6 +2209,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             if !reactionsAttribute.canViewList {
                 reactionCount = 0
             }
+        }
+        if isDonutgramDeleted {
+            // Who read it and who reacted are asked from the server.
+            canViewStats = false
+            reactionCount = 0
         }
         
         let isEdited = message.attributes.contains(where: { attribute in
@@ -2599,6 +2619,7 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
         
         var setTag = false
         var commonTags: Set<MessageReaction.Reaction>?
+        var hadDonutgramDeleted = false
         
         func getPeer(_ peerId: EnginePeer.Id) -> EngineRawPeer? {
             if let maybePeer = peerMap[peerId], let peer = maybePeer {
@@ -2692,7 +2713,16 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                         }
                     }
                 }
-                if id.namespace == Namespaces.Message.EphemeralLocal {
+                if message.localTags.contains(.donutgramDeleted) {
+                    // Donutgram: the server no longer has a saved deleted message. It is deleted on this
+                    // device only, and a forward goes out as a copy (see EnqueueMessage).
+                    hadDonutgramDeleted = true
+                    optionsMap[id]!.insert(.deleteLocally)
+                    let isAction = message.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent })
+                    if !isAction && !isShareProtected && !message.isCopyProtected() && donutgramCanSendForwardAsCopy(message) {
+                        optionsMap[id]!.insert(.forward)
+                    }
+                } else if id.namespace == Namespaces.Message.EphemeralLocal {
                     let isForwardingDisabled = (message.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute)?.isForwardingDisabled ?? false
                     let isAction = message.media.contains(where: { $0 is TelegramMediaAction || $0 is TelegramMediaExpiredContent })
                     if !isForwardingDisabled && !message.containsSecretMedia && !isAction && !isCopyProtected && !isShareProtected && !(message.flags.isSending || message.flags.contains(.Failed)) {
@@ -2890,6 +2920,11 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
             }
             
             if !isPremium {
+                setTag = false
+                commonTags = nil
+            }
+            // Tags are reactions, which the server refuses on a message it no longer has.
+            if hadDonutgramDeleted {
                 setTag = false
                 commonTags = nil
             }
