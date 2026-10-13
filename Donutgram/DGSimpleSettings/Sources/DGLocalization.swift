@@ -259,6 +259,7 @@ private let dgEnglishStrings: [String: String] = [
     "Бахафон": "Bakhafon",
     "Котик-шпион": "Spy Cat",
     "Прочитать все на сервере": "Read All on Server",
+    "ЧТЕНИЕ": "READING",
     "Прочитать все сообщения?": "Read all messages?",
     "Прочитать": "Read",
     "Отмена": "Cancel",

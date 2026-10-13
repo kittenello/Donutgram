@@ -46,7 +46,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "bypassForward": return "arrowshape.turn.up.right"
     case "protectedScreenshots": return "camera.viewfinder"
     case "telegramStatistics": return "chart.bar"
-    case "readOnAction": return "checkmark.message"
+    case "readOnAction", "readAll": return "checkmark.message"
     case "scheduled": return "calendar"
     case "silent": return "speaker.slash"
     case "stories", "hideStories", "saveProtectedStories": return "play.rectangle"
@@ -224,7 +224,7 @@ enum DGListEntry: ItemListNodeEntry {
     }
 }
 
-func dgController(context: AccountContext, page: DGSettingsPage, title: String, focusKey: String?, entries: @escaping () -> [DGListEntry], restartRequiredKeys: Set<String> = [], additionalUpdates: Signal<Void, NoError> = .single(()), toggle: @escaping (String, Bool) -> Void = { _, _ in }, select: @escaping (String) -> Void = { _ in }, textUpdated: @escaping (String, String) -> Void = { _, _ in }, open: @escaping (String) -> ViewController? = { _ in nil }) -> ViewController {
+func dgController(context: AccountContext, page: DGSettingsPage, title: String, focusKey: String?, entries: @escaping () -> [DGListEntry], restartRequiredKeys: Set<String> = [], additionalUpdates: Signal<Void, NoError> = .single(()), toggle: @escaping (String, Bool) -> Void = { _, _ in }, select: @escaping (String) -> Void = { _ in }, textUpdated: @escaping (String, String) -> Void = { _, _ in }, open: @escaping (String) -> ViewController? = { _ in nil }, perform: @escaping (String, ViewController) -> Void = { _, _ in }) -> ViewController {
     let focusTag = focusKey.map { DGSettingItemTag(key: $0) }
     let initialState = DGListState()
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
@@ -237,6 +237,7 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         })
     }
     var pushControllerImpl: ((ViewController) -> Void)?
+    var performImpl: ((String) -> Void)?
     var presentRestartNoticeImpl: (() -> Void)?
     // Set when a sub-page is pushed: it can change a value this page shows (e.g. the transcription service label).
     var needsRefreshOnAppear = false
@@ -248,6 +249,8 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         if let controller = open(key) {
             needsRefreshOnAppear = true
             pushControllerImpl?(controller)
+        } else {
+            performImpl?(key)
         }
     }, textUpdated: { key, value in textUpdated(key, value) })
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), additionalUpdates)
@@ -298,6 +301,9 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         }
     }
     pushControllerImpl = { [weak controller] pushed in (controller?.navigationController as? NavigationController)?.pushViewController(pushed) }
+    performImpl = { [weak controller] key in
+        if let controller { perform(key, controller) }
+    }
     presentRestartNoticeImpl = { [weak controller] in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         controller?.present(UndoOverlayController(
