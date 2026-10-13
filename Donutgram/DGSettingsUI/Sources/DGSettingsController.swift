@@ -54,8 +54,6 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "premiumStatuses": return "star.slash"
     case "hideVerification": return "checkmark.seal"
     case "hideTabBar", "wideTabBar": return "rectangle.split.3x1"
-    case "integratedTabSearch": return "magnifyingglass"
-    case "tabSearchOnLeft": return "arrow.left"
     case "contacts", "mutualContact": return "person.2"
     case "calls", "confirmCalls": return "phone"
     case "profileId", "visualId", "dialogIdFormat": return "number"
