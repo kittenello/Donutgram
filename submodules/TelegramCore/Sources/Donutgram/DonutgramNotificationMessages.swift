@@ -104,8 +104,10 @@ func donutgramIsNotificationMessage(_ message: StoreMessage, expectedId: Message
     return id == expectedId && message.flags.contains(.Incoming)
 }
 
-/// This is exclusively for server deletion pushes, not the user's delete action.
-public func donutgramDeleteMessagesFromNotification(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) {
+/// This is exclusively for server deletion pushes, not the user's delete action. Returns the messages
+/// it deleted: a saved one keeps its notification, as it does when the app applies the deletion.
+public func donutgramDeleteMessagesFromNotification(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) -> [MessageId] {
     let idsToDelete = ids.filter { !donutgramPreserveDeletedMessage(transaction: transaction, messageId: $0) }
     _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: idsToDelete, deleteMedia: true)
+    return idsToDelete
 }

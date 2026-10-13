@@ -2528,15 +2528,16 @@ private final class NotificationServiceHandler {
                         case let .deleteMessage(ids):
                             Logger.shared.log("NotificationService \(episode)", "Will delete messages \(ids)")
                             let mediaBox = stateManager.postbox.mediaBox
-                            let _ = (stateManager.postbox.transaction { transaction -> Void in
-                                donutgramDeleteMessagesFromNotification(transaction: transaction, mediaBox: mediaBox, ids: ids)
+                            let _ = (stateManager.postbox.transaction { transaction -> [MessageId] in
+                                return donutgramDeleteMessagesFromNotification(transaction: transaction, mediaBox: mediaBox, ids: ids)
                             }
-                            |> deliverOn(strongSelf.queue)).start(completed: {
+                            |> deliverOn(strongSelf.queue)).start(next: { deletedIds in
+                                // A saved deleted message keeps its notification, as it does when the app applies the deletion.
                                 UNUserNotificationCenter.current().getDeliveredNotifications(completionHandler: { notifications in
                                     var removeIdentifiers: [String] = []
                                     for notification in notifications {
                                         if let peerIdString = notification.request.content.userInfo["peerId"] as? String, let peerIdValue = Int64(peerIdString), let messageIdString = notification.request.content.userInfo["msg_id"] as? String, let messageIdValue = Int32(messageIdString) {
-                                            for id in ids {
+                                            for id in deletedIds {
                                                 if PeerId(peerIdValue) == id.peerId && messageIdValue == id.id {
                                                     removeIdentifiers.append(notification.request.identifier)
                                                 }

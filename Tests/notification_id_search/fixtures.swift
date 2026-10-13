@@ -202,20 +202,20 @@ firstProcess.messages[id] = Message(store(id), author: alice)
 let reopenedTransaction = Transaction()
 reopenedTransaction.peers = firstProcess.peers
 reopenedTransaction.messages = firstProcess.messages
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]).isEmpty, "a retained message keeps its notification")
 let retained = reopenedTransaction.getMessage(id)!
 expect(retained.localTags.contains(.donutgramDeleted), "delete push marks retained message")
 expect(retained.text == firstProcess.messages[id]!.text, "full text survives deletion")
 expect(retained.media == ["photo"] && retained.attributes == ["entities", "reply"], "media and entities survive deletion")
 expect(retained.groupingKey == 8 && retained.threadId == 9 && retained.timestamp == 123, "album/topic/date survive deletion")
 expect(reopenedTransaction.deleted.isEmpty, "retained record never reaches generic deletion")
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]).isEmpty, "duplicate delete push keeps the notification")
 expect(reopenedTransaction.deleted.isEmpty, "duplicate delete push is idempotent")
 let missing = MessageId(peerId: alice.id, namespace: 0, id: 101)
 expect(!donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: missing), "missing text is not reconstructed")
 let botId = MessageId(peerId: bot.id, namespace: 0, id: 102)
 reopenedTransaction.messages[botId] = Message(store(botId), author: bot)
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [botId])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [botId]) == [botId], "a deleted message loses its notification")
 expect(reopenedTransaction.getMessage(botId) == nil, "disabled bot retention applies to extension")
 DGSimpleSettings.shared.saveInBotChats = true
 reopenedTransaction.messages[botId] = Message(store(botId), author: bot)
@@ -244,7 +244,7 @@ DGSimpleSettings.shared.saveOwnDeletedMessages = true
 reopenedTransaction.state = nil
 DGSimpleSettings.shared.saveDeletedMessages = false
 reopenedTransaction.messages[id] = Message(store(id), author: alice)
-donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id])
+expect(donutgramDeleteMessagesFromNotification(transaction: reopenedTransaction, mediaBox: MediaBox(), ids: [id]) == [id], "disabled retention removes the notification")
 expect(reopenedTransaction.getMessage(id) == nil, "disabled retention follows normal deletion")
 reopenedTransaction.messages[id] = Message(store(id, tags: [.donutgramSavedViewOnce]), author: alice)
 expect(donutgramPreserveDeletedMessage(transaction: reopenedTransaction, messageId: id), "previously saved view-once copy stays retained")
