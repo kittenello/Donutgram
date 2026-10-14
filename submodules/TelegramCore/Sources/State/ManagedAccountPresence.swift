@@ -79,6 +79,8 @@ private final class AccountPresenceManagerImpl {
     // the server last reported that session online.
     private var otherSessionOnlineUntil: Int32 = 0
     private var otherSessionLastReport: Double = 0.0
+    // Donutgram: when the server last reported this account online.
+    private var lastServerOnlineReport: Double = 0.0
     // Donutgram: the server's report of this account online waiting to be weighed.
     private var pendingServerOnline: (arrival: Double, expires: Int32)?
     // Donutgram: when the last report that looked like another session answering an offline
@@ -205,6 +207,7 @@ private final class AccountPresenceManagerImpl {
         if expires <= Int32(now) {
             return
         }
+        self.lastServerOnlineReport = now
         if let pending = self.pendingServerOnline {
             self.pendingServerOnline = (arrival: pending.arrival, expires: max(pending.expires, expires))
             return
@@ -236,15 +239,19 @@ private final class AccountPresenceManagerImpl {
         }
         self.pendingServerOnline = nil
         if let lastActionOffline = self.lastActionOffline, lastActionOffline.timestamp > pending.arrival - ghostOwnActionWindow {
-            // An action here showed the account online, so this says nothing about another session.
+            // An action here may have shown the account online, so this does not count as
+            // another session answering an offline packet.
             self.lastReactionReport = nil
-            if lastActionOffline.timestamp < pending.arrival {
-                // Its offline packet went out before the report, so it is answered once.
-                if self.takeOwnActionReport(arrival: pending.arrival) {
-                    self.requestOfflinePresence(cause: .answer)
-                }
+            if lastActionOffline.timestamp >= pending.arrival {
+                // The action's offline packet went out after the report and covers it.
+                return
             }
-            return
+            if self.takeOwnActionReport(arrival: pending.arrival) {
+                // The first report after the action's offline packet is the action's own.
+                self.requestOfflinePresence(cause: .answer)
+                return
+            }
+            // A later one may come from anything, so it is weighed like any other.
         }
         if self.isOtherSessionOnline() {
             self.otherSessionOnlineUntil = max(self.otherSessionOnlineUntil, pending.expires)
@@ -309,6 +316,17 @@ private final class AccountPresenceManagerImpl {
         self.lastGhostOffline = (timestamp: now, cause: cause)
         if cause == .action {
             self.lastActionOffline = (timestamp: now, answered: false)
+        }
+        if self.isOtherSessionOnline() {
+            // A session that keeps the account online answers every offline packet. One that
+            // stays silent is gone, even if it never sent its own offline (killed, asleep, cut
+            // off), so the account is ghost mode's again.
+            self.queue.after(ghostOtherSessionReactionInterval, { [weak self] in
+                guard let self, self.isOtherSessionOnline(), self.lastServerOnlineReport < now else {
+                    return
+                }
+                self.resetOtherSessionState()
+            })
         }
         let timestamp = Int32(self.network.globalTime)
         let request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
