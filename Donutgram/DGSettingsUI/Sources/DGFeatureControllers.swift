@@ -322,54 +322,67 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .disclosure(3, 2, "reactions", "Скрыть реакции", "\(hiddenCount)/3"),
             .toggle(6, 2, "hidePaidReactions", "Скрыть платные реакции", s.hidePaidReactions, true),
             .header(7, 3, "ВНЕШНИЙ ВИД"),
-            .disclosure(8, 3, "chatListAppearance", "Внешний вид", ""),
-            .header(10, 4, "СООБЩЕНИЯ"),
-            .messagePreview(11, 4, s.messagePreviewConfiguration, previewEmoji),
-            .toggle(12, 4, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
-            .toggle(13, 4, "seconds", "Показывать секунды", s.showMessageSeconds, true),
-            .toggle(14, 4, "replies", "Отключить цветные ответы", s.disableColoredReplies, true),
-            .toggle(15, 4, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
-            .toggle(16, 4, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
-            .toggle(17, 4, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
-            .toggle(18, 4, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
-            .toggle(19, 4, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
-            .toggle(20, 4, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
-            .toggle(21, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
-            .toggle(22, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
-            .toggle(23, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
-            .toggle(24, 4, "removePings", "Убрать пинги", s.removePings, true),
-            .toggle(25, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
-            .toggle(26, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
-            .header(27, 5, "ГОЛОС В ТЕКСТ"),
-            .disclosure(28, 5, "transcription", "Сервис", transcription),
-            .header(30, 6, "ЗАПИСЬ"),
-            .disclosure(31, 6, "camera", "Камера в кружках", cameraTitle),
-            .toggle(32, 6, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
-            .toggle(33, 6, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
-            .toggle(34, 6, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
-            .disclosure(35, 6, "pauseMusicOnRecording", "Пауза музыки при записи", "\(musicOptions.filter { s.musicPlaybackExceptions.contains($0) }.count)/3"),
-            .toggle(36, 6, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
-            .header(40, 7, "ВИДЕО"),
-            .disclosure(41, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
-            .toggle(42, 7, "autoPause", "Авто пауза", s.autoPause, true),
-            .disclosure(43, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
-            .header(50, 8, "КАНАЛЫ"),
-            .toggle(51, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
-            .disclosure(52, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .header(60, 9, "ВОСПРОИЗВЕДЕНИЕ"),
-            .toggle(61, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
-            .disclosure(62, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
-            .info(63, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
-            .header(70, 10, "БОТЫ"),
-            .toggle(71, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
-            .header(80, 11, "ДРУГОЕ"),
-            .toggle(81, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
+            .chatListPreview(8, 3, s.forceSnow, s.chatListHideEmojiStatus, s.chatListCenteredTitle, s.chatListHideSearch, s.chatListTitleMode.rawValue),
+            .toggle(9, 3, "snow", "Снег", s.forceSnow, true),
+            .toggle(10, 3, "hideStatus", "Скрыть статус соединения", s.chatListHideStatus, true),
+            .toggle(11, 3, "hideEmojiStatus", "Скрыть эмодзи-статус", s.chatListHideEmojiStatus, true),
+            .toggle(12, 3, "centerTitle", "Заголовок по центру", s.chatListCenteredTitle, true),
+            .toggle(13, 3, "hideSearch", "Скрыть строку поиска", s.chatListHideSearch, true),
+            .disclosure(14, 3, "titleMode", "Текст в заголовке", dgChatListTitleModeTitle(s.chatListTitleMode)),
+            .toggle(15, 3, "foldersAtBottom", "Папки внизу", s.chatListFoldersAtBottom, true),
+            .header(18, 4, "СООБЩЕНИЯ"),
+            .messagePreview(19, 4, s.messagePreviewConfiguration, previewEmoji),
+            .toggle(20, 4, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
+            .toggle(21, 4, "seconds", "Показывать секунды", s.showMessageSeconds, true),
+            .toggle(22, 4, "replies", "Отключить цветные ответы", s.disableColoredReplies, true),
+            .toggle(23, 4, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
+            .toggle(24, 4, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
+            .toggle(25, 4, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
+            .toggle(26, 4, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
+            .toggle(27, 4, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
+            .toggle(28, 4, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
+            .toggle(29, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
+            .toggle(30, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
+            .toggle(31, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
+            .toggle(32, 4, "removePings", "Убрать пинги", s.removePings, true),
+            .toggle(33, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
+            .toggle(34, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
+            .header(35, 5, "ГОЛОС В ТЕКСТ"),
+            .disclosure(36, 5, "transcription", "Сервис", transcription),
+            .header(38, 6, "ЗАПИСЬ"),
+            .disclosure(39, 6, "camera", "Камера в кружках", cameraTitle),
+            .toggle(40, 6, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
+            .toggle(41, 6, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
+            .toggle(42, 6, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
+            .disclosure(43, 6, "pauseMusicOnRecording", "Пауза музыки при записи", "\(musicOptions.filter { s.musicPlaybackExceptions.contains($0) }.count)/3"),
+            .toggle(44, 6, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
+            .header(48, 7, "ВИДЕО"),
+            .disclosure(49, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
+            .toggle(50, 7, "autoPause", "Авто пауза", s.autoPause, true),
+            .disclosure(51, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
+            .header(58, 8, "КАНАЛЫ"),
+            .toggle(59, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
+            .disclosure(60, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
+            .header(68, 9, "ВОСПРОИЗВЕДЕНИЕ"),
+            .toggle(69, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
+            .disclosure(70, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
+            .info(71, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
+            .header(78, 10, "БОТЫ"),
+            .toggle(79, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
+            .header(88, 11, "ДРУГОЕ"),
+            .toggle(89, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
-        result.append(.toggle(82, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
-        result.append(.disclosure(83, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
+        result.append(.toggle(90, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
+        result.append(.disclosure(91, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {
+        case "snow": s.forceSnow = value
+        case "hideStatus": s.chatListHideStatus = value
+        case "hideEmojiStatus": s.chatListHideEmojiStatus = value
+        case "centerTitle": s.chatListCenteredTitle = value
+        case "hideSearch": s.chatListHideSearch = value
+        case "foldersAtBottom": s.chatListFoldersAtBottom = value
         case "hidePaidReactions": s.hidePaidReactions = value
         case "hideViaBot": s.hideViaBot = value
         case "removeLinkPreviews": s.removeLinkPreviews = value
@@ -426,7 +439,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "autoplayMediaTypes": return dgAutoplayMediaController(context: context)
         case "autoPauseMedia": return dgAutoPauseMediaController(context: context)
         case "doubleTapSeek": return dgDoubleTapSeekController(context: context)
-        case "chatListAppearance": return dgChatListAppearanceController(context: context)
+        case "titleMode": return dgChatListTitleModeController(context: context)
         case "pauseMusicOnRecording": return dgMusicPlaybackExceptionsController(context: context)
         default: return nil
         }
@@ -463,33 +476,9 @@ private func dgGlowController(context: AccountContext, focusKey: String? = nil) 
     })
 }
 
+// Keep previously shared links opening the controls at their new inline location.
 private func dgChatListAppearanceController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    return dgController(context: context, page: .chatListAppearance, title: "Внешний вид", focusKey: focusKey, entries: {
-        [
-            .header(0, 0, "СПИСОК ЧАТОВ"),
-            .chatListPreview(1, 0, settings.forceSnow, settings.chatListHideEmojiStatus, settings.chatListCenteredTitle, settings.chatListHideSearch, settings.chatListTitleMode.rawValue),
-            .toggle(2, 0, "snow", "Снег", settings.forceSnow, true),
-            .toggle(3, 0, "hideStatus", "Скрыть статус соединения", settings.chatListHideStatus, true),
-            .toggle(4, 0, "hideEmojiStatus", "Скрыть эмодзи-статус", settings.chatListHideEmojiStatus, true),
-            .toggle(5, 0, "centerTitle", "Заголовок по центру", settings.chatListCenteredTitle, true),
-            .toggle(6, 0, "hideSearch", "Скрыть строку поиска", settings.chatListHideSearch, true),
-            .disclosure(7, 0, "titleMode", "Текст в заголовке", dgChatListTitleModeTitle(settings.chatListTitleMode)),
-            .toggle(8, 0, "foldersAtBottom", "Папки внизу", settings.chatListFoldersAtBottom, true)
-        ]
-    }, toggle: { key, value in
-        switch key {
-        case "snow": settings.forceSnow = value
-        case "hideStatus": settings.chatListHideStatus = value
-        case "hideEmojiStatus": settings.chatListHideEmojiStatus = value
-        case "centerTitle": settings.chatListCenteredTitle = value
-        case "hideSearch": settings.chatListHideSearch = value
-        case "foldersAtBottom": settings.chatListFoldersAtBottom = value
-        default: break
-        }
-    }, open: { key in
-        key == "titleMode" ? dgChatListTitleModeController(context: context) : nil
-    })
+    return dgChatsSettingsController(context: context, focusKey: focusKey ?? "chatListPreview")
 }
 
 private func dgMusicPlaybackExceptionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
@@ -623,6 +612,8 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     if page == .chats && key == "openArchiveOnPull" {
         // Links to rows that are gone lead to the switches that replaced them.
         focusKey = "hideArchive"
+    } else if page == .chats && key == "chatListAppearance" {
+        focusKey = "chatListPreview"
     } else if page == .chats && key == "stickerReplies" {
         focusKey = "hideStickerReplyColors"
     } else if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {

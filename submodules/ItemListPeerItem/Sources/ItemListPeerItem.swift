@@ -990,7 +990,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                     let stringRect = textString.boundingRect(with: CGSize(width: 100.0, height: 16.0), options: .usesLineFragmentOrigin, context: nil)
                     titleIconsWidth += floor(stringRect.width) + 11.0
                 default:
-                    titleIconsWidth += 16.0
+                    titleIconsWidth += 20.0
                 }
             }
             
@@ -1276,10 +1276,13 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
             
             let (labelLayout, labelApply) = makeLabelLayout(TextNodeLayoutArguments(attributedString: labelAttributedString, backgroundColor: nil, maximumNumberOfLines: labelMaximumNumberOfLines, truncationType: .end, constrainedSize: CGSize(width: params.width - leftInset - 16.0 - editingOffset - rightInset, height: CGFloat.greatestFiniteMagnitude), alignment: labelAlignment, lineSpacing: labelLineSpacing, cutout: nil, insets: UIEdgeInsets()))
             
-            let constrainedTitleSize = CGSize(width: params.width - leftInset - 12.0 - editingOffset - rightInset - labelLayout.size.width - labelInset - titleIconsWidth, height: CGFloat.greatestFiniteMagnitude)
+            // Reserve the whole unread badge, including its padding, and the actual
+            // 20-point premium/emoji icon so a truncated name leaves space between them.
+            let reservedLabelWidth = badgeColor != nil ? max(badgeDiameter, labelLayout.size.width + 12.0) : labelLayout.size.width
+            let constrainedTitleSize = CGSize(width: max(0.0, params.width - leftInset - 12.0 - editingOffset - rightInset - reservedLabelWidth - labelInset - titleIconsWidth), height: CGFloat.greatestFiniteMagnitude)
             let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: titleAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: constrainedTitleSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
-            let constrainedStatusSize = CGSize(width: params.width - leftInset - 8.0 - editingOffset - rightInset - labelLayout.size.width - labelInset, height: CGFloat.greatestFiniteMagnitude)
+            let constrainedStatusSize = CGSize(width: max(0.0, params.width - leftInset - 8.0 - editingOffset - rightInset - reservedLabelWidth - labelInset), height: CGFloat.greatestFiniteMagnitude)
             let (statusLayout, statusApply) = makeStatusLayout(TextNodeLayoutArguments(attributedString: statusAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: constrainedStatusSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             var insets = itemListNeighborsGroupedInsets(neighbors, params)
