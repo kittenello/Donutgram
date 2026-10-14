@@ -146,10 +146,28 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         self.tabBarControllerNode.updateIsTabBarEnabled(value, transition: transition)
     }
     
+    // Donutgram: «Скрыть панель вкладок» hides the bar only on the tabs this returns true for, so the
+    // other tabs keep the bar and with it the way back. Screens still hide it on their own (search,
+    // editing) through updateIsTabBarHidden; ending that does not bring back a bar the setting hides.
+    public var hidesTabBarForController: ((ViewController) -> Bool)?
+    private var isTabBarHiddenByController = false
+    
+    private func isTabBarHidden(for controller: ViewController?) -> Bool {
+        if self.isTabBarHiddenByController {
+            return true
+        }
+        if let controller, let hidesTabBarForController = self.hidesTabBarForController {
+            return hidesTabBarForController(controller)
+        }
+        return false
+    }
+    
     public func updateIsTabBarHidden(_ value: Bool, transition: ContainedViewLayoutTransition) {
-        self.tabBarControllerNode.tabBarHidden = value
+        self.isTabBarHiddenByController = value
         if let layout = self.validLayout {
             self.containerLayoutUpdated(layout, transition: .animated(duration: 0.4, curve: .slide))
+        } else if self.isNodeLoaded {
+            self.tabBarControllerNode.tabBarHidden = self.isTabBarHidden(for: self.currentController)
         }
     }
     
@@ -365,6 +383,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         
         self.validLayout = layout
         
+        self.tabBarControllerNode.tabBarHidden = self.isTabBarHidden(for: self.currentController)
         let bottomInset = self.tabBarControllerNode.containerLayoutUpdated(layout, toolbar: self.currentController?.toolbar, transition: transition)
         
         if let currentController = self.currentController {
@@ -400,7 +419,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
             } else {
                 tabBarHeight = 49.0 + bottomInset
             }
-            if !self.tabBarControllerNode.tabBarHidden {
+            if !self.isTabBarHidden(for: controller) {
                 updatedLayout.intrinsicInsets.bottom = tabBarHeight
             }
             

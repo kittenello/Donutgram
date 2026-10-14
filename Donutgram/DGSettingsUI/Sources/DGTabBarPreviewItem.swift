@@ -138,7 +138,7 @@ private final class DGTabBarPreviewItemNode: ListViewItemNode, ItemListItemNode 
             ComponentTransition(transition).setAlpha(view: tabBarView, alpha: item.layout.hidden ? 0.0 : 1.0)
             tabBarView.accessibilityElementsHidden = true
         }
-        self.hiddenLabel.text = dgLocalized("Панель вкладок скрыта", languageCode: languageCode)
+        self.hiddenLabel.text = dgLocalized("Панель вкладок скрыта в чатах", languageCode: languageCode)
         self.hiddenLabel.textColor = item.theme.list.itemSecondaryTextColor
         transition.updateFrame(view: self.hiddenLabel, frame: CGRect(x: 20.0, y: 24.0, width: max(1.0, width - 40.0), height: 64.0))
         ComponentTransition(transition).setAlpha(view: self.hiddenLabel, alpha: item.layout.hidden ? 1.0 : 0.0)

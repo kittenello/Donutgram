@@ -98,7 +98,7 @@ private let dgEnglishStrings: [String: String] = [
     "Вкладка Контакты": "Contacts Tab",
     "Вкладка Звонки": "Calls Tab",
     "Широкая Панель": "Wide Tab Bar",
-    "Панель вкладок скрыта": "Tab Bar Is Hidden",
+    "Панель вкладок скрыта в чатах": "Tab Bar Is Hidden in Chats",
     "Контакты": "Contacts",
     "Звонки": "Calls",
     "Профиль": "Profile",

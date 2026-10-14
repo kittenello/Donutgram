@@ -95,6 +95,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     private var showCallsTab: Bool = true
     private var appliedShowContactsTab: Bool?
     private var appliedShowCallsTab: Bool?
+    // «Скрыть панель вкладок» as the tab bar was last laid out for it.
+    private var appliedHideTabBar: Bool?
     private var donutgramTabsObserver: NSObjectProtocol?
 
     override public var minimizedContainer: MinimizedContainer? {
@@ -249,9 +251,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         controllers.append(accountSettingsController)
                 
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
-        if DGSimpleSettings.shared.hideTabBar {
-            tabBarController.updateIsTabBarHidden(true, transition: .immediate)
+        // «Скрыть панель вкладок» hides the bar on the chat list only: the chat list has a settings button
+        // in its place, and the other tabs keep the bar to get back to the chats.
+        tabBarController.hidesTabBarForController = { controller in
+            return controller is ChatListController && DGSimpleSettings.shared.hideTabBar
         }
+        self.appliedHideTabBar = DGSimpleSettings.shared.hideTabBar
         self.showCallsTab = showCallsTab
         self.appliedShowContactsTab = DGSimpleSettings.shared.showContactsTab
         self.appliedShowCallsTab = DGSimpleSettings.shared.showCallsTab
@@ -263,6 +268,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 let settings = DGSimpleSettings.shared
                 if settings.showContactsTab != self.appliedShowContactsTab || settings.showCallsTab != self.appliedShowCallsTab {
                     self.updateRootControllers(showCallsTab: self.showCallsTab)
+                }
+                if settings.hideTabBar != self.appliedHideTabBar {
+                    self.appliedHideTabBar = settings.hideTabBar
+                    self.rootTabController?.updateLayout(transition: .immediate)
                 }
             }
         }
