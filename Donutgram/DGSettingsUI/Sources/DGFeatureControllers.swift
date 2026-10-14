@@ -170,9 +170,9 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
             .header(20, 3, "ВКЛАДКИ"),
             .tabBarPreview(21, 3, s.tabBarLayout),
             .toggle(22, 3, "hideTabBar", "Скрыть панель вкладок", s.hideTabBar, true),
-            .toggle(23, 3, "contacts", "Вкладка Контакты", s.showContactsTab, !s.hideTabBar),
-            .toggle(24, 3, "calls", "Вкладка Звонки", s.showCallsTab, !s.hideTabBar),
-            .toggle(25, 3, "wideTabBar", "Широкая Панель", s.wideTabBar, !s.hideTabBar),
+            .toggle(23, 3, "contacts", "Вкладка Контакты", s.showContactsTab, true),
+            .toggle(24, 3, "calls", "Вкладка Звонки", s.showCallsTab, true),
+            .toggle(25, 3, "wideTabBar", "Широкая Панель", s.wideTabBar, true),
             .header(30, 4, "ПРОФИЛЬ"),
             .toggle(31, 4, "profileId", "ID Профилей", s.showProfileId, true)
         ]
@@ -191,7 +191,7 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
             .toggle(42, 5, "confirmCalls", "Подтверждение вызова", s.confirmCalls, true)
         ])
         return entries
-    }, restartRequiredKeys: ["premiumStatuses", "hideVerification", "hideStories", "hideTabBar"], toggle: { key, value in
+    }, restartRequiredKeys: ["premiumStatuses", "hideVerification", "hideStories"], toggle: { key, value in
         switch key { case "hideBirthdayNotifications": s.hideBirthdayNotifications = value; case "premiumStatuses": s.hidePremiumStatuses = value; case "hideVerification": s.hideVerification = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
     }, open: { key in
         switch key {

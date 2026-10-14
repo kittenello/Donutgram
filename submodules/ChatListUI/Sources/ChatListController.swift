@@ -6869,6 +6869,7 @@ private final class ChatListLocationContext {
     var rightButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var proxyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var storyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+    var settingsButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     
     var rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] {
         var result: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
@@ -6877,6 +6878,9 @@ private final class ChatListLocationContext {
         }
         if let storyButton = self.storyButton {
             result.append(storyButton)
+        }
+        if let settingsButton = self.settingsButton {
+            result.append(settingsButton)
         }
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
@@ -7287,6 +7291,7 @@ private final class ChatListLocationContext {
             if case .chatList(.root) = self.location {
                 self.rightButton = nil
                 self.storyButton = nil
+                self.settingsButton = nil
                 self.proxyButton = nil
             }
             let title = !stateAndFilterId.state.selectedPeerIds.isEmpty ? presentationData.strings.ChatList_SelectedChats(Int32(stateAndFilterId.state.selectedPeerIds.count)) : defaultTitle
@@ -7303,6 +7308,7 @@ private final class ChatListLocationContext {
             if case .chatList(.root) = self.location {
                 self.rightButton = nil
                 self.storyButton = nil
+                self.settingsButton = nil
                 self.proxyButton = nil
             }
             self.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
@@ -7392,6 +7398,21 @@ private final class ChatListLocationContext {
                     )))
                 } else {
                     self.storyButton = nil
+                }
+                
+                // With «Скрыть панель вкладок» the chat list has no tab bar, so this is its way to the settings.
+                if DGSimpleSettings.shared.hideTabBar {
+                    self.settingsButton = AnyComponentWithIdentity(id: "settings", component: AnyComponent(NavigationButtonComponent(
+                        content: .icon(imageName: "Chat List/Tabs/IconSettings"),
+                        pressed: { [weak self] _ in
+                            guard let self else {
+                                return
+                            }
+                            (self.context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface)?.openSettings(edit: false)
+                        }
+                    )))
+                } else {
+                    self.settingsButton = nil
                 }
             } else {
                 let parentController = self.parentController
