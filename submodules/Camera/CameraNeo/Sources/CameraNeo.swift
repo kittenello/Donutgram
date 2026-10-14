@@ -471,7 +471,7 @@ final class CameraNeo: NSObject, CameraProtocol {
 
     func setZoomLevel(_ zoomLevel: CGFloat) {
         self.updateZoom { device in
-            return 1.0 + zoomLevel
+            return self.neutralZoomFactor(device: device) + zoomLevel
         }
     }
 
@@ -492,15 +492,15 @@ final class CameraNeo: NSObject, CameraProtocol {
         }
     }
 
-    // Donutgram: this pipeline films with the wide-angle lens only, so its raw zoom factor already is the «1×»-relative
-    // value the round-video zoom controls use; there is no 0.5× and no optical telephoto here.
+    // Donutgram: displayed zoom is relative to the wide lens. A virtual camera's
+    // raw 1.0 can be its ultra-wide lens, which the controls display as 0.5×.
     func setZoomFactor(_ zoomFactor: CGFloat, rampRate: CGFloat?) {
         self.sessionQueue.async { [weak self] in
             guard let self, let device = self.activeDevice else {
                 return
             }
             self.withLockedDevice(device) { device in
-                let target = self.clampedZoom(zoomFactor, device: device)
+                let target = self.clampedZoom(self.neutralZoomFactor(device: device) * zoomFactor, device: device)
                 if let rampRate {
                     device.ramp(toVideoZoomFactor: target, withRate: Float(rampRate))
                 } else {
@@ -516,27 +516,32 @@ final class CameraNeo: NSObject, CameraProtocol {
                 return 1.0 ... 1.0
             }
             let minimum = max(1.0, device.minAvailableVideoZoomFactor)
-            return minimum ... max(minimum, device.maxAvailableVideoZoomFactor)
+            let neutral = self.neutralZoomFactor(device: device)
+            return (minimum / neutral) ... (max(minimum, device.maxAvailableVideoZoomFactor) / neutral)
         }
     }
 
-    // Donutgram: 1× plus the crops of a 48 MP sensor, such as the wide camera's 2×, taken from every format: the small
-    // round-video format may not list them, but such a crop still covers it without upscaling.
+    // Donutgram: include the virtual camera's lens switches and the native crops
+    // of a 48 MP sensor, in the same wide-relative units as setZoomFactor.
     var nativeZoomFactors: Signal<[CGFloat], NoError> {
         return self.readActiveDevice { device in
             guard let device else {
                 return [1.0]
             }
             var rawFactors: [CGFloat] = [1.0]
+            if #available(iOS 13.0, *) {
+                rawFactors.append(contentsOf: device.virtualDeviceSwitchOverVideoZoomFactors.map { CGFloat($0.doubleValue) })
+            }
             if #available(iOS 16.0, *) {
                 for format in device.formats {
                     rawFactors.append(contentsOf: format.secondaryNativeResolutionZoomFactors)
                 }
             }
             var result: [CGFloat] = []
-            for rawFactor in rawFactors where rawFactor <= device.maxAvailableVideoZoomFactor {
+            let neutral = self.neutralZoomFactor(device: device)
+            for rawFactor in rawFactors where rawFactor >= max(1.0, device.minAvailableVideoZoomFactor) && rawFactor <= device.maxAvailableVideoZoomFactor {
                 // One decimal, as on the labels.
-                let factor = (rawFactor * 10.0).rounded() / 10.0
+                let factor = (rawFactor / neutral * 10.0).rounded() / 10.0
                 if !result.contains(factor) {
                     result.append(factor)
                 }
@@ -865,6 +870,14 @@ final class CameraNeo: NSObject, CameraProtocol {
     }
 
     private func makeVideoDevice(position: Camera.Position) -> AVCaptureDevice? {
+        if !self.useMultiCam, self.configuration.isRoundVideo, position == .back, #available(iOS 13.0, *) {
+            for deviceType in [AVCaptureDevice.DeviceType.builtInTripleCamera, .builtInDualWideCamera] {
+                if let device = AVCaptureDevice.default(deviceType, for: .video, position: position),
+                   self.captureFormat(device: device) != nil {
+                    return device
+                }
+            }
+        }
         if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) {
             return device
         }
@@ -875,14 +888,25 @@ final class CameraNeo: NSObject, CameraProtocol {
         ).devices.first
     }
 
-    private func configureCaptureFormat(device: AVCaptureDevice) -> Bool {
+    private func captureFormat(device: AVCaptureDevice) -> AVCaptureDevice.Format? {
+        // Virtual lens groups may not expose VGA. Their smallest supported format
+        // is still cropped to the same 480×480 output by the frame processor.
+        let allowsLargerFormat: Bool
+        if #available(iOS 13.0, *) {
+            allowsLargerFormat = !self.useMultiCam && device.isVirtualDevice
+        } else {
+            allowsLargerFormat = false
+        }
         let candidates = device.formats.filter { format in
             if self.useMultiCam, #available(iOS 13.0, *), !format.isMultiCamSupported {
                 return false
             }
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
             let mediaSubtype = CMFormatDescriptionGetMediaSubType(format.formatDescription)
-            guard dimensions.width == 640, dimensions.height == 480,
+            let hasSuitableDimensions = allowsLargerFormat
+                ? dimensions.width >= 640 && dimensions.height >= 480
+                : dimensions.width == 640 && dimensions.height == 480
+            guard hasSuitableDimensions,
                   (mediaSubtype == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange || mediaSubtype == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) else {
                 return false
             }
@@ -890,18 +914,28 @@ final class CameraNeo: NSObject, CameraProtocol {
                 $0.minFrameRate <= roundVideoFrameRate && $0.maxFrameRate >= roundVideoFrameRate
             })
         }
-        let selectedFormat = candidates.min { lhs, rhs in
+        return candidates.min { lhs, rhs in
+            let lhsDimensions = CMVideoFormatDescriptionGetDimensions(lhs.formatDescription)
+            let rhsDimensions = CMVideoFormatDescriptionGetDimensions(rhs.formatDescription)
+            let lhsPixels = Int64(lhsDimensions.width) * Int64(lhsDimensions.height)
+            let rhsPixels = Int64(rhsDimensions.width) * Int64(rhsDimensions.height)
+            if lhsPixels != rhsPixels {
+                return lhsPixels < rhsPixels
+            }
             let lhsMaximumFps = lhs.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0.0
             let rhsMaximumFps = rhs.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0.0
             return lhsMaximumFps < rhsMaximumFps
         }
+    }
 
-        guard let selectedFormat else {
+    private func configureCaptureFormat(device: AVCaptureDevice) -> Bool {
+        guard let selectedFormat = self.captureFormat(device: device) else {
             return false
         }
         do {
             try device.lockForConfiguration()
             device.activeFormat = selectedFormat
+            device.videoZoomFactor = self.clampedZoom(self.neutralZoomFactor(device: device), device: device)
             if device.isLowLightBoostSupported {
                 device.automaticallyEnablesLowLightBoostWhenAvailable = true
             }
@@ -1004,6 +1038,15 @@ final class CameraNeo: NSObject, CameraProtocol {
         let minimum = max(1.0, device.minAvailableVideoZoomFactor)
         let maximum = max(minimum, device.maxAvailableVideoZoomFactor)
         return min(maximum, max(minimum, value))
+    }
+
+    private func neutralZoomFactor(device: AVCaptureDevice) -> CGFloat {
+        if #available(iOS 13.0, *),
+           let wideIndex = device.constituentDevices.firstIndex(where: { $0.deviceType == .builtInWideAngleCamera }),
+           wideIndex > 0, wideIndex <= device.virtualDeviceSwitchOverVideoZoomFactors.count {
+            return max(1.0, CGFloat(device.virtualDeviceSwitchOverVideoZoomFactors[wideIndex - 1].doubleValue))
+        }
+        return 1.0
     }
 
     private func withLockedDevice(_ device: AVCaptureDevice, _ update: (AVCaptureDevice) -> Void) {

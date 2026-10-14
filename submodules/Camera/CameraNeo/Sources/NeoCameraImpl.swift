@@ -13,6 +13,11 @@ private func supportsDualCameraCapture(forRoundVideo: Bool) -> Bool {
     if forRoundVideo && DeviceModel.current == .iPhoneXR {
         return false
     }
+    // Donutgram: a single capture session lets the rear virtual camera switch to
+    // its ultra-wide lens. Use it automatically, independently of Low Power Mode.
+    if forRoundVideo, AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil {
+        return false
+    }
     let positions: [AVCaptureDevice.Position] = [.back, .front]
     return positions.allSatisfy { position in
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
