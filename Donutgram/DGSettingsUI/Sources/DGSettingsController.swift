@@ -72,7 +72,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "hideStickerChecks": return "checkmark"
     case "foldersAtBottom": return "folder"
     case "transcription": return "waveform"
-    case "camera", "rearCamera", "rememberCamera", "zoomSlider", "staticZoom": return "camera.rotate"
+    case "camera", "rearCamera", "rememberCamera", "zoomSlider", "staticZoom", "roundVideoFrameRate": return "camera.rotate"
     case "pauseMusicOnRecording": return "music.note"
     case "builtInMic": return "mic"
     case "autoPause", "autoPauseMedia": return "pause.circle"

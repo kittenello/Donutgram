@@ -349,6 +349,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(34, 6, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
             .disclosure(35, 6, "pauseMusicOnRecording", "Пауза музыки при записи", "\(musicOptions.filter { s.musicPlaybackExceptions.contains($0) }.count)/3"),
             .toggle(36, 6, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
+            .disclosure(37, 6, "roundVideoFrameRate", "FPS в кружках", "\(s.roundVideoFrameRate) FPS"),
             .header(40, 7, "ВИДЕО"),
             .disclosure(41, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
             .toggle(42, 7, "autoPause", "Авто пауза", s.autoPause, true),
@@ -423,6 +424,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "glow": return dgGlowController(context: context)
         case "transcription": return dgTranscriptionController(context: context)
         case "camera": return dgRoundVideoCameraController(context: context)
+        case "roundVideoFrameRate": return dgRoundVideoFrameRateController(context: context)
         case "autoplayMediaTypes": return dgAutoplayMediaController(context: context)
         case "autoPauseMedia": return dgAutoPauseMediaController(context: context)
         case "doubleTapSeek": return dgDoubleTapSeekController(context: context)
@@ -549,6 +551,15 @@ private func dgRoundVideoCameraController(context: AccountContext, focusKey: Str
     }, select: { s.roundVideoCamera = DGSimpleSettings.RoundVideoCamera(rawValue: Int($0) ?? 0) ?? .front })
 }
 
+private func dgRoundVideoFrameRateController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let settings = DGSimpleSettings.shared
+    return dgController(context: context, page: .roundVideoFrameRate, title: "FPS в кружках", focusKey: focusKey, entries: {
+        [.checkbox(0, 0, "30", "30 FPS", settings.roundVideoFrameRate == 30),
+         .checkbox(1, 0, "60", "60 FPS", settings.roundVideoFrameRate == 60),
+         .info(2, 0, "Если камера не поддерживает 60 FPS, запись идёт в 30 FPS.")]
+    }, select: { settings.roundVideoFrameRate = Int($0) ?? 30 })
+}
+
 private func dgAutoPauseMediaController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     return dgController(context: context, page: .autoPause, title: "Авто пауза", focusKey: focusKey, entries: {
@@ -648,6 +659,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     case .chatListTitle: makeController = dgChatListTitleModeController
     case .doubleTapSeek: makeController = dgDoubleTapSeekController
     case .camera: makeController = dgRoundVideoCameraController
+    case .roundVideoFrameRate: makeController = dgRoundVideoFrameRateController
     case .autoplayMedia: makeController = dgAutoplayMediaController
     case .autoPause: makeController = dgAutoPauseMediaController
     case .musicPlaybackExceptions: makeController = dgMusicPlaybackExceptionsController

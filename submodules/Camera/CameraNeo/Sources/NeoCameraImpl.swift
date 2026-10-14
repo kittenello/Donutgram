@@ -79,7 +79,7 @@ public final class NeoCameraImpl: CameraImpl {
             configuration: configuration,
             previewView: cameraPreviewView,
             secondaryPreviewView: cameraSecondaryPreviewView,
-            useMultiCam: configuration.isDualEnabled && self.isDualCameraSupported(forRoundVideo: configuration.isRoundVideo)
+            useMultiCam: configuration.isDualEnabled && (!configuration.isRoundVideo || configuration.roundVideoFrameRate == 30) && self.isDualCameraSupported(forRoundVideo: configuration.isRoundVideo)
         )
     }
 

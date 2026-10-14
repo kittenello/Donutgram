@@ -177,6 +177,7 @@ public final class DGSimpleSettings {
         static let forceBuiltInMicrophone = "donutgram.chats.forceBuiltInMicrophone"
         static let startRoundVideoWithRearCamera = "donutgram.chats.startRoundVideoWithRearCamera"
         static let roundVideoCamera = "donutgram.chats.roundVideoCamera"
+        static let roundVideoFrameRate = "donutgram.chats.roundVideoFrameRate"
         static let musicPlaybackExceptions = "donutgram.chats.musicPlaybackExceptions"
         static let rememberRoundVideoCamera = "donutgram.chats.rememberRoundVideoCamera"
         static let lastRoundVideoCamera = "donutgram.chats.lastRoundVideoCamera"
@@ -958,6 +959,11 @@ public final class DGSimpleSettings {
         set { setInteger(newValue.rawValue, Key.roundVideoCamera) }
     }
     public var rememberRoundVideoCamera: Bool { get { bool(Key.rememberRoundVideoCamera) } set { setBool(newValue, Key.rememberRoundVideoCamera) } }
+    /// Requested capture rate; a camera without a suitable 60 fps format falls back to 30.
+    public var roundVideoFrameRate: Int {
+        get { integer(Key.roundVideoFrameRate) == 60 ? 60 : 30 }
+        set { setInteger(newValue == 60 ? 60 : 30, Key.roundVideoFrameRate) }
+    }
     public var lastRoundVideoCamera: RoundVideoCamera {
         get {
             if self.defaults.object(forKey: Key.lastRoundVideoCamera) == nil {

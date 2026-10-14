@@ -1187,6 +1187,7 @@ public class VideoMessageCameraScreen: ViewController {
         private weak var controller: VideoMessageCameraScreen?
         private let context: AccountContext
         private let cameraImpl: CameraImpl
+        private let roundVideoFrameRate: Int
         fileprivate var camera: CameraProtocol?
         private var pinchStartTimestamp: Double?
         private let updateState: ActionSlot<CameraState>
@@ -1303,8 +1304,9 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.clipsToBounds = true
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
-            let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true)
             let cameraSettings = DGSimpleSettings.shared
+            self.roundVideoFrameRate = cameraSettings.roundVideoFrameRate
+            let isDualCameraEnabled = cameraSettings.roundVideoFrameRate == 30 && cameraImpl.isDualCameraSupported(forRoundVideo: true)
             let initialCamera = cameraSettings.rememberRoundVideoCamera ? cameraSettings.lastRoundVideoCamera : cameraSettings.roundVideoCamera
             let isFrontPosition = initialCamera != .rear
             
@@ -1444,7 +1446,8 @@ public class VideoMessageCameraScreen: ViewController {
                     audio: true,
                     photo: false,
                     metadata: false,
-                    isRoundVideo: true
+                    isRoundVideo: true,
+                    roundVideoFrameRate: self.roundVideoFrameRate
                 ),
                 previewView: self.mainPreviewView,
                 secondaryPreviewView: self.additionalPreviewView

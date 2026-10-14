@@ -157,6 +157,8 @@ private let dgEnglishStrings: [String: String] = [
     "Сервис": "Service",
     "Запись": "Recording",
     "Камера в кружках": "Round Video Camera",
+    "FPS в кружках": "Round Video FPS",
+    "Если камера не поддерживает 60 FPS, запись идёт в 30 FPS.": "Cameras that do not support 60 FPS record at 30 FPS.",
     "Запоминать последнюю камеру": "Remember Last Camera",
     "Слайдер зума": "Zoom Slider",
     "Оставлять зум после щипка": "Keep Zoom After Pinching",

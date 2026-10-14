@@ -7,8 +7,6 @@ import SwiftSignalKit
 import DeviceModel
 import Camera
 
-private let roundVideoFrameRate: Double = 30.0
-
 private enum CaptureInitializationStatus {
     case pending
     case ready
@@ -17,6 +15,9 @@ private enum CaptureInitializationStatus {
 
 final class CameraNeo: NSObject, CameraProtocol {
     private let configuration: Camera.Configuration
+    private var roundVideoFrameRate: Double {
+        return Double(self.configuration.roundVideoFrameRate)
+    }
     private let useMultiCam: Bool
     private let previewView: CameraPreviewView?
     private let secondaryPreviewView: CameraPreviewView?
@@ -56,6 +57,7 @@ final class CameraNeo: NSObject, CameraProtocol {
     private let singleCameraSwitchGeneration = Atomic<Int>(value: 0)
     private let recordingCompletionPipe = ValuePipe<VideoCaptureResult>()
     private let captureInitializationStatus = Atomic<CaptureInitializationStatus>(value: .pending)
+    private let captureFrameRate = Atomic<Double>(value: 30.0)
 
     private var mainVideoOutput: CameraVideoOutput?
     private var additionalVideoOutput: CameraVideoOutput?
@@ -341,6 +343,7 @@ final class CameraNeo: NSObject, CameraProtocol {
                         processor: processor,
                         url: outputUrl,
                         hasAudio: self.configuration.audio,
+                        frameRate: self.captureFrameRate.with { $0 },
                         initialPosition: self.positionValue.with { $0 },
                         durationUpdated: { [weak self] duration in
                             guard let self else {
@@ -704,7 +707,7 @@ final class CameraNeo: NSObject, CameraProtocol {
             return false
         }
         self.session.addInput(videoInput)
-        self.configureFrameRate(roundVideoFrameRate, device: device, input: videoInput)
+        self.configureFrameRate(self.roundVideoFrameRate, device: device, input: videoInput)
 
         if addOutput {
             guard let output = self.makeVideoOutput(), self.session.canAddOutput(output) else {
@@ -748,8 +751,8 @@ final class CameraNeo: NSObject, CameraProtocol {
 
         multiCamSession.addInputWithNoConnections(backInput)
         multiCamSession.addInputWithNoConnections(frontInput)
-        self.configureFrameRate(roundVideoFrameRate, device: backDevice, input: backInput)
-        self.configureFrameRate(roundVideoFrameRate, device: frontDevice, input: frontInput)
+        self.configureFrameRate(self.roundVideoFrameRate, device: backDevice, input: backInput)
+        self.configureFrameRate(self.roundVideoFrameRate, device: frontDevice, input: frontInput)
         multiCamSession.addOutputWithNoConnections(backOutput)
         multiCamSession.addOutputWithNoConnections(frontOutput)
 
@@ -893,7 +896,7 @@ final class CameraNeo: NSObject, CameraProtocol {
         // is still cropped to the same 480×480 output by the frame processor.
         let allowsLargerFormat: Bool
         if #available(iOS 13.0, *) {
-            allowsLargerFormat = !self.useMultiCam && device.isVirtualDevice
+            allowsLargerFormat = !self.useMultiCam && (device.isVirtualDevice || self.roundVideoFrameRate == 60.0)
         } else {
             allowsLargerFormat = false
         }
@@ -911,10 +914,16 @@ final class CameraNeo: NSObject, CameraProtocol {
                 return false
             }
             return format.videoSupportedFrameRateRanges.contains(where: {
-                $0.minFrameRate <= roundVideoFrameRate && $0.maxFrameRate >= roundVideoFrameRate
+                ($0.minFrameRate <= 30.0 && $0.maxFrameRate >= 30.0)
+                    || ($0.minFrameRate <= self.roundVideoFrameRate && $0.maxFrameRate >= self.roundVideoFrameRate)
             })
         }
-        return candidates.min { lhs, rhs in
+        let preferredCandidates = candidates.filter { format in
+            format.videoSupportedFrameRateRanges.contains(where: {
+                $0.minFrameRate <= self.roundVideoFrameRate && $0.maxFrameRate >= self.roundVideoFrameRate
+            })
+        }
+        return (preferredCandidates.isEmpty ? candidates : preferredCandidates).min { lhs, rhs in
             let lhsDimensions = CMVideoFormatDescriptionGetDimensions(lhs.formatDescription)
             let rhsDimensions = CMVideoFormatDescriptionGetDimensions(rhs.formatDescription)
             let lhsPixels = Int64(lhsDimensions.width) * Int64(lhsDimensions.height)
@@ -953,10 +962,13 @@ final class CameraNeo: NSObject, CameraProtocol {
         guard fps.isFinite, fps > 0.0 else {
             return
         }
-        guard let range = device.activeFormat.videoSupportedFrameRateRanges.first(where: { $0.minFrameRate <= fps && $0.maxFrameRate >= fps }) else {
+        let supportedRanges = device.activeFormat.videoSupportedFrameRateRanges
+        let requestedRange = supportedRanges.first(where: { $0.minFrameRate <= fps && $0.maxFrameRate >= fps })
+        guard (requestedRange
+            ?? supportedRanges.first(where: { $0.minFrameRate <= 30.0 && $0.maxFrameRate >= 30.0 })) != nil else {
             return
         }
-        let effectiveFps = min(range.maxFrameRate, max(range.minFrameRate, fps))
+        let effectiveFps = requestedRange != nil ? fps : 30.0
         let duration = CMTime(seconds: 1.0 / effectiveFps, preferredTimescale: 60_000)
         self.withLockedDevice(device) { device in
             if #available(iOS 18.0, *), device.activeFormat.isAutoVideoFrameRateSupported, device.isAutoVideoFrameRateEnabled {
@@ -964,6 +976,7 @@ final class CameraNeo: NSObject, CameraProtocol {
             }
             device.activeVideoMinFrameDuration = duration
             device.activeVideoMaxFrameDuration = duration
+            let _ = self.captureFrameRate.modify { _ in effectiveFps }
         }
         input.videoMinFrameDurationOverride = duration
     }

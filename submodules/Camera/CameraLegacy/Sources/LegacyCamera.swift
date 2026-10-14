@@ -13,8 +13,8 @@ final class CameraSession {
     
     let hasMultiCam: Bool
         
-    init(forRoundVideo: Bool) {
-        if #available(iOS 13.0, *), legacyIsDualCameraSupported(forRoundVideo: forRoundVideo) {
+    init(forRoundVideo: Bool, forceSingleCamera: Bool = false) {
+        if #available(iOS 13.0, *), !forceSingleCamera, legacyIsDualCameraSupported(forRoundVideo: forRoundVideo) {
             self.multiSession = AVCaptureMultiCamSession()
             self.singleSession = nil
             self.hasMultiCam = true
@@ -48,16 +48,18 @@ final class CameraDeviceContext {
     private let exclusive: Bool
     private let additional: Bool
     private let isRoundVideo: Bool
+    private let roundVideoFrameRate: Int
     
     let device = CameraDevice()
     let input = CameraInput()
     let output: CameraOutput
         
-    init(session: CameraSession, exclusive: Bool, additional: Bool, ciContext: CIContext, colorSpace: CGColorSpace, isRoundVideo: Bool = false) {
+    init(session: CameraSession, exclusive: Bool, additional: Bool, ciContext: CIContext, colorSpace: CGColorSpace, isRoundVideo: Bool = false, roundVideoFrameRate: Int = 30) {
         self.session = session
         self.exclusive = exclusive
         self.additional = additional
         self.isRoundVideo = isRoundVideo
+        self.roundVideoFrameRate = roundVideoFrameRate
         self.output = CameraOutput(exclusive: exclusive, ciContext: ciContext, colorSpace: colorSpace, use32BGRA: isRoundVideo)
     }
     
@@ -70,8 +72,12 @@ final class CameraDeviceContext {
                 
         self.device.configure(for: session, position: position, dual: !self.exclusive || self.additional, switchAudio: switchAudio)
         self.device.configureDeviceFormat(maxDimensions: self.maxDimensions(additional: self.additional, preferWide: preferWide), maxFramerate: self.preferredMaxFrameRate(useLower: preferLowerFramerate))
+        if self.isRoundVideo && self.exclusive && self.roundVideoFrameRate == 60 {
+            self.device.configureRoundVideo60Fps()
+        }
         self.input.configure(for: session, device: self.device, audio: audio && switchAudio)
         self.output.configure(for: session, device: self.device, input: self.input, previewView: previewView, audio: audio && switchAudio, photo: photo, metadata: metadata)
+        self.output.roundVideoFrameRate = self.device.fps
         
         self.output.configureVideoStabilization()
         
@@ -332,10 +338,10 @@ private final class CameraContext {
         if enabled {
             self.configure {
                 self.mainDeviceContext?.invalidate()
-                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
+                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo, roundVideoFrameRate: self.initialConfiguration.roundVideoFrameRate)
                 self.mainDeviceContext?.configure(position: .back, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata)
             
-                self.additionalDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: true, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
+                self.additionalDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: true, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo, roundVideoFrameRate: self.initialConfiguration.roundVideoFrameRate)
                 self.additionalDeviceContext?.configure(position: .front, previewView: self.secondaryPreviewView, audio: false, photo: true, metadata: false)
             }
             self.mainDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
@@ -383,7 +389,7 @@ private final class CameraContext {
                 let preferWide = self.initialConfiguration.preferWide || self.initialConfiguration.isRoundVideo
                 let preferLowerFramerate = self.initialConfiguration.preferLowerFramerate || self.initialConfiguration.isRoundVideo
                 
-                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: true, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
+                self.mainDeviceContext = CameraDeviceContext(session: self.session, exclusive: true, additional: false, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo, roundVideoFrameRate: self.initialConfiguration.roundVideoFrameRate)
                 self.mainDeviceContext?.configure(position: self.positionValue, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata, preferWide: preferWide, preferLowerFramerate: preferLowerFramerate)
             }
             self.mainDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
@@ -762,7 +768,7 @@ final class LegacyCamera: CameraProtocol {
         
         self.metrics = Camera.Metrics(model: DeviceModel.current)
         
-        let session = CameraSession(forRoundVideo: configuration.isRoundVideo)
+        let session = CameraSession(forRoundVideo: configuration.isRoundVideo, forceSingleCamera: configuration.isRoundVideo && configuration.roundVideoFrameRate == 60)
         session.session.automaticallyConfiguresApplicationAudioSession = false
         session.session.automaticallyConfiguresCaptureDeviceForWideColor = false
         session.session.usesApplicationAudioSession = true

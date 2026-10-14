@@ -11,6 +11,16 @@ let settings = DGSimpleSettings(defaults: defaults)
 
 if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
+    check(settings.roundVideoFrameRate == 30, "round videos default to 30 fps")
+    settings.roundVideoFrameRate = 60
+    check(settings.roundVideoFrameRate == 60, "60 fps can be selected")
+    settings.roundVideoFrameRate = 30
+    check(settings.roundVideoFrameRate == 30, "30 fps can be restored")
+    settings.roundVideoFrameRate = 120
+    check(settings.roundVideoFrameRate == 30, "unsupported fps values fall back to 30")
+    defaults.set(24, forKey: "donutgram.chats.roundVideoFrameRate")
+    check(settings.roundVideoFrameRate == 30, "invalid persisted fps values fall back to 30")
+    settings.roundVideoFrameRate = 60
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
     for enabled in [false, true] {
@@ -38,6 +48,7 @@ if mode == "write" {
     defaults.synchronize()
     print("settings behavior checks passed")
 } else if mode == "read" {
+    check(settings.roundVideoFrameRate == 60, "round video fps selection must survive process restart")
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
     check(settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 1, "autoplay preferences must survive process restart")

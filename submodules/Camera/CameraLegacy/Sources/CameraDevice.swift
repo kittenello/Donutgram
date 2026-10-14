@@ -184,6 +184,39 @@ final class CameraDevice {
     }
     
     private(set) var fps: Double = defaultFPS
+
+    // Donutgram: choose a real 60 fps format rather than just changing the
+    // durations of the legacy 30 fps VGA format. An unsupported camera stays at 30.
+    func configureRoundVideo60Fps() {
+        guard let device = self.videoDevice else {
+            return
+        }
+        let candidates = device.formats.filter { format in
+            let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            return format.mediaType == .video
+                && dimensions.width >= 640 && dimensions.height >= 480
+                && CMFormatDescriptionGetMediaSubType(format.formatDescription) == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+                && format.videoSupportedFrameRateRanges.contains(where: { $0.minFrameRate <= 60.0 && $0.maxFrameRate >= 60.0 })
+        }
+        guard let format = candidates.min(by: { lhs, rhs in
+            let lhsSize = CMVideoFormatDescriptionGetDimensions(lhs.formatDescription)
+            let rhsSize = CMVideoFormatDescriptionGetDimensions(rhs.formatDescription)
+            return Int64(lhsSize.width) * Int64(lhsSize.height) < Int64(rhsSize.width) * Int64(rhsSize.height)
+        }) else {
+            self.setFps(30.0)
+            return
+        }
+        self.transaction(device) { device in
+            device.activeFormat = format
+            if #available(iOS 18.0, *), device.activeFormat.isAutoVideoFrameRateSupported {
+                device.isAutoVideoFrameRateEnabled = false
+            }
+            let duration = CMTime(value: 1, timescale: 60)
+            device.activeVideoMinFrameDuration = duration
+            device.activeVideoMaxFrameDuration = duration
+            self.fps = 60.0
+        }
+    }
     
     func setFps(_ fps: Double) {
         guard let device = self.videoDevice, let targetFPS = device.actualFPS(Double(fps)) else {

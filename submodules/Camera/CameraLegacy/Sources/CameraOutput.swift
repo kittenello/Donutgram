@@ -21,6 +21,7 @@ final class CameraOutput: NSObject {
     let isVideoMessage: Bool
     
     var hasAudio: Bool = false
+    var roundVideoFrameRate: Double = 30.0
     
     let photoOutput = AVCapturePhotoOutput()
     let videoOutput = AVCaptureVideoDataOutput()
@@ -292,7 +293,8 @@ final class CameraOutput: NSObject {
             }
             
             let compressionProperties: [String: Any] = [
-                AVVideoAverageBitRateKey: 1000 * 1000,
+                AVVideoAverageBitRateKey: self.roundVideoFrameRate > 30.0 ? 2_000_000 : 1_000_000,
+                AVVideoExpectedSourceFrameRateKey: self.roundVideoFrameRate,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
                 AVVideoH264EntropyModeKey: AVVideoH264EntropyModeCABAC
             ]

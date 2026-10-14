@@ -78,6 +78,7 @@ final class VideoRecorder {
     private let processor: RoundVideoFrameProcessor
     private let url: URL
     private let hasAudio: Bool
+    private let frameRate: Double
     private let durationUpdated: (Double) -> Void
     private let transitionImageUpdated: (UIImage?) -> Void
     private let runtimeFailure: (CameraRecordingError) -> Void
@@ -120,6 +121,7 @@ final class VideoRecorder {
         processor: RoundVideoFrameProcessor,
         url: URL,
         hasAudio: Bool,
+        frameRate: Double,
         initialPosition: Camera.Position,
         durationUpdated: @escaping (Double) -> Void,
         transitionImageUpdated: @escaping (UIImage?) -> Void,
@@ -130,6 +132,7 @@ final class VideoRecorder {
         self.processor = processor
         self.url = url
         self.hasAudio = hasAudio
+        self.frameRate = frameRate
         self.activePosition = initialPosition
         self.durationUpdated = durationUpdated
         self.transitionImageUpdated = transitionImageUpdated
@@ -463,7 +466,8 @@ final class VideoRecorder {
         assetWriter.shouldOptimizeForNetworkUse = false
 
         let compressionProperties: [String: Any] = [
-            AVVideoAverageBitRateKey: 1_200_000,
+            AVVideoAverageBitRateKey: self.frameRate > 30.0 ? 2_400_000 : 1_200_000,
+            AVVideoExpectedSourceFrameRateKey: self.frameRate,
             AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
             AVVideoH264EntropyModeKey: AVVideoH264EntropyModeCABAC
         ]
