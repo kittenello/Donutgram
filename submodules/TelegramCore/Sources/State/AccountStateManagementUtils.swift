@@ -1519,8 +1519,15 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let userPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(updateUserStatusData.userId))
                 // Donutgram: the server reports it whenever it shows this account online,
                 // whatever the action was, including another session's.
-                if userPeerId == accountPeerId, case let .userStatusOnline(statusData) = updateUserStatusData.status {
-                    DGSimpleSettings.shared.requestGhostOffline(accountPeerId: accountPeerId.toInt64(), serverOnlineExpires: statusData.expires)
+                if userPeerId == accountPeerId {
+                    switch updateUserStatusData.status {
+                    case let .userStatusOnline(statusData):
+                        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: accountPeerId.toInt64(), serverOnlineExpires: statusData.expires)
+                    case let .userStatusOffline(statusData):
+                        DGSimpleSettings.shared.reportGhostServerOffline(accountPeerId: accountPeerId.toInt64(), wasOnline: statusData.wasOnline)
+                    default:
+                        break
+                    }
                 }
                 updatedState.mergePeerPresences([userPeerId: updateUserStatusData.status], explicit: true)
             case let .updateUserName(updateUserNameData):
