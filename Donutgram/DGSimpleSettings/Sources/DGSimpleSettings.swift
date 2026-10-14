@@ -45,6 +45,13 @@ public final class DGSimpleSettings {
     public static let requestOfflineNotification = Notification.Name("donutgram.ghost.requestOffline")
     /// `requestOfflineNotification` user info: the `PeerId.toInt64()` of the account to send the offline packet for.
     public static let requestOfflineAccountPeerIdKey = "accountPeerId"
+    /// `requestOfflineNotification` user info: set when the request answers the server reporting the account online
+    /// (`updateUserStatus` for the account itself); the `expires` of that online status, in server time.
+    public static let requestOfflineServerOnlineExpiresKey = "serverOnlineExpires"
+    /// The server reported an account offline (`updateUserStatus` for the account itself). User info: the account's
+    /// `PeerId.toInt64()` under `requestOfflineAccountPeerIdKey` and the status's `was_online` under `serverOfflineWasOnlineKey`.
+    public static let serverReportedOfflineNotification = Notification.Name("donutgram.ghost.serverReportedOffline")
+    public static let serverOfflineWasOnlineKey = "serverOfflineWasOnline"
     public static let lastOnlineDidChangeNotification = Notification.Name("donutgram.presence.lastOnlineDidChange")
     /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
     /// send account.updateStatus.
@@ -348,13 +355,28 @@ public final class DGSimpleSettings {
 
     /// Asks for an offline packet after an action that shows the user online on the server, for the
     /// account with `accountPeerId` (`PeerId.toInt64()`) or for every account when it is nil.
-    public func requestGhostOffline(accountPeerId: Int64? = nil) {
+    /// `serverOnlineExpires` is set when no action here is known: the server itself reported the account
+    /// online until that time, which another session of the account may have caused.
+    public func requestGhostOffline(accountPeerId: Int64? = nil, serverOnlineExpires: Int32? = nil) {
         guard self.ghostModeEnabled && self.ghostAutomaticOffline else { return }
-        var userInfo: [AnyHashable: Any]?
+        var userInfo: [AnyHashable: Any] = [:]
         if let accountPeerId {
-            userInfo = [DGSimpleSettings.requestOfflineAccountPeerIdKey: accountPeerId]
+            userInfo[DGSimpleSettings.requestOfflineAccountPeerIdKey] = accountPeerId
+        }
+        if let serverOnlineExpires {
+            userInfo[DGSimpleSettings.requestOfflineServerOnlineExpiresKey] = serverOnlineExpires
         }
         NotificationCenter.default.post(name: DGSimpleSettings.requestOfflineNotification, object: self, userInfo: userInfo)
+    }
+
+    /// Tells ghost mode the server reported the account offline, for the account with `accountPeerId`
+    /// (`PeerId.toInt64()`), last online at `wasOnline`. Does nothing unless ghost mode's automatic offline is on.
+    public func reportGhostServerOffline(accountPeerId: Int64, wasOnline: Int32) {
+        guard self.ghostModeEnabled && self.ghostAutomaticOffline else { return }
+        NotificationCenter.default.post(name: DGSimpleSettings.serverReportedOfflineNotification, object: self, userInfo: [
+            DGSimpleSettings.requestOfflineAccountPeerIdKey: accountPeerId,
+            DGSimpleSettings.serverOfflineWasOnlineKey: wasOnline
+        ])
     }
 
     public var ghostModeEnabled: Bool {
