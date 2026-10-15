@@ -307,7 +307,7 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
         entries.append(.option(5, theme, "info", "Прокси временно отключён по выбранным условиям. Он включится снова, когда они перестанут действовать.", nil, nil))
     }
     entries.append(.option(6, theme, "forceTcp", "Force TCP", nil, forceTcp))
-    entries.append(.option(7, theme, "info", "Включает TCP для звоноков. Включайте если только знаете что делаете", nil, nil))
+    entries.append(.option(7, theme, "info", "Включает TCP для звонков. Включайте, только если знаете, что делаете.", nil, nil))
     entries.append(.serversHeader(theme, strings.SocksProxySetup_SavedProxies))
     entries.append(.addServer(theme, strings.SocksProxySetup_AddProxy, state.editing))
     var index = 0

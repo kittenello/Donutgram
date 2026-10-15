@@ -45,11 +45,30 @@ final class ProxyAutoSwitchDelayItem: ListViewItem, ItemListItem {
     }
 }
 
+// VoiceOver steps the slider by a tenth of its range, which the rounding in valueChanged would undo,
+// so increment and decrement move by one value.
+private final class ProxyAutoSwitchDelaySlider: UISlider {
+    override func accessibilityIncrement() {
+        self.step(by: 1.0)
+    }
+
+    override func accessibilityDecrement() {
+        self.step(by: -1.0)
+    }
+
+    private func step(by delta: Float) {
+        self.value = min(max(self.value.rounded() + delta, self.minimumValue), self.maximumValue)
+        self.sendActions(for: .valueChanged)
+    }
+}
+
 private final class ProxyAutoSwitchDelayItemNode: ListViewItemNode {
     private var item: ProxyAutoSwitchDelayItem?
-    private let block = UIView()
-    private let titleLabel = UILabel()
-    private let valueLabel = UILabel()
+    // Views are created in didLoad: the node itself may be created off the main thread.
+    private var block: UIView?
+    private var separator: UIView?
+    private var titleLabel: UILabel?
+    private var valueLabel: UILabel?
     private var slider: UISlider?
     private var tickLabels: [UILabel] = []
     private var layoutWidth: CGFloat = 0.0
@@ -64,18 +83,31 @@ private final class ProxyAutoSwitchDelayItemNode: ListViewItemNode {
 
     override func didLoad() {
         super.didLoad()
-        self.view.addSubview(self.block)
-        self.block.isUserInteractionEnabled = false
-        self.block.layer.cornerRadius = 22.0
-        self.block.clipsToBounds = true
-        self.titleLabel.text = "Время ожидания"
-        self.titleLabel.font = .systemFont(ofSize: 17.0)
-        self.valueLabel.font = .systemFont(ofSize: 15.0)
-        self.valueLabel.textAlignment = .right
-        self.view.addSubview(self.titleLabel)
-        self.view.addSubview(self.valueLabel)
+        let block = UIView()
+        block.isUserInteractionEnabled = false
+        block.layer.cornerRadius = 22.0
+        block.clipsToBounds = true
+        self.view.addSubview(block)
+        self.block = block
 
-        let slider = UISlider()
+        let separator = UIView()
+        separator.isUserInteractionEnabled = false
+        self.view.addSubview(separator)
+        self.separator = separator
+
+        let titleLabel = UILabel()
+        titleLabel.text = "Время ожидания"
+        titleLabel.font = .systemFont(ofSize: 17.0)
+        self.view.addSubview(titleLabel)
+        self.titleLabel = titleLabel
+
+        let valueLabel = UILabel()
+        valueLabel.font = .systemFont(ofSize: 15.0)
+        valueLabel.textAlignment = .right
+        self.view.addSubview(valueLabel)
+        self.valueLabel = valueLabel
+
+        let slider = ProxyAutoSwitchDelaySlider()
         slider.minimumValue = 0.0
         slider.maximumValue = Float(ProxyAutoSwitchDelayItem.values.count - 1)
         if #available(iOS 26.0, *) {
@@ -115,30 +147,38 @@ private final class ProxyAutoSwitchDelayItemNode: ListViewItemNode {
     }
 
     private func updateControls() {
-        guard let item else { return }
+        guard let item, let block = self.block, let separator = self.separator, let titleLabel = self.titleLabel, let valueLabel = self.valueLabel, let slider = self.slider else { return }
         self.backgroundColor = .clear
-        self.block.backgroundColor = item.theme.list.itemBlocksBackgroundColor
+        block.backgroundColor = item.theme.list.itemBlocksBackgroundColor
         var corners: CACornerMask = []
         if self.hasTopCorners { corners.formUnion([.layerMinXMinYCorner, .layerMaxXMinYCorner]) }
         if self.hasBottomCorners { corners.formUnion([.layerMinXMaxYCorner, .layerMaxXMaxYCorner]) }
-        self.block.layer.maskedCorners = corners
-        self.block.frame = CGRect(x: self.leftInset, y: 0.0, width: max(0.0, self.layoutWidth - self.leftInset - self.rightInset), height: 112.0)
+        block.layer.maskedCorners = corners
+        block.frame = CGRect(x: self.leftInset, y: 0.0, width: max(0.0, self.layoutWidth - self.leftInset - self.rightInset), height: 112.0)
         let contentX = self.leftInset + 16.0
         let contentWidth = max(0.0, self.layoutWidth - self.leftInset - self.rightInset - 32.0)
-        self.titleLabel.textColor = item.theme.list.itemPrimaryTextColor
-        self.valueLabel.textColor = item.theme.list.itemSecondaryTextColor
-        self.titleLabel.frame = CGRect(x: contentX, y: 10.0, width: max(0.0, contentWidth - 72.0), height: 24.0)
-        self.valueLabel.frame = CGRect(x: contentX + contentWidth - 72.0, y: 10.0, width: 72.0, height: 24.0)
-        self.slider?.frame = CGRect(x: contentX, y: 40.0, width: contentWidth, height: 38.0)
-        self.slider?.minimumTrackTintColor = item.theme.list.itemAccentColor
-        self.slider?.maximumTrackTintColor = item.theme.list.itemSecondaryTextColor.withAlphaComponent(0.4)
+
+        // A row followed by another row of the block draws the line between them, inset as in the glass rows.
+        separator.isHidden = self.hasBottomCorners
+        separator.backgroundColor = item.theme.list.itemBlocksSeparatorColor
+        separator.frame = CGRect(x: contentX, y: 112.0 - UIScreenPixel, width: contentWidth, height: UIScreenPixel)
+
+        titleLabel.textColor = item.theme.list.itemPrimaryTextColor
+        valueLabel.textColor = item.theme.list.itemSecondaryTextColor
+        titleLabel.frame = CGRect(x: contentX, y: 10.0, width: max(0.0, contentWidth - 72.0), height: 24.0)
+        valueLabel.frame = CGRect(x: contentX + contentWidth - 72.0, y: 10.0, width: 72.0, height: 24.0)
+        slider.frame = CGRect(x: contentX, y: 40.0, width: contentWidth, height: 38.0)
+        slider.minimumTrackTintColor = item.theme.list.itemAccentColor
+        slider.maximumTrackTintColor = item.theme.list.itemSecondaryTextColor.withAlphaComponent(0.4)
         let index = ProxyAutoSwitchDelayItem.values.firstIndex(of: item.value) ?? 1
-        self.slider?.value = Float(index)
+        slider.value = Float(index)
         self.updateValue(index: index)
+        // Each label sits under the thumb center for its value, as the slider itself computes it,
+        // so the labels follow the thumb and track of every iOS version.
+        let trackRect = slider.trackRect(forBounds: slider.bounds)
         for (i, label) in self.tickLabels.enumerated() {
-            let fraction = CGFloat(i) / CGFloat(ProxyAutoSwitchDelayItem.values.count - 1)
-            // Match the thumb centers, rather than the outer edges of the slider.
-            let x = contentX + 14.0 + fraction * max(0.0, contentWidth - 28.0)
+            let thumbRect = slider.thumbRect(forBounds: slider.bounds, trackRect: trackRect, value: Float(i))
+            let x = slider.frame.minX + thumbRect.midX
             label.frame = CGRect(x: x - 16.0, y: 82.0, width: 32.0, height: 20.0)
         }
     }
@@ -146,7 +186,7 @@ private final class ProxyAutoSwitchDelayItemNode: ListViewItemNode {
     private func updateValue(index: Int) {
         guard let item else { return }
         let text = "\(ProxyAutoSwitchDelayItem.values[index]) сек."
-        self.valueLabel.text = text
+        self.valueLabel?.text = text
         self.slider?.accessibilityValue = text
         for (i, label) in self.tickLabels.enumerated() {
             label.textColor = i == index ? item.theme.list.itemAccentColor : item.theme.list.itemSecondaryTextColor
