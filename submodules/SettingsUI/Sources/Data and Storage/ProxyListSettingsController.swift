@@ -23,6 +23,7 @@ private final class ProxySettingsControllerArguments {
     let shareProxyList: () -> Void
     var toggleOption: (String, Bool) -> Void = { _, _ in }
     var openOption: (String) -> Void = { _ in }
+    var updateSwitchDelay: (Int32) -> Void = { _ in }
     
     init(toggleEnabled: @escaping (Bool) -> Void, addNewServer: @escaping () -> Void, activateServer: @escaping (ProxyServerSettings) -> Void, editServer: @escaping (ProxyServerSettings) -> Void, removeServer: @escaping (ProxyServerSettings) -> Void, setServerWithRevealedOptions: @escaping (ProxyServerSettings?, ProxyServerSettings?) -> Void, toggleUseForCalls: @escaping (Bool) -> Void, shareProxyList: @escaping () -> Void) {
         self.toggleEnabled = toggleEnabled
@@ -240,11 +241,13 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
         let arguments = arguments as! ProxySettingsControllerArguments
         switch self {
             case let .option(_, _, key, title, label, value):
-                if key == "header" {
+                if key == "switchDelay", let label, let seconds = Int32(label) {
+                    return ProxyAutoSwitchDelayItem(theme: presentationData.theme, sectionId: self.section, value: seconds, updated: arguments.updateSwitchDelay)
+                } else if key == "header" {
                     return ItemListSectionHeaderItem(presentationData: presentationData, text: title, sectionId: self.section)
                 } else if key == "info" {
                     return ItemListTextItem(presentationData: presentationData, text: .plain(title), sectionId: self.section)
-                } else if key.hasPrefix("condition.") || key.hasPrefix("delay.") {
+                } else if key.hasPrefix("condition.") {
                     return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: title, style: .left, checked: value ?? false, zeroSeparatorInsets: false, sectionId: self.section, action: { arguments.openOption(key) })
                 } else if let value {
                     return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: true, enabled: true, sectionId: self.section, style: .blocks, updated: { arguments.toggleOption(key, $0) })
@@ -296,8 +299,7 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
     entries.append(.option(0, theme, "header", "ОСНОВНЫЕ", nil, nil))
     entries.append(.option(1, theme, "autoSwitch", "Автопереключение прокси", nil, proxySettings.autoSwitch))
     if proxySettings.autoSwitch {
-        entries.append(.option(2, theme, "switchDelay", "Время ожидания", "\(proxySettings.autoSwitchDelay) сек.", nil))
-        entries.append(.option(3, theme, "info", "Если текущий прокси перестанет работать, после указанного времени будет выбран доступный прокси с наименьшей задержкой.", nil, nil))
+        entries.append(.option(2, theme, "switchDelay", "Время ожидания", "\(proxySettings.autoSwitchDelay)", nil))
     }
     let conditions = [(Int32(1), "VPN"), (Int32(2), "Мобильная сеть"), (Int32(4), "Wi-Fi")].filter { proxySettings.disableOnNetworks & $0.0 != 0 }.map { $0.1 }
     entries.append(.option(4, theme, "disableOnNetworks", "Отключать прокси", conditions.isEmpty ? "Никогда" : (conditions.count == 3 ? "Всегда" : conditions.joined(separator: ", ")), nil))
@@ -305,7 +307,7 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
         entries.append(.option(5, theme, "info", "Прокси временно отключён по выбранным условиям. Он включится снова, когда они перестанут действовать.", nil, nil))
     }
     entries.append(.option(6, theme, "forceTcp", "Force TCP", nil, forceTcp))
-    entries.append(.option(7, theme, "info", "Включает TCP-транспорт для звонков. Применяется к новым звонкам.", nil, nil))
+    entries.append(.option(7, theme, "info", "Включает TCP для звоноков. Включайте если только знаете что делаете", nil, nil))
     entries.append(.serversHeader(theme, strings.SocksProxySetup_SavedProxies))
     entries.append(.addServer(theme, strings.SocksProxySetup_AddProxy, state.editing))
     var index = 0
@@ -390,16 +392,14 @@ public func proxySettingsController(context: AccountContext, mode: ProxySettings
     return proxySettingsController(accountManager: context.sharedContext.accountManager, sharedContext: context.sharedContext, context: context, network: context.account.network, mode: mode, presentationData: presentationData, updatedPresentationData: context.sharedContext.presentationData, focusOnItemTag: focusOnItemTag)
 }
 
-private func proxyAutomationOptionsController(accountManager: AccountManager<TelegramAccountManagerTypes>, presentationData: PresentationData, updatedPresentationData: Signal<PresentationData, NoError>, delay: Bool) -> ViewController {
+private func proxyAutomationOptionsController(accountManager: AccountManager<TelegramAccountManagerTypes>, presentationData: PresentationData, updatedPresentationData: Signal<PresentationData, NoError>) -> ViewController {
     let arguments = ProxySettingsControllerArguments(toggleEnabled: { _ in }, addNewServer: {}, activateServer: { _ in }, editServer: { _ in }, removeServer: { _ in }, setServerWithRevealedOptions: { _, _ in }, toggleUseForCalls: { _ in }, shareProxyList: {})
     arguments.openOption = { key in
         let parts = key.split(separator: ".")
         guard parts.count == 2, let value = Int32(parts[1]) else { return }
         let _ = updateProxySettingsInteractively(accountManager: accountManager, { current in
             var current = current
-            if parts[0] == "delay", [5, 10, 15, 30, 60].contains(value) {
-                current.autoSwitchDelay = value
-            } else if parts[0] == "condition", [1, 2, 4].contains(value) {
+            if parts[0] == "condition", [1, 2, 4].contains(value) {
                 current.disableOnNetworks ^= value
             }
             return current
@@ -409,17 +409,11 @@ private func proxyAutomationOptionsController(accountManager: AccountManager<Tel
     |> map { presentationData, data -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let settings = data.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) ?? .defaultSettings
         var entries: [ProxySettingsControllerEntry] = []
-        if delay {
-            for (index, seconds) in [Int32(5), 10, 15, 30, 60].enumerated() {
-                entries.append(.option(index, presentationData.theme, "delay.\(seconds)", "\(seconds) сек.", nil, settings.autoSwitchDelay == seconds))
-            }
-        } else {
-            for (index, condition) in [(Int32(1), "VPN"), (Int32(2), "Мобильная сеть"), (Int32(4), "Wi-Fi")].enumerated() {
-                entries.append(.option(index, presentationData.theme, "condition.\(condition.0)", condition.1, nil, settings.disableOnNetworks & condition.0 != 0))
-            }
-            entries.append(.option(3, presentationData.theme, "info", "Можно выбрать несколько условий. При совпадении любого из них прокси временно отключается; ручной выбор прокси сохраняется.", nil, nil))
+        for (index, condition) in [(Int32(1), "VPN"), (Int32(2), "Мобильная сеть"), (Int32(4), "Wi-Fi")].enumerated() {
+            entries.append(.option(index, presentationData.theme, "condition.\(condition.0)", condition.1, nil, settings.disableOnNetworks & condition.0 != 0))
         }
-        let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(delay ? "Время ожидания" : "Отключать прокси"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        entries.append(.option(3, presentationData.theme, "info", "Можно выбрать несколько условий. При совпадении любого из них прокси временно отключается; ручной выбор прокси сохраняется.", nil, nil))
+        let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Отключать прокси"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks), arguments))
     }
     return ItemListController(presentationData: ItemListPresentationData(presentationData), updatedPresentationData: updatedPresentationData |> map(ItemListPresentationData.init(_:)), state: signal, tabBarItem: nil)
@@ -518,9 +512,17 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
         }
     }
     arguments.openOption = { key in
-        if key == "switchDelay" || key == "disableOnNetworks" {
-            pushControllerImpl?(proxyAutomationOptionsController(accountManager: accountManager, presentationData: presentationData, updatedPresentationData: updatedPresentationData, delay: key == "switchDelay"))
+        if key == "disableOnNetworks" {
+            pushControllerImpl?(proxyAutomationOptionsController(accountManager: accountManager, presentationData: presentationData, updatedPresentationData: updatedPresentationData))
         }
+    }
+    arguments.updateSwitchDelay = { seconds in
+        guard ProxyAutoSwitchDelayItem.values.contains(seconds) else { return }
+        let _ = updateProxySettingsInteractively(accountManager: accountManager, { current in
+            var current = current
+            current.autoSwitchDelay = seconds
+            return current
+        }).start()
     }
     
     let proxySettings = Promise<ProxySettings>()
