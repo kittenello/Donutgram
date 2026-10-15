@@ -989,6 +989,9 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                     let textString = NSAttributedString(string: string, font: Font.bold(10.0), textColor: .black, paragraphAlignment: .center)
                     let stringRect = textString.boundingRect(with: CGSize(width: 100.0, height: 16.0), options: .usesLineFragmentOrigin, context: nil)
                     titleIconsWidth += floor(stringRect.width) + 11.0
+                case .verified(_, _, sizeType: .compact):
+                    // Drawn at its image size, 16 points, rather than filling the 20-point container.
+                    titleIconsWidth += 16.0
                 default:
                     titleIconsWidth += 20.0
                 }
