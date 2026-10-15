@@ -146,6 +146,20 @@ private final class ProxyAutoSwitchDelayItemNode: ListViewItemNode {
         }
     }
 
+    // Without these the list keeps a removed row fully drawn until its height animation ends, so the slider
+    // lingered after "Автопереключение прокси" was turned off. The same fades as the switch rows around it.
+    override func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
+        self.layer.allowsGroupOpacity = true
+        self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.4, completion: { [weak self] _ in
+            self?.layer.allowsGroupOpacity = false
+        })
+    }
+
+    override func animateRemoved(_ currentTimestamp: Double, duration: Double) {
+        self.layer.allowsGroupOpacity = true
+        self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
+    }
+
     private func updateControls() {
         guard let item, let block = self.block, let separator = self.separator, let titleLabel = self.titleLabel, let valueLabel = self.valueLabel, let slider = self.slider else { return }
         self.backgroundColor = .clear
