@@ -414,7 +414,8 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         transition.updateFrame(view: self.stopButton, frame: CGRect(origin: CGPoint(), size: size))
         
         var sendSlowmodeTimerTimestamp: (duration: Int32, timestamp: Int32)?
-        if let slowmodeState = interfaceState.slowmodeState {
+        // Donutgram: the slowmode countdown belongs to new sends, not saving an edit.
+        if let slowmodeState = interfaceState.slowmodeState, interfaceState.interfaceState.editMessage == nil {
             switch slowmodeState.variant {
             case .pendingMessages:
                 break

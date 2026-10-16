@@ -1707,7 +1707,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         var isSlowmodeActive = false
-        if interfaceState.slowmodeState != nil && !isScheduledMessages {
+        if interfaceState.slowmodeState != nil && !isScheduledMessages && interfaceState.interfaceState.editMessage == nil {
             isSlowmodeActive = true
             if !isEditingMedia {
                 isMediaEnabled = false
@@ -2412,7 +2412,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var rightSlowModeInset: CGFloat = 0.0
         var slowModeButtonSize: CGSize = .zero
         var hasSlowmodeButton = false
-        if let presentationInterfaceState = self.presentationInterfaceState, (presentationInterfaceState.boostsToUnrestrict ?? 0) > 0, presentationInterfaceState.slowmodeState != nil {
+        // Donutgram: editing saves an existing message; the boost button must not hide Apply.
+        if let presentationInterfaceState = self.presentationInterfaceState, (presentationInterfaceState.boostsToUnrestrict ?? 0) > 0, presentationInterfaceState.slowmodeState != nil, presentationInterfaceState.interfaceState.editMessage == nil {
             slowModeButtonSize = self.slowModeButton.update(size: CGSize(width: width, height: 40.0), interfaceState: presentationInterfaceState)
             rightSlowModeInset = max(0.0, slowModeButtonSize.width + 4.0)
             hasSlowmodeButton = true
@@ -3223,7 +3224,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        if let slowmodeState = interfaceState.slowmodeState, !isScheduledMessages && rightSlowModeInset.isZero {
+        if let slowmodeState = interfaceState.slowmodeState, !isScheduledMessages && rightSlowModeInset.isZero && interfaceState.interfaceState.editMessage == nil {
             let slowmodePlaceholderNode: ChatTextInputSlowmodePlaceholderNode
             if let current = self.slowmodePlaceholderNode {
                 slowmodePlaceholderNode = current
@@ -3246,7 +3247,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             slowmodePlaceholderNode.removeFromSupernode()
         }
 
-        if (interfaceState.slowmodeState != nil && rightSlowModeInset.isZero && !isScheduledMessages && interfaceState.editMessageState == nil) || interfaceState.inputTextPanelState.contextPlaceholder != nil {
+        if (interfaceState.slowmodeState != nil && rightSlowModeInset.isZero && !isScheduledMessages && interfaceState.interfaceState.editMessage == nil) || interfaceState.inputTextPanelState.contextPlaceholder != nil {
             self.textPlaceholderNode.isHidden = true
             self.slowmodePlaceholderNode?.isHidden = inputHasText
         } else {
@@ -4547,7 +4548,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         if let interfaceState = self.presentationInterfaceState {
-            if (interfaceState.slowmodeState != nil && !isScheduledMessages && interfaceState.editMessageState == nil) || interfaceState.inputTextPanelState.contextPlaceholder != nil {
+            if (interfaceState.slowmodeState != nil && !isScheduledMessages && interfaceState.interfaceState.editMessage == nil) || interfaceState.inputTextPanelState.contextPlaceholder != nil {
                 self.textPlaceholderNode.isHidden = true
                 self.slowmodePlaceholderNode?.isHidden = inputHasText
             } else {
