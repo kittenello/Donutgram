@@ -139,10 +139,6 @@ final class AvatarGalleryItemFooterContentNode: GalleryFooterContentNode {
         var panelHeight: CGFloat = 54.0 + bottomInset
         panelHeight += contentInset
 
-        let dateSize = self.dateNode.isHidden ? CGSize.zero : self.dateNode.measure(CGSize(width: max(0.0, width - leftInset - rightInset - 32.0), height: CGFloat.greatestFiniteMagnitude))
-        let dateHeight = self.dateNode.isHidden ? 0.0 : dateSize.height + 10.0
-        panelHeight += dateHeight
-        
         var buttonPanelInsets = UIEdgeInsets()
         buttonPanelInsets.left = 8.0
         buttonPanelInsets.right = 8.0
@@ -155,7 +151,9 @@ final class AvatarGalleryItemFooterContentNode: GalleryFooterContentNode {
         let constrainedSize = CGSize(width: width - 44.0 * 2.0 - 8.0 * 2.0 - leftInset - rightInset, height: CGFloat.greatestFiniteMagnitude)
         let controlsY = panelHeight - buttonPanelInsets.bottom - 44.0
 
-        self.dateNode.frame = CGRect(origin: CGPoint(x: leftInset + floor((width - leftInset - rightInset - dateSize.width) / 2.0), y: controlsY - dateHeight), size: dateSize)
+        let dateSideInset = max(leftInset, rightInset) + buttonPanelInsets.left + 44.0 + 12.0
+        let dateSize = self.dateNode.isHidden ? CGSize.zero : self.dateNode.measure(CGSize(width: max(0.0, width - dateSideInset * 2.0), height: 44.0))
+        self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: controlsY + floor((44.0 - dateSize.height) / 2.0)), size: dateSize)
 
         let mainSize = self.mainNode.measure(constrainedSize)
         self.mainNode.frame = CGRect(origin: CGPoint(x: floor((width - mainSize.width) / 2.0), y: controlsY + floor((44.0 - mainSize.height) / 2.0)), size: mainSize)
