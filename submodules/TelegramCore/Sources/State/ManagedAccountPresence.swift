@@ -54,6 +54,7 @@ private final class AccountPresenceManagerImpl {
     private let currentRequestDisposable = MetaDisposable()
     private let initialPresenceRequestDisposable = MetaDisposable()
     private let serverStatusRefreshDisposable = MetaDisposable()
+    private var connectionStatusDisposable: Disposable?
     private var onlineTimer: SignalKitTimer?
     private var offlineFallbackTimer: SignalKitTimer?
     private var settingsObserver: NSObjectProtocol?
@@ -90,10 +91,16 @@ private final class AccountPresenceManagerImpl {
     private var lastReactionReport: Double?
     private var lastAcknowledgedPresenceOnline: Bool = false
     // Donutgram: how many reports of this account online have been recorded for the own profile, and
-    // when the last one was; how many offline packets the server has acknowledged.
+    // when the last one was; how many offline packets have been sent.
     private var serverOnlineRecords: Int = 0
     private var lastServerOnlineRecord: Double = 0.0
-    private var offlineAcknowledgements: Int = 0
+    private var offlinePacketsSent: Int = 0
+    // Donutgram: whether a status request is on its way, and whether the own status is to be asked
+    // for once it is answered.
+    private var isStatusRequestInFlight = false
+    private var pendingServerStatusRefresh = false
+    // Donutgram: whether the network has been connected since the manager started.
+    private var hasBeenConnected = false
     private var resolvingInitialPresence = false
     private var didResolveInitialPresence = false
     
@@ -114,9 +121,30 @@ private final class AccountPresenceManagerImpl {
                 self.updatePresence(value)
                 if value {
                     // Another client may have been online while the app was closed.
-                    self.refreshServerStatus()
+                    self.scheduleServerStatusRefresh()
                 }
             }
+        })
+
+        self.connectionStatusDisposable = (self.network.connectionStatus
+        |> map { status -> Bool in
+            switch status {
+            case .online, .updating:
+                return true
+            case .waitingForNetwork, .connecting:
+                return false
+            }
+        }
+        |> distinctUntilChanged
+        |> deliverOn(self.queue)).start(next: { [weak self] isConnected in
+            guard let self, isConnected else {
+                return
+            }
+            if self.hasBeenConnected && self.wasOnline {
+                // No update reports a status that changed while the connection was lost.
+                self.scheduleServerStatusRefresh()
+            }
+            self.hasBeenConnected = true
         })
 
         self.settingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil, using: { [weak self] _ in
@@ -130,6 +158,11 @@ private final class AccountPresenceManagerImpl {
                 let ghost = DGSimpleSettings.shared
                 if !(ghost.ghostModeEnabled && ghost.ghostAutomaticOffline) {
                     self.resetOtherSessionState()
+                }
+                if !ghost.ghostHidesOnline {
+                    // Nothing records the server's status meanwhile, so it would be stale when ghost
+                    // mode hides online again.
+                    ghost.setServerOnlineUntil(nil, accountId: self.accountId)
                 }
                 // UserDefaults changes are independent from the foreground
                 // signal. Re-evaluate immediately so enabling ghost mode while
@@ -183,6 +216,7 @@ private final class AccountPresenceManagerImpl {
         self.currentRequestDisposable.dispose()
         self.initialPresenceRequestDisposable.dispose()
         self.serverStatusRefreshDisposable.dispose()
+        self.connectionStatusDisposable?.dispose()
         self.onlineTimer?.invalidate()
         self.offlineFallbackTimer?.invalidate()
         if let settingsObserver = self.settingsObserver {
@@ -205,7 +239,6 @@ private final class AccountPresenceManagerImpl {
             ghost.setLastOnlineTimestamp(timestamp, accountId: self.accountId)
         }
         if !isOnline {
-            self.offlineAcknowledgements += 1
             // The packet ends an online the server reported before it was sent, whichever session
             // caused it. One reported after that may have come from another session answering it.
             if self.serverOnlineRecords == serverOnlineRecordsAtRequest, let onlineUntil = ghost.serverOnlineUntil(accountId: self.accountId) {
@@ -246,13 +279,32 @@ private final class AccountPresenceManagerImpl {
         }
     }
 
+    // Donutgram: asks for this account's status once the status request on its way is answered.
+    // Sent alongside it, the server may answer this one first, with an online that request ends.
+    private func scheduleServerStatusRefresh() {
+        if self.isStatusRequestInFlight {
+            self.pendingServerStatusRefresh = true
+        } else {
+            self.refreshServerStatus()
+        }
+    }
+
+    private func statusRequestCompleted() {
+        self.isStatusRequestInFlight = false
+        self.isPerformingUpdate.set(false)
+        if self.pendingServerStatusRefresh {
+            self.pendingServerStatusRefresh = false
+            self.refreshServerStatus()
+        }
+    }
+
     // Donutgram: asks the server for this account's status, so the own profile shows an online of
     // another client that no update reported here (the app was closed or disconnected meanwhile).
     private func refreshServerStatus() {
         guard DGSimpleSettings.shared.ghostHidesOnline, !self.resolvingInitialPresence else {
             return
         }
-        let offlineAcknowledgements = self.offlineAcknowledgements
+        let offlinePacketsSent = self.offlinePacketsSent
         self.serverStatusRefreshDisposable.set((self.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]), automaticFloodWait: false)
         |> `catch` { _ -> Signal<[Api.User], NoError> in
             return .single([])
@@ -265,8 +317,10 @@ private final class AccountPresenceManagerImpl {
                 guard case let .user(data) = user, let status = data.status else { continue }
                 switch status {
                 case let .userStatusOnline(data):
-                    // An offline packet acknowledged since the request was sent ended this online.
-                    if self.offlineAcknowledgements == offlineAcknowledgements {
+                    // An offline packet sent after the request ends this online, even if the server
+                    // has not acknowledged it yet: its acknowledgement would not end an online
+                    // recorded after it was sent.
+                    if self.offlinePacketsSent == offlinePacketsSent {
                         self.recordServerStatus(onlineExpires: data.expires, offlineWasOnline: nil)
                     }
                 case let .userStatusOffline(data):
@@ -427,8 +481,10 @@ private final class AccountPresenceManagerImpl {
         }
         let timestamp = Int32(self.network.globalTime)
         let serverOnlineRecords = self.serverOnlineRecords
+        self.offlinePacketsSent += 1
         let request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         self.isPerformingUpdate.set(true)
+        self.isStatusRequestInFlight = true
         self.currentRequestDisposable.set((request
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
@@ -438,7 +494,7 @@ private final class AccountPresenceManagerImpl {
                 self?.recordAcknowledgedPresence(isOnline: false, timestamp: timestamp, serverOnlineRecordsAtRequest: serverOnlineRecords)
             }
         }, completed: { [weak self] in
-            self?.isPerformingUpdate.set(false)
+            self?.statusRequestCompleted()
         }))
     }
     
@@ -522,9 +578,11 @@ private final class AccountPresenceManagerImpl {
             if ghost.ghostHidesOnline {
                 self.lastGhostOffline = (timestamp: self.network.globalTime, cause: GhostOfflineCause.routine)
             }
+            self.offlinePacketsSent += 1
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         }
         self.isPerformingUpdate.set(true)
+        self.isStatusRequestInFlight = true
         self.currentRequestDisposable.set((request
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
@@ -534,10 +592,7 @@ private final class AccountPresenceManagerImpl {
                 self?.recordAcknowledgedPresence(isOnline: effectiveOnline, timestamp: timestamp, serverOnlineRecordsAtRequest: serverOnlineRecords)
             }
         }, completed: { [weak self] in
-            guard let strongSelf = self else {
-                return
-            }
-            strongSelf.isPerformingUpdate.set(false)
+            self?.statusRequestCompleted()
         }))
     }
 }

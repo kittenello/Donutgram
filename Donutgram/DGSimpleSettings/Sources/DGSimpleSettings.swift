@@ -527,7 +527,7 @@ public final class DGSimpleSettings {
     }
 
     /// Until when (server time) the server shows the account online, as it last reported. Nil once it reports
-    /// the account offline or an offline packet sent here has been acknowledged.
+    /// the account offline, an offline packet sent here has been acknowledged, or ghost mode stops hiding online.
     public func serverOnlineUntil(accountId: Int64) -> Int32? {
         let value = integer(accountKey("serverOnlineUntil", accountId: accountId))
         guard value > 0, let timestamp = Int32(exactly: value) else { return nil }
