@@ -13,6 +13,7 @@ if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
+    check(settings.jumpToStartInChatMenu, "«В начало чата» is in the avatar menu by default")
     for enabled in [false, true] {
         settings.disableMediaAutoplay = enabled
         for mask in 0 ... 3 {
@@ -35,11 +36,15 @@ if mode == "write" {
     check(settings.disabledAutoplayMediaTypes == 1, "turning the stop switch off must preserve its selection")
     check(!settings.shouldStopAfterMedia(isRoundVideo: false) && !settings.shouldStopAfterMedia(isRoundVideo: true), "switch off restores Telegram autoplay for both types")
     settings.disableMediaAutoplay = true
+    settings.jumpToStartInChatMenu = false
     defaults.synchronize()
     print("settings behavior checks passed")
 } else if mode == "read" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
+    check(!settings.jumpToStartInChatMenu, "a hidden «В начало чата» stays hidden after a restart")
+    settings.jumpToStartInChatMenu = true
+    check(settings.jumpToStartInChatMenu, "«В начало чата» can be shown again")
     check(settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 1, "autoplay preferences must survive process restart")
     check(settings.shouldStopAfterMedia(isRoundVideo: false) && !settings.shouldStopAfterMedia(isRoundVideo: true), "persisted selection stops after voice but allows continuation after round videos")
     settings.disableMediaAutoplay = false
