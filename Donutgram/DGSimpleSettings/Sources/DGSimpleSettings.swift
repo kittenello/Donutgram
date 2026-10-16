@@ -205,6 +205,7 @@ public final class DGSimpleSettings {
         // «Hide» used to set that one too, and it must not take the archive away after an update.
         static let hideArchive = "donutgram.chats.fullyHideArchive"
         static let hideGiftButton = "donutgram.chats.hideGiftButton"
+        static let jumpToStartInChatMenu = "donutgram.chats.jumpToStartInChatMenu"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
         static let accelerateUpload = "donutgram.network.accelerateUpload"
     }
@@ -1031,6 +1032,11 @@ public final class DGSimpleSettings {
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }
     public var hideGiftButton: Bool { get { bool(Key.hideGiftButton) } set { setBool(newValue, Key.hideGiftButton) } }
+    /// «В начало чата» in the menu of a chat's avatar (long press). On until switched off.
+    public var jumpToStartInChatMenu: Bool {
+        get { self.defaults.object(forKey: Key.jumpToStartInChatMenu) == nil ? true : bool(Key.jumpToStartInChatMenu) }
+        set { setBool(newValue, Key.jumpToStartInChatMenu) }
+    }
     /// 0: standard, 1: fast, 2: ultra. Values outside this range fall back to standard.
     public var downloadAcceleration: Int { get { min(max(integer(Key.downloadAcceleration), 0), 2) } set { setInteger(min(max(newValue, 0), 2), Key.downloadAcceleration) } }
     public var accelerateUpload: Bool { get { bool(Key.accelerateUpload) } set { setBool(newValue, Key.accelerateUpload) } }
