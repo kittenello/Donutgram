@@ -148,6 +148,7 @@ enum PeerInfoMemberAction {
 
 enum PeerInfoContextSubject {
     case bio
+    case profileId(String)
     case phone(String)
     case link(customLink: String?)
     case businessHours(String)
