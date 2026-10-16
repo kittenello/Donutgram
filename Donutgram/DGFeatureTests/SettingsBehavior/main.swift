@@ -14,6 +14,7 @@ if mode == "write" {
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
     check(!settings.disableStoryCameraSwipe, "the swipe to the story camera must stay on by default")
+    check(!settings.disableGiftStarsRedirect, "gift sales open Stars by default")
     check(settings.jumpToStartInChatMenu, "«В начало чата» is in the avatar menu by default")
     for enabled in [false, true] {
         settings.disableMediaAutoplay = enabled
@@ -30,6 +31,7 @@ if mode == "write" {
     settings.hidePaidReactions = true
     settings.hideBirthdayNotifications = true
     settings.disableStoryCameraSwipe = true
+    settings.disableGiftStarsRedirect = true
     settings.hideViaBot = true
     settings.hideBotAutomation = true
     settings.removeLinkPreviews = true
@@ -45,6 +47,9 @@ if mode == "write" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
     check(settings.disableStoryCameraSwipe, "turning off the swipe to the story camera must survive process restart")
+    check(settings.disableGiftStarsRedirect, "disabling the gift Stars redirect must survive process restart")
+    settings.disableGiftStarsRedirect = false
+    check(!settings.disableGiftStarsRedirect, "the gift Stars redirect can be enabled again")
     check(!settings.jumpToStartInChatMenu, "a hidden «В начало чата» stays hidden after a restart")
     settings.jumpToStartInChatMenu = true
     check(settings.jumpToStartInChatMenu, "«В начало чата» can be shown again")

@@ -144,6 +144,7 @@ public final class DGSimpleSettings {
         static let showChatCreationDate = "donutgram.appearance.showChatCreationDate"
         static let showMutualContact = "donutgram.appearance.showMutualContact"
         static let confirmCalls = "donutgram.appearance.confirmCalls"
+        static let disableGiftStarsRedirect = "donutgram.appearance.disableGiftStarsRedirect"
         static let disableAds = "donutgram.appearance.disableAds"
         static let hideVerification = "donutgram.appearance.hideVerification"
         static let hidePremiumStatuses = "donutgram.appearance.hidePremiumStatuses"
@@ -598,6 +599,7 @@ public final class DGSimpleSettings {
     public var showChatCreationDate: Bool { get { bool(Key.showChatCreationDate) } set { setBool(newValue, Key.showChatCreationDate) } }
     public var showMutualContact: Bool { get { bool(Key.showMutualContact) } set { setBool(newValue, Key.showMutualContact) } }
     public var confirmCalls: Bool { get { bool(Key.confirmCalls) } set { setBool(newValue, Key.confirmCalls) } }
+    public var disableGiftStarsRedirect: Bool { get { bool(Key.disableGiftStarsRedirect) } set { setBool(newValue, Key.disableGiftStarsRedirect) } }
     public var disableAds: Bool { get { bool(Key.disableAds) } set { setBool(newValue, Key.disableAds) } }
     /// Presentation only; «Оформление → Скрыть верификацию». Off by default.
     public var hideVerification: Bool { get { bool(Key.hideVerification) } set { setBool(newValue, Key.hideVerification) } }

@@ -18,6 +18,7 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "не открывать звёзды после продажи подарка": "do not open stars after selling a gift",
     "Настройки Donutgram": "Donutgram Settings",
     "Настройки сообщений": "Message Settings",
     "Время пересылки": "Forwarded Message Date",
