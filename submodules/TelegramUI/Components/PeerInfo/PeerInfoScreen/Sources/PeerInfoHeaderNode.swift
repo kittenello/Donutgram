@@ -1267,7 +1267,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 subtitleColor = .white
                 
                 if DGSimpleSettings.shared.ghostHidesOnline {
-                    subtitleStringText = statusData.flatMap { $0.isActivity ? nil : $0.text } ?? presentationData.strings.Channel_NotificationLoading
+                    // The server shows the account online while another client is, so this can read "online".
+                    subtitleStringText = statusData?.text ?? presentationData.strings.Channel_NotificationLoading
                 } else {
                     subtitleStringText = presentationData.strings.Presence_online
                 }

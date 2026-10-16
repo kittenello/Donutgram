@@ -1250,7 +1250,7 @@ func peerInfoScreenData(
                 let notify: () -> Void = {
                     let data = statusManager.with { manager -> PeerInfoStatusData? in
                         let isOwnHiddenPresence = userPeerId == context.account.peerId && DGSimpleSettings.shared.ghostHidesOnline
-                        if isOwnHiddenPresence && DGSimpleSettings.shared.lastOnlineTimestamp(accountId: context.account.id.int64) == nil {
+                        if isOwnHiddenPresence && DGSimpleSettings.shared.lastOnlineTimestamp(accountId: context.account.id.int64) == nil && DGSimpleSettings.shared.serverOnlineUntil(accountId: context.account.id.int64) == nil {
                             return PeerInfoStatusData(text: strings.Channel_NotificationLoading, isActivity: false, key: nil)
                         }
                         if let presence = manager.currentValue {
@@ -1294,11 +1294,17 @@ func peerInfoScreenData(
                     }
                     if user.id == context.account.peerId {
                         guard DGSimpleSettings.shared.ghostHidesOnline else { return .none }
-                        if let timestamp = DGSimpleSettings.shared.lastOnlineTimestamp(accountId: context.account.id.int64) {
-                            // Self presence in Postbox is permanently online. Use
-                            // the last acknowledged visible session instead.
-                            let now = Int32(context.account.network.globalTime)
-                            return .presence(TelegramUserPresence(status: .present(until: min(timestamp, now - 1)), lastActivity: 0))
+                        // Self presence in Postbox is permanently online. Use what the server
+                        // last reported or acknowledged instead, from any client of the account.
+                        let now = Int32(context.account.network.globalTime)
+                        let serverOnlineUntil = DGSimpleSettings.shared.serverOnlineUntil(accountId: context.account.id.int64)
+                        if let serverOnlineUntil, serverOnlineUntil > now {
+                            return .presence(TelegramUserPresence(status: .present(until: serverOnlineUntil), lastActivity: 0))
+                        }
+                        // An online the server reported and nothing ended lasted until it expired.
+                        let lastSeen = max(DGSimpleSettings.shared.lastOnlineTimestamp(accountId: context.account.id.int64) ?? 0, serverOnlineUntil ?? 0)
+                        if lastSeen > 0 {
+                            return .presence(TelegramUserPresence(status: .present(until: min(lastSeen, now - 1)), lastActivity: 0))
                         }
                         return .presence(TelegramUserPresence(status: .recently(isHidden: false), lastActivity: 0))
                     }

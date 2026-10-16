@@ -53,12 +53,14 @@ private final class AccountPresenceManagerImpl {
     private var shouldKeepOnlinePresenceDisposable: Disposable?
     private let currentRequestDisposable = MetaDisposable()
     private let initialPresenceRequestDisposable = MetaDisposable()
+    private let serverStatusRefreshDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
     private var offlineFallbackTimer: SignalKitTimer?
     private var settingsObserver: NSObjectProtocol?
     private var offlineRequestObserver: NSObjectProtocol?
     
     private var serverOfflineObserver: NSObjectProtocol?
+    private var serverStatusObserver: NSObjectProtocol?
     
     private enum GhostOfflineCause {
         // An action here asked for it.
@@ -87,6 +89,11 @@ private final class AccountPresenceManagerImpl {
     // packet arrived, while no second one has followed it.
     private var lastReactionReport: Double?
     private var lastAcknowledgedPresenceOnline: Bool = false
+    // Donutgram: how many reports of this account online have been recorded for the own profile, and
+    // when the last one was; how many offline packets the server has acknowledged.
+    private var serverOnlineRecords: Int = 0
+    private var lastServerOnlineRecord: Double = 0.0
+    private var offlineAcknowledgements: Int = 0
     private var resolvingInitialPresence = false
     private var didResolveInitialPresence = false
     
@@ -105,6 +112,10 @@ private final class AccountPresenceManagerImpl {
             if self.wasOnline != value {
                 self.wasOnline = value
                 self.updatePresence(value)
+                if value {
+                    // Another client may have been online while the app was closed.
+                    self.refreshServerStatus()
+                }
             }
         })
 
@@ -153,6 +164,17 @@ private final class AccountPresenceManagerImpl {
                 self.handleServerReportedOffline(wasOnline: wasOnline)
             }
         })
+        self.serverStatusObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.serverReportedStatusNotification, object: DGSimpleSettings.shared, queue: nil, using: { [weak self] notification in
+            let reportedAccountPeerId = notification.userInfo?[DGSimpleSettings.requestOfflineAccountPeerIdKey] as? Int64
+            let onlineExpires = notification.userInfo?[DGSimpleSettings.requestOfflineServerOnlineExpiresKey] as? Int32
+            let offlineWasOnline = notification.userInfo?[DGSimpleSettings.serverOfflineWasOnlineKey] as? Int32
+            self?.queue.async { [weak self] in
+                guard let self, reportedAccountPeerId == self.accountPeerId.toInt64() else {
+                    return
+                }
+                self.recordServerStatus(onlineExpires: onlineExpires, offlineWasOnline: offlineWasOnline)
+            }
+        })
     }
     
     deinit {
@@ -160,6 +182,7 @@ private final class AccountPresenceManagerImpl {
         self.shouldKeepOnlinePresenceDisposable?.dispose()
         self.currentRequestDisposable.dispose()
         self.initialPresenceRequestDisposable.dispose()
+        self.serverStatusRefreshDisposable.dispose()
         self.onlineTimer?.invalidate()
         self.offlineFallbackTimer?.invalidate()
         if let settingsObserver = self.settingsObserver {
@@ -171,14 +194,88 @@ private final class AccountPresenceManagerImpl {
         if let serverOfflineObserver = self.serverOfflineObserver {
             NotificationCenter.default.removeObserver(serverOfflineObserver)
         }
+        if let serverStatusObserver = self.serverStatusObserver {
+            NotificationCenter.default.removeObserver(serverStatusObserver)
+        }
     }
 
-    private func recordAcknowledgedPresence(isOnline: Bool, timestamp: Int32) {
-        if isOnline || self.lastAcknowledgedPresenceOnline || DGSimpleSettings.shared.lastOnlineTimestamp(accountId: self.accountId) == nil {
-            DGSimpleSettings.shared.setLastOnlineTimestamp(timestamp, accountId: self.accountId)
+    private func recordAcknowledgedPresence(isOnline: Bool, timestamp: Int32, serverOnlineRecordsAtRequest: Int) {
+        let ghost = DGSimpleSettings.shared
+        if isOnline || self.lastAcknowledgedPresenceOnline || ghost.lastOnlineTimestamp(accountId: self.accountId) == nil {
+            ghost.setLastOnlineTimestamp(timestamp, accountId: self.accountId)
+        }
+        if !isOnline {
+            self.offlineAcknowledgements += 1
+            // The packet ends an online the server reported before it was sent, whichever session
+            // caused it. One reported after that may have come from another session answering it.
+            if self.serverOnlineRecords == serverOnlineRecordsAtRequest, let onlineUntil = ghost.serverOnlineUntil(accountId: self.accountId) {
+                ghost.setServerOnlineUntil(nil, accountId: self.accountId)
+                let lastSeen = min(onlineUntil, timestamp)
+                if lastSeen > (ghost.lastOnlineTimestamp(accountId: self.accountId) ?? 0) {
+                    ghost.setLastOnlineTimestamp(lastSeen, accountId: self.accountId)
+                }
+            }
         }
         // Repeated offline requests must keep the original last-seen time.
         self.lastAcknowledgedPresenceOnline = isOnline
+    }
+
+    // Donutgram: the server reported this account's status, which is what other users see. While ghost
+    // mode hides online the own profile shows it (PeerInfoData), so the online of another client is
+    // shown too, not only the times this app was online.
+    private func recordServerStatus(onlineExpires: Int32?, offlineWasOnline: Int32?) {
+        let ghost = DGSimpleSettings.shared
+        if let offlineWasOnline {
+            // An old status may be replayed, and an offline packet sent here may come back after
+            // another session went online again.
+            if Double(offlineWasOnline) >= self.lastServerOnlineRecord - 2.0 {
+                ghost.setServerOnlineUntil(nil, accountId: self.accountId)
+            }
+            if offlineWasOnline > (ghost.lastOnlineTimestamp(accountId: self.accountId) ?? 0) {
+                ghost.setLastOnlineTimestamp(offlineWasOnline, accountId: self.accountId)
+            }
+        } else if let onlineExpires {
+            let now = self.network.globalTime
+            // An old status replayed after a gap is no longer true.
+            guard onlineExpires > Int32(now) else {
+                return
+            }
+            self.serverOnlineRecords += 1
+            self.lastServerOnlineRecord = now
+            ghost.setServerOnlineUntil(onlineExpires, accountId: self.accountId)
+        }
+    }
+
+    // Donutgram: asks the server for this account's status, so the own profile shows an online of
+    // another client that no update reported here (the app was closed or disconnected meanwhile).
+    private func refreshServerStatus() {
+        guard DGSimpleSettings.shared.ghostHidesOnline, !self.resolvingInitialPresence else {
+            return
+        }
+        let offlineAcknowledgements = self.offlineAcknowledgements
+        self.serverStatusRefreshDisposable.set((self.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]), automaticFloodWait: false)
+        |> `catch` { _ -> Signal<[Api.User], NoError> in
+            return .single([])
+        }
+        |> deliverOn(self.queue)).start(next: { [weak self] users in
+            guard let self, DGSimpleSettings.shared.ghostHidesOnline else {
+                return
+            }
+            for user in users {
+                guard case let .user(data) = user, let status = data.status else { continue }
+                switch status {
+                case let .userStatusOnline(data):
+                    // An offline packet acknowledged since the request was sent ended this online.
+                    if self.offlineAcknowledgements == offlineAcknowledgements {
+                        self.recordServerStatus(onlineExpires: data.expires, offlineWasOnline: nil)
+                    }
+                case let .userStatusOffline(data):
+                    self.recordServerStatus(onlineExpires: nil, offlineWasOnline: data.wasOnline)
+                default:
+                    break
+                }
+            }
+        }))
     }
 
     private func isOtherSessionOnline() -> Bool {
@@ -329,6 +426,7 @@ private final class AccountPresenceManagerImpl {
             })
         }
         let timestamp = Int32(self.network.globalTime)
+        let serverOnlineRecords = self.serverOnlineRecords
         let request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         self.isPerformingUpdate.set(true)
         self.currentRequestDisposable.set((request
@@ -337,7 +435,7 @@ private final class AccountPresenceManagerImpl {
         }
         |> deliverOn(self.queue)).start(next: { [weak self] result in
             if case .boolTrue = result {
-                self?.recordAcknowledgedPresence(isOnline: false, timestamp: timestamp)
+                self?.recordAcknowledgedPresence(isOnline: false, timestamp: timestamp, serverOnlineRecordsAtRequest: serverOnlineRecords)
             }
         }, completed: { [weak self] in
             self?.isPerformingUpdate.set(false)
@@ -382,8 +480,9 @@ private final class AccountPresenceManagerImpl {
                         switch status {
                         case let .userStatusOffline(data):
                             ghost.setLastOnlineTimestamp(data.wasOnline, accountId: self.accountId)
-                        case .userStatusOnline:
+                        case let .userStatusOnline(data):
                             self.lastAcknowledgedPresenceOnline = true
+                            self.recordServerStatus(onlineExpires: data.expires, offlineWasOnline: nil)
                         default:
                             break
                         }
@@ -402,6 +501,7 @@ private final class AccountPresenceManagerImpl {
             self.didResolveInitialPresence = true
         }
         let timestamp = Int32(self.network.globalTime)
+        let serverOnlineRecords = self.serverOnlineRecords
         let request: Signal<Api.Bool, MTRpcError>
         if effectiveOnline {
             self.updateOfflineFallbackTimer(isActive: false)
@@ -431,7 +531,7 @@ private final class AccountPresenceManagerImpl {
         }
         |> deliverOn(self.queue)).start(next: { [weak self] result in
             if case .boolTrue = result {
-                self?.recordAcknowledgedPresence(isOnline: effectiveOnline, timestamp: timestamp)
+                self?.recordAcknowledgedPresence(isOnline: effectiveOnline, timestamp: timestamp, serverOnlineRecordsAtRequest: serverOnlineRecords)
             }
         }, completed: { [weak self] in
             guard let strongSelf = self else {
