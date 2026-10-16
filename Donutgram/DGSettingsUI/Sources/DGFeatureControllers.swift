@@ -374,6 +374,8 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         ])
         result.append(.toggle(90, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
         result.append(.disclosure(91, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
+        result.append(.toggle(92, 11, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true))
+        result.append(.info(93, 11, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению."))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {
@@ -416,6 +418,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "autoPause": s.autoPause = value
         case "hideArchive": s.hideArchive = value
         case "hideGiftButton": s.hideGiftButton = value
+        case "jumpToStart": s.jumpToStartInChatMenu = value
         default: break
         }
     }, select: { key in

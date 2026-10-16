@@ -6146,6 +6146,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             f(.dismissWithoutContent)
                             self?.interfaceInteraction?.beginMessageSearch(.everything, "")
                         })))
+                        if let jumpToStartItem = strongSelf.donutgramJumpToStartContextMenuItem() {
+                            items.append(jumpToStartItem)
+                        }
                                                 
                         return items
                     }
@@ -6396,6 +6399,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             f(.dismissWithoutContent)
                             self?.interfaceInteraction?.beginMessageSearch(.everything, "")
                         })))
+                        if let jumpToStartItem = strongSelf.donutgramJumpToStartContextMenuItem() {
+                            items.append(jumpToStartItem)
+                        }
                         
                         if threadId != 1 {
                             var canOpenClose = false
