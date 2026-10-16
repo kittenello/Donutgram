@@ -51,6 +51,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "scheduled": return "calendar"
     case "silent": return "speaker.slash"
     case "stories", "hideStories", "saveProtectedStories": return "play.rectangle"
+    case "disableStoryCameraSwipe": return "camera"
     case "premiumStatuses": return "star.slash"
     case "hideVerification": return "checkmark.seal"
     case "hideTabBar", "wideTabBar": return "rectangle.split.3x1"

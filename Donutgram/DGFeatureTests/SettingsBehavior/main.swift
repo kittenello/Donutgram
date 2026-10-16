@@ -13,6 +13,7 @@ if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
+    check(!settings.disableStoryCameraSwipe, "the swipe to the story camera must stay on by default")
     check(settings.jumpToStartInChatMenu, "«В начало чата» is in the avatar menu by default")
     for enabled in [false, true] {
         settings.disableMediaAutoplay = enabled
@@ -28,6 +29,7 @@ if mode == "write" {
     }
     settings.hidePaidReactions = true
     settings.hideBirthdayNotifications = true
+    settings.disableStoryCameraSwipe = true
     settings.hideViaBot = true
     settings.hideBotAutomation = true
     settings.removeLinkPreviews = true
@@ -42,6 +44,7 @@ if mode == "write" {
 } else if mode == "read" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
+    check(settings.disableStoryCameraSwipe, "turning off the swipe to the story camera must survive process restart")
     check(!settings.jumpToStartInChatMenu, "a hidden «В начало чата» stays hidden after a restart")
     settings.jumpToStartInChatMenu = true
     check(settings.jumpToStartInChatMenu, "«В начало чата» can be shown again")

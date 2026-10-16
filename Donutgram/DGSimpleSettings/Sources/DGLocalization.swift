@@ -92,6 +92,7 @@ private let dgEnglishStrings: [String: String] = [
     "Скрыть верификацию": "Hide Verification Badges",
     "Отключить кастомные фоны": "Disable Custom Backgrounds",
     "Скрыть сторис": "Hide Stories",
+    "Отключить камеру по свайпу": "Disable Swipe to Story Camera",
     "Приложение": "Application",
     "Вкладки": "Tabs",
     "Скрыть панель вкладок": "Hide Tab Bar",

@@ -149,6 +149,7 @@ public final class DGSimpleSettings {
         static let hidePremiumStatuses = "donutgram.appearance.hidePremiumStatuses"
         static let disableCustomBackgrounds = "donutgram.appearance.disableCustomBackgrounds"
         static let hideStories = "donutgram.appearance.hideStories"
+        static let disableStoryCameraSwipe = "donutgram.appearance.disableStoryCameraSwipe"
         static let forceSnow = "donutgram.appearance.forceSnow"
         static let chatListHideStatus = "donutgram.chats.appearance.hideStatus"
         static let chatListHideEmojiStatus = "donutgram.chats.appearance.hideEmojiStatus"
@@ -604,6 +605,9 @@ public final class DGSimpleSettings {
     public var hidePremiumStatuses: Bool { get { bool(Key.hidePremiumStatuses) } set { setBool(newValue, Key.hidePremiumStatuses) } }
     public var disableCustomBackgrounds: Bool { get { bool(Key.disableCustomBackgrounds) } set { setBool(newValue, Key.disableCustomBackgrounds) } }
     public var hideStories: Bool { get { bool(Key.hideStories) } set { setBool(newValue, Key.hideStories) } }
+    /// «Оформление → Отключить камеру по свайпу»: a swipe to the right on the chat list, and pulling the stories row
+    /// past its start, no longer open the story camera. Other ways to post a story are unchanged. Off by default.
+    public var disableStoryCameraSwipe: Bool { get { bool(Key.disableStoryCameraSwipe) } set { setBool(newValue, Key.disableStoryCameraSwipe) } }
     public var forceSnow: Bool { get { bool(Key.forceSnow) } set { setBool(newValue, Key.forceSnow) } }
     /// No «Соединение…», «Обновление…» or «Ожидание сети…» with a spinner in the chat list title: it keeps its text.
     public var chatListHideStatus: Bool { get { bool(Key.chatListHideStatus) } set { setBool(newValue, Key.chatListHideStatus) } }

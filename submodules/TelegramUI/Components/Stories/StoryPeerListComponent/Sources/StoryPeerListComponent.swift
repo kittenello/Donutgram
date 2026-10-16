@@ -11,6 +11,7 @@ import TelegramPresentationData
 import StoryContainerScreen
 import EmojiStatusComponent
 import ChatListTitleView
+import DGSimpleSettings
 
 public final class StoryPeerListComponent: Component {
     public enum PeerStatus: Equatable {
@@ -590,7 +591,9 @@ public final class StoryPeerListComponent: Component {
             if !self.ignoreScrolling {
                 self.updateScrolling(transition: .immediate)
                 
-                let willComposeOnRelease = scrollView.contentOffset.x <= -70.0
+                // «Отключить камеру по свайпу»: the row just bounces back, without the haptic and without opening the camera.
+                let composesOnPull = !DGSimpleSettings.shared.disableStoryCameraSwipe
+                let willComposeOnRelease = composesOnPull && scrollView.contentOffset.x <= -70.0
                 if self.willComposeOnRelease != willComposeOnRelease {
                     self.willComposeOnRelease = willComposeOnRelease
                     
@@ -601,7 +604,7 @@ public final class StoryPeerListComponent: Component {
                     }
                 }
                 
-                if scrollView.isScrollEnabled && scrollView.isTracking, scrollView.contentOffset.x <= -85.0 {
+                if composesOnPull && scrollView.isScrollEnabled && scrollView.isTracking, scrollView.contentOffset.x <= -85.0 {
                     scrollView.isScrollEnabled = false
                     scrollView.panGestureRecognizer.isEnabled = false
                     scrollView.panGestureRecognizer.isEnabled = true
@@ -622,7 +625,7 @@ public final class StoryPeerListComponent: Component {
                 
         public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             if !self.ignoreScrolling {
-                if scrollView.isScrollEnabled && scrollView.contentOffset.x <= -70.0 {
+                if !DGSimpleSettings.shared.disableStoryCameraSwipe && scrollView.isScrollEnabled && scrollView.contentOffset.x <= -70.0 {
                     scrollView.isScrollEnabled = false
                     scrollView.panGestureRecognizer.isEnabled = false
                     scrollView.panGestureRecognizer.isEnabled = true
@@ -1163,7 +1166,7 @@ public final class StoryPeerListComponent: Component {
                 unseenCount = itemSet.unseenCount
                 
                 var composeContentOffset: CGFloat?
-                if peer.id == component.context.account.peerId && collapsedState.sideAlphaFraction == 1.0 && self.scrollView.contentOffset.x < 0.0 {
+                if peer.id == component.context.account.peerId && collapsedState.sideAlphaFraction == 1.0 && self.scrollView.contentOffset.x < 0.0 && !DGSimpleSettings.shared.disableStoryCameraSwipe {
                     composeContentOffset = self.scrollView.contentOffset.x * -1.0
                 }
                 
