@@ -956,6 +956,8 @@ func infoItems(
             let visualId = peer.id == context.account.peerId ? DGSimpleSettings.shared.visualProfileId(accountId: accountId) : ""
             items[.donutgram]!.append(PeerInfoScreenLabeledValueItem(id: itemId, label: "ID профиля", text: visualId.isEmpty ? profileId : visualId, textColor: .accent, action: { _, _ in
                 UIPasteboard.general.string = profileId
+            }, longTapAction: { sourceNode in
+                interaction.openPeerInfoContextMenu(.profileId(profileId), sourceNode, nil)
             }, requestLayout: { interaction.requestLayout($0) }))
             itemId += 1
         }
