@@ -2,7 +2,7 @@
 
 # donutgram
 
-**Ghost mode, save deleted messages**
+**ghost mode, save deleted messages**
 
 a multifunctional ios client with deeper customization
 
