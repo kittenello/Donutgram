@@ -2389,7 +2389,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                                 guard let profileGifts else {
                                     return
                                 }
-                                profileGifts.convertStarGift(reference: reference)
+                                profileGifts.convertStarGift(reference: reference, completion: {
+                                    context.starsContext?.load(force: true)
+                                })
                             },
                             dropOriginalDetails: { [weak profileGifts] reference in
                                 guard let profileGifts else {

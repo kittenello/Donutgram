@@ -187,13 +187,14 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
             .toggle(35, 4, "mutualContact", "Показывать взаимный контакт", s.showMutualContact, true),
             .toggle(38, 4, "relativeOnlineTime", "Относительное время онлайна", s.relativeOnlineTime, true),
             .toggle(39, 4, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
+            .toggle(36, 4, "disableGiftStarsRedirect", "не открывать звёзды после продажи подарка", s.disableGiftStarsRedirect, true),
             .header(40, 5, "ДРУГОЕ"),
             .toggle(41, 5, "disableAds", "Отключить рекламу", s.disableAds, true),
             .toggle(42, 5, "confirmCalls", "Подтверждение вызова", s.confirmCalls, true)
         ])
         return entries
     }, restartRequiredKeys: ["premiumStatuses", "hideVerification", "hideStories"], toggle: { key, value in
-        switch key { case "hideBirthdayNotifications": s.hideBirthdayNotifications = value; case "premiumStatuses": s.hidePremiumStatuses = value; case "hideVerification": s.hideVerification = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "disableStoryCameraSwipe": s.disableStoryCameraSwipe = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
+        switch key { case "hideBirthdayNotifications": s.hideBirthdayNotifications = value; case "premiumStatuses": s.hidePremiumStatuses = value; case "hideVerification": s.hideVerification = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "disableStoryCameraSwipe": s.disableStoryCameraSwipe = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "disableGiftStarsRedirect": s.disableGiftStarsRedirect = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
     }, open: { key in
         switch key {
         case "dialogIdFormat": return dgDialogIdFormatController(context: context)

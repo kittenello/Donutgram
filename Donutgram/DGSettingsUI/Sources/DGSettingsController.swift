@@ -94,6 +94,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "doubleTapSeek": return "goforward.15"
     case "hideArchive": return "archivebox"
     case "hideGiftButton": return "gift"
+    case "disableGiftStarsRedirect": return "star.slash"
     case "jumpToStart": return "arrow.up.to.line"
     case "downloadAcceleration": return "arrow.down.circle"
     case "accelerateUpload": return "arrow.up.circle"

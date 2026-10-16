@@ -721,6 +721,9 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             guard let self else {
                 return
             }
+            if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(_, _, canReorder) = playlistLocation, canReorder {
+                return
+            }
             self.requestDismiss()
         }
     }
@@ -838,6 +841,23 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
     }
     
     func removeFromSavedMusic(file: FileMediaReference) {
+        if let playlistLocation = self.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = playlistLocation, savedMusicContext.peerId == self.context.account.peerId {
+            let _ = (savedMusicContext.state
+            |> take(1)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] state in
+                // The rendered history may still be transitioning after the previous removal.
+                let isLastTrack = state.files.count == 1
+                    && state.files.first?.fileId == file.media.fileId
+                    && (state.count ?? Int32(state.files.count)) == 1
+                    && state.dataState == .ready(canLoadMore: false)
+                self?.removeFromSavedMusic(file: file, dismissPlayer: isLastTrack)
+            })
+        } else {
+            self.removeFromSavedMusic(file: file, dismissPlayer: false)
+        }
+    }
+
+    private func removeFromSavedMusic(file: FileMediaReference, dismissPlayer: Bool) {
         self.dismissAllTooltips()
                         
         let controller = UndoOverlayController(
@@ -855,7 +875,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
             }
         )
         
-        if let itemId = self.controlsNode.currentItemId as? PeerMessagesMediaPlaylistItemId, itemId.messageId.namespace == Namespaces.Message.Local && itemId.messageId.peerId == self.context.account.peerId, self.historyNode.originalHistoryView?.entries.count == 1 {
+        if dismissPlayer {
             if let navigationController = (self.getParentController() as? OverlayAudioPlayerControllerImpl)?.parentNavigationController {
                 self.requestDismiss()
                 navigationController.presentOverlay(controller: controller)
@@ -1611,8 +1631,14 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, ASGestu
                             return
                         }
                         if message.id.namespace == Namespaces.Message.Local {
-                            f(.default)
-                            self.removeFromSavedMusic(file: fileReference)
+                            if let c {
+                                c.dismiss(completion: { [weak self] in
+                                    self?.removeFromSavedMusic(file: fileReference)
+                                })
+                            } else {
+                                f(.default)
+                                self.removeFromSavedMusic(file: fileReference)
+                            }
                         } else {
                             c?.setItems(context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: message.id.peerId))
                             |> map { peer -> ContextController.Items in
