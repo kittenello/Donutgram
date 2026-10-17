@@ -107,10 +107,6 @@ public final class PeerNameTextComponent: Component {
                         iconContent = .text(color: UIColor(rgb: 0xeb5545), string: "SCAM")
                     case .fake:
                         iconContent = .text(color: UIColor(rgb: 0xeb5545), string: "FAKE")
-                    case .verified:
-                        iconContent = .verified(fillColor: component.iconBackgroundColor, foregroundColor: component.iconForegroundColor, sizeType: .compact)
-                    case .premium:
-                        iconContent = .premium(color: component.iconBackgroundColor)
                     case .support, .bot:
                         iconContent = .text(color: component.iconBackgroundColor, string: DGSimpleSettings.shared.visualLabel(accountId: component.context.account.peerId.toInt64()).badgeText)
                     }

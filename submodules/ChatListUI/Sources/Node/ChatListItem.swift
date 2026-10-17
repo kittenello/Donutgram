@@ -38,8 +38,6 @@ private func donutgramVisualChatListLabel(_ label: DGVisualLabel, theme: Present
     case .none: return nil
     case .scam: return .text(color: theme.chat.message.incoming.scamColor, string: "SCAM")
     case .fake: return .text(color: theme.chat.message.incoming.scamColor, string: "FAKE")
-    case .verified: return .verified(fillColor: theme.list.itemCheckColors.fillColor, foregroundColor: theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
-    case .premium: return .premium(color: theme.list.itemAccentColor)
     case .support, .bot: return .text(color: theme.list.itemAccentColor, string: label.badgeText)
     }
 }

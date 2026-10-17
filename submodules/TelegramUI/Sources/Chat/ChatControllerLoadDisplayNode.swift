@@ -621,7 +621,7 @@ extension ChatControllerImpl {
             case .dismiss:
                 self.dismiss()
             case .bannedChat:
-                let text = dgLocalized("Вы были заблокированы в этом чате. Загруженная история сохранена на этом устройстве. Отправка и получение новых сообщений недоступны.", languageCode: self.presentationData.strings.primaryComponent.languageCode)
+                let text = dgLocalized("Вы были заблокированы в этом чате", languageCode: self.presentationData.strings.primaryComponent.languageCode)
                 self.present(textAlertController(context: self.context, title: nil, text: text, actions: [
                     TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
                 ]), in: .window(.root))

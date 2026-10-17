@@ -2,15 +2,13 @@ import Foundation
 
 /// Local-only decorations for the selected account; they never modify Telegram peer flags.
 public enum DGVisualLabel: String, CaseIterable {
-    case none, scam, fake, verified, premium, support, bot
+    case none, scam, fake, support, bot
 
     public var title: String {
         switch self {
         case .none: return "Без метки"
         case .scam: return "SCAM"
         case .fake: return "FAKE"
-        case .verified: return "Подтверждённый"
-        case .premium: return "Premium"
         case .support: return "SUPPORT"
         case .bot: return "BOT"
         }

@@ -186,8 +186,6 @@ func dgVisualTitleIcon(_ label: DGVisualLabel) -> ChatTitleCredibilityIcon {
     case .none: return .none
     case .scam: return .scam
     case .fake: return .fake
-    case .verified: return .verified
-    case .premium: return .premium
     case .support, .bot: return .localText(label.badgeText)
     }
 }

@@ -624,8 +624,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 case .none: break
                 case .scam: credibilityIcon = .scam
                 case .fake: credibilityIcon = .fake
-                case .verified: credibilityIcon = .verified
-                case .premium: credibilityIcon = .premium
                 case .support: credibilityIcon = .localText("SUPPORT")
                 case .bot: credibilityIcon = .localText("BOT")
                 }
@@ -1226,8 +1224,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             isFake = peer.isFake || peer.isScam
             if peer.id == self.context.account.peerId {
                 switch DGSimpleSettings.shared.visualLabel(accountId: self.context.account.peerId.toInt64()) {
-                case .verified: isVerified = true
-                case .premium: isPremium = true
                 case .scam, .fake, .support, .bot: isFake = true
                 case .none: break
                 }
