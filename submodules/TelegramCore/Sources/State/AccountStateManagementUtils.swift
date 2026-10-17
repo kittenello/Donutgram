@@ -1522,8 +1522,10 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 if userPeerId == accountPeerId {
                     switch updateUserStatusData.status {
                     case let .userStatusOnline(statusData):
+                        DGSimpleSettings.shared.reportServerStatus(accountPeerId: accountPeerId.toInt64(), onlineExpires: statusData.expires)
                         DGSimpleSettings.shared.requestGhostOffline(accountPeerId: accountPeerId.toInt64(), serverOnlineExpires: statusData.expires)
                     case let .userStatusOffline(statusData):
+                        DGSimpleSettings.shared.reportServerStatus(accountPeerId: accountPeerId.toInt64(), wasOnline: statusData.wasOnline)
                         DGSimpleSettings.shared.reportGhostServerOffline(accountPeerId: accountPeerId.toInt64(), wasOnline: statusData.wasOnline)
                     default:
                         break
