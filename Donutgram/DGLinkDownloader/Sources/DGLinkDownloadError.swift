@@ -9,6 +9,7 @@ public enum DGLinkDownloadError: Error, Equatable {
     case tiktokStatus(Int)
     case tiktokNoData
     case tiktokUnavailable
+    case tiktokDownloadServiceStatus(Int)
     case youtubeLoginRequired
     case youtubeAgeRestricted
     case youtubeUnavailable
@@ -43,6 +44,8 @@ public enum DGLinkDownloadError: Error, Equatable {
             return "TikTok не отдал страницу (проверка на бота)"
         case .tiktokUnavailable:
             return "Не удалось получить медиа из TikTok. Попробуйте позже"
+        case let .tiktokDownloadServiceStatus(code):
+            return "Сервис скачивания TikTok вернул HTTP \(code)"
         case .youtubeLoginRequired:
             return "YouTube просит войти в аккаунт"
         case .youtubeAgeRestricted:

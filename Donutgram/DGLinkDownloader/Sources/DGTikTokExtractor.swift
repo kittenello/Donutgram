@@ -163,6 +163,8 @@ enum DGTikTokExtractor {
         }
         fetcher.fetchData(self.pageRequest(apiURL), completion: { result in
             switch result {
+            case let .failure(.httpStatus(code)):
+                completion(.failure(.tiktokDownloadServiceStatus(code)))
             case let .failure(error):
                 completion(.failure(error))
             case let .success(response):
@@ -192,8 +194,9 @@ enum DGTikTokExtractor {
             return .success(.photos(files))
         }
         let duration = (item["duration"] as? NSNumber)?.doubleValue ?? 0
-        if let video = file(item["hdplay"], size: dgIntValue(item["hd_size"])) ?? file(item["play"], size: dgIntValue(item["size"])) {
-            return .success(.video(video, duration))
+        let candidates = [file(item["hdplay"], size: dgIntValue(item["hd_size"])), file(item["play"], size: dgIntValue(item["size"]))].compactMap { $0 }
+        if let video = candidates.first {
+            return .success(.video(DGRemoteFile(url: video.url, expectedSize: video.expectedSize, width: video.width, height: video.height, alternateURLs: candidates.dropFirst().map { $0.url }), duration))
         }
         return .failure(.tiktokUnavailable)
     }

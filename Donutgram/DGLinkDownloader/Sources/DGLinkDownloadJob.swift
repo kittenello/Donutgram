@@ -149,7 +149,7 @@ public final class DGLinkDownloadJob {
                 case let .success(.video(file, _)):
                     self.kind = .video
                     let destination = directory.appendingPathComponent("tiktok.mp4")
-                    self.download([(DGTikTokExtractor.mediaRequest(file.url), destination, file.expectedSize)], failure: { error in
+                    self.download([(DGTikTokExtractor.mediaRequest(file.url), destination, file.expectedSize)], alternatives: [file.alternateURLs.map(DGTikTokExtractor.mediaRequest)], failure: { error in
                         self.retryTikTok(url, error: error, usedFallback: useFallback)
                     }, completion: { urls in
                         self.completeVideo(fileURL: urls[0], failure: { error in
@@ -239,19 +239,19 @@ public final class DGLinkDownloadJob {
     }
 
     /// Up to three parallel downloads; `completion` gets the files in the order of `items`.
-    private func download(_ items: [(URLRequest, URL, Int64?)], failure: ((DGLinkDownloadError) -> Void)? = nil, completion: @escaping ([URL]) -> Void) {
+    private func download(_ items: [(URLRequest, URL, Int64?)], alternatives: [[URLRequest]] = [], failure: ((DGLinkDownloadError) -> Void)? = nil, completion: @escaping ([URL]) -> Void) {
         let batch = Batch(expected: items.map { $0.2 })
         self.reportBatch(batch)
-        self.startNext(items, batch: batch, failure: failure, completion: completion)
+        self.startNext(items, alternatives: alternatives, batch: batch, failure: failure, completion: completion)
     }
 
-    private func startNext(_ items: [(URLRequest, URL, Int64?)], batch: Batch, failure: ((DGLinkDownloadError) -> Void)?, completion: @escaping ([URL]) -> Void) {
+    private func startNext(_ items: [(URLRequest, URL, Int64?)], alternatives: [[URLRequest]], batch: Batch, failure: ((DGLinkDownloadError) -> Void)?, completion: @escaping ([URL]) -> Void) {
         while batch.active < 3 && batch.nextIndex < items.count {
             let index = batch.nextIndex
             batch.nextIndex += 1
             batch.active += 1
             let (request, destination, _) = items[index]
-            self.fetcher.download(request, to: destination, maxBytes: DGLinkDownloadJob.maxFileSize, progress: { written, total in
+            self.fetcher.download(request, alternatives: index < alternatives.count ? alternatives[index] : [], to: destination, maxBytes: DGLinkDownloadJob.maxFileSize, progress: { written, total in
                 self.queue.async {
                     guard !batch.failed, !self.isFinished else { return }
                     batch.received[index] = written
@@ -280,7 +280,7 @@ public final class DGLinkDownloadJob {
                         if batch.remaining == 0 {
                             completion(batch.results.compactMap { $0 })
                         } else {
-                            self.startNext(items, batch: batch, failure: failure, completion: completion)
+                            self.startNext(items, alternatives: alternatives, batch: batch, failure: failure, completion: completion)
                         }
                     }
                 }

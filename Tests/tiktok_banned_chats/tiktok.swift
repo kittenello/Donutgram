@@ -41,6 +41,7 @@ DGTikTokExtractor.resolve(short, fetcher: fetcher) { result = $0 }
 if case let .success(.video(file, duration)) = result {
     check(file.url.absoluteString == "https://cdn.example/video.mp4", "prefer HD")
     check(file.expectedSize == 12345 && duration == 15, "provider metadata")
+    check(file.alternateURLs == [URL(string: "https://cdn.example/sd.mp4")!], "keep SD from another CDN when HD is blocked")
 } else { fatalError("a challenge redirect must use the provider") }
 check(fetcher.requests.count == 2, "one fallback request")
 let query = URLComponents(url: fetcher.requests[1].url!, resolvingAgainstBaseURL: false)!.queryItems!
@@ -54,6 +55,9 @@ fetcher.responses = [.failure(.cancelled)]
 DGTikTokExtractor.resolve(post, fetcher: fetcher) { result = $0 }
 check(result == .failure(.cancelled), "cancellation propagates")
 check(fetcher.requests.count == count + 1, "cancellation never contacts fallback")
+fetcher.responses = [.failure(.httpStatus(403))]
+DGTikTokExtractor.resolveFallback(short, fetcher: fetcher) { result = $0 }
+check(result == .failure(.tiktokDownloadServiceStatus(403)), "distinguish resolver HTTP errors from media errors")
 
 let photos: [String: Any] = ["code": 0, "data": ["images": ["//cdn.example/1.jpg", "https://cdn.example/2.jpg"], "play": "https://cdn.example/cover.mp4"]]
 let photosData = try! JSONSerialization.data(withJSONObject: photos)
