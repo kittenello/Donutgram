@@ -434,6 +434,20 @@ func fetchMessageHistoryHole(accountPeerId: PeerId, source: FetchMessageHistoryH
     |> take(1)
     |> mapToSignal { _ -> Signal<FetchMessageHistoryHoleResult?, NoError> in
         return postbox.transaction { transaction -> (Peer?, Int64, Peer?) in
+            let archivedPeerId: PeerId
+            let archivedThreadId: Int64?
+            switch peerInput {
+            case let .direct(peerId, threadId):
+                archivedPeerId = peerId
+                archivedThreadId = threadId
+            case let .threadFromChannel(messageId):
+                archivedPeerId = messageId.peerId
+                archivedThreadId = Int64(messageId.id)
+            }
+            if donutgramIsPreservedBannedChat(transaction: transaction, peerId: archivedPeerId) {
+                transaction.removeHole(peerId: archivedPeerId, threadId: archivedThreadId, namespace: namespace, space: space, range: 1 ... (Int32.max - 1))
+                return (nil, 0, nil)
+            }
             switch peerInput {
             case let .direct(peerId, _):
                 let peer = transaction.getPeer(peerId)

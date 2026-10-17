@@ -6,8 +6,7 @@ enum DGTikTokItem: Equatable {
     case photos([DGRemoteFile])
 }
 
-/// Reads a TikTok post straight from tiktok.com, without third-party services. Mirrors `tiktok_item_id`,
-/// `tiktok_page_url` and `tiktok_parse_page` in the Python reference.
+/// Tries TikTok first, then resolves the original link through TikWM if TikTok blocks access.
 enum DGTikTokExtractor {
     static let userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     private static let rehydrationMarker = "<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\""
@@ -125,6 +124,18 @@ enum DGTikTokExtractor {
 
     /// Short links (vm./vt./t/) are followed first: they redirect to "/@/video/<id>" or to the home page when expired.
     static func resolve(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {
+        self.resolveDirect(url, fetcher: fetcher, completion: { result in
+            switch result {
+            case .failure(.cancelled), .success:
+                completion(result)
+            case .failure:
+                // A redirect to a login, challenge or home page does not prove that a share link expired.
+                self.resolveFallback(url, fetcher: fetcher, completion: completion)
+            }
+        })
+    }
+
+    private static func resolveDirect(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {
         if let itemId = DGTikTokExtractor.itemId(from: url) {
             DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
             return
@@ -135,12 +146,59 @@ enum DGTikTokExtractor {
                 completion(.failure(error))
             case let .success(response):
                 guard let finalURL = response.url, let itemId = DGTikTokExtractor.itemId(from: finalURL) else {
-                    completion(.failure(.tiktokLinkExpired))
+                    completion(.failure(.tiktokNoData))
                     return
                 }
                 DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
             }
         })
+    }
+
+    static func resolveFallback(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {
+        var components = URLComponents(string: "https://www.tikwm.com/api/")!
+        components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString), URLQueryItem(name: "hd", value: "1")]
+        guard let apiURL = components.url else {
+            completion(.failure(.tiktokUnavailable))
+            return
+        }
+        fetcher.fetchData(self.pageRequest(apiURL), completion: { result in
+            switch result {
+            case let .failure(.httpStatus(code)):
+                completion(.failure(.tiktokDownloadServiceStatus(code)))
+            case let .failure(error):
+                completion(.failure(error))
+            case let .success(response):
+                completion(self.parseFallback(response.data))
+            }
+        })
+    }
+
+    static func parseFallback(_ data: Data) -> Result<DGTikTokItem, DGLinkDownloadError> {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              dgIntValue(root["code"]) == 0, let item = root["data"] as? [String: Any] else {
+            return .failure(.tiktokUnavailable)
+        }
+        func file(_ value: Any?, size: Int64? = nil) -> DGRemoteFile? {
+            guard let value = value as? String, !value.isEmpty,
+                  let url = URL(string: value, relativeTo: URL(string: "https://www.tikwm.com/"))?.absoluteURL,
+                  url.scheme == "https", url.host != nil else {
+                return nil
+            }
+            return DGRemoteFile(url: url, expectedSize: size, width: 0, height: 0)
+        }
+        if let images = item["images"] as? [Any], !images.isEmpty {
+            let files = images.compactMap { file($0) }
+            guard files.count == images.count else {
+                return .failure(.tiktokUnavailable)
+            }
+            return .success(.photos(files))
+        }
+        let duration = (item["duration"] as? NSNumber)?.doubleValue ?? 0
+        let candidates = [file(item["hdplay"], size: dgIntValue(item["hd_size"])), file(item["play"], size: dgIntValue(item["size"]))].compactMap { $0 }
+        if let video = candidates.first {
+            return .success(.video(DGRemoteFile(url: video.url, expectedSize: video.expectedSize, width: video.width, height: video.height, alternateURLs: candidates.dropFirst().map { $0.url }), duration))
+        }
+        return .failure(.tiktokUnavailable)
     }
 
     private static func fetchItem(itemId: String, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {

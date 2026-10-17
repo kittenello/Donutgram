@@ -969,6 +969,7 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                         }
                     
                         for id in removedMessageIds {
+                            if donutgramIsPreservedBannedChat(transaction: transaction, peerId: id.peerId) { continue }
                             if !validMessageIds.contains(id) {
                                 if let tag = tag {
                                     transaction.updateMessage(id, update: { currentMessage in
@@ -1190,6 +1191,7 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
                     }
                 
                     for id in removedMessageIds {
+                        if donutgramIsPreservedBannedChat(transaction: transaction, peerId: id.peerId) { continue }
                         if !validMessageIds.contains(id) {
                             // Donutgram: a deletion the server confirmed here is saved like one that arrived as an update.
                             if transaction.getMessage(id)?.localTags.contains(.donutgramDeleted) == true || (removalConfirmed && donutgramPreserveDeletedMessage(transaction: transaction, messageId: id)) {

@@ -70,7 +70,17 @@ final class DGMediaFetcher: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func download(_ request: URLRequest, to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
+    func download(_ request: URLRequest, alternatives: [URLRequest] = [], to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
+        self.downloadSingle(request, to: destination, maxBytes: maxBytes, progress: progress, completion: { result in
+            if case let .failure(.httpStatus(code)) = result, [403, 404, 410].contains(code), let next = alternatives.first {
+                self.download(next, alternatives: Array(alternatives.dropFirst()), to: destination, maxBytes: maxBytes, progress: progress, completion: completion)
+            } else {
+                completion(result)
+            }
+        })
+    }
+
+    private func downloadSingle(_ request: URLRequest, to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
         self.queue.async {
             guard !self.isCancelled, let session = self.session else {
                 completion(.failure(.cancelled))

@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import TelegramPresentationData
 import AccountContext
 import Postbox
@@ -56,6 +57,7 @@ extension ChatControllerImpl {
             case upgraded(EnginePeer.Id)
             case movedToForumTopics
             case dismiss
+            case bannedChat
         }
         
         struct NextChannelToRead: Equatable {
@@ -789,6 +791,14 @@ extension ChatControllerImpl {
                         shouldDismiss = true
                     } else if let previous = strongSelf.state.peerView, let secretChat = previous.peers[previous.peerId] as? TelegramSecretChat, case .active = secretChat.embeddedState, let updatedSecretChat = peerView.peers[peerView.peerId] as? TelegramSecretChat, case .terminated = updatedSecretChat.embeddedState {
                         shouldDismiss = true
+                    }
+
+                    let isBanned = donutgramPeerIsBanned(peerView.peers[peerView.peerId])
+                    if DGSimpleSettings.shared.keepBannedChats, isBanned, shouldDismiss || strongSelf.state.peerView == nil {
+                        shouldDismiss = false
+                        strongSelf.state.performDismissAction = .bannedChat
+                    } else if !isBanned, let previous = strongSelf.state.peerView, donutgramPeerIsBanned(previous.peers[previous.peerId]) {
+                        strongSelf.state.performDismissAction = nil
                     }
                     
                     var wasGroupChannel: Bool?

@@ -1,5 +1,30 @@
 import Foundation
 
+/// Local-only decorations for the selected account; they never modify Telegram peer flags.
+public enum DGVisualLabel: String, CaseIterable {
+    case none, scam, fake, support, bot
+
+    public var title: String {
+        switch self {
+        case .none: return "Без метки"
+        case .scam: return "SCAM"
+        case .fake: return "FAKE"
+        case .support: return "SUPPORT"
+        case .bot: return "BOT"
+        }
+    }
+
+    public var badgeText: String {
+        switch self {
+        case .scam: return "SCAM"
+        case .fake: return "FAKE"
+        case .support: return "SUPPORT"
+        case .bot: return "BOT"
+        default: return ""
+        }
+    }
+}
+
 public struct DGVisualUsername: Codable, Equatable {
     public var name: String
     public var isActive: Bool
@@ -116,6 +141,7 @@ public final class DGSimpleSettings {
         static let saveViewOnceMedia = "donutgram.spy.saveViewOnceMedia"
         static let saveProtectedStories = "donutgram.spy.saveProtectedStories"
         static let gifUnlock = "donutgram.general.gifUnlock"
+        static let keepBannedChats = "donutgram.general.keepBannedChats"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
@@ -524,6 +550,15 @@ public final class DGSimpleSettings {
         self.defaults.set(Int(timestamp), forKey: key)
         // Presence updates must not trigger another account.updateStatus request.
         NotificationCenter.default.post(name: DGSimpleSettings.lastOnlineDidChangeNotification, object: self)
+    }
+
+    /// Device-local, account-specific; does not change Telegram verification or warnings.
+    public func visualLabel(accountId: Int64) -> DGVisualLabel {
+        return DGVisualLabel(rawValue: string(accountKey("visualLabel", accountId: accountId))) ?? .none
+    }
+
+    public func setVisualLabel(_ label: DGVisualLabel, accountId: Int64) {
+        setString(label.rawValue, accountKey("visualLabel", accountId: accountId))
     }
 
     /// Until when (server time) the server shows the account online, as it last reported. Nil once it reports
@@ -1072,6 +1107,7 @@ public final class DGSimpleSettings {
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
+    public var keepBannedChats: Bool { get { bool(Key.keepBannedChats) } set { setBool(newValue, Key.keepBannedChats) } }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }
     public var hideGiftButton: Bool { get { bool(Key.hideGiftButton) } set { setBool(newValue, Key.hideGiftButton) } }
     /// «В начало чата» in the menu of a chat's avatar (long press). On until switched off.

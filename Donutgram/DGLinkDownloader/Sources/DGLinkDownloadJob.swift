@@ -52,6 +52,7 @@ public final class DGLinkDownloadJob {
         var remaining: Int
         var nextIndex = 0
         var active = 0
+        var failed = false
 
         init(expected: [Int64?]) {
             self.received = Array(repeating: 0, count: expected.count)
@@ -128,8 +129,16 @@ public final class DGLinkDownloadJob {
         }
     }
 
-    private func runTikTok(_ url: URL) {
-        DGTikTokExtractor.resolve(url, fetcher: self.fetcher, completion: { result in
+    private func runTikTok(_ url: URL, useFallback: Bool = false) {
+        // Old photo tasks may still be finishing when another source is tried.
+        let directory = self.workDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            self.finish(.failure(.processingFailed))
+            return
+        }
+        let completion: (Result<DGTikTokItem, DGLinkDownloadError>) -> Void = { result in
             self.queue.async {
                 guard !self.isFinished else {
                     return
@@ -139,9 +148,13 @@ public final class DGLinkDownloadJob {
                     self.finish(.failure(error))
                 case let .success(.video(file, _)):
                     self.kind = .video
-                    let destination = self.workDirectory.appendingPathComponent("tiktok.mp4")
-                    self.download([(DGTikTokExtractor.mediaRequest(file.url), destination, file.expectedSize)], completion: { urls in
-                        self.completeVideo(fileURL: urls[0])
+                    let destination = directory.appendingPathComponent("tiktok.mp4")
+                    self.download([(DGTikTokExtractor.mediaRequest(file.url), destination, file.expectedSize)], alternatives: [file.alternateURLs.map(DGTikTokExtractor.mediaRequest)], failure: { error in
+                        self.retryTikTok(url, error: error, usedFallback: useFallback)
+                    }, completion: { urls in
+                        self.completeVideo(fileURL: urls[0], failure: { error in
+                            self.retryTikTok(url, error: error, usedFallback: useFallback)
+                        })
                     })
                 case let .success(.photos(files)):
                     self.kind = .photos
@@ -150,14 +163,32 @@ public final class DGLinkDownloadJob {
                         selected = Array(selected.prefix(maxPhotos))
                     }
                     let items = selected.enumerated().map { index, file in
-                        return (DGTikTokExtractor.mediaRequest(file.url), self.workDirectory.appendingPathComponent("source-\(index)"), file.expectedSize)
+                        return (DGTikTokExtractor.mediaRequest(file.url), directory.appendingPathComponent("source-\(index)"), file.expectedSize)
                     }
-                    self.download(items, completion: { urls in
-                        self.completePhotos(urls)
+                    self.download(items, failure: { error in
+                        self.retryTikTok(url, error: error, usedFallback: useFallback)
+                    }, completion: { urls in
+                        self.completePhotos(urls, failure: { error in
+                            self.retryTikTok(url, error: error, usedFallback: useFallback)
+                        })
                     })
                 }
             }
-        })
+        }
+        if useFallback {
+            DGTikTokExtractor.resolveFallback(url, fetcher: self.fetcher, completion: completion)
+        } else {
+            DGTikTokExtractor.resolve(url, fetcher: self.fetcher, completion: completion)
+        }
+    }
+
+    private func retryTikTok(_ url: URL, error: DGLinkDownloadError, usedFallback: Bool) {
+        guard !usedFallback, !self.isCancelRequested, error != .cancelled, error != .tooLarge else {
+            self.finish(.failure(error))
+            return
+        }
+        self.report(.resolving)
+        self.runTikTok(url, useFallback: true)
     }
 
     private func runYouTube(_ videoId: String) {
@@ -208,20 +239,21 @@ public final class DGLinkDownloadJob {
     }
 
     /// Up to three parallel downloads; `completion` gets the files in the order of `items`.
-    private func download(_ items: [(URLRequest, URL, Int64?)], completion: @escaping ([URL]) -> Void) {
+    private func download(_ items: [(URLRequest, URL, Int64?)], alternatives: [[URLRequest]] = [], failure: ((DGLinkDownloadError) -> Void)? = nil, completion: @escaping ([URL]) -> Void) {
         let batch = Batch(expected: items.map { $0.2 })
         self.reportBatch(batch)
-        self.startNext(items, batch: batch, completion: completion)
+        self.startNext(items, alternatives: alternatives, batch: batch, failure: failure, completion: completion)
     }
 
-    private func startNext(_ items: [(URLRequest, URL, Int64?)], batch: Batch, completion: @escaping ([URL]) -> Void) {
+    private func startNext(_ items: [(URLRequest, URL, Int64?)], alternatives: [[URLRequest]], batch: Batch, failure: ((DGLinkDownloadError) -> Void)?, completion: @escaping ([URL]) -> Void) {
         while batch.active < 3 && batch.nextIndex < items.count {
             let index = batch.nextIndex
             batch.nextIndex += 1
             batch.active += 1
             let (request, destination, _) = items[index]
-            self.fetcher.download(request, to: destination, maxBytes: DGLinkDownloadJob.maxFileSize, progress: { written, total in
+            self.fetcher.download(request, alternatives: index < alternatives.count ? alternatives[index] : [], to: destination, maxBytes: DGLinkDownloadJob.maxFileSize, progress: { written, total in
                 self.queue.async {
+                    guard !batch.failed, !self.isFinished else { return }
                     batch.received[index] = written
                     if let total {
                         batch.expected[index] = total
@@ -230,20 +262,25 @@ public final class DGLinkDownloadJob {
                 }
             }, completion: { result in
                 self.queue.async {
-                    guard !self.isFinished else {
+                    guard !self.isFinished, !batch.failed else {
                         return
                     }
                     batch.active -= 1
                     switch result {
                     case let .failure(error):
-                        self.finish(.failure(error))
+                        batch.failed = true
+                        if let failure {
+                            failure(error)
+                        } else {
+                            self.finish(.failure(error))
+                        }
                     case let .success(url):
                         batch.results[index] = url
                         batch.remaining -= 1
                         if batch.remaining == 0 {
                             completion(batch.results.compactMap { $0 })
                         } else {
-                            self.startNext(items, batch: batch, completion: completion)
+                            self.startNext(items, alternatives: alternatives, batch: batch, failure: failure, completion: completion)
                         }
                     }
                 }
@@ -257,11 +294,11 @@ public final class DGLinkDownloadJob {
         self.report(.downloading(received: received, total: total))
     }
 
-    private func completeVideo(fileURL: URL) {
+    private func completeVideo(fileURL: URL, failure: ((DGLinkDownloadError) -> Void)? = nil) {
         self.report(.processing)
         // No video track means the server sent something else (e.g. an HTML page): send the link instead.
         guard let info = DGMediaProcessor.videoInfo(fileURL) else {
-            self.finish(.failure(.processingFailed))
+            if let failure { failure(.processingFailed) } else { self.finish(.failure(.processingFailed)) }
             return
         }
         let video = Video(
@@ -276,7 +313,7 @@ public final class DGLinkDownloadJob {
         self.finish(.success(.video(video)))
     }
 
-    private func completePhotos(_ sources: [URL]) {
+    private func completePhotos(_ sources: [URL], failure: ((DGLinkDownloadError) -> Void)? = nil) {
         self.report(.processing)
         var photos: [Photo] = []
         for (index, source) in sources.enumerated() {
@@ -286,7 +323,7 @@ public final class DGLinkDownloadJob {
             }
             let destination = self.workDirectory.appendingPathComponent("photo-\(index).jpg")
             guard let size = DGMediaProcessor.normalizePhoto(sourceURL: source, destinationURL: destination) else {
-                self.finish(.failure(.processingFailed))
+                if let failure { failure(.processingFailed) } else { self.finish(.failure(.processingFailed)) }
                 return
             }
             try? FileManager.default.removeItem(at: source)

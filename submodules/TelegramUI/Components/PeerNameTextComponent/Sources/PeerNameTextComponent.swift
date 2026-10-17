@@ -9,6 +9,7 @@ import MultilineTextComponent
 import EmojiStatusComponent
 import TelegramCore
 import AccountContext
+import DGSimpleSettings
 
 public final class PeerNameTextComponent: Component {
     public enum TextContent: Equatable {
@@ -98,6 +99,17 @@ public final class PeerNameTextComponent: Component {
                 
                 if peer.donutgramDisplayIsVerified {
                     iconContent = .verified(fillColor: component.iconBackgroundColor, foregroundColor: component.iconForegroundColor, sizeType: .compact)
+                }
+                if peer.id == component.context.account.peerId {
+                    switch DGSimpleSettings.shared.visualLabel(accountId: component.context.account.peerId.toInt64()) {
+                    case .none: break
+                    case .scam:
+                        iconContent = .text(color: UIColor(rgb: 0xeb5545), string: "SCAM")
+                    case .fake:
+                        iconContent = .text(color: UIColor(rgb: 0xeb5545), string: "FAKE")
+                    case .support, .bot:
+                        iconContent = .text(color: component.iconBackgroundColor, string: DGSimpleSettings.shared.visualLabel(accountId: component.context.account.peerId.toInt64()).badgeText)
+                    }
                 }
             }
             
