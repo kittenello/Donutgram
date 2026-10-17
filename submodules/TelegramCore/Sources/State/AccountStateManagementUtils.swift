@@ -3485,6 +3485,10 @@ func resetChannels(accountPeerId: PeerId, postbox: Postbox, network: Network, pe
 }
 
 private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Network, peer: Peer, state: AccountMutableState) -> Signal<(AccountMutableState, Bool, Int32?), NoError> {
+    // A retained dialog is a local history archive, including for public supergroups.
+    if donutgramPeerIsBanned(peer) {
+        return .single((state, false, nil))
+    }
     if let inputChannel = apiInputChannel(peer) {
         let limit: Int32
         #if DEBUG

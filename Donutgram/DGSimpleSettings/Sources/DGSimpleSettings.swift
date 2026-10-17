@@ -111,6 +111,7 @@ public final class DGSimpleSettings {
         static let saveViewOnceMedia = "donutgram.spy.saveViewOnceMedia"
         static let saveProtectedStories = "donutgram.spy.saveProtectedStories"
         static let gifUnlock = "donutgram.general.gifUnlock"
+        static let keepBannedChats = "donutgram.general.keepBannedChats"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
@@ -1032,6 +1033,7 @@ public final class DGSimpleSettings {
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
+    public var keepBannedChats: Bool { get { bool(Key.keepBannedChats) } set { setBool(newValue, Key.keepBannedChats) } }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }
     public var hideGiftButton: Bool { get { bool(Key.hideGiftButton) } set { setBool(newValue, Key.hideGiftButton) } }
     /// «В начало чата» in the menu of a chat's avatar (long press). On until switched off.

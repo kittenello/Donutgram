@@ -3817,7 +3817,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             var restrictionText: String?
             if let peer = chatPresentationInterfaceState.renderedPeer?.peer, let restrictionTextValue = peer.restrictionText(platform: "ios", contentSettings: self.context.currentContentSettings.with { $0 }), !restrictionTextValue.isEmpty {
                 restrictionText = restrictionTextValue
-            } else if chatPresentationInterfaceState.isNotAccessible {
+            } else if chatPresentationInterfaceState.isNotAccessible && !donutgramPeerIsBanned(chatPresentationInterfaceState.renderedPeer?.peer) {
+                // Banned dialogs can retain local history. Keep the real access flag for input restrictions.
                 if canJoinInaccessibleCommunityChat(chatPresentationInterfaceState) {
                     restrictionText = chatPresentationInterfaceState.strings.Community_Chat_JoinToView
                 } else if case .replyThread = self.chatLocation {

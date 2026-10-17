@@ -598,6 +598,9 @@ extension ChatControllerImpl {
             self.navigationItem.badge = initialNavigationBadge
         }
         
+        if contentData.state.performDismissAction == nil {
+            self.didHandlePerformDismissAction = false
+        }
         if let performDismissAction = contentData.state.performDismissAction, !self.didHandlePerformDismissAction {
             self.didHandlePerformDismissAction = true
             
@@ -617,6 +620,11 @@ extension ChatControllerImpl {
                 }
             case .dismiss:
                 self.dismiss()
+            case .bannedChat:
+                let text = dgLocalized("Вы были заблокированы в этом чате. Загруженная история сохранена на этом устройстве. Отправка и получение новых сообщений недоступны.", languageCode: self.presentationData.strings.primaryComponent.languageCode)
+                self.present(textAlertController(context: self.context, title: nil, text: text, actions: [
+                    TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
+                ]), in: .window(.root))
             }
         }
         
