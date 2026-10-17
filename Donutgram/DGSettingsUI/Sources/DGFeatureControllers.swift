@@ -29,6 +29,7 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         }
         result.append(.toggle(37, 4, "keepBannedChats", "Обход бана в чатах", s.keepBannedChats, true))
         result.append(.info(38, 4, "После блокировки чат и загруженная история останутся на этом устройстве. Писать и получать новые сообщения нельзя."))
+        result.append(.disclosure(39, 4, "visualLabel", "Визуальная метка", s.visualLabel(accountId: accountId).title))
         result.append(contentsOf: [.header(40, 5, "СТАТИСТИКА"), .toggle(41, 5, "telegramStatistics", "Отправлять статистику в Telegram", s.sendTelegramStatistics, true), .info(42, 5, "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.")])
         return result
     }, restartRequiredKeys: ["localPremium"], toggle: { key, value in
@@ -39,6 +40,7 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         switch key {
         case "ghost": return dgGhostSettingsController(context: context)
         case "visualPhone": return dgVisualPhoneController(context: context)
+        case "visualLabel": return dgVisualLabelController(context: context)
         case "visualRating": return dgVisualRatingController(context: context)
         case "visualUsernames": return dgVisualUsernamesController(context: context)
         case "visualId": return dgVisualIdController(context: context)
@@ -46,6 +48,21 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         case "savedDeleted": return dgSavedDeletedMessagesController(context: context)
         default: return nil
         }
+    })
+}
+
+private func dgVisualLabelController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let settings = DGSimpleSettings.shared
+    let accountId = context.account.peerId.toInt64()
+    return dgController(context: context, page: .visualLabel, title: "Визуальная метка", focusKey: focusKey, entries: {
+        var entries: [DGListEntry] = [.header(0, 0, "МЕТКА ПРОФИЛЯ")]
+        for (index, label) in DGVisualLabel.allCases.enumerated() {
+            entries.append(.checkbox(Int32(index + 1), 0, label.rawValue, label.title, settings.visualLabel(accountId: accountId) == label))
+        }
+        entries.append(.info(10, 0, "Метка отображается только в Donutgram на этом устройстве и только для текущего аккаунта. Настоящие пометки SCAM, FAKE, верификация и Premium от Telegram не изменяются."))
+        return entries
+    }, select: { key in
+        settings.setVisualLabel(DGVisualLabel(rawValue: key) ?? .none, accountId: accountId)
     })
 }
 
@@ -660,6 +677,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     case .visualRating: makeController = dgVisualRatingController
     case .visualUsernames: makeController = dgVisualUsernamesController
     case .visualPhone: makeController = dgVisualPhoneController
+    case .visualLabel: makeController = dgVisualLabelController
     case .shadowBan: makeController = dgShadowBanController
     case .savedDeleted: makeController = dgSavedDeletedMessagesController
     case .support: makeController = dgSupportController

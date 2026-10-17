@@ -471,6 +471,9 @@ public final class ChatTitleComponent: Component {
                                 titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                             }
                         }
+                        if peer.id == component.context.account.peerId {
+                            titleCredibilityIcon = dgVisualTitleIcon(DGSimpleSettings.shared.visualLabel(accountId: component.context.account.peerId.toInt64()))
+                        }
                         if peerView.peerId != component.context.account.peerId, let badge = donutgramBadge(peerId: peer.id) {
                             titleVerifiedIcon = .verified
                             donutgramTeamBadge = (badge: badge, peerName: EnginePeer(peer).displayTitle(strings: component.strings, displayOrder: component.nameDisplayOrder))
@@ -917,6 +920,8 @@ public final class ChatTitleComponent: Component {
                 switch value {
                 case .none:
                     return nil
+                case let .localText(text):
+                    return .text(color: component.theme.list.itemAccentColor, string: text)
                 case .premium:
                     return .premium(color: component.theme.list.itemAccentColor)
                 case .verified:

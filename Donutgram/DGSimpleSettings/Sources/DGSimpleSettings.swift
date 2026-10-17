@@ -1,5 +1,32 @@
 import Foundation
 
+/// Local-only decorations for the selected account; they never modify Telegram peer flags.
+public enum DGVisualLabel: String, CaseIterable {
+    case none, scam, fake, verified, premium, support, bot
+
+    public var title: String {
+        switch self {
+        case .none: return "Без метки"
+        case .scam: return "SCAM"
+        case .fake: return "FAKE"
+        case .verified: return "Подтверждённый"
+        case .premium: return "Premium"
+        case .support: return "SUPPORT"
+        case .bot: return "BOT"
+        }
+    }
+
+    public var badgeText: String {
+        switch self {
+        case .scam: return "SCAM"
+        case .fake: return "FAKE"
+        case .support: return "SUPPORT"
+        case .bot: return "BOT"
+        default: return ""
+        }
+    }
+}
+
 public struct DGVisualUsername: Codable, Equatable {
     public var name: String
     public var isActive: Bool
@@ -505,6 +532,15 @@ public final class DGSimpleSettings {
         self.defaults.set(Int(timestamp), forKey: key)
         // Presence updates must not trigger another account.updateStatus request.
         NotificationCenter.default.post(name: DGSimpleSettings.lastOnlineDidChangeNotification, object: self)
+    }
+
+    /// Device-local, account-specific; does not change Telegram verification or warnings.
+    public func visualLabel(accountId: Int64) -> DGVisualLabel {
+        return DGVisualLabel(rawValue: string(accountKey("visualLabel", accountId: accountId))) ?? .none
+    }
+
+    public func setVisualLabel(_ label: DGVisualLabel, accountId: Int64) {
+        setString(label.rawValue, accountKey("visualLabel", accountId: accountId))
     }
 
     public func visualProfileId(accountId: Int64) -> String {

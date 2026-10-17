@@ -487,6 +487,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         case verified
         case fake
         case scam
+        case localText(String)
         case emojiStatus(PeerEmojiStatus)
     }
     
@@ -617,6 +618,17 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             if peer.donutgramDisplayIsVerified {
                 credibilityIcon = .verified
+            }
+            if peer.id == self.context.account.peerId {
+                switch DGSimpleSettings.shared.visualLabel(accountId: self.context.account.peerId.toInt64()) {
+                case .none: break
+                case .scam: credibilityIcon = .scam
+                case .fake: credibilityIcon = .fake
+                case .verified: credibilityIcon = .verified
+                case .premium: credibilityIcon = .premium
+                case .support: credibilityIcon = .localText("SUPPORT")
+                case .bot: credibilityIcon = .localText("BOT")
+                }
             }
             if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
@@ -923,6 +935,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             case .scam:
                 emojiRegularStatusContent = .text(color: presentationData.theme.chat.message.incoming.scamColor, string: presentationData.strings.Message_ScamAccount.uppercased())
                 emojiExpandedStatusContent = emojiRegularStatusContent
+            case let .localText(text):
+                emojiRegularStatusContent = .text(color: presentationData.theme.list.itemAccentColor, string: text)
+                emojiExpandedStatusContent = emojiRegularStatusContent
             case let .emojiStatus(emojiStatus):
                 currentEmojiStatus = emojiStatus
                 emojiRegularStatusContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: presentationData.theme.list.mediaPlaceholderColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
@@ -1209,6 +1224,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             isPremium = peer.isPremium
             isVerified = peer.donutgramDisplayIsVerified
             isFake = peer.isFake || peer.isScam
+            if peer.id == self.context.account.peerId {
+                switch DGSimpleSettings.shared.visualLabel(accountId: self.context.account.peerId.toInt64()) {
+                case .verified: isVerified = true
+                case .premium: isPremium = true
+                case .scam, .fake, .support, .bot: isFake = true
+                case .none: break
+                }
+            }
         }
         
         let titleShadowColor: UIColor? = nil
