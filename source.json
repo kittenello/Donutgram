@@ -1,0 +1,38 @@
+{
+  "name": "Donutgram",
+  "identifier": "com.kittenello.donutgram.source",
+  "subtitle": "Сборки Пончика с master",
+  "description": "Каждая сборка master публикуется сюда автоматически.",
+  "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+  "website": "https://github.com/kittenello/Donutgram",
+  "tintColor": "#E8508C",
+  "apps": [
+    {
+      "name": "Donutgram",
+      "bundleIdentifier": "com.kittenello.donutgram",
+      "developerName": "kittenello",
+      "subtitle": "Telegram с пончиком",
+      "localizedDescription": "Неофициальный клиент Telegram на основе Telegram iOS.",
+      "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+      "tintColor": "#E8508C",
+      "category": "social",
+      "versions": [
+        {
+          "version": "13.0.35639",
+          "buildVersion": "35639",
+          "date": "2026-10-17T20:04:44Z",
+          "localizedDescription": "fix(ghost): в профиле виден онлайн с других клиентов (#105)\nСвой профиль в режиме призрака показывает статус, который сообщает сервер, включая онлайн с других клиентов. Статус перезапрашивается при открытии приложения и после восстановления связи, после ответа на офлайн-пакет.",
+          "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-35639.ipa",
+          "size": 80899933,
+          "minOSVersion": "15.0"
+        }
+      ],
+      "version": "13.0.35639",
+      "versionDate": "2026-10-17T20:04:44Z",
+      "versionDescription": "fix(ghost): в профиле виден онлайн с других клиентов (#105)\nСвой профиль в режиме призрака показывает статус, который сообщает сервер, включая онлайн с других клиентов. Статус перезапрашивается при открытии приложения и после восстановления связи, после ответа на офлайн-пакет.",
+      "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-35639.ipa",
+      "size": 80899933
+    }
+  ],
+  "news": []
+}
