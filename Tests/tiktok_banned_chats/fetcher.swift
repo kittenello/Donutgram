@@ -62,4 +62,18 @@ fetch(cookieFetcher, "/echo-cookie")
 cookieFetcher.deleteCookies(answer)
 fetch(cookieFetcher, "/echo-cookie")
 cookieFetcher.invalidate()
+
+// A short link is followed only for where it leads: the final address counts, whatever its status.
+let resolver = DGMediaFetcher()
+var head = URLRequest(url: URL(string: base + "/redirect")!)
+head.httpMethod = "HEAD"
+let landed = DispatchSemaphore(value: 0)
+var landing: Result<URL, DGLinkDownloadError>?
+resolver.finalURL(head, completion: { result in
+    landing = result
+    landed.signal()
+})
+check(landed.wait(timeout: .now() + 10) == .success, "final URL timed out")
+check((try? landing?.get())?.path == "/landing", "the redirect target is reported although it answers 404")
+resolver.invalidate()
 print("HTTP download fallback checks passed")

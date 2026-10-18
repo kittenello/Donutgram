@@ -27,14 +27,18 @@ enum DGTikTokExtractor {
         return nil
     }
 
-    /// Item id of a post link or of the page a short link redirected to; nil for the home page (expired link).
+    /// Item id of a post link or of the page a short link redirected to; nil for the home page. A login wall keeps the
+    /// post's link in `redirect_url`.
     static func itemId(from url: URL) -> String? {
         if let itemId = DGTikTokExtractor.itemId(fromPathSegments: dgPathSegments(url.path)) {
             return itemId
         }
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        if let shared = components?.queryItems?.first(where: { $0.name == "share_item_id" })?.value, dgIsTikTokItemId(shared) {
+        let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        if let shared = queryItems.first(where: { $0.name == "share_item_id" })?.value, dgIsTikTokItemId(shared) {
             return shared
+        }
+        if url.path == "/login", let target = queryItems.first(where: { $0.name == "redirect_url" })?.value.flatMap({ URL(string: $0) }) {
+            return DGTikTokExtractor.itemId(fromPathSegments: dgPathSegments(target.path))
         }
         return nil
     }
@@ -50,6 +54,14 @@ enum DGTikTokExtractor {
         return request
     }
 
+    /// A short link the way yt-dlp follows it: HEAD as Facebook's link preview bot, which TikTok redirects to the post.
+    static func previewRequest(_ url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.setValue("facebookexternalhit/1.1", forHTTPHeaderField: "User-Agent")
+        return request
+    }
+
     /// CDN requests need the page's cookies (same DGMediaFetcher) and a tiktok.com referer, otherwise 403.
     static func mediaRequest(_ url: URL) -> URLRequest {
         var request = DGTikTokExtractor.pageRequest(url)
@@ -60,7 +72,7 @@ enum DGTikTokExtractor {
     static func parsePage(_ html: String) -> Result<DGTikTokItem, DGLinkDownloadError> {
         guard let marker = html.range(of: DGTikTokExtractor.rehydrationMarker),
               let openEnd = html[marker.upperBound...].firstIndex(of: ">") else {
-            return .failure(html.contains(DGTikTokExtractor.deniedMarker) ? .tiktokPageDenied : .tiktokNoData)
+            return .failure(html.contains(DGTikTokExtractor.deniedMarker) ? .tiktokPageDenied : .tiktokNoData(DGTikTokExtractor.pageTitle(html)))
         }
         let jsonStart = html.index(after: openEnd)
         guard let close = html.range(of: "</script>", range: jsonStart ..< html.endIndex),
@@ -68,80 +80,120 @@ enum DGTikTokExtractor {
               let root = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any],
               let scope = root["__DEFAULT_SCOPE__"] as? [String: Any],
               let detail = scope["webapp.video-detail"] as? [String: Any] else {
-            return .failure(.tiktokNoData)
+            return .failure(.tiktokNoData(DGTikTokExtractor.pageTitle(html)))
         }
         let status = dgIntValue(detail["statusCode"]) ?? 0
         if status == 10204 {
             return .failure(.tiktokNotFound)
         }
-        if status == 10222 {
+        // 10216: private post, 10222: private account (yt-dlp).
+        if status == 10216 || status == 10222 {
             return .failure(.tiktokPrivate)
         }
         if status != 0 {
             return .failure(.tiktokStatus(Int(status)))
         }
         guard let itemInfo = detail["itemInfo"] as? [String: Any], let item = itemInfo["itemStruct"] as? [String: Any] else {
-            return .failure(.tiktokNoData)
+            return .failure(.tiktokNoData(DGTikTokExtractor.pageTitle(html)))
         }
         if let imagePost = item["imagePost"] as? [String: Any] {
             var files: [DGRemoteFile] = []
             for entry in (imagePost["images"] as? [Any]) ?? [] {
                 guard let image = entry as? [String: Any],
-                      let imageURL = image["imageURL"] as? [String: Any],
-                      let first = (imageURL["urlList"] as? [Any])?.first as? String,
-                      let url = URL(string: first) else {
-                    return .failure(.tiktokNoData)
+                      let url = DGTikTokExtractor.fileLinks((image["imageURL"] as? [String: Any])?["urlList"]).first else {
+                    return .failure(.tiktokNoFile)
                 }
                 files.append(DGRemoteFile(url: url, expectedSize: nil, width: Int(dgIntValue(image["imageWidth"]) ?? 0), height: Int(dgIntValue(image["imageHeight"]) ?? 0)))
             }
             if files.isEmpty {
-                return .failure(.tiktokNoData)
+                return .failure(.tiktokNoFile)
             }
             return .success(.photos(files))
         }
         let video = (item["video"] as? [String: Any]) ?? [:]
         let duration = Double(dgIntValue(video["duration"]) ?? 0)
-        let playAddr = DGTikTokExtractor.mediaURLs(video["playAddr"].map { [$0] } ?? [])
-        var best: (bitrate: Int64, file: DGRemoteFile)?
+        var best: (bitrate: Int64, links: [URL], play: [String: Any])?
         for entry in (video["bitrateInfo"] as? [Any]) ?? [] {
             guard let variant = entry as? [String: Any],
                   let codec = variant["CodecType"] as? String, codec.lowercased().hasPrefix("h264"),
                   let play = variant["PlayAddr"] as? [String: Any] else {
                 continue
             }
-            let urls = DGTikTokExtractor.mediaURLs((play["UrlList"] as? [Any]) ?? [])
-            guard let first = urls.first else {
-                continue
-            }
+            let links = DGTikTokExtractor.fileLinks(play["UrlList"])
             let bitrate = dgIntValue(variant["Bitrate"]) ?? 0
-            if let current = best, current.bitrate >= bitrate {
+            if links.isEmpty || (best.map { $0.bitrate >= bitrate } ?? false) {
                 continue
             }
-            // The other CDN copies of this variant, then the default stream, in case a CDN refuses this network.
-            let alternates = Array(urls.dropFirst()) + playAddr.filter { !urls.contains($0) }
-            best = (bitrate, DGRemoteFile(url: first, expectedSize: dgIntValue(play["DataSize"]), width: Int(dgIntValue(play["Width"]) ?? 0), height: Int(dgIntValue(play["Height"]) ?? 0), alternateURLs: alternates))
+            best = (bitrate, links, play)
         }
-        if let best {
-            return .success(.video(best.file, duration))
+        // Every CDN copy of the best variant and of the default stream, in case a CDN refuses this network. Links on
+        // www.tiktok.com itself (/aweme/v1/play/) answer 403 outside a browser session and yt-dlp drops them, but some
+        // pages carry nothing else, so they go after the CDN ones; the watermarked download is the last resort.
+        let streams = (best?.links ?? []) + DGTikTokExtractor.fileLinks(video["playAddr"])
+        let downloads = DGTikTokExtractor.fileLinks(video["downloadAddr"]) + DGTikTokExtractor.fileLinks((video["download"] as? [String: Any])?["url"])
+        var links: [URL] = []
+        for link in DGTikTokExtractor.cdnFirst(streams) + DGTikTokExtractor.cdnFirst(downloads) where !links.contains(link) {
+            links.append(link)
         }
-        if let first = playAddr.first {
-            return .success(.video(DGRemoteFile(url: first, expectedSize: nil, width: Int(dgIntValue(video["width"]) ?? 0), height: Int(dgIntValue(video["height"]) ?? 0)), duration))
+        guard let first = links.first else {
+            // Videos marked "may not be comfortable for some audiences" come without files to anyone not logged in.
+            return .failure(item["isContentClassified"] as? Bool == true ? .tiktokAgeRestricted : .tiktokNoFile)
         }
-        return .failure(.tiktokNoData)
+        let play = (best?.links.contains(first) ?? false) ? best?.play : nil
+        let width = dgIntValue(play?["Width"]) ?? dgIntValue(video["width"]) ?? 0
+        let height = dgIntValue(play?["Height"]) ?? dgIntValue(video["height"]) ?? 0
+        return .success(.video(DGRemoteFile(url: first, expectedSize: play.flatMap { dgIntValue($0["DataSize"]) }, width: Int(width), height: Int(height), alternateURLs: Array(links.dropFirst())), duration))
     }
 
-    /// Every https link of a file, in TikTok's order. Links on www.tiktok.com itself (/aweme/v1/play/) answer 403
-    /// outside a browser session and yt-dlp drops them too; the others are separate CDN copies.
-    static func mediaURLs(_ values: [Any]) -> [URL] {
-        var urls: [URL] = []
-        for value in values {
-            guard let string = value as? String, let url = URL(string: string), url.scheme == "https",
-                  let host = url.host, host.lowercased() != "www.tiktok.com", !urls.contains(url) else {
+    /// The https links in a page value: one link, a list of links, or a list of `{"src": link}` (playAddr comes in
+    /// each form), in TikTok's order.
+    static func fileLinks(_ value: Any?) -> [URL] {
+        let entries: [Any]
+        if let list = value as? [Any] {
+            entries = list
+        } else if let value {
+            entries = [value]
+        } else {
+            entries = []
+        }
+        var links: [URL] = []
+        for entry in entries {
+            guard var string = (entry as? String) ?? ((entry as? [String: Any])?["src"] as? String) else {
                 continue
             }
-            urls.append(url)
+            if string.hasPrefix("//") {
+                string = "https:" + string
+            }
+            guard let url = URL(string: string), url.scheme == "https", url.host != nil, !links.contains(url) else {
+                continue
+            }
+            links.append(url)
         }
-        return urls
+        return links
+    }
+
+    /// Links on www.tiktok.com after the CDN ones, each group in its own order.
+    private static func cdnFirst(_ links: [URL]) -> [URL] {
+        let isPage: (URL) -> Bool = { $0.host?.lowercased() == "www.tiktok.com" }
+        return links.filter { !isPage($0) } + links.filter(isPage)
+    }
+
+    /// The page's <title>, so the toast tells an unknown page apart (a captcha, a notice, a login form).
+    static func pageTitle(_ html: String) -> String? {
+        guard let start = html.range(of: "<title", options: .caseInsensitive),
+              let open = html[start.upperBound...].firstIndex(of: ">"),
+              let end = html.range(of: "</title>", options: .caseInsensitive, range: html.index(after: open) ..< html.endIndex) else {
+            return nil
+        }
+        var title = String(html[html.index(after: open) ..< end.lowerBound])
+        for (entity, text) in [("&quot;", "\""), ("&#39;", "'"), ("&lt;", "<"), ("&gt;", ">"), ("&nbsp;", " "), ("&amp;", "&")] {
+            title = title.replacingOccurrences(of: entity, with: text)
+        }
+        title = title.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        if title.isEmpty {
+            return nil
+        }
+        return title.count > 40 ? String(title.prefix(40)) + "…" : title
     }
 
     /// The "Please wait..." bot check instead of the page.
@@ -293,7 +345,8 @@ enum DGTikTokExtractor {
         }
     }
 
-    /// Short links (vm./vt./t/) are followed first: they redirect to "/@/video/<id>" or to the home page when expired.
+    /// Short links (vm./vt./t/) are followed first: they redirect to "/@/video/<id>". When TikTok sends this network to
+    /// another page instead (a login wall, the home page), the link is followed again the way yt-dlp does it.
     private static func resolveDirect(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {
         if let itemId = DGTikTokExtractor.itemId(from: url) {
             DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
@@ -304,11 +357,21 @@ enum DGTikTokExtractor {
             case let .failure(error):
                 completion(.failure(DGTikTokExtractor.pageError(error)))
             case let .success(response):
-                guard let finalURL = response.url, let itemId = DGTikTokExtractor.itemId(from: finalURL) else {
-                    completion(.failure(.tiktokNoData))
+                if let itemId = response.url.flatMap({ DGTikTokExtractor.itemId(from: $0) }) {
+                    DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
                     return
                 }
-                DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
+                fetcher.finalURL(DGTikTokExtractor.previewRequest(url), completion: { preview in
+                    if case let .success(previewURL) = preview, let itemId = DGTikTokExtractor.itemId(from: previewURL) {
+                        DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
+                    } else if case .failure(.cancelled) = preview {
+                        completion(.failure(.cancelled))
+                    } else if response.url?.path == "/login" {
+                        completion(.failure(.tiktokLoginRequired))
+                    } else {
+                        completion(.failure(.tiktokShortLinkRedirected(response.url?.path ?? "")))
+                    }
+                })
             }
         })
     }
@@ -362,34 +425,55 @@ enum DGTikTokExtractor {
 
     private static func fetchItem(itemId: String, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {
         guard let url = DGTikTokExtractor.pageURL(itemId: itemId) else {
-            completion(.failure(.tiktokNoData))
+            completion(.failure(.tiktokNoData(nil)))
             return
         }
         DGTikTokExtractor.fetchPage(url, fetcher: fetcher, completion: { result in
-            guard case let .success(html) = result, DGTikTokExtractor.isBotCheck(html) else {
-                completion(result.flatMap(DGTikTokExtractor.parsePage))
+            guard case let .success(page) = result, DGTikTokExtractor.isBotCheck(page.html) else {
+                completion(result.flatMap(DGTikTokExtractor.parse))
                 return
             }
-            guard let cookies = DGTikTokExtractor.challengeCookies(html) else {
+            guard let cookies = DGTikTokExtractor.challengeCookies(page.html) else {
                 completion(.failure(.tiktokBotCheck))
                 return
             }
             fetcher.setCookies(cookies)
             DGTikTokExtractor.fetchPage(url, fetcher: fetcher, completion: { result in
                 fetcher.deleteCookies(cookies)
-                if case let .success(html) = result, DGTikTokExtractor.isBotCheck(html) {
+                if case let .success(page) = result, DGTikTokExtractor.isBotCheck(page.html) {
                     completion(.failure(.tiktokBotCheck))
                 } else {
-                    completion(result.flatMap(DGTikTokExtractor.parsePage))
+                    completion(result.flatMap(DGTikTokExtractor.parse))
                 }
             })
         })
     }
 
-    private static func fetchPage(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<String, DGLinkDownloadError>) -> Void) {
+    /// A fetched page and where its redirects ended.
+    private struct Page {
+        let html: String
+        let url: URL?
+    }
+
+    private static func fetchPage(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<Page, DGLinkDownloadError>) -> Void) {
         fetcher.fetchData(DGTikTokExtractor.pageRequest(url), completion: { result in
-            completion(result.map { String(decoding: $0.data, as: UTF8.self) }.mapError(DGTikTokExtractor.pageError))
+            completion(result.map { Page(html: String(decoding: $0.data, as: UTF8.self), url: $0.url) }.mapError(DGTikTokExtractor.pageError))
         })
+    }
+
+    /// A post page without the post's data says where TikTok sent the request instead, when it went elsewhere.
+    private static func parse(_ page: Page) -> Result<DGTikTokItem, DGLinkDownloadError> {
+        let result = DGTikTokExtractor.parsePage(page.html)
+        guard case .failure(.tiktokNoData(_)) = result, let url = page.url else {
+            return result
+        }
+        if url.path == "/login" {
+            return .failure(.tiktokLoginRequired)
+        }
+        if DGTikTokExtractor.itemId(from: url) == nil {
+            return .failure(.tiktokRedirected(url.path))
+        }
+        return result
     }
 
     /// An HTTP error on a page is TikTok refusing the page, not a file.

@@ -7,7 +7,14 @@ public enum DGLinkDownloadError: Error, Equatable {
     case tiktokNotFound
     case tiktokPrivate
     case tiktokStatus(Int)
-    case tiktokNoData
+    /// The post page came without the post's data; the title of what came instead, when it has one.
+    case tiktokNoData(String?)
+    /// TikTok sent the post page, or a short link, to another page: its path.
+    case tiktokRedirected(String)
+    case tiktokShortLinkRedirected(String)
+    case tiktokLoginRequired
+    case tiktokAgeRestricted
+    case tiktokNoFile
     case tiktokPageStatus(Int)
     case tiktokPageDenied
     case tiktokBotCheck
@@ -46,8 +53,18 @@ public enum DGLinkDownloadError: Error, Equatable {
             return "Закрытый аккаунт"
         case let .tiktokStatus(code):
             return "TikTok не отдал видео (код \(code))"
-        case .tiktokNoData:
-            return "TikTok прислал страницу без видео"
+        case let .tiktokNoData(title):
+            return "TikTok прислал страницу без видео" + (title.map { ": «\($0)»" } ?? "")
+        case let .tiktokRedirected(path):
+            return "TikTok открыл \(DGLinkDownloadError.placeName(path)) вместо видео"
+        case let .tiktokShortLinkRedirected(path):
+            return "Короткая ссылка TikTok ведёт на \(DGLinkDownloadError.placeName(path)), а не на видео"
+        case .tiktokLoginRequired:
+            return "TikTok просит войти в аккаунт"
+        case .tiktokAgeRestricted:
+            return "TikTok не отдаёт это видео без входа (18+)"
+        case .tiktokNoFile:
+            return "TikTok не дал ссылку на файл"
         case let .tiktokPageStatus(code):
             return "TikTok не отдал страницу (HTTP \(code))"
         case .tiktokPageDenied:
@@ -88,5 +105,13 @@ public enum DGLinkDownloadError: Error, Equatable {
         case .processingFailed:
             return "Не удалось обработать файл"
         }
+    }
+
+    /// A TikTok page path as the toast names it.
+    private static func placeName(_ path: String) -> String {
+        if path.isEmpty || path == "/" {
+            return "главную"
+        }
+        return path.count > 40 ? String(path.prefix(40)) + "…" : path
     }
 }

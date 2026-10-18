@@ -84,13 +84,14 @@ if __name__ == "__main__":
                 subprocess.run([str(executable)], check=True)
             requests = []
             cookie_headers = []
+            heads = []
 
             class Handler(BaseHTTPRequestHandler):
                 def do_GET(self):
                     requests.append(self.path)
                     if self.path == "/echo-cookie":
                         cookie_headers.append(self.headers.get("Cookie") or "")
-                    status = {"/denied": 403, "/missing": 404, "/gone": 410}.get(self.path, 200)
+                    status = {"/denied": 403, "/missing": 404, "/gone": 410, "/landing": 404}.get(self.path, 200)
                     payload = b"A" * 8192 if status == 200 else b"denied"
                     self.send_response(status)
                     if self.path == "/set-cookie":
@@ -101,6 +102,16 @@ if __name__ == "__main__":
                         self.wfile.write(payload)
                     except ConnectionError:
                         pass
+
+                def do_HEAD(self):
+                    heads.append((self.path, self.headers.get("User-Agent")))
+                    if self.path == "/redirect":
+                        self.send_response(302)
+                        self.send_header("Location", "/landing")
+                    else:
+                        self.send_response(404)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
 
                 def log_message(self, *args):
                     pass
@@ -118,6 +129,8 @@ if __name__ == "__main__":
                 assert len(cookie_headers) == 2, cookie_headers
                 assert "page=1" in cookie_headers[0] and "answer=YWJj=" in cookie_headers[0], cookie_headers
                 assert "page=1" in cookie_headers[1] and "answer" not in cookie_headers[1], cookie_headers
+                # The short link's second try is a HEAD request; only its final address matters.
+                assert heads and heads[0][0] == "/redirect", heads
             finally:
                 server.shutdown()
                 server.server_close()
