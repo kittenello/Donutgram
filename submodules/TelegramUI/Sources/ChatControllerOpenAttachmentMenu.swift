@@ -1432,20 +1432,23 @@ extension ChatControllerImpl {
                             }
 
                             var groupingKey: Int64?
-                            var fileTypes: (music: Bool, other: Bool) = (false, false)
+                            // An album holds one kind of item: music, videos (sent as video media) or other files.
+                            var fileTypes: (music: Bool, video: Bool, other: Bool) = (false, false, false)
                             if results.count > 1 {
                                 for item in results {
                                     if let item = item {
                                         let pathExtension = (item.fileName as NSString).pathExtension.lowercased()
                                         if ["mp3", "m4a"].contains(pathExtension) {
                                             fileTypes.music = true
+                                        } else if item.videoMetadata != nil {
+                                            fileTypes.video = true
                                         } else {
                                             fileTypes.other = true
                                         }
                                     }
                                 }
                             }
-                            if fileTypes.music != fileTypes.other {
+                            if [fileTypes.music, fileTypes.video, fileTypes.other].filter({ $0 }).count == 1 {
                                 groupingKey = Int64.random(in: Int64.min ... Int64.max)
                             }
 
