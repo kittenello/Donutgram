@@ -37,6 +37,18 @@ func donutgramIsPreservedBannedChat(transaction: Transaction, peerId: PeerId, pe
     return transaction.retrieveItemCacheEntry(id: donutgramBannedChatCacheId(peerId))?.get(DonutgramBannedChat.self)?.saved == true
 }
 
+/// The peer stored for a kept chat. A ban arrives as a stripped object (`channelForbidden`, `chatForbidden`) with only an id,
+/// a title and an access hash: no photo, username, creation date or flags, so a forum would open as a plain chat. The kept
+/// chat stays the chat it was, and only what the ban changed comes from the new object.
+func donutgramPreservedBannedPeer(previous: Peer?, updated: Peer) -> Peer {
+    if let previous = previous as? TelegramChannel, let updated = updated as? TelegramChannel {
+        return TelegramChannel(id: previous.id, accessHash: updated.accessHash ?? previous.accessHash, title: previous.title, username: previous.username, photo: previous.photo, creationDate: previous.creationDate, version: previous.version, participationStatus: updated.participationStatus, info: previous.info, flags: previous.flags, restrictionInfo: previous.restrictionInfo, adminRights: updated.adminRights, bannedRights: updated.bannedRights, defaultBannedRights: previous.defaultBannedRights, usernames: previous.usernames, storiesHidden: previous.storiesHidden, nameColor: previous.nameColor, backgroundEmojiId: previous.backgroundEmojiId, profileColor: previous.profileColor, profileBackgroundEmojiId: previous.profileBackgroundEmojiId, emojiStatus: previous.emojiStatus, approximateBoostLevel: previous.approximateBoostLevel, subscriptionUntilDate: previous.subscriptionUntilDate, verificationIconFileId: previous.verificationIconFileId, sendPaidMessageStars: previous.sendPaidMessageStars, linkedMonoforumId: previous.linkedMonoforumId, linkedCommunityId: previous.linkedCommunityId)
+    } else if let previous = previous as? TelegramGroup, let updated = updated as? TelegramGroup {
+        return TelegramGroup(id: previous.id, title: previous.title, photo: previous.photo, participantCount: previous.participantCount, role: updated.role, membership: updated.membership, flags: previous.flags, defaultBannedRights: previous.defaultBannedRights, migrationReference: previous.migrationReference, creationDate: previous.creationDate, version: previous.version)
+    }
+    return updated
+}
+
 func donutgramUpdateBannedChat(transaction: Transaction, previous: Peer?, updated: Peer) {
     guard updated is TelegramGroup || updated is TelegramChannel else { return }
     let cacheId = donutgramBannedChatCacheId(updated.id)

@@ -24,6 +24,7 @@ def prepare(directory):
     peers = source("submodules/TelegramCore/Sources/UpdatePeers.swift")
     assert "donutgramUpdateBannedChat(transaction: transaction, previous: previous, updated: updated)" in peers
     assert peers.index("donutgramUpdateBannedChat(") < peers.index("switch peerId.namespace")
+    assert "return update(previous, donutgramPreservedBannedPeer(previous: previous, updated: updated))" in peers
     reset = source("submodules/TelegramCore/Sources/State/ResetState.swift")
     assert "preservedBannedChats.append" in reset and "inclusion: inclusion" in reset
     holes = source("submodules/TelegramCore/Sources/State/Holes.swift")

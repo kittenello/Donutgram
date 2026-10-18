@@ -330,7 +330,7 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
 
         donutgramUpdateBannedChat(transaction: transaction, previous: previous, updated: updated)
         if donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId, peer: updated) {
-            return update(previous, updated)
+            return update(previous, donutgramPreservedBannedPeer(previous: previous, updated: updated))
         }
         
         switch peerId.namespace {

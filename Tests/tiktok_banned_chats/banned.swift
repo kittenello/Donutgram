@@ -4,19 +4,57 @@ public struct PeerId: Hashable {
 }
 public protocol Peer { var id: PeerId { get } }
 enum Membership { case Member, Removed, Left }
+enum GroupRole { case creator, admin, member }
 enum Participation { case member, left, kicked }
 struct GroupFlags: OptionSet {
     let rawValue: Int
     static let deactivated = GroupFlags(rawValue: 1)
 }
+struct ChannelFlags: OptionSet {
+    let rawValue: Int
+    static let isForum = ChannelFlags(rawValue: 1)
+}
+// The fields of the real peers, in the order of their initializers; the payloads are simplified.
 struct TelegramGroup: Peer {
     let id: PeerId
+    var title: String = ""
+    var photo: [String] = []
+    var participantCount: Int = 0
+    var role: GroupRole = .member
     var membership: Membership
     var flags: GroupFlags = []
+    var defaultBannedRights: String? = nil
+    var migrationReference: String? = nil
+    var creationDate: Int32 = 0
+    var version: Int = 0
 }
 struct TelegramChannel: Peer {
     let id: PeerId
+    var accessHash: Int64? = nil
+    var title: String = ""
+    var username: String? = nil
+    var photo: [String] = []
+    var creationDate: Int32 = 0
+    var version: Int32 = 0
     var participationStatus: Participation
+    var info: String = ""
+    var flags: ChannelFlags = []
+    var restrictionInfo: String? = nil
+    var adminRights: String? = nil
+    var bannedRights: String? = nil
+    var defaultBannedRights: String? = nil
+    var usernames: [String] = []
+    var storiesHidden: Bool? = nil
+    var nameColor: Int32? = nil
+    var backgroundEmojiId: Int64? = nil
+    var profileColor: Int32? = nil
+    var profileBackgroundEmojiId: Int64? = nil
+    var emojiStatus: String? = nil
+    var approximateBoostLevel: Int32? = nil
+    var subscriptionUntilDate: Int32? = nil
+    var verificationIconFileId: Int64? = nil
+    var sendPaidMessageStars: Int64? = nil
+    var linkedMonoforumId: PeerId? = nil
     var linkedCommunityId: PeerId? = nil
 }
 struct TelegramCommunity: Peer {
@@ -133,4 +171,19 @@ transaction.peers[id] = removed
 check(!shouldExcludePeerFromChatList(transaction: transaction, peerId: id), "basic groups are preserved too")
 check(!donutgramPeerIsBanned(TelegramGroup(id: id, membership: .Removed, flags: .deactivated)), "migrated/deactivated groups are excluded")
 check(!donutgramPeerIsBanned(TelegramGroup(id: id, membership: .Left)), "voluntary basic-group leave")
+
+// A ban arrives as a stripped object: the kept chat must not lose what only the member's object had.
+let forum = TelegramChannel(id: id, accessHash: 1, title: "Форум", username: "forum", photo: ["photo"], creationDate: 100, version: 7, participationStatus: .member, info: "group", flags: .isForum, adminRights: "admin", usernames: ["forum"], nameColor: 3)
+let forbidden = TelegramChannel(id: id, accessHash: 2, title: "Форум", participationStatus: .kicked, info: "broadcast", bannedRights: "read")
+let kept = donutgramPreservedBannedPeer(previous: forum, updated: forbidden) as! TelegramChannel
+check(kept.photo == ["photo"] && kept.username == "forum" && kept.usernames == ["forum"] && kept.nameColor == 3, "a kept chat keeps its photo, username and colour")
+check(kept.creationDate == 100 && kept.version == 7 && kept.info == "group", "a kept chat keeps its age and kind")
+check(kept.flags.contains(.isForum), "a kept forum still opens by topics")
+check(kept.participationStatus == .kicked && kept.adminRights == nil && kept.bannedRights == "read" && kept.accessHash == 2, "membership, rights and access hash come from the ban")
+check(donutgramPeerIsBanned(kept), "a kept chat stays banned for input restrictions")
+check((donutgramPreservedBannedPeer(previous: nil, updated: forbidden) as! TelegramChannel).accessHash == 2, "without a previous object the new one is stored")
+let fullGroup = TelegramGroup(id: id, title: "Группа", photo: ["photo"], participantCount: 5, role: .admin, membership: .Member, creationDate: 50)
+let keptGroup = donutgramPreservedBannedPeer(previous: fullGroup, updated: TelegramGroup(id: id, title: "Группа", membership: .Removed)) as! TelegramGroup
+check(keptGroup.photo == ["photo"] && keptGroup.participantCount == 5 && keptGroup.creationDate == 50, "a kept basic group keeps its photo and members count")
+check(keptGroup.membership == .Removed && keptGroup.role == .member, "removal and the lost admin role come from the ban")
 print("banned chat archive checks passed")
