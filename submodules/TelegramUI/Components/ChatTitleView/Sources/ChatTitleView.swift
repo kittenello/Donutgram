@@ -172,22 +172,12 @@ enum ChatTitleIcon {
 }
 
 enum ChatTitleCredibilityIcon: Equatable {
-    case localText(String)
     case none
     case fake
     case scam
     case verified
     case premium
     case emojiStatus(PeerEmojiStatus)
-}
-
-func dgVisualTitleIcon(_ label: DGVisualLabel) -> ChatTitleCredibilityIcon {
-    switch label {
-    case .none: return .none
-    case .scam: return .scam
-    case .fake: return .fake
-    case .support, .bot: return .localText(label.badgeText)
-    }
 }
 
 public final class ChatTitleView: UIView, NavigationBarTitleView {
@@ -335,9 +325,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                     if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                                         titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                                     }
-                                }
-                                if peer.id == self.context.account.peerId {
-                                    titleCredibilityIcon = dgVisualTitleIcon(DGSimpleSettings.shared.visualLabel(accountId: self.context.account.peerId.toInt64()))
                                 }
                                 if peerView.peerId != self.context.account.peerId, let badge = donutgramBadge(peerId: peer.id) {
                                     titleVerifiedIcon = .verified
@@ -920,8 +907,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         
         let titleCredibilityContent: EmojiStatusComponent.Content
         switch self.titleCredibilityIcon {
-        case let .localText(text):
-            titleCredibilityContent = .text(color: self.theme.list.itemAccentColor, string: text)
         case .none:
             titleCredibilityContent = .none
         case .premium:
@@ -938,8 +923,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         
         let titleVerifiedContent: EmojiStatusComponent.Content
         switch self.titleVerifiedIcon {
-        case let .localText(text):
-            titleVerifiedContent = .text(color: self.theme.list.itemAccentColor, string: text)
         case .none:
             titleVerifiedContent = .none
         case .premium:

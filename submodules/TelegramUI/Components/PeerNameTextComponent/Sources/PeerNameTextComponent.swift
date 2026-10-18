@@ -25,6 +25,8 @@ public final class PeerNameTextComponent: Component {
     public let iconBackgroundColor: UIColor
     public let iconForegroundColor: UIColor
     public let strings: PresentationStrings
+    /// The account's local label on its own name. Part of the component, so that a name already drawn follows a change.
+    let visualLabel: DGVisualLabel
     
     public init(
         context: AccountContext,
@@ -44,6 +46,7 @@ public final class PeerNameTextComponent: Component {
         self.iconBackgroundColor = iconBackgroundColor
         self.iconForegroundColor = iconForegroundColor
         self.strings = strings
+        self.visualLabel = peer?.id == context.account.peerId ? DGSimpleSettings.shared.visualLabel(accountId: context.account.peerId.toInt64()) : .none
     }
     
     public static func ==(lhs: PeerNameTextComponent, rhs: PeerNameTextComponent) -> Bool {
@@ -69,6 +72,9 @@ public final class PeerNameTextComponent: Component {
             return false
         }
         if lhs.strings !== rhs.strings {
+            return false
+        }
+        if lhs.visualLabel != rhs.visualLabel {
             return false
         }
         return true
@@ -100,16 +106,13 @@ public final class PeerNameTextComponent: Component {
                 if peer.donutgramDisplayIsVerified {
                     iconContent = .verified(fillColor: component.iconBackgroundColor, foregroundColor: component.iconForegroundColor, sizeType: .compact)
                 }
-                if peer.id == component.context.account.peerId {
-                    switch DGSimpleSettings.shared.visualLabel(accountId: component.context.account.peerId.toInt64()) {
-                    case .none: break
-                    case .scam:
-                        iconContent = .text(color: UIColor(rgb: 0xeb5545), string: "SCAM")
-                    case .fake:
-                        iconContent = .text(color: UIColor(rgb: 0xeb5545), string: "FAKE")
-                    case .support, .bot:
-                        iconContent = .text(color: component.iconBackgroundColor, string: DGSimpleSettings.shared.visualLabel(accountId: component.context.account.peerId.toInt64()).badgeText)
-                    }
+                switch component.visualLabel {
+                case .none:
+                    break
+                case .scam, .fake:
+                    iconContent = .text(color: UIColor(rgb: 0xeb5545), string: component.visualLabel.badgeText)
+                case .support, .bot:
+                    iconContent = .text(color: component.iconBackgroundColor, string: component.visualLabel.badgeText)
                 }
             }
             

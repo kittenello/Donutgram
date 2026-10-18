@@ -497,6 +497,21 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var currentStatusIcon: CredibilityIcon?
     
     private var currentPanelStatusData: PeerInfoStatusData?
+
+    /// The account's local label where Telegram draws marks next to the account's own name, its profile and the
+    /// settings header, and not in the Saved Messages profile, which stock leaves without marks.
+    private func donutgramVisualLabel(peer: EnginePeer) -> DGVisualLabel? {
+        guard peer.id == self.context.account.peerId, self.isSettings || self.isMyProfile else {
+            return nil
+        }
+        switch DGSimpleSettings.shared.visualLabel(accountId: peer.id.toInt64()) {
+        case .none:
+            return nil
+        case let label:
+            return label
+        }
+    }
+
     func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, statusBarHeight: CGFloat, navigationHeight: CGFloat, presentedInFormSheet: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
         if self.appliedCustomNavigationContentNode !== self.customNavigationContentNode {
             if let previous = self.appliedCustomNavigationContentNode {
@@ -619,14 +634,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if peer.donutgramDisplayIsVerified {
                 credibilityIcon = .verified
             }
-            if peer.id == self.context.account.peerId {
-                switch DGSimpleSettings.shared.visualLabel(accountId: self.context.account.peerId.toInt64()) {
-                case .none: break
+            if let label = self.donutgramVisualLabel(peer: peer) {
+                switch label {
                 case .scam: credibilityIcon = .scam
                 case .fake: credibilityIcon = .fake
-                case .support: credibilityIcon = .localText("SUPPORT")
-                case .bot: credibilityIcon = .localText("BOT")
+                default: credibilityIcon = .localText(label.badgeText)
                 }
+                // Instead of the emoji status, as with a real SCAM or FAKE mark.
+                statusIcon = .none
             }
             if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
@@ -1222,11 +1237,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             isPremium = peer.isPremium
             isVerified = peer.donutgramDisplayIsVerified
             isFake = peer.isFake || peer.isScam
-            if peer.id == self.context.account.peerId {
-                switch DGSimpleSettings.shared.visualLabel(accountId: self.context.account.peerId.toInt64()) {
-                case .scam, .fake, .support, .bot: isFake = true
-                case .none: break
-                }
+            if self.donutgramVisualLabel(peer: peer) != nil {
+                isFake = true
             }
         }
         

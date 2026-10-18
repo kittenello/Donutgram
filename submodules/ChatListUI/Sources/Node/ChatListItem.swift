@@ -32,16 +32,6 @@ import ShimmerEffect
 import GlassBackgroundComponent
 import ChatTitleView
 
-/// Local decoration only; the real Telegram peer flags remain unchanged.
-private func donutgramVisualChatListLabel(_ label: DGVisualLabel, theme: PresentationTheme) -> EmojiStatusComponent.Content? {
-    switch label {
-    case .none: return nil
-    case .scam: return .text(color: theme.chat.message.incoming.scamColor, string: "SCAM")
-    case .fake: return .text(color: theme.chat.message.incoming.scamColor, string: "FAKE")
-    case .support, .bot: return .text(color: theme.list.itemAccentColor, string: label.badgeText)
-    }
-}
-
 private func donutgramPresenceIcon(_ theme: PresentationTheme, state: RecentStatusOnlineIconState, voiceChat: Bool, offline: Bool) -> UIImage? {
     if !offline {
         return PresentationResourcesChatList.recentStatusOnlineIcon(theme, state: state, voiceChat: voiceChat)
@@ -3719,19 +3709,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             if let verificationIconFileId = peer.donutgramDisplayVerificationIconFileId {
                                 currentVerifiedIconContent = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                             }
-                            if peer.id == item.context.account.peerId {
-                                let label = DGSimpleSettings.shared.visualLabel(accountId: item.context.account.peerId.toInt64())
-                                if label != .none {
-                                    currentCredibilityIconContent = donutgramVisualChatListLabel(label, theme: item.presentationData.theme)
-                                }
-                            }
-                            if peer.id == item.context.account.peerId {
-                        let label = DGSimpleSettings.shared.visualLabel(accountId: item.context.account.peerId.toInt64())
-                        if label != .none {
-                            currentCredibilityIconContent = donutgramVisualChatListLabel(label, theme: item.presentationData.theme)
-                        }
-                    }
-                    if let badge = donutgramBadge(peerId: peer.id) {
+                            if let badge = donutgramBadge(peerId: peer.id) {
                                 currentVerifiedIconContent = donutgramBadgeContent(badge, sizeType: .compact)
                                 currentDonutgramBadge = (badge: badge, peerName: peer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder))
                             }
