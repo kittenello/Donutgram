@@ -377,11 +377,12 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         ])
         result.append(.toggle(91, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
         result.append(.disclosure(92, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
-        result.append(.toggle(93, 11, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true))
-        result.append(.info(94, 11, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению."))
-        result.append(.toggle(96, 11, "confirmReactionsInUnjoinedChats", "Подтверждать реакции без вступления", s.confirmReactionsInUnjoinedChats, true))
-        result.append(.toggle(97, 11, "confirmTelegramLinks", "Подтверждать переход по ссылкам Telegram", s.confirmTelegramLinks, true))
-        result.append(.toggle(98, 11, "confirmChatPreviewEntry", "Подтверждать вход из предпросмотра", s.confirmChatPreviewEntry, true))
+        // The confirmations come before «В начало чата», so its explanation stays the footer of the section.
+        result.append(.toggle(93, 11, "confirmReactionsInUnjoinedChats", "Подтверждать реакции без вступления", s.confirmReactionsInUnjoinedChats, true))
+        result.append(.toggle(94, 11, "confirmTelegramLinks", "Подтверждать переход по ссылкам Telegram", s.confirmTelegramLinks, true))
+        result.append(.toggle(95, 11, "confirmChatPreviewEntry", "Подтверждать вход из предпросмотра", s.confirmChatPreviewEntry, true))
+        result.append(.toggle(96, 11, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true))
+        result.append(.info(97, 11, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению."))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {

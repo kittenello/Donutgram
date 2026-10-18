@@ -69,7 +69,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "hideViaBot", "hideBotAutomation": return "cpu"
     case "hideServiceMessages": return "message.badge"
     case "confirmReactionsInUnjoinedChats": return "hand.thumbsup"
-    case "confirmTelegramLinks": return "link.badge"
+    case "confirmTelegramLinks": return "link.circle"
     case "confirmChatPreviewEntry": return "rectangle.portrait.and.arrow.right"
     case "removeLinkPreviews": return "link"
     case "autoplayMedia", "autoplayMediaTypes": return "play.circle"
