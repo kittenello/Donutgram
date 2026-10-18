@@ -60,6 +60,14 @@ final class DeletedMessageSearchTests: XCTestCase {
         XCTAssertEqual(donutgramPreservedMessageIds(matching: " ?! ", in: entries, limit: 10), [])
     }
 
+    func testSavedDeletedPageSearchIndexFoldsWordsOnceAndStopsWhenCancelled() {
+        let entry = DonutgramPreservedMessageSearchEntry(id: MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: 1), timestamp: 1, text: "Отчёт.PDF отчёт")
+        XCTAssertEqual(entry.words.sorted(), ["pdf", "отчет"])
+        let entries = (1 ... 300).map { DonutgramPreservedMessageSearchEntry(id: MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: Int32(301 - $0)), timestamp: Int32(301 - $0), text: "встреча \($0)") }
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "встреча", in: entries, limit: 1000, isCancelled: { true }), [])
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "встреча", in: entries, limit: 201).count, 201)
+    }
+
     func testLocalOnlyResultsOnEmptyRemoteResponse() {
         let merged = donutgramSearchResultIncludingDeletedMessages(self.result([], totalCount: 0, completed: true), deletedMessages: [self.message(4, deleted: true), self.message(9, deleted: true)])
         XCTAssertEqual(merged.messages.map { $0.id.id }, [9, 4])

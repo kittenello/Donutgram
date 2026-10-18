@@ -204,11 +204,15 @@ public struct DonutgramPreservedMessageSearchEntry: Equatable {
     public var timestamp: Int32
     /// The message text and the searchable text of its media, such as file names.
     public var text: String
+    /// The distinct words of `text`, folded once here so that typing does not fold every message
+    /// again.
+    public var words: [String]
 
     public init(id: EngineMessage.Id, timestamp: Int32, text: String) {
         self.id = id
         self.timestamp = timestamp
         self.text = text
+        self.words = Array(Set(donutgramSearchWords(text)))
     }
 }
 
@@ -236,17 +240,22 @@ func _internal_donutgramPreservedMessagesSearchIndex(postbox: Postbox) -> Signal
 
 /// The messages of `entries` whose text matches `query` the way search in a chat does (whole words
 /// by prefix, ignoring case and diacritics), in the order of `entries`, at most `limit`. A query
-/// without letters or digits matches nothing.
-public func donutgramPreservedMessageIds(matching query: String, in entries: [DonutgramPreservedMessageSearchEntry], limit: Int) -> [EngineMessage.Id] {
-    guard query.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) else {
+/// without letters or digits matches nothing. `isCancelled` is polled while scanning, so a search
+/// replaced by a newer query stops early; its result is then incomplete and must be dropped.
+public func donutgramPreservedMessageIds(matching query: String, in entries: [DonutgramPreservedMessageSearchEntry], limit: Int, isCancelled: () -> Bool = { false }) -> [EngineMessage.Id] {
+    let queryWords = donutgramSearchWords(query)
+    if queryWords.isEmpty {
         return []
     }
     var result: [EngineMessage.Id] = []
-    for entry in entries {
+    for (index, entry) in entries.enumerated() {
         if result.count >= limit {
             break
         }
-        if donutgramDeletedMessageMatchesQuery(text: entry.text, query: query) {
+        if index % 256 == 0 && isCancelled() {
+            break
+        }
+        if donutgramSearchWordsMatch(textWords: entry.words, queryWords: queryWords) {
             result.append(entry.id)
         }
     }

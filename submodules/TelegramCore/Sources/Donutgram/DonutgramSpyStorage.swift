@@ -317,13 +317,19 @@ func donutgramRemoveOrphanedMessageRevisions(postbox: Postbox) -> Signal<Never, 
 /// Matches words and filename prefixes with the same case-insensitive semantics
 /// as local chat search. Cloud messages are not in Postbox's secret-chat text index.
 public func donutgramDeletedMessageMatchesQuery(text: String, query: String) -> Bool {
-    func words(_ value: String) -> [String] {
-        return value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-    }
-    let queryWords = words(query)
-    let textWords = words(text)
+    return donutgramSearchWordsMatch(textWords: donutgramSearchWords(text), queryWords: donutgramSearchWords(query))
+}
+
+/// The words a text is searched by: case and diacritics folded (ё = е), split at everything that
+/// is not a letter or a digit. Empty when the text has no letters or digits.
+public func donutgramSearchWords(_ value: String) -> [String] {
+    return value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        .components(separatedBy: CharacterSet.alphanumerics.inverted)
+        .filter { !$0.isEmpty }
+}
+
+/// Every query word is the start of some word of the text.
+public func donutgramSearchWordsMatch(textWords: [String], queryWords: [String]) -> Bool {
     return queryWords.allSatisfy { queryWord in
         textWords.contains { $0.hasPrefix(queryWord) }
     }
