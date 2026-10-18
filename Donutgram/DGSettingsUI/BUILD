@@ -35,6 +35,10 @@ swift_library(
         "//submodules/UndoUI:UndoUI",
         "//submodules/ItemListPeerItem:ItemListPeerItem",
         "//submodules/ItemListPeerActionItem:ItemListPeerActionItem",
+        "//submodules/TelegramStringFormatting:TelegramStringFormatting",
+        "//submodules/MergeLists:MergeLists",
+        "//submodules/ActivityIndicator:ActivityIndicator",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
     ],
     visibility = [
         "//visibility:public",

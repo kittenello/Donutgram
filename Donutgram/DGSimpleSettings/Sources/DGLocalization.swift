@@ -295,6 +295,7 @@ private let dgEnglishStrings: [String: String] = [
     "Автор в теневом бане": "The author is shadow banned",
     "Сообщение скрыто теневым баном": "This message is hidden by shadow ban",
     "Сохраненные удаленки": "Saved Deleted Messages",
+    "Поиск по удаленкам": "Search Deleted Messages",
     "Хранилище": "Storage",
     "Файлы": "Files",
     "Удалить все": "Delete All",
