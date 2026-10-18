@@ -21,22 +21,26 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         // Its own append: one more case with a ternary in the literal above risks the compiler's type-check time limit.
         let shadowBanCount = s.shadowBannedPeerIds.count
         result.append(.disclosure(21, 1, "shadowBan", "Теневой бан", shadowBanCount == 0 ? "Выключен" : "\(shadowBanCount)"))
-        result.append(contentsOf: [.header(22, 2, "ПЕРЕСЫЛКА"), .toggle(23, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true)])
-        result.append(contentsOf: [.toggle(24, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true)])
-        result.append(contentsOf: [.header(26, 3, "УСКОРЕНИЕ ЗАГРУЗКИ"), .speedSlider(27, 3, s.downloadAcceleration), .toggle(28, 3, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true), .info(29, 3, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео."), .header(30, 4, "ДРУГОЕ"), .disclosure(31, 4, "visualPhone", "Визуальный номер", s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"), .disclosure(32, 4, "visualRating", "Визуальный рейтинг", s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"), .disclosure(33, 4, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"), .disclosure(34, 4, "visualId", "Визуальный ID", s.visualProfileId(accountId: accountId).isEmpty ? "Выключен" : s.visualProfileId(accountId: accountId)), .toggle(35, 4, "localPremium", "Локальный TG Premium", s.localPremium(accountId: accountId), true)])
+        result.append(.toggle(22, 1, "keepBannedChats", "Обход бана в чатах", s.keepBannedChats, true))
+        result.append(contentsOf: [.header(23, 2, "ПЕРЕСЫЛКА"), .toggle(24, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true)])
+        result.append(contentsOf: [.toggle(25, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true)])
+        result.append(contentsOf: [.header(27, 3, "УСКОРЕНИЕ ЗАГРУЗКИ"), .speedSlider(28, 3, s.downloadAcceleration), .toggle(29, 3, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true), .info(30, 3, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео."), .header(31, 4, "ДРУГОЕ"), .disclosure(32, 4, "visualPhone", "Визуальный номер", s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"), .disclosure(33, 4, "visualRating", "Визуальный рейтинг", s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"), .disclosure(34, 4, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"), .disclosure(35, 4, "visualId", "Визуальный ID", s.visualProfileId(accountId: accountId).isEmpty ? "Выключен" : s.visualProfileId(accountId: accountId))])
+        result.append(.disclosure(36, 4, "visualLabel", "Визуальная метка", s.visualLabel(accountId: accountId).title))
+        result.append(.toggle(37, 4, "localPremium", "Локальный TG Premium", s.localPremium(accountId: accountId), true))
         if s.localPremium(accountId: accountId) {
-            result.append(.info(36, 4, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
+            result.append(.info(38, 4, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
         }
-        result.append(contentsOf: [.header(40, 5, "СТАТИСТИКА"), .toggle(41, 5, "telegramStatistics", "Отправлять статистику в Telegram", s.sendTelegramStatistics, true), .info(42, 5, "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.")])
+        result.append(contentsOf: [.header(41, 5, "СТАТИСТИКА"), .toggle(42, 5, "telegramStatistics", "Отправлять статистику в Telegram", s.sendTelegramStatistics, true), .info(43, 5, "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.")])
         return result
     }, restartRequiredKeys: ["localPremium"], toggle: { key, value in
-        switch key { case "telegramStatistics": s.sendTelegramStatistics = value; case "saveDeleted": s.saveDeletedMessages = value; case "saveOwnDeleted": s.saveOwnDeletedMessages = value; case "transparentDeleted": s.semiTransparentDeletedMessages = value; case "saveEdits": s.saveEditHistory = value; case "saveOnce": s.saveViewOnceMedia = value; case "saveBots": s.saveInBotChats = value; case "saveProtectedStories": s.saveProtectedStories = value; case "gifUnlock": s.gifUnlock = value; case "disappearedGifts": s.showDisappearedGifts = value; case "bypassForward": s.bypassForwardRestrictions = value; case "protectedScreenshots": s.allowProtectedScreenshots = value; case "accelerateUpload": s.accelerateUpload = value; case "localPremium": s.setLocalPremium(value, accountId: accountId); default: break }
+        switch key { case "telegramStatistics": s.sendTelegramStatistics = value; case "saveDeleted": s.saveDeletedMessages = value; case "saveOwnDeleted": s.saveOwnDeletedMessages = value; case "transparentDeleted": s.semiTransparentDeletedMessages = value; case "saveEdits": s.saveEditHistory = value; case "saveOnce": s.saveViewOnceMedia = value; case "saveBots": s.saveInBotChats = value; case "saveProtectedStories": s.saveProtectedStories = value; case "gifUnlock": s.gifUnlock = value; case "keepBannedChats": s.keepBannedChats = value; case "disappearedGifts": s.showDisappearedGifts = value; case "bypassForward": s.bypassForwardRestrictions = value; case "protectedScreenshots": s.allowProtectedScreenshots = value; case "accelerateUpload": s.accelerateUpload = value; case "localPremium": s.setLocalPremium(value, accountId: accountId); default: break }
     }, select: { key in
         if key.hasPrefix("downloadAcceleration:"), let value = Int(key.split(separator: ":").last ?? "") { s.downloadAcceleration = value }
     }, open: { key in
         switch key {
         case "ghost": return dgGhostSettingsController(context: context)
         case "visualPhone": return dgVisualPhoneController(context: context)
+        case "visualLabel": return dgVisualLabelController(context: context)
         case "visualRating": return dgVisualRatingController(context: context)
         case "visualUsernames": return dgVisualUsernamesController(context: context)
         case "visualId": return dgVisualIdController(context: context)
@@ -44,6 +48,20 @@ public func dgSpySettingsController(context: AccountContext, focusKey: String? =
         case "savedDeleted": return dgSavedDeletedMessagesController(context: context)
         default: return nil
         }
+    })
+}
+
+private func dgVisualLabelController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let settings = DGSimpleSettings.shared
+    let accountId = context.account.peerId.toInt64()
+    return dgController(context: context, page: .visualLabel, title: "Визуальная метка", focusKey: focusKey, entries: {
+        var entries: [DGListEntry] = [.header(0, 0, "МЕТКА ПРОФИЛЯ")]
+        for (index, label) in DGVisualLabel.allCases.enumerated() {
+            entries.append(.checkbox(Int32(index + 1), 0, label.rawValue, label.title, settings.visualLabel(accountId: accountId) == label))
+        }
+        return entries
+    }, select: { key in
+        settings.setVisualLabel(DGVisualLabel(rawValue: key) ?? .none, accountId: accountId)
     })
 }
 
@@ -558,7 +576,7 @@ private func dgAutoPauseMediaController(context: AccountContext, focusKey: Strin
 func dgDownloadsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let settings = DGSimpleSettings.shared
     return dgController(context: context, page: .downloads, title: "Скачивание", focusKey: focusKey, entries: {
-        [.header(0, 0, "СКАЧИВАНИЕ"), .toggle(1, 0, "downloadTikTok", "Скачивать TikTok", settings.downloadTikTok, true), .toggle(2, 0, "downloadShorts", "Скачивать YT Shorts", settings.downloadYouTubeShorts, true), .toggle(3, 0, "signDownloads", "Подписывать", settings.signDownloadedMedia, true)]
+        [.header(0, 0, "СКАЧИВАНИЕ"), .toggle(1, 0, "downloadTikTok", "Скачивать TikTok", settings.downloadTikTok, true), .toggle(2, 0, "downloadShorts", "Скачивать YT Shorts", settings.downloadYouTubeShorts, true), .toggle(3, 0, "signDownloads", "Подписывать", settings.signDownloadedMedia, true), .info(4, 0, "Если TikTok не отдаёт видео или фото, они запрашиваются через сторонний сервис tikwm.com: он видит ссылку на пост и ваш IP-адрес.")]
     }, toggle: { key, value in
         switch key { case "downloadTikTok": settings.downloadTikTok = value; case "downloadShorts": settings.downloadYouTubeShorts = value; case "signDownloads": settings.signDownloadedMedia = value; default: break }
     })
@@ -658,6 +676,7 @@ public func dgSettingsControllerForLink(context: AccountContext, page: String, k
     case .visualRating: makeController = dgVisualRatingController
     case .visualUsernames: makeController = dgVisualUsernamesController
     case .visualPhone: makeController = dgVisualPhoneController
+    case .visualLabel: makeController = dgVisualLabelController
     case .shadowBan: makeController = dgShadowBanController
     case .savedDeleted: makeController = dgSavedDeletedMessagesController
     case .support: makeController = dgSupportController

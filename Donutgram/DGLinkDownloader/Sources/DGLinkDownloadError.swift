@@ -3,11 +3,31 @@ import Foundation
 /// Why a link could not be turned into media. `reason` is the Russian text shown on the toast.
 public enum DGLinkDownloadError: Error, Equatable {
     case cancelled
-    case tiktokLinkExpired
     case tiktokNotFound
+    /// The account is private (status 10222).
     case tiktokPrivate
+    /// Only the post is closed (status 10216): a public account's post for friends or for its author alone.
+    case tiktokPrivatePost
     case tiktokStatus(Int)
-    case tiktokNoData
+    /// The post page came without the post's data; the title of what came instead, when it has one.
+    case tiktokNoData(String?)
+    /// TikTok sent the post page, or a short link, to another page: its path.
+    case tiktokRedirected(String)
+    case tiktokShortLinkRedirected(String)
+    /// TikTok left Hong Kong in 2020 and sends every request from there to "/hk/about"; for this app's users that
+    /// means a VPN server there, so the toast speaks of the VPN.
+    case tiktokHongKong
+    case tiktokLoginRequired
+    case tiktokAgeRestricted
+    case tiktokNoFile
+    case tiktokPageStatus(Int)
+    case tiktokPageDenied
+    case tiktokBotCheck
+    case tiktokFileStatus(Int)
+    case tiktokUnavailable
+    case tiktokDownloadServiceStatus(Int)
+    /// TikTok refused (first) and TikWM failed after it (second): TikWM's answer alone hides why TikTok refused.
+    indirect case tiktokFailed(DGLinkDownloadError, DGLinkDownloadError)
     case youtubeLoginRequired
     case youtubeAgeRestricted
     case youtubeUnavailable
@@ -30,16 +50,42 @@ public enum DGLinkDownloadError: Error, Equatable {
         switch self {
         case .cancelled:
             return "Скачивание отменено"
-        case .tiktokLinkExpired:
-            return "Ссылка TikTok устарела или неверная"
         case .tiktokNotFound:
             return "Видео удалено или недоступно"
         case .tiktokPrivate:
             return "Закрытый аккаунт"
+        case .tiktokPrivatePost:
+            return "Закрытое видео"
         case let .tiktokStatus(code):
             return "TikTok не отдал видео (код \(code))"
-        case .tiktokNoData:
-            return "TikTok не отдал страницу (проверка на бота)"
+        case let .tiktokNoData(title):
+            return "TikTok прислал страницу без видео" + (title.map { ": «\($0)»" } ?? "")
+        case let .tiktokRedirected(path):
+            return "TikTok открыл \(DGLinkDownloadError.placeName(path)) вместо видео"
+        case let .tiktokShortLinkRedirected(path):
+            return "Короткая ссылка TikTok ведёт на \(DGLinkDownloadError.placeName(path)), а не на видео"
+        case .tiktokHongKong:
+            return "TikTok не работает через этот VPN, смените сервер"
+        case .tiktokLoginRequired:
+            return "TikTok просит войти в аккаунт"
+        case .tiktokAgeRestricted:
+            return "TikTok не отдаёт это видео без входа (18+)"
+        case .tiktokNoFile:
+            return "TikTok не дал ссылку на файл"
+        case let .tiktokPageStatus(code):
+            return "TikTok не отдал страницу (HTTP \(code))"
+        case .tiktokPageDenied:
+            return "TikTok отклонил запрос"
+        case .tiktokBotCheck:
+            return "TikTok не пропустил проверку на бота"
+        case let .tiktokFileStatus(code):
+            return "TikTok не отдал файл (HTTP \(code))"
+        case .tiktokUnavailable:
+            return "Сервис скачивания TikTok не отдал видео"
+        case let .tiktokDownloadServiceStatus(code):
+            return "Сервис скачивания TikTok вернул HTTP \(code)"
+        case let .tiktokFailed(direct, fallback):
+            return [direct.reason, fallback.reason].map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }.joined(separator: ". ")
         case .youtubeLoginRequired:
             return "YouTube просит войти в аккаунт"
         case .youtubeAgeRestricted:
@@ -66,5 +112,13 @@ public enum DGLinkDownloadError: Error, Equatable {
         case .processingFailed:
             return "Не удалось обработать файл"
         }
+    }
+
+    /// A TikTok page path as the toast names it.
+    private static func placeName(_ path: String) -> String {
+        if path.isEmpty || path == "/" {
+            return "главную"
+        }
+        return path.count > 40 ? String(path.prefix(40)) + "…" : path
     }
 }

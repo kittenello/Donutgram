@@ -6,6 +6,19 @@ on:
     paths:
       - 'Donutgram/DGSimpleSettings/**'
       - 'Donutgram/DGSettingsUI/**'
+      - 'Donutgram/DGLinkDownloader/**'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramBannedChats.swift'
+      - 'submodules/TelegramCore/Sources/UpdatePeers.swift'
+      - 'submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift'
+      - 'submodules/TelegramCore/Sources/State/HistoryViewStateValidation.swift'
+      - 'submodules/TelegramCore/Sources/State/Holes.swift'
+      - 'submodules/TelegramCore/Sources/State/ResetState.swift'
+      - 'submodules/TelegramCore/Sources/State/ManagedSynchronizePinnedChatsOperations.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/UpdateCachedPeerData.swift'
+      - 'submodules/TelegramUI/Sources/ChatControllerContentData.swift'
+      - 'submodules/TelegramUI/Sources/ChatControllerNode.swift'
+      - 'submodules/TelegramUI/Sources/ChatController.swift'
+      - 'submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift'
       - 'submodules/SettingsUI/Sources/Themes/ThemeSettingsChatPreviewItem.swift'
       - 'submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/**'
       - 'submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/**'
@@ -14,6 +27,7 @@ on:
       - 'submodules/ChatListUI/**'
       - 'submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/**'
       - 'Tests/message_controls/**'
+      - 'Tests/tiktok_banned_chats/**'
       - '.github/workflows/message-controls-tests.yml'
   workflow_dispatch:
 
@@ -28,3 +42,5 @@ jobs:
       - uses: actions/checkout@v5
       - name: Check message settings, cat emoji and persistence
         run: python3 Tests/message_controls/run.py
+      - name: Check TikTok fallback and banned chat archives
+        run: python3 Tests/tiktok_banned_chats/run.py

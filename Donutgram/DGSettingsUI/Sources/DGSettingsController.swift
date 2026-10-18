@@ -101,6 +101,7 @@ private func dgSettingsSymbol(key: String, title: String) -> String {
     case "localPremium": return "star"
     case "visualPhone", "number": return "phone"
     case "visualRating": return "star"
+    case "visualLabel": return "checkmark.seal"
     case "visualUsernames": return "at"
     case "signDownloads": return "text.alignleft"
     case "online": return "person.crop.circle"

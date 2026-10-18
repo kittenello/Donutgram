@@ -16,6 +16,9 @@ func shouldExcludePeerFromChatList(transaction: Transaction, peerId: PeerId, pee
     guard let peer = peer ?? transaction.getPeer(peerId) else {
         return false
     }
+    if donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId, peer: peer) {
+        return false
+    }
 
     if let group = peer as? TelegramGroup {
         if group.flags.contains(.deactivated) {
@@ -323,6 +326,11 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
         }
         if let updatedCommunity = updated as? TelegramCommunity {
             updated = mergeCommunity(lhs: previous as? TelegramCommunity, rhs: updatedCommunity)
+        }
+
+        donutgramUpdateBannedChat(transaction: transaction, previous: previous, updated: updated)
+        if donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId, peer: updated) {
+            return update(previous, donutgramPreservedBannedPeer(previous: previous, updated: updated))
         }
         
         switch peerId.namespace {

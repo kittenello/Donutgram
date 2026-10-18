@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/Display",
         "//submodules/ComponentFlow",
         "//submodules/Components/ComponentDisplayAdapters",

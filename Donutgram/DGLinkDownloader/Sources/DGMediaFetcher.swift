@@ -70,7 +70,55 @@ final class DGMediaFetcher: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    func download(_ request: URLRequest, to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
+    /// Where a request ends up after redirects, whatever the final status: only the address is needed.
+    func finalURL(_ request: URLRequest, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
+        self.queue.async {
+            guard !self.isCancelled, let session = self.session else {
+                completion(.failure(.cancelled))
+                return
+            }
+            let task = session.dataTask(with: request, completionHandler: { _, response, error in
+                if let error {
+                    completion(.failure(DGLinkDownloadError(error)))
+                } else if let url = response?.url {
+                    completion(.success(url))
+                } else {
+                    completion(.failure(.httpStatus(0)))
+                }
+            })
+            self.tasks.append(task)
+            task.resume()
+        }
+    }
+
+    /// Cookies a page's script would set (TikTok's bot check). Queued like requests, so they apply to the next one.
+    func setCookies(_ cookies: [HTTPCookie]) {
+        self.queue.async {
+            for cookie in cookies {
+                self.session?.configuration.httpCookieStorage?.setCookie(cookie)
+            }
+        }
+    }
+
+    func deleteCookies(_ cookies: [HTTPCookie]) {
+        self.queue.async {
+            for cookie in cookies {
+                self.session?.configuration.httpCookieStorage?.deleteCookie(cookie)
+            }
+        }
+    }
+
+    func download(_ request: URLRequest, alternatives: [URLRequest] = [], to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
+        self.downloadSingle(request, to: destination, maxBytes: maxBytes, progress: progress, completion: { result in
+            if case let .failure(.httpStatus(code)) = result, [403, 404, 410].contains(code), let next = alternatives.first {
+                self.download(next, alternatives: Array(alternatives.dropFirst()), to: destination, maxBytes: maxBytes, progress: progress, completion: completion)
+            } else {
+                completion(result)
+            }
+        })
+    }
+
+    private func downloadSingle(_ request: URLRequest, to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
         self.queue.async {
             guard !self.isCancelled, let session = self.session else {
                 completion(.failure(.cancelled))
@@ -102,6 +150,11 @@ final class DGMediaFetcher: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let download = self.downloads[downloadTask.taskIdentifier], download.failure == nil else {
+            return
+        }
+        // A refused copy's error page is not the file: its length would stand as the file's size until the next copy
+        // sends one, and that copy may never send it.
+        if let httpResponse = downloadTask.response as? HTTPURLResponse, !(200 ..< 300).contains(httpResponse.statusCode) {
             return
         }
         let expected: Int64? = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil

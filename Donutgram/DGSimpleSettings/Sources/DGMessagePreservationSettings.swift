@@ -1,6 +1,6 @@
 import Foundation
 
-/// Message-retention and mention-notification preferences are shared with the notification extension.
+/// Message-retention, banned-chat and mention-notification preferences are shared with the notification extension.
 /// An extension must not initialize them from its own, unrelated standard defaults.
 public final class DGMessagePreservationSettings {
     private let defaults: UserDefaults
@@ -12,7 +12,8 @@ public final class DGMessagePreservationSettings {
         static let bots = "donutgram.spy.saveInBotChats"
         static let removePings = "donutgram.chats.removePings"
         static let own = "donutgram.spy.saveOwnDeletedMessages"
-        static let all = [deleted, edits, viewOnce, bots, removePings, own]
+        static let keepBannedChats = "donutgram.general.keepBannedChats"
+        static let all = [deleted, edits, viewOnce, bots, removePings, own, keepBannedChats]
     }
 
     public init(sharedDefaults: UserDefaults, legacyDefaults: UserDefaults, migrateLegacyValues: Bool) {
@@ -62,5 +63,12 @@ public final class DGMessagePreservationSettings {
     public var saveOwnDeletedMessages: Bool {
         get { (self.defaults.object(forKey: Key.own) as? Bool) ?? true }
         set { self.set(newValue, forKey: Key.own) }
+    }
+
+    /// The extension applies the update that bans the account from a chat as often as the app does, and a chat it lets
+    /// go is not kept later: by then the stored membership is already the banned one.
+    public var keepBannedChats: Bool {
+        get { self.defaults.bool(forKey: Key.keepBannedChats) }
+        set { self.set(newValue, forKey: Key.keepBannedChats) }
     }
 }
