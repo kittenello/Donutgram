@@ -971,6 +971,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private let mediaPlaybackStateDisposable = MetaDisposable()
     
     private let fetchDisposable = MetaDisposable()
+    private let copyFrameDisposable = MetaDisposable()
     private var fetchStatus: MediaResourceStatus?
     private var fetchControls: FetchControls?
     
@@ -1204,6 +1205,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         self.scrubbingFrameDisposable?.dispose()
         self.hideControlsDisposable?.dispose()
         self.automaticPictureInPictureDisposable?.dispose()
+        self.copyFrameDisposable.dispose()
     }
     
     override func ready() -> Signal<Void, NoError> {
@@ -3289,6 +3291,49 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         return nil
     }
 
+    private func copyCurrentVideoFrame(message: Message, file: TelegramMediaFile) {
+        let timestamp = self.playerStatusValue?.timestamp ?? 0.0
+        // Prefer a file that is already on disk: the original, then the best downloaded HLS quality. Otherwise
+        // fetch the quality being played rather than the original, which can be many times larger.
+        var candidates: [FileMediaReference] = [.message(message: MessageReference(message), media: file)]
+        var fallback = candidates[0]
+        if let content = self.item?.content as? HLSVideoContent, let qualitySet = HLSQualitySet(baseFile: content.fileReference, codecConfiguration: HLSCodecConfiguration(context: self.context)) {
+            let qualities = qualitySet.qualityFiles.sorted(by: { $0.key > $1.key })
+            candidates = [content.fileReference] + qualities.map(\.value)
+            if let current = self.videoNode?.videoQualityState()?.current, let currentFile = qualitySet.qualityFiles[current] {
+                fallback = currentFile
+            } else if let smallest = qualities.last?.value {
+                fallback = smallest
+            }
+        }
+        let context = self.context
+        let statuses = candidates.map { candidate -> Signal<Bool, NoError> in
+            return context.engine.resources.status(resource: EngineMediaResource(candidate.media.resource))
+            |> take(1)
+            |> map { status -> Bool in
+                return status == .Local
+            }
+        }
+        let copySignal = combineLatest(queue: .mainQueue(), statuses)
+        |> mapToSignal { isLocal -> Signal<Bool, NoError> in
+            let reference = zip(candidates, isLocal).first(where: { $0.1 })?.0 ?? fallback
+            return Signal { subscriber in
+                return donutgramCopyVideoFrame(context: context, mediaReference: reference.abstract, timestamp: timestamp, completion: { success in
+                    subscriber.putNext(success)
+                    subscriber.putCompletion()
+                })
+            }
+        }
+        // Owned by the node, so a download that outlives the gallery cannot overwrite the clipboard later.
+        self.copyFrameDisposable.set((copySignal
+        |> deliverOnMainQueue).startStrict(next: { [weak self] success in
+            guard let self, let controller = self.galleryController(), success else {
+                return
+            }
+            controller.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: dgLocalized("Кадр скопирован", languageCode: self.presentationData.strings.primaryComponent.languageCode)), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
+        }))
+    }
+
     private func canDelete() -> Bool {
         guard let (message, _, _) = self.contentInfo() else {
             return false
@@ -3834,18 +3879,12 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 }
                 
                 if let (message, file, _) = strongSelf.contentInfo(), let file, !message.isCopyProtected() && !item.peerIsCopyProtected && message.paidContent == nil {
-                    let context = strongSelf.context
                     items.append(.action(ContextMenuActionItem(text: dgLocalized("Копировать кадр", languageCode: strongSelf.presentationData.strings.primaryComponent.languageCode), icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor) }, action: { [weak self] _, f in
                         f(.default)
                         guard let self else {
                             return
                         }
-                        let _ = donutgramCopyVideoFrame(context: context, mediaReference: .message(message: MessageReference(message), media: file), timestamp: self.playerStatusValue?.timestamp ?? 0.0, completion: { [weak self] success in
-                            guard let self, let controller = self.galleryController(), success else {
-                                return
-                            }
-                            controller.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: dgLocalized("Кадр скопирован", languageCode: self.presentationData.strings.primaryComponent.languageCode)), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
-                        })
+                        self.copyCurrentVideoFrame(message: message, file: file)
                     })))
                 }
 

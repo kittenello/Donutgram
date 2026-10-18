@@ -4,7 +4,6 @@ import AVFoundation
 import AccountContext
 import TelegramCore
 import SwiftSignalKit
-import Pasteboard
 import SaveToCameraRoll
 
 private func donutgramCopyFetchedImage(path: String) -> Bool {
@@ -19,6 +18,9 @@ private func donutgramCopyFetchedVideoFrame(path: String, timestamp: Double) -> 
     let asset = AVURLAsset(url: URL(fileURLWithPath: path))
     let generator = AVAssetImageGenerator(asset: asset)
     generator.appliesPreferredTrackTransform = true
+    // The default tolerance is infinite, which returns the nearest keyframe instead of the paused frame.
+    generator.requestedTimeToleranceBefore = .zero
+    generator.requestedTimeToleranceAfter = .zero
     guard let image = try? generator.copyCGImage(at: CMTime(seconds: max(timestamp, 0.0), preferredTimescale: 600), actualTime: nil) else {
         return false
     }
