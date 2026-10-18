@@ -29,6 +29,10 @@ def prepare(directory):
     assert "preservedBannedChats.append" in reset and "inclusion: inclusion" in reset
     holes = source("submodules/TelegramCore/Sources/State/Holes.swift")
     assert "donutgramIsPreservedBannedChat(transaction: transaction, peerId: archivedPeerId)" in holes
+    cached = source("submodules/TelegramCore/Sources/TelegramEngine/Peers/UpdateCachedPeerData.swift")
+    # getFullChannel fails in a channel the account is banned from; a kept chat must not lose its pin and migration link.
+    failed = cached.split("let isPreservedBannedChat = donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId)", 1)[1]
+    assert failed.index("if isPreservedBannedChat, let current {\n                                    return current") < failed.index("withUpdatedIsNotAccessible(true)")
     sync = source("submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift")
     poll = sync.split("private func pollChannel(", 1)[1]
     assert poll.index("if donutgramPeerIsBanned(peer)") < poll.index("network.request(")
