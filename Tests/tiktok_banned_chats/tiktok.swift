@@ -6,10 +6,17 @@ struct DGHTTPResponse {
 final class DGMediaFetcher {
     var responses: [Result<DGHTTPResponse, DGLinkDownloadError>] = []
     var requests: [URLRequest] = []
+    var cookieLog: [String] = []
     func fetchData(_ request: URLRequest, completion: @escaping (Result<DGHTTPResponse, DGLinkDownloadError>) -> Void) {
         requests.append(request)
         precondition(!responses.isEmpty, "unexpected extra request")
         completion(responses.removeFirst())
+    }
+    func setCookies(_ cookies: [HTTPCookie]) {
+        cookieLog.append("set " + cookies.map { $0.name }.joined(separator: ","))
+    }
+    func deleteCookies(_ cookies: [HTTPCookie]) {
+        cookieLog.append("delete " + cookies.map { $0.name }.joined(separator: ","))
     }
 }
 
@@ -21,43 +28,160 @@ func response(_ object: [String: Any], url: URL? = nil) -> Result<DGHTTPResponse
     return .success(DGHTTPResponse(data: try! JSONSerialization.data(withJSONObject: object), url: url))
 }
 
+func htmlResponse(_ html: String, url: URL) -> Result<DGHTTPResponse, DGLinkDownloadError> {
+    return .success(DGHTTPResponse(data: Data(html.utf8), url: url))
+}
+
 let post = URL(string: "https://www.tiktok.com/@scout2015/video/6718335390845095173")!
 let short = URL(string: "https://vm.tiktok.com/ABC123/?test=a&another=b")!
 let video: [String: Any] = ["code": 0, "data": ["hdplay": "https://cdn.example/video.mp4", "hd_size": "12345", "play": "https://cdn.example/sd.mp4", "duration": 15]]
 let fetcher = DGMediaFetcher()
 let page = #"{"__DEFAULT_SCOPE__":{"webapp.video-detail":{"statusCode":0,"itemInfo":{"itemStruct":{"video":{"playAddr":"https://cdn.example/direct.mp4","duration":5}}}}}}"#
 let html = "<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\">" + page + "</script>"
-fetcher.responses = [.success(DGHTTPResponse(data: Data(html.utf8), url: post))]
-var direct: Result<DGTikTokItem, DGLinkDownloadError>?
-DGTikTokExtractor.resolve(post, fetcher: fetcher) { direct = $0 }
-if case let .success(.video(file, _)) = direct {
+// What TikTok's Akamai edge answered a GitHub runner with, as HTTP 200 (X-Cache: TCP_DENIED).
+let deniedPage = """
+<!doctype html>
+<html>
+<head>
+    <title>Site Maintenance</title>
+    <style type="text/css">body { text-align: center; padding: 150px; }h1 { font-size: 40px; }body { font: 16px
+Helvetica, sans-serif; color: #333; }#error { display: block; text-align: left; width: 650px; margin: 0 auto; }
+</style>
+</head>
+<body>
+    <div id="error">
+    <h1>Oops! Something went wrong</h1>
+    <div>
+        <hr>
+        <p>Please contact your administrator with the error code: 0.591e2117.1792313912.be90ad69</p>
+    </div>
+    </div>
+</body>
+</html
+"""
+
+/// The whole TikTok flow against canned answers. `files` are the outcomes of downloading each item in turn:
+/// nil means the files arrived and the job is done, an error goes back to the extractor.
+func flow(_ url: URL, _ answers: [Result<DGHTTPResponse, DGLinkDownloadError>], files: [DGLinkDownloadError?] = [nil]) -> (items: [DGTikTokItem], failure: DGLinkDownloadError?, fallbacks: Int) {
+    fetcher.requests.removeAll()
+    fetcher.cookieLog.removeAll()
+    fetcher.responses = answers
+    var items: [DGTikTokItem] = []
+    var failure: DGLinkDownloadError?
+    var fallbacks = 0
+    var outcomes = files
+    DGTikTokExtractor.run(url, fetcher: fetcher, willUseFallback: { fallbacks += 1 }, download: { item, failed in
+        items.append(item)
+        precondition(!outcomes.isEmpty, "unexpected extra download")
+        if let error = outcomes.removeFirst() {
+            failed(error)
+        }
+    }, failure: { error in
+        precondition(failure == nil, "one final error")
+        failure = error
+    })
+    check(fetcher.responses.isEmpty && outcomes.isEmpty, "every canned answer and download used")
+    return (items, failure, fallbacks)
+}
+
+func tikwmRequests() -> Int {
+    return fetcher.requests.filter { $0.url?.host == "www.tikwm.com" }.count
+}
+
+var run = flow(post, [htmlResponse(html, url: post)])
+if case let .video(file, _)? = run.items.first {
     check(file.url.absoluteString == "https://cdn.example/direct.mp4", "keep working direct extraction")
 } else { fatalError("direct page") }
-check(fetcher.requests.count == 1, "working direct pages never contact provider")
-fetcher.requests.removeAll()
-fetcher.responses = [.success(DGHTTPResponse(data: Data("challenge".utf8), url: URL(string: "https://www.tiktok.com/"))), response(video)]
-var result: Result<DGTikTokItem, DGLinkDownloadError>?
-DGTikTokExtractor.resolve(short, fetcher: fetcher) { result = $0 }
-if case let .success(.video(file, duration)) = result {
+check(run.failure == nil && run.fallbacks == 0 && fetcher.requests.count == 1, "working direct pages never contact provider")
+
+run = flow(short, [htmlResponse("challenge", url: URL(string: "https://www.tiktok.com/")!), response(video)])
+if case let .video(file, duration)? = run.items.first {
     check(file.url.absoluteString == "https://cdn.example/video.mp4", "prefer HD")
     check(file.expectedSize == 12345 && duration == 15, "provider metadata")
     check(file.alternateURLs == [URL(string: "https://cdn.example/sd.mp4")!], "keep SD from another CDN when HD is blocked")
 } else { fatalError("a challenge redirect must use the provider") }
-check(fetcher.requests.count == 2, "one fallback request")
+check(run.failure == nil && run.fallbacks == 1 && fetcher.requests.count == 2, "one fallback request")
 let query = URLComponents(url: fetcher.requests[1].url!, resolvingAgainstBaseURL: false)!.queryItems!
 check(query.first { $0.name == "url" }?.value == short.absoluteString, "pass original short link without corrupting its query")
 
-fetcher.responses = [.failure(.httpStatus(403)), response(video)]
-DGTikTokExtractor.resolve(post, fetcher: fetcher) { result = $0 }
-if case .success(.video) = result {} else { fatalError("page HTTP 403 must use fallback") }
-let count = fetcher.requests.count
-fetcher.responses = [.failure(.cancelled)]
-DGTikTokExtractor.resolve(post, fetcher: fetcher) { result = $0 }
-check(result == .failure(.cancelled), "cancellation propagates")
-check(fetcher.requests.count == count + 1, "cancellation never contacts fallback")
+run = flow(post, [.failure(.httpStatus(403)), response(video)])
+check(run.items.count == 1 && run.failure == nil && run.fallbacks == 1, "page HTTP 403 must use fallback")
+
+run = flow(post, [.failure(.cancelled)], files: [])
+check(run.failure == .cancelled && run.fallbacks == 0 && fetcher.requests.count == 1, "cancellation never contacts fallback")
+
+var result: Result<DGTikTokItem, DGLinkDownloadError>?
 fetcher.responses = [.failure(.httpStatus(403))]
 DGTikTokExtractor.resolveFallback(short, fetcher: fetcher) { result = $0 }
 check(result == .failure(.tiktokDownloadServiceStatus(403)), "distinguish resolver HTTP errors from media errors")
+
+// When both sources fail, the toast names TikTok's answer too: TikWM's alone hid it.
+run = flow(post, [.failure(.httpStatus(403)), .failure(.httpStatus(403))], files: [])
+check(run.failure == .tiktokFailed(.tiktokPageStatus(403), .tiktokDownloadServiceStatus(403)), "page and provider errors are both kept")
+check(run.failure?.reason == "TikTok не отдал страницу (HTTP 403). Сервис скачивания TikTok вернул HTTP 403", "both reasons on the toast")
+run = flow(post, [htmlResponse(deniedPage, url: post), .failure(.httpStatus(403))], files: [])
+check(run.failure == .tiktokFailed(.tiktokPageDenied, .tiktokDownloadServiceStatus(403)), "Akamai's HTTP 200 deny page is named")
+check(DGLinkDownloadError.tiktokFailed(.tiktokNoData, .tiktokUnavailable).reason == "TikTok прислал страницу без видео. Сервис скачивания TikTok не отдал видео", "reason text")
+
+// A failed TikTok file goes to TikWM once; TikWM is never asked twice in one job.
+run = flow(post, [htmlResponse(html, url: post), response(video)], files: [.httpStatus(403), .httpStatus(403)])
+check(run.items.count == 2 && run.fallbacks == 1 && tikwmRequests() == 1, "one provider request per job")
+check(run.failure == .tiktokFailed(.tiktokFileStatus(403), .httpStatus(403)), "file errors of both sources are kept")
+run = flow(short, [htmlResponse("home", url: URL(string: "https://www.tiktok.com/")!), response(video)], files: [.httpStatus(403)])
+check(tikwmRequests() == 1 && run.failure == .tiktokFailed(.tiktokNoData, .httpStatus(403)), "a provider file failure is final")
+run = flow(post, [htmlResponse(html, url: post)], files: [.tooLarge])
+check(run.failure == .tooLarge && run.fallbacks == 0 && fetcher.requests.count == 1, "the provider's copy would be too large as well")
+run = flow(post, [htmlResponse(html, url: post), response(video)], files: [.processingFailed, .tooLarge])
+check(run.failure == .tooLarge, "the size limit is reported as it is")
+
+// TikTok's bot check: find n with SHA-256(a + "n") = c, answer in a cookie, reload.
+func challengePage(answer: Int, extraCookie: Bool) -> (html: String, json: String) {
+    let prefix = Data("donutgram-challenge-prefix".utf8)
+    var hasher = SHA256()
+    hasher.update(data: prefix)
+    hasher.update(data: Data(String(answer).utf8))
+    let digest = Data(hasher.finalize())
+    let json = #"{"v":{"a":""# + prefix.base64EncodedString() + #"","b":"x","c":""# + digest.base64EncodedString() + #""},"s":"sig/+"}"#
+    var encoded = Data(json.utf8).base64EncodedString()
+    while encoded.hasSuffix("=") {
+        encoded.removeLast()
+    }
+    var page = "<html><head><title>Please wait...</title></head><body><p id=\"cs\" class=\"" + encoded + "\"></p><p class=\"_wafchallengeid\" id=\"wci\"></p>"
+    if extraCookie {
+        page += "<p id=\"rci\" class=\"waforiginalreid\"></p><p id='rs' class='original-value'></p>"
+    }
+    return (page + "<script>/* solve and reload */</script></body></html>", json)
+}
+
+let challenge = challengePage(answer: 54321, extraCookie: true)
+check(DGTikTokExtractor.isBotCheck(challenge.html) && !DGTikTokExtractor.isBotCheck(html), "bot check recognized only without page data")
+check(DGTikTokExtractor.solveChallenge(prefix: Data("donutgram-challenge-prefix".utf8), expected: Data(repeating: 0, count: 31)) == nil, "a malformed digest is not searched")
+let cookies = DGTikTokExtractor.challengeCookies(challenge.html) ?? []
+check(cookies.map { $0.name } == ["_wafchallengeid", "waforiginalreid"], "cookie names come from the page")
+check(cookies.allSatisfy { $0.domain == ".tiktok.com" && $0.path == "/" }, "cookies reach www.tiktok.com")
+check(cookies.count == 2 && cookies[1].value == "original-value", "the optional second cookie keeps its value")
+let answerText = cookies.first.flatMap { Data(base64Encoded: $0.value) }.map { String(decoding: $0, as: UTF8.self) }
+check(answerText == String(challenge.json.dropLast()) + #","d":"NTQzMjE="}"#, "the challenge text with the answer d = base64(\"54321\") added last")
+
+run = flow(post, [htmlResponse(challenge.html, url: post), htmlResponse(html, url: post)])
+check(run.failure == nil && run.fallbacks == 0 && run.items.count == 1, "a solved bot check reaches the page")
+check(fetcher.requests.count == 2 && fetcher.requests[0].url == fetcher.requests[1].url, "the same page is asked again")
+check(fetcher.cookieLog == ["set _wafchallengeid,waforiginalreid", "delete _wafchallengeid,waforiginalreid"], "challenge cookies are set for the reload only")
+run = flow(post, [htmlResponse(challenge.html, url: post), htmlResponse(challenge.html, url: post), .failure(.httpStatus(403))], files: [])
+check(run.failure == .tiktokFailed(.tiktokBotCheck, .tiktokDownloadServiceStatus(403)), "a bot check that stays is named")
+check(fetcher.cookieLog.last == "delete _wafchallengeid,waforiginalreid", "cookies are removed after a failed reload too")
+let unsolvable = challengePage(answer: 1_000_001, extraCookie: false)
+check(DGTikTokExtractor.challengeCookies(unsolvable.html) == nil, "search stops at yt-dlp's bound")
+run = flow(post, [htmlResponse(unsolvable.html, url: post), .failure(.httpStatus(403))], files: [])
+check(run.failure == .tiktokFailed(.tiktokBotCheck, .tiktokDownloadServiceStatus(403)) && fetcher.cookieLog.isEmpty, "an unsolved bot check goes to the provider")
+
+// Every CDN copy of the chosen variant, then the default stream; www.tiktok.com links are dropped.
+let variants = #"{"__DEFAULT_SCOPE__":{"webapp.video-detail":{"statusCode":0,"itemInfo":{"itemStruct":{"video":{"duration":7,"playAddr":"https://v77.cdn.example/play.mp4","bitrateInfo":[{"CodecType":"h264","Bitrate":900,"PlayAddr":{"DataSize":"777","Width":576,"Height":1024,"UrlList":["https://www.tiktok.com/aweme/v1/play/?video_id=1","https://v16.cdn.example/hd.mp4","https://v19.cdn.example/hd.mp4"]}},{"CodecType":"h264","Bitrate":100,"PlayAddr":{"UrlList":["https://v16.cdn.example/sd.mp4"]}},{"CodecType":"bytevc1","Bitrate":5000,"PlayAddr":{"UrlList":["https://v16.cdn.example/hevc.mp4"]}}]}}}}}}"#
+if case let .success(.video(file, duration)) = DGTikTokExtractor.parsePage("<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\" type=\"application/json\">" + variants + "</script>") {
+    check(file.url.absoluteString == "https://v16.cdn.example/hd.mp4" && file.expectedSize == 777 && duration == 7, "best h264 variant")
+    check(file.alternateURLs.map { $0.absoluteString } == ["https://v19.cdn.example/hd.mp4", "https://v77.cdn.example/play.mp4"], "other CDN copies, then the default stream")
+} else { fatalError("variants page") }
+check(DGTikTokExtractor.parsePage(deniedPage) == .failure(.tiktokPageDenied), "deny page")
 
 let photos: [String: Any] = ["code": 0, "data": ["images": ["//cdn.example/1.jpg", "https://cdn.example/2.jpg"], "play": "https://cdn.example/cover.mp4"]]
 let photosData = try! JSONSerialization.data(withJSONObject: photos)

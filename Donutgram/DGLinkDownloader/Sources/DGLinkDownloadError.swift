@@ -8,8 +8,14 @@ public enum DGLinkDownloadError: Error, Equatable {
     case tiktokPrivate
     case tiktokStatus(Int)
     case tiktokNoData
+    case tiktokPageStatus(Int)
+    case tiktokPageDenied
+    case tiktokBotCheck
+    case tiktokFileStatus(Int)
     case tiktokUnavailable
     case tiktokDownloadServiceStatus(Int)
+    /// TikTok refused (first) and TikWM failed after it (second): TikWM's answer alone hides why TikTok refused.
+    indirect case tiktokFailed(DGLinkDownloadError, DGLinkDownloadError)
     case youtubeLoginRequired
     case youtubeAgeRestricted
     case youtubeUnavailable
@@ -41,11 +47,21 @@ public enum DGLinkDownloadError: Error, Equatable {
         case let .tiktokStatus(code):
             return "TikTok не отдал видео (код \(code))"
         case .tiktokNoData:
-            return "TikTok не отдал страницу (проверка на бота)"
+            return "TikTok прислал страницу без видео"
+        case let .tiktokPageStatus(code):
+            return "TikTok не отдал страницу (HTTP \(code))"
+        case .tiktokPageDenied:
+            return "TikTok отклонил запрос"
+        case .tiktokBotCheck:
+            return "TikTok не пропустил проверку на бота"
+        case let .tiktokFileStatus(code):
+            return "TikTok не отдал файл (HTTP \(code))"
         case .tiktokUnavailable:
-            return "Не удалось получить медиа из TikTok. Попробуйте позже"
+            return "Сервис скачивания TikTok не отдал видео"
         case let .tiktokDownloadServiceStatus(code):
             return "Сервис скачивания TikTok вернул HTTP \(code)"
+        case let .tiktokFailed(direct, fallback):
+            return [direct.reason, fallback.reason].map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }.joined(separator: ". ")
         case .youtubeLoginRequired:
             return "YouTube просит войти в аккаунт"
         case .youtubeAgeRestricted:
