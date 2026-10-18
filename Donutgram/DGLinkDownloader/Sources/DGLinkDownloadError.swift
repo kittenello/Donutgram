@@ -3,7 +3,6 @@ import Foundation
 /// Why a link could not be turned into media. `reason` is the Russian text shown on the toast.
 public enum DGLinkDownloadError: Error, Equatable {
     case cancelled
-    case tiktokLinkExpired
     case tiktokNotFound
     case tiktokPrivate
     case tiktokStatus(Int)
@@ -48,8 +47,6 @@ public enum DGLinkDownloadError: Error, Equatable {
         switch self {
         case .cancelled:
             return "Скачивание отменено"
-        case .tiktokLinkExpired:
-            return "Ссылка TikTok устарела или неверная"
         case .tiktokNotFound:
             return "Видео удалено или недоступно"
         case .tiktokPrivate:

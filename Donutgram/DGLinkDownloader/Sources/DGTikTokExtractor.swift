@@ -303,8 +303,9 @@ enum DGTikTokExtractor {
     static func run(_ url: URL, fetcher: DGMediaFetcher, willUseFallback: @escaping () -> Void, download: @escaping (DGTikTokItem, @escaping (DGLinkDownloadError) -> Void) -> Void, failure: @escaping (DGLinkDownloadError) -> Void) {
         let fallback: (DGLinkDownloadError) -> Void = { directError in
             switch directError {
-            case .cancelled, .tooLarge:
-                // TikWM serves the same file, so it would be just as large.
+            case .cancelled, .tooLarge, .tiktokPrivate:
+                // TikWM serves the same file, so it would be just as large, and it is not logged in either: a private
+                // post or account is closed to it too, and its refusal would only hide why.
                 failure(directError)
             default:
                 willUseFallback()
@@ -341,7 +342,8 @@ enum DGTikTokExtractor {
         case .cancelled, .tooLarge:
             return fallbackError
         default:
-            return .tiktokFailed(directError, fallbackError)
+            // Both sources failing the same way (no internet) is one reason, not the same one twice.
+            return fallbackError == directError ? directError : .tiktokFailed(directError, fallbackError)
         }
     }
 

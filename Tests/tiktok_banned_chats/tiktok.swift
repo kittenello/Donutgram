@@ -135,6 +135,8 @@ check(run.failure?.reason == "TikTok не отдал страницу (HTTP 403)
 run = flow(post, [htmlResponse(deniedPage, url: post), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokPageDenied, .tiktokDownloadServiceStatus(403)), "Akamai's HTTP 200 deny page is named")
 check(DGLinkDownloadError.tiktokFailed(.tiktokNoData(nil), .tiktokUnavailable).reason == "TikTok прислал страницу без видео. Сервис скачивания TikTok не отдал видео", "reason text")
+run = flow(post, [.failure(.network(.notConnectedToInternet)), .failure(.network(.notConnectedToInternet))], files: [])
+check(run.failure == .network(.notConnectedToInternet) && run.failure?.reason == "Нет интернета", "the same answer from both sources is named once")
 
 // A failed TikTok file goes to TikWM once; TikWM is never asked twice in one job.
 run = flow(post, [htmlResponse(html, url: post), response(video)], files: [.httpStatus(403), .httpStatus(403)])
@@ -239,6 +241,10 @@ check(DGTikTokExtractor.parsePage(rehydrated(["isContentClassified": true, "vide
 check(DGTikTokExtractor.parsePage(rehydrated(["video": ["duration": 9]])) == .failure(.tiktokNoFile), "no file links")
 check(DGTikTokExtractor.parsePage(rehydrated(["imagePost": ["images": [["imageURL": ["urlList": []]]]]])) == .failure(.tiktokNoFile), "photo without links")
 check(DGTikTokExtractor.parsePage(rehydrated([:], status: 10216)) == .failure(.tiktokPrivate), "private post")
+// TikWM is not logged in either: it is not asked for a private post or account, and the toast says why.
+run = flow(post, [htmlResponse(rehydrated([:], status: 10222), url: post)], files: [])
+check(run.failure == .tiktokPrivate && run.fallbacks == 0 && tikwmRequests() == 0, "a private post is not sent to the provider")
+check(run.failure?.reason == "Закрытый аккаунт", "private reason")
 check(DGTikTokExtractor.parsePage("<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\">{\"__DEFAULT_SCOPE__\":{\"webapp.app-context\":{}}}</script><title>TikTok</title>") == .failure(.tiktokNoData("TikTok")), "page data without the post")
 if case let .success(.video(file, _)) = DGTikTokExtractor.parsePage(rehydrated(["video": ["bitrateInfo": [["CodecType": "h264", "Bitrate": 1, "PlayAddr": ["UrlList": ["https://www.tiktok.com/aweme/v1/play/?video_id=2"]]]]]])) {
     check(file.url.absoluteString == "https://www.tiktok.com/aweme/v1/play/?video_id=2" && file.alternateURLs.isEmpty, "www.tiktok.com links are used when nothing else is there")
