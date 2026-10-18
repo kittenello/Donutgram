@@ -17,7 +17,6 @@ import PresentationDataUtils
 import UrlWhitelist
 import UndoUI
 import BrowserUI
-import OpenUserGeneratedUrl
 
 func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, navigateDisposable: MetaDisposable, controller: ViewController, action: TextLinkItemActionType, itemLink: TextLinkItem) {
     let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
@@ -73,28 +72,7 @@ func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, n
         present: presentImpl, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
     }
     
-    var confirmedTelegramUrl: String?
-    var openLinkImpl: ((String) -> Void)!
-    openLinkImpl = { [weak controller] url in
-        if confirmedTelegramUrl == url {
-            confirmedTelegramUrl = nil
-        } else if DGSimpleSettings.shared.confirmTelegramLinks,
-                  let parsedUrl = URL(string: url),
-                  (parsedUrl.scheme?.lowercased() == "tg" || ["t.me", "telegram.me", "telegram.dog"].contains(parsedUrl.host?.lowercased() ?? "")),
-                  let controller {
-            let confirmation = openLinkConfirmationController(
-                context: context,
-                presentationData: presentationData,
-                updatedPresentationData: .single(presentationData),
-                displayUrl: url,
-                open: {
-                    confirmedTelegramUrl = url
-                    openLinkImpl(url)
-                }
-            )
-            controller.present(confirmation, in: .window(.root))
-            return
-        }
+    let openLinkImpl: (String) -> Void = { [weak controller] url in
         navigateDisposable.set((context.sharedContext.resolveUrl(context: context, peerId: peerId, url: url, skipUrlAuth: true) |> deliverOnMainQueue).start(next: { result in
             if let controller = controller {
                 switch result {
@@ -169,6 +147,11 @@ func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, n
                     // A login part hides the host the link opens (see `externalUrlWithLoginPart`).
                     let loginPartUrl = externalUrlWithLoginPart(url)
                     if parsedConcealed || loginPartUrl != nil {
+                        concealed = true
+                    }
+                    // «Подтверждать переход по ссылкам Telegram». Only text that belongs to a chat (a bio, a description)
+                    // has a peer: the app's own screens open their t.me links here too, with no peer, and are not asked about.
+                    if peerId != nil && DGSimpleSettings.shared.confirmTelegramLinks && isTelegramLinkUrl(url) {
                         concealed = true
                     }
                     

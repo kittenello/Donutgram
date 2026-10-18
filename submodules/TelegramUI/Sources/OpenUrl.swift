@@ -357,9 +357,9 @@ private func makeTelegramUrl(_ path: String, queryItems: [URLQueryItem] = []) ->
 }
 
 func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
-    if DGSimpleSettings.shared.confirmTelegramLinks,
-       let parsedUrl = URL(string: url),
-       (parsedUrl.scheme?.lowercased() == "tg" || ["t.me", "telegram.me", "telegram.dog"].contains(parsedUrl.host?.lowercased() ?? "")) {
+    // «Подтверждать переход по ссылкам Telegram» for a link another app hands over. Links in messages are asked about
+    // in `openUserGeneratedUrl` before they are resolved; the app's own t.me buttons come here and are not asked about.
+    if DGSimpleSettings.shared.confirmTelegramLinks, case .external = urlContext, isTelegramLinkUrl(url) {
         let controller = openLinkConfirmationController(
             context: context,
             presentationData: presentationData,

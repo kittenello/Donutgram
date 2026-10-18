@@ -12,6 +12,7 @@ import AlertComponent
 import AlertCheckComponent
 import AlertWebpagePreviewComponent
 import UrlHandling
+import DGSimpleSettings
 
 public func openUserGeneratedUrl(
     context: AccountContext,
@@ -107,6 +108,9 @@ public func openUserGeneratedUrl(
     let loginPartUrl = externalUrlWithLoginPart(url)
 
     if forceConcealed || loginPartUrl != nil {
+        concealed = true
+    } else if DGSimpleSettings.shared.confirmTelegramLinks && isTelegramLinkUrl(url) {
+        // «Подтверждать переход по ссылкам Telegram»: every link a message opens inside Telegram is asked about first.
         concealed = true
     } else if let parsedUrl = parseInternalUrl(sharedContext: context.sharedContext, context: context, query: url) {
         if case .proxy = parsedUrl {
