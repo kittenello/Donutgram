@@ -1,0 +1,24 @@
+name: Deleted messages search tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramSpyStorage.swift'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramPreservedMedia.swift'
+      - 'Donutgram/DGSettingsUI/Sources/DGSavedDeletedMessagesSearch.swift'
+      - 'Tests/deleted_messages_search/**'
+      - '.github/workflows/deleted-messages-search-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check matching, limit and cancellation of the saved deleted messages search
+        run: python3 Tests/deleted_messages_search/run.py

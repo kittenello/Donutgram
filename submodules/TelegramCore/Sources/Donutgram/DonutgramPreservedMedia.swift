@@ -198,6 +198,70 @@ func _internal_donutgramPreservedMessagesUsage(postbox: Postbox) -> Signal<Donut
     }
 }
 
+/// What the search on «Сохраненные удаленки» needs of one saved deleted message.
+public struct DonutgramPreservedMessageSearchEntry: Equatable {
+    public var id: EngineMessage.Id
+    public var timestamp: Int32
+    /// The message text and the searchable text of its media, such as file names.
+    public var text: String
+    /// The distinct words of `text`, folded once here so that typing does not fold every message
+    /// again.
+    public var words: [String]
+
+    public init(id: EngineMessage.Id, timestamp: Int32, text: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.text = text
+        self.words = Array(Set(donutgramSearchWords(text)))
+    }
+}
+
+/// The text of every saved deleted message of the account, the newest first. Read once when the
+/// search opens and filtered in memory on each change of the query, so typing does not read the
+/// whole store again.
+func _internal_donutgramPreservedMessagesSearchIndex(postbox: Postbox) -> Signal<[DonutgramPreservedMessageSearchEntry], NoError> {
+    return postbox.transaction { transaction -> [MessageId] in
+        return transaction.getMessageIdsWithLocalTag(.donutgramDeleted).filter { $0.namespace == Namespaces.Message.Cloud }
+    }
+    |> mapToSignal { messageIds -> Signal<[DonutgramPreservedMessageSearchEntry], NoError> in
+        return donutgramReduceMessages(postbox: postbox, messageIds: messageIds, into: [DonutgramPreservedMessageSearchEntry](), { entries, message in
+            entries.append(DonutgramPreservedMessageSearchEntry(id: message.id, timestamp: message.timestamp, text: donutgramDeletedMessageSearchText(message)))
+        })
+        |> map { entries -> [DonutgramPreservedMessageSearchEntry] in
+            return entries.sorted { lhs, rhs in
+                if lhs.timestamp != rhs.timestamp {
+                    return lhs.timestamp > rhs.timestamp
+                }
+                return lhs.id > rhs.id
+            }
+        }
+    }
+}
+
+/// The messages of `entries` whose text matches `query` the way search in a chat does (whole words
+/// by prefix, ignoring case and diacritics), in the order of `entries`, at most `limit`. A query
+/// without letters or digits matches nothing. `isCancelled` is polled while scanning, so a search
+/// replaced by a newer query stops early; its result is then incomplete and must be dropped.
+public func donutgramPreservedMessageIds(matching query: String, in entries: [DonutgramPreservedMessageSearchEntry], limit: Int, isCancelled: () -> Bool = { false }) -> [EngineMessage.Id] {
+    let queryWords = donutgramSearchWords(query)
+    if queryWords.isEmpty {
+        return []
+    }
+    var result: [EngineMessage.Id] = []
+    for (index, entry) in entries.enumerated() {
+        if result.count >= limit {
+            break
+        }
+        if index % 256 == 0 && isCancelled() {
+            break
+        }
+        if donutgramSearchWordsMatch(textWords: entry.words, queryWords: queryWords) {
+            result.append(entry.id)
+        }
+    }
+    return result
+}
+
 /// Deletes the saved deleted messages of `peerId`, or of every chat when it is nil, with their edit
 /// history and their downloaded files. Only the local copies are deleted: the messages are already
 /// gone from the server. A file that a message still on the server shows as well downloads again
@@ -255,5 +319,11 @@ public extension TelegramEngine.Messages {
     /// edit history and their downloaded files.
     func donutgramDeletePreservedMessages(peerId: EnginePeer.Id?) -> Signal<Never, NoError> {
         return _internal_donutgramDeletePreservedMessages(postbox: self.account.postbox, peerId: peerId)
+    }
+
+    /// The text of every saved deleted message, the newest first, for searching them on
+    /// «Сохраненные удаленки» with `donutgramPreservedMessageIds(matching:in:limit:)`.
+    func donutgramPreservedMessagesSearchIndex() -> Signal<[DonutgramPreservedMessageSearchEntry], NoError> {
+        return _internal_donutgramPreservedMessagesSearchIndex(postbox: self.account.postbox)
     }
 }

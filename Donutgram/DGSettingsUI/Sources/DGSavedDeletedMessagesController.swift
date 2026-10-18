@@ -189,12 +189,13 @@ private enum DGSavedDeletedEntry: ItemListNodeEntry {
 
 private struct DGSavedDeletedState: Equatable {
     var editing = false
+    var searching = false
     var deleting = false
     var peerIdWithRevealedOptions: EnginePeer.Id?
 }
 
 /// «Сохраненные удаленки» in «Основные»: how many saved deleted messages the account keeps, how much
-/// their files take, and deleting them, all at once or one chat at a time.
+/// their files take, deleting them, all at once or one chat at a time, and searching them by text.
 public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let statePromise = ValuePromise(DGSavedDeletedState(), ignoreRepeated: true)
     let stateValue = Atomic(value: DGSavedDeletedState())
@@ -210,6 +211,7 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
     }
     var presentControllerImpl: ((ViewController) -> Void)?
     var navigationControllerImpl: (() -> NavigationController?)?
+    var dismissInputImpl: (() -> Void)?
 
     let performDelete: (EnginePeer.Id?) -> Void = { peerId in
         updateState { state in
@@ -263,6 +265,19 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
         }
     })
 
+    // Opens a found message in its chat; the search stays open for the way back.
+    let openFoundMessage: (EnginePeer, EngineMessage) -> Void = { peer, message in
+        guard let navigationController = navigationControllerImpl?() else {
+            return
+        }
+        dismissInputImpl?()
+        if case let .channel(channel) = peer, channel.flags.contains(.isForum), let threadId = message.threadId {
+            let _ = context.sharedContext.navigateToForumThread(context: context, peerId: peer.id, threadId: threadId, messageId: message.id, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: .always, animated: true).startStandalone()
+        } else {
+            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), keepStack: .always))
+        }
+    }
+
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), usagePromise.get())
     |> deliverOnMainQueue
     |> map { presentationData, state, usage -> (ItemListControllerState, (ItemListNodeState, Any)) in
@@ -272,6 +287,7 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
         let chats = (usage?.chats ?? []).filter { $0.peer != nil }
 
         var rightNavigationButton: ItemListNavigationButton?
+        var secondaryRightNavigationButton: ItemListNavigationButton?
         if !chats.isEmpty && !state.deleting {
             if state.editing {
                 rightNavigationButton = ItemListNavigationButton(content: .icon(.done), style: .bold, enabled: true, action: {
@@ -289,7 +305,28 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
                         return state
                     }
                 })
+                secondaryRightNavigationButton = ItemListNavigationButton(content: .icon(.search), style: .regular, enabled: true, action: {
+                    updateState { state in
+                        var state = state
+                        state.searching = true
+                        state.peerIdWithRevealedOptions = nil
+                        return state
+                    }
+                })
             }
+        }
+
+        var searchItem: ItemListControllerSearch?
+        if state.searching {
+            searchItem = DGSavedDeletedSearchItem(context: context, cancel: {
+                updateState { state in
+                    var state = state
+                    state.searching = false
+                    return state
+                }
+            }, openMessage: openFoundMessage, dismissInput: {
+                dismissInputImpl?()
+            })
         }
 
         var entries: [DGSavedDeletedEntry] = []
@@ -313,8 +350,8 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
             }
         }
 
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized("Сохраненные удаленки", languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized("Сохраненные удаленки", languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, searchItem: searchItem, animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
@@ -324,6 +361,9 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
     }
     navigationControllerImpl = { [weak controller] in
         return controller?.navigationController as? NavigationController
+    }
+    dismissInputImpl = { [weak controller] in
+        controller?.view.endEditing(true)
     }
     // A message deleted in a chat opened from here changes the numbers.
     controller.didAppear = { firstTime in

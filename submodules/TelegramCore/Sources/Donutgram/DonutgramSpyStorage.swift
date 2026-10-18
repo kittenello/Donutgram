@@ -317,13 +317,19 @@ func donutgramRemoveOrphanedMessageRevisions(postbox: Postbox) -> Signal<Never, 
 /// Matches words and filename prefixes with the same case-insensitive semantics
 /// as local chat search. Cloud messages are not in Postbox's secret-chat text index.
 public func donutgramDeletedMessageMatchesQuery(text: String, query: String) -> Bool {
-    func words(_ value: String) -> [String] {
-        return value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-    }
-    let queryWords = words(query)
-    let textWords = words(text)
+    return donutgramSearchWordsMatch(textWords: donutgramSearchWords(text), queryWords: donutgramSearchWords(query))
+}
+
+/// The words a text is searched by: case and diacritics folded (ё = е), split at everything that
+/// is not a letter or a digit. Empty when the text has no letters or digits.
+public func donutgramSearchWords(_ value: String) -> [String] {
+    return value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        .components(separatedBy: CharacterSet.alphanumerics.inverted)
+        .filter { !$0.isEmpty }
+}
+
+/// Every query word is the start of some word of the text.
+public func donutgramSearchWordsMatch(textWords: [String], queryWords: [String]) -> Bool {
     return queryWords.allSatisfy { queryWord in
         textWords.contains { $0.hasPrefix(queryWord) }
     }
@@ -351,14 +357,19 @@ func donutgramDeletedMessages(
             let messageReactions = message.attributes.compactMap { $0 as? ReactionsMessageAttribute }.flatMap { $0.reactions }
             if !reactions.allSatisfy({ reaction in messageReactions.contains { $0.value == reaction } }) { return false }
         }
-        var text = message.text
-        for media in message.media {
-            if let indexableText = media.indexableText {
-                text += " " + indexableText
-            }
-        }
-        return donutgramDeletedMessageMatchesQuery(text: text, query: query)
+        return donutgramDeletedMessageMatchesQuery(text: donutgramDeletedMessageSearchText(message), query: query)
     }.sorted { $0.index > $1.index }
+}
+
+/// The text a saved deleted message is found by: its own text and the searchable text of its media.
+func donutgramDeletedMessageSearchText(_ message: Message) -> String {
+    var text = message.text
+    for media in message.media {
+        if let indexableText = media.indexableText {
+            text += " " + indexableText
+        }
+    }
+    return text
 }
 
 /// Includes local results only inside the loaded remote window. Older deletions
