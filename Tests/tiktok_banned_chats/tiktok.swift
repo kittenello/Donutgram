@@ -221,7 +221,7 @@ check(run.failure?.reason == "TikTok открыл /foryou вместо виде�
 let hongKong = URL(string: "https://www.tiktok.com/hk/about")!
 run = flow(short, [htmlResponse("<title>TikTok</title>", url: hongKong), htmlResponse("", url: hongKong), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokHongKong, .tiktokDownloadServiceStatus(403)), "a short link sent to the Hong Kong notice")
-check(run.failure?.reason == "TikTok не работает в Гонконге, а интернет идёт через Гонконг (смените страну VPN). Сервис скачивания TikTok вернул HTTP 403", "Hong Kong reason")
+check(run.failure?.reason == "TikTok не работает через этот VPN, смените сервер. Сервис скачивания TikTok вернул HTTP 403", "Hong Kong reason")
 run = flow(post, [htmlResponse("<title>TikTok</title>", url: hongKong), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokHongKong, .tiktokDownloadServiceStatus(403)), "a post page sent to the Hong Kong notice")
 run = flow(post, [htmlResponse("<html><head><TITLE>\n  Verify &amp; continue  </TITLE></head><body></body></html>", url: post), .failure(.httpStatus(403))], files: [])
