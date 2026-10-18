@@ -87,7 +87,10 @@ enum DGTikTokExtractor {
             return .failure(.tiktokNotFound)
         }
         // 10216: private post, 10222: private account (yt-dlp).
-        if status == 10216 || status == 10222 {
+        if status == 10216 {
+            return .failure(.tiktokPrivatePost)
+        }
+        if status == 10222 {
             return .failure(.tiktokPrivate)
         }
         if status != 0 {
@@ -303,7 +306,7 @@ enum DGTikTokExtractor {
     static func run(_ url: URL, fetcher: DGMediaFetcher, willUseFallback: @escaping () -> Void, download: @escaping (DGTikTokItem, @escaping (DGLinkDownloadError) -> Void) -> Void, failure: @escaping (DGLinkDownloadError) -> Void) {
         let fallback: (DGLinkDownloadError, String?) -> Void = { directError, itemId in
             switch directError {
-            case .cancelled, .tooLarge, .tiktokPrivate:
+            case .cancelled, .tooLarge, .tiktokPrivate, .tiktokPrivatePost:
                 // TikWM serves the same file, so it would be just as large, and it is not logged in either: a private
                 // post or account is closed to it too, and its refusal would only hide why.
                 failure(directError)

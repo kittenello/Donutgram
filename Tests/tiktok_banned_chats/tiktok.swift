@@ -255,11 +255,16 @@ check(DGTikTokExtractor.pageTitle("<title> </title>") == nil && DGTikTokExtracto
 check(DGTikTokExtractor.parsePage(rehydrated(["isContentClassified": true, "video": ["duration": 9]])) == .failure(.tiktokAgeRestricted), "18+ posts come without files")
 check(DGTikTokExtractor.parsePage(rehydrated(["video": ["duration": 9]])) == .failure(.tiktokNoFile), "no file links")
 check(DGTikTokExtractor.parsePage(rehydrated(["imagePost": ["images": [["imageURL": ["urlList": []]]]]])) == .failure(.tiktokNoFile), "photo without links")
-check(DGTikTokExtractor.parsePage(rehydrated([:], status: 10216)) == .failure(.tiktokPrivate), "private post")
+check(DGTikTokExtractor.parsePage(rehydrated([:], status: 10216)) == .failure(.tiktokPrivatePost), "private post")
+check(DGTikTokExtractor.parsePage(rehydrated([:], status: 10222)) == .failure(.tiktokPrivate), "private account")
 // TikWM is not logged in either: it is not asked for a private post or account, and the toast says why.
 run = flow(post, [htmlResponse(rehydrated([:], status: 10222), url: post)], files: [])
-check(run.failure == .tiktokPrivate && run.fallbacks == 0 && tikwmRequests() == 0, "a private post is not sent to the provider")
-check(run.failure?.reason == "Закрытый аккаунт", "private reason")
+check(run.failure == .tiktokPrivate && run.fallbacks == 0 && tikwmRequests() == 0, "a private account's post is not sent to the provider")
+check(run.failure?.reason == "Закрытый аккаунт", "private account reason")
+// A public account's post for friends only: the account is not private, the post is.
+run = flow(post, [htmlResponse(rehydrated([:], status: 10216), url: post)], files: [])
+check(run.failure == .tiktokPrivatePost && run.fallbacks == 0 && tikwmRequests() == 0, "a private post is not sent to the provider")
+check(run.failure?.reason == "Закрытое видео", "private post reason")
 check(DGTikTokExtractor.parsePage("<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\">{\"__DEFAULT_SCOPE__\":{\"webapp.app-context\":{}}}</script><title>TikTok</title>") == .failure(.tiktokNoData("TikTok")), "page data without the post")
 if case let .success(.video(file, _)) = DGTikTokExtractor.parsePage(rehydrated(["video": ["bitrateInfo": [["CodecType": "h264", "Bitrate": 1, "PlayAddr": ["UrlList": ["https://www.tiktok.com/aweme/v1/play/?video_id=2"]]]]]])) {
     check(file.url.absoluteString == "https://www.tiktok.com/aweme/v1/play/?video_id=2" && file.alternateURLs.isEmpty, "www.tiktok.com links are used when nothing else is there")

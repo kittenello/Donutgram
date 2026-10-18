@@ -4,7 +4,10 @@ import Foundation
 public enum DGLinkDownloadError: Error, Equatable {
     case cancelled
     case tiktokNotFound
+    /// The account is private (status 10222).
     case tiktokPrivate
+    /// Only the post is closed (status 10216): a public account's post for friends or for its author alone.
+    case tiktokPrivatePost
     case tiktokStatus(Int)
     /// The post page came without the post's data; the title of what came instead, when it has one.
     case tiktokNoData(String?)
@@ -51,6 +54,8 @@ public enum DGLinkDownloadError: Error, Equatable {
             return "Видео удалено или недоступно"
         case .tiktokPrivate:
             return "Закрытый аккаунт"
+        case .tiktokPrivatePost:
+            return "Закрытое видео"
         case let .tiktokStatus(code):
             return "TikTok не отдал видео (код \(code))"
         case let .tiktokNoData(title):
