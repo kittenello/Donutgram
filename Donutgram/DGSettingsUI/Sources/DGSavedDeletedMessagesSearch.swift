@@ -34,7 +34,7 @@ private final class DGSavedDeletedSearchNavigationContentNode: NavigationBarCont
     }
 
     private var theme: PresentationTheme
-    private let strings: PresentationStrings
+    private var strings: PresentationStrings
 
     private let cancel: () -> Void
 
@@ -127,8 +127,9 @@ private final class DGSavedDeletedSearchNavigationContentNode: NavigationBarCont
         self.queryUpdated = f
     }
 
-    func updateTheme(_ theme: PresentationTheme) {
+    func updatePresentationData(theme: PresentationTheme, strings: PresentationStrings) {
         self.theme = theme
+        self.strings = strings
         if let params = self.params {
             let _ = self.updateLayout(size: params.size, leftInset: params.leftInset, rightInset: params.rightInset, transition: .immediate)
         }
@@ -275,7 +276,7 @@ final class DGSavedDeletedSearchItem: ItemListControllerSearch {
     func titleContentNode(current: (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)?) -> (NavigationBarContentNode & ItemListControllerSearchNavigationContentNode)? {
         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
         if let current = current as? DGSavedDeletedSearchNavigationContentNode {
-            current.updateTheme(presentationData.theme)
+            current.updatePresentationData(theme: presentationData.theme, strings: presentationData.strings)
             return current
         } else {
             return DGSavedDeletedSearchNavigationContentNode(theme: presentationData.theme, strings: presentationData.strings, cancel: self.cancel, updateActivity: { [weak self] value in
@@ -294,35 +295,74 @@ final class DGSavedDeletedSearchItem: ItemListControllerSearch {
     }
 }
 
-private struct DGSavedDeletedSearchEntry: Comparable, Identifiable {
-    let index: Int
-    let message: EngineMessage
-    let peer: EnginePeer
-    let text: String
-    let date: String
-    let theme: PresentationTheme
+private enum DGSavedDeletedSearchEntryId: Hashable {
+    case message(EngineMessage.Id)
+    case truncatedNotice
+}
 
-    var stableId: EngineMessage.Id {
-        return self.message.id
+private enum DGSavedDeletedSearchEntry: Comparable, Identifiable {
+    case message(index: Int, message: EngineMessage, peer: EnginePeer, text: String, date: String, theme: PresentationTheme)
+    // Below the last row when more messages match than `searchResultLimit`.
+    case truncatedNotice(text: String, theme: PresentationTheme)
+
+    var stableId: DGSavedDeletedSearchEntryId {
+        switch self {
+        case let .message(_, message, _, _, _, _):
+            return .message(message.id)
+        case .truncatedNotice:
+            return .truncatedNotice
+        }
+    }
+
+    private var sortIndex: Int {
+        switch self {
+        case let .message(index, _, _, _, _, _):
+            return index
+        case .truncatedNotice:
+            return Int.max
+        }
     }
 
     static func ==(lhs: DGSavedDeletedSearchEntry, rhs: DGSavedDeletedSearchEntry) -> Bool {
-        return lhs.index == rhs.index && lhs.message.id == rhs.message.id && lhs.message.stableVersion == rhs.message.stableVersion && lhs.peer == rhs.peer && lhs.text == rhs.text && lhs.date == rhs.date && lhs.theme === rhs.theme
+        switch lhs {
+        case let .message(lhsIndex, lhsMessage, lhsPeer, lhsText, lhsDate, lhsTheme):
+            if case let .message(rhsIndex, rhsMessage, rhsPeer, rhsText, rhsDate, rhsTheme) = rhs, lhsIndex == rhsIndex, lhsMessage.id == rhsMessage.id, lhsMessage.stableVersion == rhsMessage.stableVersion, lhsPeer == rhsPeer, lhsText == rhsText, lhsDate == rhsDate, lhsTheme === rhsTheme {
+                return true
+            } else {
+                return false
+            }
+        case let .truncatedNotice(lhsText, lhsTheme):
+            if case let .truncatedNotice(rhsText, rhsTheme) = rhs, lhsText == rhsText, lhsTheme === rhsTheme {
+                return true
+            } else {
+                return false
+            }
+        }
     }
 
     static func <(lhs: DGSavedDeletedSearchEntry, rhs: DGSavedDeletedSearchEntry) -> Bool {
-        return lhs.index < rhs.index
+        return lhs.sortIndex < rhs.sortIndex
     }
 
     func item(context: AccountContext, presentationData: PresentationData, openMessage: @escaping (EnginePeer, EngineMessage) -> Void) -> ListViewItem {
-        let peer = self.peer
-        let message = self.message
-        return ItemListPeerItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, context: context, peer: peer, presence: nil, text: .text(self.text, .secondary), label: .text(self.date, .standard, nil, false), editing: ItemListPeerItemEditing(editable: false, editing: false, revealed: false), switchValue: nil, enabled: true, selectable: true, sectionId: 0, action: {
-            openMessage(peer, message)
-        }, setPeerIdWithRevealedOptions: { _, _ in
-        }, removePeer: { _ in
-        }, style: .plain)
+        switch self {
+        case let .message(_, message, peer, text, date, _):
+            return ItemListPeerItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, context: context, peer: peer, presence: nil, text: .text(text, .secondary), label: .text(date, .standard, nil, false), editing: ItemListPeerItemEditing(editable: false, editing: false, revealed: false), switchValue: nil, enabled: true, selectable: true, sectionId: 0, action: {
+                openMessage(peer, message)
+            }, setPeerIdWithRevealedOptions: { _, _ in
+            }, removePeer: { _ in
+            }, style: .plain)
+        case let .truncatedNotice(text, _):
+            return ItemListTextItem(presentationData: ItemListPresentationData(presentationData), text: .plain(text), sectionId: 1, style: .plain, textAlignment: .center)
+        }
     }
+}
+
+/// The rows of a query: the newest `searchResultLimit` matching messages that still exist.
+private struct DGSavedDeletedSearchResults {
+    var items: [(message: EngineMessage, peer: EnginePeer, searchText: String)]
+    // More messages match than are shown.
+    var isTruncated: Bool
 }
 
 private struct DGSavedDeletedSearchTransition {
@@ -369,7 +409,6 @@ private final class DGSavedDeletedSearchNode: ItemListControllerSearchNode {
 
     private let query = ValuePromise<String>("", ignoreRepeated: true)
     private var searchDisposable: Disposable?
-    private var presentationDataDisposable: Disposable?
 
     init(context: AccountContext, openMessage: @escaping (EnginePeer, EngineMessage) -> Void, cancel: @escaping () -> Void, updateActivity: @escaping (Bool) -> Void, dismissInput: @escaping () -> Void) {
         self.cancel = cancel
@@ -411,10 +450,13 @@ private final class DGSavedDeletedSearchNode: ItemListControllerSearchNode {
         searchIndex.set(context.engine.messages.donutgramPreservedMessagesSearchIndex()
         |> map(Optional.init))
 
+        // One query is filtered at a time; a newer one stops the scan of the previous one.
+        let searchQueue = Queue()
+
         // nil until a query with letters or digits is typed: the page then stays dimmed.
-        let foundMessages: Signal<(String, [(EngineMessage, EnginePeer, String)]?), NoError> = combineLatest(self.query.get(), searchIndex.get())
-        |> mapToSignal { query, index -> Signal<(String, [(EngineMessage, EnginePeer, String)]?), NoError> in
-            if !query.unicodeScalars.contains(where: { CharacterSet.alphanumerics.contains($0) }) {
+        let foundMessages: Signal<(String, DGSavedDeletedSearchResults?), NoError> = combineLatest(self.query.get(), searchIndex.get())
+        |> mapToSignal { query, index -> Signal<(String, DGSavedDeletedSearchResults?), NoError> in
+            if donutgramSearchWords(query).isEmpty {
                 return .single((query, nil))
             }
             updateActivity(true)
@@ -423,47 +465,69 @@ private final class DGSavedDeletedSearchNode: ItemListControllerSearchNode {
                 return .never()
             }
             return Signal<[EngineMessage.Id], NoError> { subscriber in
-                subscriber.putNext(donutgramPreservedMessageIds(matching: query, in: index, limit: searchResultLimit))
-                subscriber.putCompletion()
-                return EmptyDisposable
+                let isCancelled = Atomic<Bool>(value: false)
+                searchQueue.async {
+                    // One more than is shown, to know whether the list is cut.
+                    let messageIds = donutgramPreservedMessageIds(matching: query, in: index, limit: searchResultLimit + 1, isCancelled: {
+                        return isCancelled.with { $0 }
+                    })
+                    if !isCancelled.with({ $0 }) {
+                        subscriber.putNext(messageIds)
+                        subscriber.putCompletion()
+                    }
+                }
+                return ActionDisposable {
+                    let _ = isCancelled.swap(true)
+                }
             }
-            |> runOn(Queue.concurrentDefaultQueue())
-            |> mapToSignal { messageIds -> Signal<(String, [(EngineMessage, EnginePeer, String)]?), NoError> in
+            |> mapToSignal { foundIds -> Signal<(String, DGSavedDeletedSearchResults?), NoError> in
+                let isTruncated = foundIds.count > searchResultLimit
+                let messageIds = Array(foundIds.prefix(searchResultLimit))
                 let messageIdSet = Set(messageIds)
                 let searchTexts = Dictionary(index.lazy.filter { messageIdSet.contains($0.id) }.map { ($0.id, $0.text) }, uniquingKeysWith: { lhs, _ in lhs })
                 let peerIds = Set(messageIds.map(\.peerId))
-                return context.engine.data.get(
+                // Followed rather than read once, so a message deleted in a chat opened from here
+                // is gone from the list on the way back.
+                return context.engine.data.subscribe(
                     TelegramEngine.EngineData.Item.Messages.Messages(ids: messageIdSet),
                     EngineDataMap(peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:)))
                 )
-                |> map { messages, peers -> (String, [(EngineMessage, EnginePeer, String)]?) in
-                    var result: [(EngineMessage, EnginePeer, String)] = []
-                    // A message deleted from this device since the search opened has no row.
+                |> map { messages, peers -> (String, DGSavedDeletedSearchResults?) in
+                    var items: [(message: EngineMessage, peer: EnginePeer, searchText: String)] = []
                     for id in messageIds {
                         guard let message = messages[id], let peer = peers[id.peerId] ?? nil else {
                             continue
                         }
-                        result.append((message, peer, searchTexts[id] ?? ""))
+                        items.append((message: message, peer: peer, searchText: searchTexts[id] ?? ""))
                     }
-                    return (query, result)
+                    return (query, DGSavedDeletedSearchResults(items: items, isTruncated: isTruncated))
                 }
             }
         }
 
         let previousEntries = Atomic<[DGSavedDeletedSearchEntry]?>(value: nil)
-        self.searchDisposable = (foundMessages
-        |> deliverOnMainQueue).start(next: { [weak self] query, found in
+        // The rows are rebuilt on a theme or language change too.
+        self.searchDisposable = (combineLatest(foundMessages, context.sharedContext.presentationData)
+        |> deliverOnMainQueue).start(next: { [weak self] found, presentationData in
             guard let self else {
                 return
             }
+            let (query, results) = found
             updateActivity(false)
-            let presentationData = self.presentationData
-            let entries: [DGSavedDeletedSearchEntry]? = found.map { found in
-                return found.enumerated().map { index, item -> DGSavedDeletedSearchEntry in
-                    let (message, peer, searchText) = item
-                    let date = stringForMediumDate(timestamp: message.timestamp, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, withTime: false)
-                    return DGSavedDeletedSearchEntry(index: index, message: message, peer: peer, text: dgSavedDeletedSearchSnippet(message: message, peer: peer, searchText: searchText), date: date, theme: presentationData.theme)
+            if self.presentationData.theme !== presentationData.theme || self.presentationData.strings !== presentationData.strings {
+                self.presentationData = presentationData
+                self.listNode.backgroundColor = presentationData.theme.list.plainBackgroundColor
+                self.emptyResultsTitleNode.attributedText = NSAttributedString(string: presentationData.strings.ChatList_Search_NoResults, font: Font.semibold(17.0), textColor: presentationData.theme.list.freeTextColor)
+            }
+            let entries: [DGSavedDeletedSearchEntry]? = results.map { results in
+                var rows = results.items.enumerated().map { index, item -> DGSavedDeletedSearchEntry in
+                    let date = stringForMediumDate(timestamp: item.message.timestamp, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, withTime: false)
+                    return .message(index: index, message: item.message, peer: item.peer, text: dgSavedDeletedSearchSnippet(message: item.message, peer: item.peer, searchText: item.searchText), date: date, theme: presentationData.theme)
                 }
+                if results.isTruncated && !rows.isEmpty {
+                    rows.append(.truncatedNotice(text: dgLocalized("Показаны только самые новые совпадения. Уточните запрос, чтобы найти более старые.", languageCode: presentationData.strings.primaryComponent.languageCode), theme: presentationData.theme))
+                }
+                return rows
             }
             let previous = previousEntries.swap(entries)
             let (deleteIndices, indicesAndItems, updateIndices) = mergeListsStableWithUpdates(leftList: previous ?? [], rightList: entries ?? [])
@@ -473,18 +537,6 @@ private final class DGSavedDeletedSearchNode: ItemListControllerSearchNode {
             self.enqueueTransition(DGSavedDeletedSearchTransition(deletions: deletions, insertions: insertions, updates: updates, isSearching: entries != nil, isEmpty: entries?.isEmpty ?? false, query: query))
         })
 
-        self.presentationDataDisposable = (context.sharedContext.presentationData
-        |> deliverOnMainQueue).start(next: { [weak self] presentationData in
-            guard let self else {
-                return
-            }
-            let previousTheme = self.presentationData.theme
-            self.presentationData = presentationData
-            if previousTheme !== presentationData.theme {
-                self.listNode.backgroundColor = presentationData.theme.list.plainBackgroundColor
-            }
-        })
-
         self.listNode.beganInteractiveDragging = { _ in
             dismissInput()
         }
@@ -492,7 +544,6 @@ private final class DGSavedDeletedSearchNode: ItemListControllerSearchNode {
 
     deinit {
         self.searchDisposable?.dispose()
-        self.presentationDataDisposable?.dispose()
     }
 
     override func didLoad() {

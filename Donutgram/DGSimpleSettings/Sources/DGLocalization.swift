@@ -296,6 +296,7 @@ private let dgEnglishStrings: [String: String] = [
     "Сообщение скрыто теневым баном": "This message is hidden by shadow ban",
     "Сохраненные удаленки": "Saved Deleted Messages",
     "Поиск по удаленкам": "Search Deleted Messages",
+    "Показаны только самые новые совпадения. Уточните запрос, чтобы найти более старые.": "Only the newest matches are shown. Refine the search to find older ones.",
     "Хранилище": "Storage",
     "Файлы": "Files",
     "Удалить все": "Delete All",
