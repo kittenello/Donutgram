@@ -156,6 +156,9 @@ func chatHistoryEntriesForView(
         if pendingRemovedMessages.contains(message.id) {
             continue
         }
+        if donutgramShouldHideServiceMessage(message) {
+            continue
+        }
         if let shadowBan, DonutgramShadowBan.isHidden(message, state: shadowBan) {
             donutgramHiddenCount += 1
             continue
@@ -428,7 +431,7 @@ func chatHistoryEntriesForView(
     }
     
     if let lowerTimestamp = view.entries.last?.message.timestamp, let upperTimestamp = view.entries.first?.message.timestamp {
-        if let joinMessage {
+        if let joinMessage, !donutgramShouldHideServiceMessage(joinMessage) {
             var insertAtPosition: Int?
             if joinMessage.timestamp >= lowerTimestamp && view.laterId == nil {
                 insertAtPosition = entries.count

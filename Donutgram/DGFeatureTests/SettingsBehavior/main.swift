@@ -13,6 +13,7 @@ if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
     check(!settings.disableMediaAutoplay && settings.disabledAutoplayMediaTypes == 3, "existing sequential playback must remain enabled by default")
     check(!settings.hidePaidReactions && !settings.hideViaBot && !settings.hideBirthdayNotifications, "hiding must be opt-in")
+    check(!settings.hideServiceMessages && !settings.confirmReactionsInUnjoinedChats && !settings.confirmTelegramLinks && !settings.confirmChatPreviewEntry, "safety switches must be opt-in")
     check(!settings.disableStoryCameraSwipe, "the swipe to the story camera must stay on by default")
     check(!settings.disableGiftStarsRedirect, "gift sales open Stars by default")
     check(settings.jumpToStartInChatMenu, "«В начало чата» is in the avatar menu by default")
@@ -35,6 +36,10 @@ if mode == "write" {
     settings.hideViaBot = true
     settings.hideBotAutomation = true
     settings.removeLinkPreviews = true
+    settings.hideServiceMessages = true
+    settings.confirmReactionsInUnjoinedChats = true
+    settings.confirmTelegramLinks = true
+    settings.confirmChatPreviewEntry = true
     settings.disabledAutoplayMediaTypes = 1
     settings.disableMediaAutoplay = false
     check(settings.disabledAutoplayMediaTypes == 1, "turning the stop switch off must preserve its selection")
@@ -46,6 +51,7 @@ if mode == "write" {
 } else if mode == "read" {
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
+    check(settings.hideServiceMessages && settings.confirmReactionsInUnjoinedChats && settings.confirmTelegramLinks && settings.confirmChatPreviewEntry, "safety preferences must survive process restart")
     check(settings.disableStoryCameraSwipe, "turning off the swipe to the story camera must survive process restart")
     check(settings.disableGiftStarsRedirect, "disabling the gift Stars redirect must survive process restart")
     settings.disableGiftStarsRedirect = false

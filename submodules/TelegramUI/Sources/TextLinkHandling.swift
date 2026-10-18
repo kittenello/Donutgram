@@ -5,6 +5,7 @@ import Display
 import SwiftSignalKit
 import TelegramUIPreferences
 import AccountContext
+import DGSimpleSettings
 import AccountContext
 import SafariServices
 import OpenInExternalAppUI
@@ -71,7 +72,28 @@ func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, n
         present: presentImpl, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
     }
     
-    let openLinkImpl: (String) -> Void = { [weak controller] url in
+    var confirmedTelegramUrl: String?
+    var openLinkImpl: ((String) -> Void)!
+    openLinkImpl = { [weak controller] url in
+        if confirmedTelegramUrl == url {
+            confirmedTelegramUrl = nil
+        } else if DGSimpleSettings.shared.confirmTelegramLinks,
+                  let parsedUrl = URL(string: url),
+                  (parsedUrl.scheme?.lowercased() == "tg" || ["t.me", "telegram.me", "telegram.dog"].contains(parsedUrl.host?.lowercased() ?? "")),
+                  let controller {
+            let confirmation = openLinkConfirmationController(
+                context: context,
+                presentationData: presentationData,
+                updatedPresentationData: .single(presentationData),
+                displayUrl: url,
+                open: {
+                    confirmedTelegramUrl = url
+                    openLinkImpl(url)
+                }
+            )
+            controller.present(confirmation, in: .window(.root))
+            return
+        }
         navigateDisposable.set((context.sharedContext.resolveUrl(context: context, peerId: peerId, url: url, skipUrlAuth: true) |> deliverOnMainQueue).start(next: { result in
             if let controller = controller {
                 switch result {

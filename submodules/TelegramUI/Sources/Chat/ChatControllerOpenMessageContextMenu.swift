@@ -370,6 +370,33 @@ extension ChatControllerImpl {
                     guard let message = messages.first else {
                         return
                     }
+
+                    let isUnjoinedChat: Bool
+                    if let channel = self.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel {
+                        isUnjoinedChat = channel.participationStatus != .member
+                    } else {
+                        isUnjoinedChat = false
+                    }
+                    let isPaidReaction: Bool
+                    if case .stars = chosenUpdatedReaction.reaction {
+                        isPaidReaction = true
+                    } else {
+                        isPaidReaction = false
+                    }
+                    if DGSimpleSettings.shared.confirmReactionsInUnjoinedChats && isUnjoinedChat && !isPaidReaction {
+                        let presentationData = self.presentationData
+                        let confirm = {
+                            let _ = self.context.engine.messages.setMessageReactions(ids: [message.id], reactions: [chosenUpdatedReaction])
+                        }
+                        let alert = textAlertController(context: self.context, title: nil, text: "Вы точно хотите поставить реакцию в чате, в который еще не вступили?", actions: [
+                            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_No, action: {}),
+                            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Yes, action: confirm)
+                        ])
+                        controller?.dismiss(completion: { [weak self] in
+                            self?.present(alert, in: .window(.root))
+                        })
+                        return
+                    }
                     
                     controller?.view.endEditing(true)
                     

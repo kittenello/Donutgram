@@ -15,6 +15,7 @@ import OverlayStatusController
 import PresentationDataUtils
 import UrlWhitelist
 import OpenUserGeneratedUrl
+import DGSimpleSettings
 
 public struct ParsedSecureIdUrl {
     public let peerId: EnginePeer.Id
@@ -356,6 +357,21 @@ private func makeTelegramUrl(_ path: String, queryItems: [URLQueryItem] = []) ->
 }
 
 func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
+    if DGSimpleSettings.shared.confirmTelegramLinks,
+       let parsedUrl = URL(string: url),
+       (parsedUrl.scheme?.lowercased() == "tg" || ["t.me", "telegram.me", "telegram.dog"].contains(parsedUrl.host?.lowercased() ?? "")) {
+        let controller = openLinkConfirmationController(
+            context: context,
+            presentationData: presentationData,
+            updatedPresentationData: .single(presentationData),
+            displayUrl: url,
+            open: {
+                openCheckedExternalUrl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+            }
+        )
+        context.sharedContext.presentGlobalController(controller, nil)
+        return
+    }
     // A login part hides the host a link opens (see `externalUrlWithLoginPart`). Every external link leaves through
     // here, whoever opens it, so here it is confirmed, unless a prompt that showed the real host was just accepted.
     if let loginPartUrl = externalUrlWithLoginPart(url), !consumeLoginPartConfirmation(loginPartUrl) {

@@ -74,6 +74,7 @@ import ChatSendMessageActionUI
 import ChatTextLinkEditUI
 import ChatRichTextEditorComposer
 import WebUI
+import DGSimpleSettings
 import PremiumUI
 import ImageTransparency
 import StickerPackPreviewUI
@@ -10642,7 +10643,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     func commitPurposefulAction() {
         if let purposefulAction = self.purposefulAction {
             self.purposefulAction = nil
-            purposefulAction()
+            if DGSimpleSettings.shared.confirmChatPreviewEntry, case .standard(.previewing) = self.mode {
+                let presentationData = self.presentationData
+                self.present(textAlertController(context: self.context, title: nil, text: "Вы точно хотите перейти в этот чат?", actions: [
+                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_No, action: {}),
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Yes, action: purposefulAction)
+                ]), in: .window(.root))
+            } else {
+                purposefulAction()
+            }
         }
     }
     
