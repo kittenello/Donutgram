@@ -2122,6 +2122,25 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             }
                         }
                         
+                        let mappedUpdatedReactions = updatedReactions.map { reaction -> UpdateMessageReaction in
+                            switch reaction {
+                            case let .builtin(value):
+                                return .builtin(value)
+                            case let .custom(fileId):
+                                return .custom(fileId: fileId, file: nil)
+                            case .stars:
+                                return .stars
+                            }
+                        }
+                        
+                        if removedReaction == nil && strongSelf.donutgramReactionNeedsConfirmation(chosenReaction) {
+                            let messageId = message.id
+                            strongSelf.donutgramPresentReactionConfirmation(apply: {
+                                let _ = updateMessageReactionsInteractively(account: context.account, messageIds: [messageId], reactions: mappedUpdatedReactions, isLarge: false, storeAsRecentlyUsed: false).startStandalone()
+                            })
+                            return
+                        }
+                        
                         if removedReaction == nil && !updatedReactions.isEmpty {
                             if strongSelf.selectPollOptionFeedback == nil {
                                 strongSelf.selectPollOptionFeedback = HapticFeedback()
@@ -2225,17 +2244,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 standaloneDismissAnimation.animateReactionDismiss(sourceView: targetView, hideNode: hideRemovedReaction, isIncoming: message.effectivelyIncoming(strongSelf.context.account.peerId), completion: { [weak standaloneDismissAnimation] in
                                     standaloneDismissAnimation?.removeFromSupernode()
                                 })
-                            }
-                        }
-                        
-                        let mappedUpdatedReactions = updatedReactions.map { reaction -> UpdateMessageReaction in
-                            switch reaction {
-                            case let .builtin(value):
-                                return .builtin(value)
-                            case let .custom(fileId):
-                                return .custom(fileId: fileId, file: nil)
-                            case .stars:
-                                return .stars
                             }
                         }
                         
