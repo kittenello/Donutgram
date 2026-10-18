@@ -135,7 +135,7 @@ func _internal_resetAccountState(postbox: Postbox, network: Network, accountPeer
                 }
                 
                 if let replacePinnedItemIds = fetchedChats.pinnedItemIds {
-                    transaction.setPinnedItemIds(groupId: .root, itemIds: replacePinnedItemIds.map(PinnedItemId.peer))
+                    transaction.setPinnedItemIds(groupId: .root, itemIds: donutgramKeepingPinnedBannedChats(transaction: transaction, currentItemIds: transaction.getPinnedItemIds(groupId: .root), itemIds: replacePinnedItemIds.map(PinnedItemId.peer)))
                 }
                 
                 for (peerId, summary) in fetchedChats.mentionTagSummaries {

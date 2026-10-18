@@ -1282,7 +1282,7 @@ func fetchChatListHole(postbox: Postbox, network: Network, accountPeerId: PeerId
             }
             
             if let replacePinnedItemIds = fetchedChats.pinnedItemIds {
-                transaction.setPinnedItemIds(groupId: groupId, itemIds: replacePinnedItemIds.map(PinnedItemId.peer))
+                transaction.setPinnedItemIds(groupId: groupId, itemIds: donutgramKeepingPinnedBannedChats(transaction: transaction, currentItemIds: transaction.getPinnedItemIds(groupId: groupId), itemIds: replacePinnedItemIds.map(PinnedItemId.peer)))
             }
             
             for (peerId, summary) in fetchedChats.mentionTagSummaries {

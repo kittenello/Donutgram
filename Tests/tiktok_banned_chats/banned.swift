@@ -63,6 +63,7 @@ struct TelegramCommunity: Peer {
     var collapsedInDialogs: Bool? = true
 }
 enum PeerGroupId: Equatable { case root, group(Int32) }
+enum PinnedItemId: Hashable { case peer(PeerId) }
 enum PeerChatListInclusion: Equatable {
     case notIncluded
     case included(group: String, pin: Int)
@@ -186,4 +187,19 @@ let fullGroup = TelegramGroup(id: id, title: "Группа", photo: ["photo"], p
 let keptGroup = donutgramPreservedBannedPeer(previous: fullGroup, updated: TelegramGroup(id: id, title: "Группа", membership: .Removed)) as! TelegramGroup
 check(keptGroup.photo == ["photo"] && keptGroup.participantCount == 5 && keptGroup.creationDate == 50, "a kept basic group keeps its photo and members count")
 check(keptGroup.membership == .Removed && keptGroup.role == .member, "removal and the lost admin role come from the ban")
+
+// The server's pinned lists leave out a kept chat; it keeps its place among the pins here.
+let pins = Transaction()
+let keptId = PeerId(value: 10), otherId = PeerId(value: 11), thirdId = PeerId(value: 12)
+pins.peers[keptId] = TelegramChannel(id: keptId, participationStatus: .member)
+pins.peers[otherId] = TelegramChannel(id: otherId, participationStatus: .member)
+pins.inclusions[keptId] = .included(group: "root", pin: 1)
+pins.inclusions[otherId] = .included(group: "root", pin: 0)
+donutgramUpdateBannedChat(transaction: pins, previous: pins.peers[keptId], updated: TelegramChannel(id: keptId, participationStatus: .kicked))
+pins.peers[keptId] = TelegramChannel(id: keptId, participationStatus: .kicked)
+let localPins: [PinnedItemId] = [.peer(otherId), .peer(keptId), .peer(thirdId)]
+check(donutgramKeepingPinnedBannedChats(transaction: pins, currentItemIds: localPins, itemIds: [.peer(thirdId), .peer(otherId)]) == [.peer(thirdId), .peer(keptId), .peer(otherId)], "a kept chat keeps its place among the server's pins")
+check(donutgramKeepingPinnedBannedChats(transaction: pins, currentItemIds: localPins, itemIds: []) == [.peer(keptId)], "a kept chat stays pinned when the server lists no pins")
+check(donutgramKeepingPinnedBannedChats(transaction: pins, currentItemIds: [.peer(otherId)], itemIds: []).isEmpty, "a chat unpinned elsewhere is unpinned")
+check(donutgramKeepingPinnedBannedChats(transaction: pins, currentItemIds: localPins, itemIds: [.peer(keptId)]) == [.peer(keptId)], "a kept chat is never pinned twice")
 print("banned chat archive checks passed")

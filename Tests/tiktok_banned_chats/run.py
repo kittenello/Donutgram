@@ -29,6 +29,12 @@ def prepare(directory):
     assert "preservedBannedChats.append" in reset and "inclusion: inclusion" in reset
     holes = source("submodules/TelegramCore/Sources/State/Holes.swift")
     assert "donutgramIsPreservedBannedChat(transaction: transaction, peerId: archivedPeerId)" in holes
+    # Every pinned list from the server leaves out a kept chat: reloading the chat list, a full reset, a pins sync.
+    keep_pins = "itemIds: donutgramKeepingPinnedBannedChats(transaction: transaction, currentItemIds: transaction.getPinnedItemIds(groupId: {}), itemIds: replacePinnedItemIds.map(PinnedItemId.peer))"
+    assert keep_pins.format("groupId") in holes and keep_pins.format(".root") in reset
+    pins = source("submodules/TelegramCore/Sources/State/ManagedSynchronizePinnedChatsOperations.swift")
+    assert "transaction.setPinnedItemIds(groupId: groupId, itemIds: donutgramKeepingPinnedBannedChats(transaction: transaction, currentItemIds: localItemIds, itemIds: serverItemIds))" in pins
+    assert "if remoteItemIds == serverItemIds {" in pins and "for itemId in serverItemIds {" in pins and "setPinnedItemIds(groupId: groupId, itemIds: resultingItemIds)" not in pins
     cached = source("submodules/TelegramCore/Sources/TelegramEngine/Peers/UpdateCachedPeerData.swift")
     # getFullChannel fails in a channel the account is banned from; a kept chat must not lose its pin and migration link.
     failed = cached.split("let isPreservedBannedChat = donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId)", 1)[1]

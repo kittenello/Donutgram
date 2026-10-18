@@ -37,6 +37,19 @@ func donutgramIsPreservedBannedChat(transaction: Transaction, peerId: PeerId, pe
     return transaction.retrieveItemCacheEntry(id: donutgramBannedChatCacheId(peerId))?.get(DonutgramBannedChat.self)?.saved == true
 }
 
+/// A pinned chat kept after a ban stays pinned here only: the server no longer lists it among the pinned chats, so each
+/// pinned list it sends would unpin it. Puts the kept chats of `currentItemIds` back at their places in `itemIds`.
+func donutgramKeepingPinnedBannedChats(transaction: Transaction, currentItemIds: [PinnedItemId], itemIds: [PinnedItemId]) -> [PinnedItemId] {
+    var result = itemIds
+    for (index, itemId) in currentItemIds.enumerated() {
+        guard case let .peer(peerId) = itemId, !result.contains(itemId), donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId) else {
+            continue
+        }
+        result.insert(itemId, at: min(index, result.count))
+    }
+    return result
+}
+
 /// The peer stored for a kept chat. A ban arrives as a stripped object (`channelForbidden`, `chatForbidden`) with only an id,
 /// a title and an access hash: no photo, username, creation date or flags, so a forum would open as a plain chat. The kept
 /// chat stays the chat it was, and only what the ban changed comes from the new object.
