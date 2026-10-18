@@ -351,14 +351,19 @@ func donutgramDeletedMessages(
             let messageReactions = message.attributes.compactMap { $0 as? ReactionsMessageAttribute }.flatMap { $0.reactions }
             if !reactions.allSatisfy({ reaction in messageReactions.contains { $0.value == reaction } }) { return false }
         }
-        var text = message.text
-        for media in message.media {
-            if let indexableText = media.indexableText {
-                text += " " + indexableText
-            }
-        }
-        return donutgramDeletedMessageMatchesQuery(text: text, query: query)
+        return donutgramDeletedMessageMatchesQuery(text: donutgramDeletedMessageSearchText(message), query: query)
     }.sorted { $0.index > $1.index }
+}
+
+/// The text a saved deleted message is found by: its own text and the searchable text of its media.
+func donutgramDeletedMessageSearchText(_ message: Message) -> String {
+    var text = message.text
+    for media in message.media {
+        if let indexableText = media.indexableText {
+            text += " " + indexableText
+        }
+    }
+    return text
 }
 
 /// Includes local results only inside the loaded remote window. Older deletions

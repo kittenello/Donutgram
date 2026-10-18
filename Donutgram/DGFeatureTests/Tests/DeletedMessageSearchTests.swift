@@ -42,6 +42,24 @@ final class DeletedMessageSearchTests: XCTestCase {
         XCTAssertTrue(merged.messages[1].localTags.contains(.donutgramDeleted))
     }
 
+    func testSavedDeletedPageSearchKeepsOrderAndLimit() {
+        let entries = [
+            DonutgramPreservedMessageSearchEntry(id: MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: 30), timestamp: 30, text: "Встреча завтра"),
+            DonutgramPreservedMessageSearchEntry(id: MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: 20), timestamp: 20, text: "привет"),
+            DonutgramPreservedMessageSearchEntry(id: MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: 10), timestamp: 10, text: "ВСТРЕЧА в офисе отчёт.pdf")
+        ]
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "встр", in: entries, limit: 10).map { $0.id }, [30, 10])
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "встреча", in: entries, limit: 1).map { $0.id }, [30])
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "отчет pdf", in: entries, limit: 10).map { $0.id }, [10])
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "пока", in: entries, limit: 10), [])
+    }
+
+    func testSavedDeletedPageSearchIgnoresQueryWithoutWords() {
+        let entries = [DonutgramPreservedMessageSearchEntry(id: MessageId(peerId: self.peerId, namespace: Namespaces.Message.Cloud, id: 1), timestamp: 1, text: "что угодно")]
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: "", in: entries, limit: 10), [])
+        XCTAssertEqual(donutgramPreservedMessageIds(matching: " ?! ", in: entries, limit: 10), [])
+    }
+
     func testLocalOnlyResultsOnEmptyRemoteResponse() {
         let merged = donutgramSearchResultIncludingDeletedMessages(self.result([], totalCount: 0, completed: true), deletedMessages: [self.message(4, deleted: true), self.message(9, deleted: true)])
         XCTAssertEqual(merged.messages.map { $0.id.id }, [9, 4])
