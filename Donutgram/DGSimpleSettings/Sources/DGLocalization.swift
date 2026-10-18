@@ -141,6 +141,7 @@ private let dgEnglishStrings: [String: String] = [
     "Подтверждать реакции без вступления": "Confirm Reactions Before Joining",
     "Подтверждать переход по ссылкам Telegram": "Confirm Telegram Link Opens",
     "Подтверждать вход из предпросмотра": "Confirm Entering a Chat Preview",
+    "Вы точно хотите перейти в этот чат?": "Do you want to open this chat?",
     "Воспроизведение": "Playback",
     "Отключить автовоспроизведение медиа": "Disable Media Autoplay",
     "Останавливать после": "Stop After",

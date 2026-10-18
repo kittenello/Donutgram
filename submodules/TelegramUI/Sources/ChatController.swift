@@ -582,6 +582,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var scheduledScrollToMessageId: (MessageId, NavigateToMessageParams)?
     
     public var purposefulAction: (() -> Void)?
+    private weak var donutgramPreviewEntryAlert: ViewController?
     public var dismissPreviewing: ((Bool) -> (() -> Void))?
     
     var updatedClosedPinnedMessageId: ((MessageId) -> Void)?
@@ -7226,6 +7227,33 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         })
     }
     
+    /// A tap on a previewed chat opens it. With «Подтверждать вход из предпросмотра» it asks first, over the preview, which
+    /// stays open on «Нет». Message option previews (forward, reply) are not chats being entered and never ask.
+    func openFromPreviewing() {
+        var asks = DGSimpleSettings.shared.confirmChatPreviewEntry
+        if let subject = self.subject, case .messageOptions = subject {
+            asks = false
+        }
+        guard asks else {
+            self.animateFromPreviewing()
+            return
+        }
+        if self.donutgramPreviewEntryAlert != nil {
+            return
+        }
+        let presentationData = self.presentationData
+        let languageCode = presentationData.strings.primaryComponent.languageCode
+        let alert = textAlertController(context: self.context, title: nil, text: dgLocalized("Вы точно хотите перейти в этот чат?", languageCode: languageCode), actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_No, action: {}),
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Yes, action: { [weak self] in
+                self?.animateFromPreviewing()
+            })
+        ])
+        self.donutgramPreviewEntryAlert = alert
+        // The preview is a context menu in the global overlay: an alert in the root window would open under it.
+        self.presentInGlobalOverlay(alert)
+    }
+
     func animateFromPreviewing(transition: ContainedViewLayoutTransition = .animated(duration: 0.4, curve: .spring)) {
         guard let navigationController = self.effectiveNavigationController else {
             return
@@ -10643,15 +10671,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     func commitPurposefulAction() {
         if let purposefulAction = self.purposefulAction {
             self.purposefulAction = nil
-            if DGSimpleSettings.shared.confirmChatPreviewEntry, case .standard(.previewing) = self.mode {
-                let presentationData = self.presentationData
-                self.present(textAlertController(context: self.context, title: nil, text: "Вы точно хотите перейти в этот чат?", actions: [
-                    TextAlertAction(type: .genericAction, title: presentationData.strings.Common_No, action: {}),
-                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Yes, action: purposefulAction)
-                ]), in: .window(.root))
-            } else {
-                purposefulAction()
-            }
+            purposefulAction()
         }
     }
     
