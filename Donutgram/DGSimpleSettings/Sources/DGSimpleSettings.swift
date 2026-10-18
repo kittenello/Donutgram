@@ -1107,7 +1107,16 @@ public final class DGSimpleSettings {
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
-    public var keepBannedChats: Bool { get { bool(Key.keepBannedChats) } set { setBool(newValue, Key.keepBannedChats) } }
+    /// Shared with the notification extension (`DGMessagePreservationSettings`).
+    public var keepBannedChats: Bool {
+        get { self.preservationSettings?.keepBannedChats ?? self.defaults.bool(forKey: Key.keepBannedChats) }
+        set {
+            guard self.keepBannedChats != newValue else { return }
+            self.defaults.set(newValue, forKey: Key.keepBannedChats)
+            self.preservationSettings?.keepBannedChats = newValue
+            NotificationCenter.default.post(name: DGSimpleSettings.didChangeNotification, object: self)
+        }
+    }
     public var hideArchive: Bool { get { bool(Key.hideArchive) } set { setBool(newValue, Key.hideArchive) } }
     public var hideGiftButton: Bool { get { bool(Key.hideGiftButton) } set { setBool(newValue, Key.hideGiftButton) } }
     /// «В начало чата» in the menu of a chat's avatar (long press). On until switched off.

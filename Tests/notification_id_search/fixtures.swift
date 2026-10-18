@@ -136,11 +136,13 @@ if args.count == 3 {
         settings.saveEditHistory = false
         settings.saveViewOnceMedia = true
         settings.removePings = true
+        settings.keepBannedChats = true
     } else {
         let settings = DGMessagePreservationSettings(sharedDefaults: defaults, legacyDefaults: .standard, migrateLegacyValues: false)
         expect(settings.saveDeletedMessages && settings.saveInBotChats && settings.saveViewOnceMedia, "extension reads another process's preferences")
         expect(!settings.saveEditHistory, "disabled preferences persist")
         expect(settings.removePings, "notification extension reads persisted remove-pings preference from another process")
+        expect(settings.keepBannedChats, "notification extension keeps a chat it learns the ban of")
         defaults.removePersistentDomain(forName: suite)
         print("Cross-process settings checks passed")
     }
@@ -158,11 +160,14 @@ legacy.set(true, forKey: "donutgram.spy.saveDeletedMessages")
 legacy.set(true, forKey: "donutgram.spy.saveEditHistory")
 legacy.set(false, forKey: "donutgram.spy.saveInBotChats")
 legacy.set(false, forKey: "donutgram.spy.saveViewOnceMedia")
+legacy.set(true, forKey: "donutgram.general.keepBannedChats")
 let beforeMigration = DGMessagePreservationSettings(sharedDefaults: shared, legacyDefaults: legacy, migrateLegacyValues: false)
 expect(!beforeMigration.saveDeletedMessages, "extension must not use its own enabled legacy defaults")
 expect(!beforeMigration.removePings, "remove pings is disabled by default")
+expect(!beforeMigration.keepBannedChats, "keeping banned chats is off until the app shares it")
 let migrated = DGMessagePreservationSettings(sharedDefaults: shared, legacyDefaults: legacy, migrateLegacyValues: true)
 expect(migrated.saveDeletedMessages && migrated.saveEditHistory, "main app migrates enabled preferences")
+expect(migrated.keepBannedChats, "main app shares a banned-chat preference set before it was shared")
 expect(!migrated.saveInBotChats && !migrated.saveViewOnceMedia, "migration preserves disabled preferences")
 migrated.saveDeletedMessages = false
 let reopened = DGMessagePreservationSettings(sharedDefaults: shared, legacyDefaults: legacy, migrateLegacyValues: true)
@@ -179,6 +184,10 @@ let extensionSettings = DGMessagePreservationSettings(sharedDefaults: UserDefaul
 expect(extensionSettings.removePings, "remove-pings toggle reaches the notification extension")
 DGSimpleSettings.shared.removePings = false
 expect(!extensionSettings.removePings, "switching off restores ordinary mention handling in the extension")
+DGSimpleSettings.shared.keepBannedChats = true
+expect(extensionSettings.keepBannedChats, "the banned-chat toggle reaches the notification extension")
+DGSimpleSettings.shared.keepBannedChats = false
+expect(!extensionSettings.keepBannedChats, "switching it off reaches the extension too")
 for namespace in [Namespaces.Peer.CloudGroup, Namespaces.Peer.CloudChannel] {
     let peerId = PeerId(namespace: namespace, value: 101)
     expect(!donutgramUsesPersonalNotificationSettings(peerId: peerId, personal: true, removePings: true), "mention in group or channel uses chat mute/sound settings")
