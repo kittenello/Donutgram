@@ -4,7 +4,6 @@ import AVFoundation
 import AccountContext
 import TelegramCore
 import SwiftSignalKit
-import Pasteboard
 import SaveToCameraRoll
 
 private func donutgramCopyFetchedImage(path: String) -> Bool {

@@ -348,13 +348,17 @@ public func iCloudFileDescription(_ url: URL) -> Signal<ICloudFileDescription?, 
 
 private final class ICloudFileResourceCopyItem: EngineRawMediaResourceDataFetchCopyLocalItem {
     private let url: URL
+    private let hasSecurityScope: Bool
     
-    init(url: URL) {
+    init(url: URL, hasSecurityScope: Bool) {
         self.url = url
+        self.hasSecurityScope = hasSecurityScope
     }
     
     deinit {
-        self.url.stopAccessingSecurityScopedResource()
+        if self.hasSecurityScope {
+            self.url.stopAccessingSecurityScopedResource()
+        }
     }
     
     func copyTo(url: URL) -> Bool {
@@ -393,7 +397,7 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
             }
         }
         
-        let _ = url.startAccessingSecurityScopedResource()
+        let hasSecurityScope = url.startAccessingSecurityScopedResource()
         
         let complete = {
             if resource.thumbnail {
@@ -421,7 +425,7 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
                     subscriber.putNext(.moveTempFile(file: tempFile))
                 }
             } else {
-                subscriber.putNext(.copyLocalItem(ICloudFileResourceCopyItem(url: url)))
+                subscriber.putNext(.copyLocalItem(ICloudFileResourceCopyItem(url: url, hasSecurityScope: hasSecurityScope)))
             }
             subscriber.putCompletion()
         }
