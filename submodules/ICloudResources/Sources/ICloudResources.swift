@@ -73,6 +73,11 @@ public struct ICloudFileDescription {
     public struct VideoMetadata {
         public let duration: Double
         public let dimensions: PixelDimensions
+
+        public init(duration: Double, dimensions: PixelDimensions) {
+            self.duration = duration
+            self.dimensions = dimensions
+        }
     }
     
     public let urlData: String
@@ -189,8 +194,10 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             }
         }
 
-        if videoFileExtensions.contains(fileExtension) {
-            let asset = AVURLAsset(url: url)
+        let videoAsset = AVURLAsset(url: url)
+        let hasVideoTrack = !videoAsset.tracks(withMediaType: .video).isEmpty
+        if videoFileExtensions.contains(fileExtension) || hasVideoTrack {
+            let asset = videoAsset
             let durationValue = CMTimeGetSeconds(asset.duration)
             let duration = durationValue.isFinite && durationValue > 0.0 ? durationValue : 0.0
             let dimensions: PixelDimensions
