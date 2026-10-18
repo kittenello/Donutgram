@@ -152,6 +152,11 @@ final class DGMediaFetcher: NSObject, URLSessionDownloadDelegate {
         guard let download = self.downloads[downloadTask.taskIdentifier], download.failure == nil else {
             return
         }
+        // A refused copy's error page is not the file: its length would stand as the file's size until the next copy
+        // sends one, and that copy may never send it.
+        if let httpResponse = downloadTask.response as? HTTPURLResponse, !(200 ..< 300).contains(httpResponse.statusCode) {
+            return
+        }
         let expected: Int64? = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
         if totalBytesWritten > download.maxBytes || (expected ?? 0) > download.maxBytes {
             download.failure = .tooLarge

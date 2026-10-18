@@ -156,7 +156,7 @@ if __name__ == "__main__":
                 subprocess.run([compiler, "-warnings-as-errors", str(directory / "fetcher" / "main.swift"), "-o", str(executable)], check=True)
                 subprocess.run([str(executable), f"http://127.0.0.1:{server.server_port}"], check=True)
                 assert "/unexpected" not in requests and "/cancelled" not in requests, requests
-                assert requests.count("/denied") == 2 and requests.count("/media") == 1, requests
+                assert requests.count("/denied") == 3 and requests.count("/media") == 2, requests
                 # A cookie set from code joins the page's own cookies for the next request only.
                 assert len(cookie_headers) == 2, cookie_headers
                 assert "page=1" in cookie_headers[0] and "answer=YWJj=" in cookie_headers[0], cookie_headers

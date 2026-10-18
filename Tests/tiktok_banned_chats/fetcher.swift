@@ -5,13 +5,13 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
 let base = CommandLine.arguments[1]
 let payload = Data(repeating: 65, count: 8192)
 
-func download(_ path: String, alternatives: [String], limit: Int64 = 200 * 1024 * 1024, cancel: Bool = false) -> Result<URL, DGLinkDownloadError> {
+func download(_ path: String, alternatives: [String], limit: Int64 = 200 * 1024 * 1024, cancel: Bool = false, progress: @escaping (Int64, Int64?) -> Void = { _, _ in }) -> Result<URL, DGLinkDownloadError> {
     let fetcher = DGMediaFetcher()
     let lock = NSLock()
     var result: Result<URL, DGLinkDownloadError>?
     let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     if cancel { fetcher.cancel() }
-    fetcher.download(URLRequest(url: URL(string: base + path)!), alternatives: alternatives.map { URLRequest(url: URL(string: base + $0)!) }, to: destination, maxBytes: limit, progress: { _, _ in }, completion: {
+    fetcher.download(URLRequest(url: URL(string: base + path)!), alternatives: alternatives.map { URLRequest(url: URL(string: base + $0)!) }, to: destination, maxBytes: limit, progress: progress, completion: {
         lock.lock()
         result = $0
         lock.unlock()
@@ -34,6 +34,19 @@ if case let .success(file) = download("/denied", alternatives: ["/media"]) {
     check((try? Data(contentsOf: file)) == payload, "HTTP 403 must try alternate CDN")
     try? FileManager.default.removeItem(at: file)
 } else { fatalError("alternate CDN failed") }
+// The refused copy's error page is not reported as the file: its length would stand as the file's size.
+let progressLock = NSLock()
+var reported: [Int64?] = []
+if case let .success(file) = download("/denied", alternatives: ["/media"], progress: { _, total in
+    progressLock.lock()
+    reported.append(total)
+    progressLock.unlock()
+}) {
+    try? FileManager.default.removeItem(at: file)
+} else { fatalError("alternate CDN failed") }
+progressLock.lock()
+check(!reported.isEmpty && reported.allSatisfy { $0 == Int64(payload.count) }, "only the served copy reports progress")
+progressLock.unlock()
 if case let .failure(error) = download("/denied", alternatives: ["/missing", "/gone"]) {
     check(error == .httpStatus(410), "bounded retries return the last HTTP failure")
 } else { fatalError("HTTP failure expected") }
