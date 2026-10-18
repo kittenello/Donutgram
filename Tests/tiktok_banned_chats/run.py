@@ -42,7 +42,14 @@ def prepare(directory):
     assert "keepBannedChats" not in content
     ui = source("submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift")
     alert = ui.split("case .bannedChat:", 1)[1].split("self.updatePreloadNextChatPeerId", 1)[0]
-    assert "Common_OK" in alert and "self.dismiss()" not in alert
+    assert "self.presentBannedChatAlertIfNeeded()" in alert and "self.dismiss()" not in alert
+    # The alert waits for the chat to be on screen: a controller without a window drops what it presents.
+    presenter = ui.split("func presentBannedChatAlertIfNeeded()", 1)[1].split("\n    }\n", 1)[0]
+    assert "guard self.didAppear" in presenter and "Common_OK" in presenter
+    assert presenter.index("self.didHandlePerformDismissAction = true") < presenter.index("self.present(")
+    controller = source("submodules/TelegramUI/Sources/ChatController.swift")
+    appear = controller.split("override public func viewDidAppear(", 1)[1]
+    assert appear.index("self.didAppear = true") < appear.index("self.presentBannedChatAlertIfNeeded()") < appear.index("\n    }\n")
     node = source("submodules/TelegramUI/Sources/ChatControllerNode.swift")
     assert "} else if chatPresentationInterfaceState.isNotAccessible {" in node and "donutgram" not in node.split("var restrictionText: String?", 1)[1][:2000]
     job = source("Donutgram/DGLinkDownloader/Sources/DGLinkDownloadJob.swift")

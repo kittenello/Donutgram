@@ -15,6 +15,7 @@ on:
       - 'submodules/TelegramCore/Sources/State/ResetState.swift'
       - 'submodules/TelegramUI/Sources/ChatControllerContentData.swift'
       - 'submodules/TelegramUI/Sources/ChatControllerNode.swift'
+      - 'submodules/TelegramUI/Sources/ChatController.swift'
       - 'submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift'
       - 'submodules/SettingsUI/Sources/Themes/ThemeSettingsChatPreviewItem.swift'
       - 'submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/**'

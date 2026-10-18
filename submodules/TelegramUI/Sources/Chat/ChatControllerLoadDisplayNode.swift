@@ -621,14 +621,25 @@ extension ChatControllerImpl {
             case .dismiss:
                 self.dismiss()
             case .bannedChat:
-                let text = dgLocalized("Вы были заблокированы в этом чате", languageCode: self.presentationData.strings.primaryComponent.languageCode)
-                self.present(textAlertController(context: self.context, title: nil, text: text, actions: [
-                    TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
-                ]), in: .window(.root))
+                // Not handled until it is shown: before the chat is on screen it has no window, so viewDidAppear shows it.
+                self.didHandlePerformDismissAction = false
+                self.presentBannedChatAlertIfNeeded()
             }
         }
         
         self.updatePreloadNextChatPeerId()
+    }
+    
+    /// Donutgram: says that the account was banned from a chat it keeps, once that chat is on screen.
+    func presentBannedChatAlertIfNeeded() {
+        guard self.didAppear, case .standard(.default) = self.mode, !self.didHandlePerformDismissAction, case .bannedChat? = self.contentData?.state.performDismissAction else {
+            return
+        }
+        self.didHandlePerformDismissAction = true
+        let text = dgLocalized("Вы были заблокированы в этом чате", languageCode: self.presentationData.strings.primaryComponent.languageCode)
+        self.present(textAlertController(context: self.context, title: nil, text: text, actions: [
+            TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
+        ]), in: .window(.root))
     }
     
     func updatePreloadNextChatPeerId() {
