@@ -348,7 +348,7 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
                         let asset = AVURLAsset(url: url)
                         let generator = AVAssetImageGenerator(asset: asset)
                         generator.appliesPreferredTrackTransform = true
-                        if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil), let image = generateScaledImage(image: UIImage(cgImage: cgImage), size: CGSize(width: 256, height: 256)), let jpegData = image.jpegData(compressionQuality: 0.5) {
+                        if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil), let image = generateScaledImage(image: UIImage(cgImage: cgImage), size: CGSize(width: cgImage.width, height: cgImage.height).fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
                             data = jpegData
                         }
                     } else if let imageData = try? Data(contentsOf: url, options: .mappedIfSafe), let originalImage = UIImage(data: imageData), let image = generateScaledImage(image: originalImage, size: originalImage.size.fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
