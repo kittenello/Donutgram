@@ -358,8 +358,9 @@ enum DGTikTokExtractor {
         case .cancelled, .tooLarge:
             return fallbackError
         default:
-            // Both sources failing the same way (no internet) is one reason, not the same one twice.
-            return fallbackError == directError ? directError : .tiktokFailed(directError, fallbackError)
+            // Both sources failing for one reason is that reason once, not twice: a connection that dropped during the
+            // TikTok download and then stayed down is two different codes behind one "no internet".
+            return fallbackError.reason == directError.reason ? directError : .tiktokFailed(directError, fallbackError)
         }
     }
 

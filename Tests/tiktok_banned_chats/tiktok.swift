@@ -148,6 +148,8 @@ check(run.failure == .tiktokFailed(.tiktokPageDenied, .tiktokDownloadServiceStat
 check(DGLinkDownloadError.tiktokFailed(.tiktokNoData(nil), .tiktokUnavailable).reason == "TikTok прислал страницу без видео. Сервис скачивания TikTok не отдал видео", "reason text")
 run = flow(post, [.failure(.network(.notConnectedToInternet)), .failure(.network(.notConnectedToInternet))], files: [])
 check(run.failure == .network(.notConnectedToInternet) && run.failure?.reason == "Нет интернета", "the same answer from both sources is named once")
+run = flow(post, [.failure(.network(.networkConnectionLost)), .failure(.network(.notConnectedToInternet))], files: [])
+check(run.failure == .network(.networkConnectionLost) && run.failure?.reason == "Нет интернета", "two codes behind one reason are named once")
 
 // A failed TikTok file goes to TikWM once; TikWM is never asked twice in one job.
 run = flow(post, [htmlResponse(html, url: post), response(video)], files: [.httpStatus(403), .httpStatus(403)])
