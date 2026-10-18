@@ -120,4 +120,34 @@ final class UrlWhitelistTests: XCTestCase {
         XCTAssertFalse(concealed)
         XCTAssertEqual(URL(string: displayUrl)?.host, "evil.org")
     }
+
+    func testTelegramLinksAreRecognized() {
+        let telegramUrls = [
+            "tg://resolve?domain=durov",
+            "TG://join?invite=abc",
+            "https://t.me/durov",
+            "http://telegram.me/durov",
+            "https://telegram.dog/durov",
+            "t.me/durov", // no scheme: the opener supplies "http://"
+            "T.ME/+abcdef",
+            "https://durov.t.me",
+            "https://t.me./durov",
+        ]
+        for url in telegramUrls {
+            XCTAssertTrue(isTelegramLinkUrl(url), url)
+        }
+        let otherUrls = [
+            "https://telegram.org",
+            "https://nott.me/durov",
+            "https://t.me.evil.org/durov",
+            "https://t.me\u{2215}test\u{2215}@evil.org", // the login part hides evil.org
+            "https://t.me@evil.org",
+            "mailto:durov@t.me",
+            "tel:+123456789",
+            "ftp://t.me/durov",
+        ]
+        for url in otherUrls {
+            XCTAssertFalse(isTelegramLinkUrl(url), url)
+        }
+    }
 }

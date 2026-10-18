@@ -53,6 +53,7 @@ func chatHistoryEntriesForView(
     pendingUnpinnedAllMessages: Bool,
     pendingRemovedMessages: Set<MessageId>,
     shadowBan: DonutgramShadowBan.State?,
+    hideServiceMessages: Bool,
     associatedData: ChatMessageItemAssociatedData,
     updatingMedia: [MessageId: ChatUpdatingMessageMedia],
     customChannelDiscussionReadState: MessageId?,
@@ -154,6 +155,11 @@ func chatHistoryEntriesForView(
         }
         
         if pendingRemovedMessages.contains(message.id) {
+            continue
+        }
+        // Counted with the shadow-banned ones, so loading, read state and empty windows are handled past them as well.
+        if hideServiceMessages && donutgramIsHideableServiceMessage(message) {
+            donutgramHiddenCount += 1
             continue
         }
         if let shadowBan, DonutgramShadowBan.isHidden(message, state: shadowBan) {
@@ -428,7 +434,7 @@ func chatHistoryEntriesForView(
     }
     
     if let lowerTimestamp = view.entries.last?.message.timestamp, let upperTimestamp = view.entries.first?.message.timestamp {
-        if let joinMessage {
+        if let joinMessage, !(hideServiceMessages && donutgramIsHideableServiceMessage(joinMessage)) {
             var insertAtPosition: Int?
             if joinMessage.timestamp >= lowerTimestamp && view.laterId == nil {
                 insertAtPosition = entries.count

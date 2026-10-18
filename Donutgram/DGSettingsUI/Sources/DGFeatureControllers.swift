@@ -367,35 +367,40 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(32, 4, "removePings", "Убрать пинги", s.removePings, true),
             .toggle(33, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
             .toggle(34, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
-            .header(35, 5, "ГОЛОС В ТЕКСТ"),
-            .disclosure(36, 5, "transcription", "Сервис", transcription),
-            .header(38, 6, "ЗАПИСЬ"),
-            .disclosure(39, 6, "camera", "Камера в кружках", cameraTitle),
-            .toggle(40, 6, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
-            .toggle(41, 6, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
-            .toggle(42, 6, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
-            .disclosure(43, 6, "pauseMusicOnRecording", "Пауза музыки при записи", "\(musicOptions.filter { s.musicPlaybackExceptions.contains($0) }.count)/3"),
-            .toggle(44, 6, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
-            .header(48, 7, "ВИДЕО"),
-            .disclosure(49, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
-            .toggle(50, 7, "autoPause", "Авто пауза", s.autoPause, true),
-            .disclosure(51, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
-            .header(58, 8, "КАНАЛЫ"),
-            .toggle(59, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
-            .disclosure(60, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .header(68, 9, "ВОСПРОИЗВЕДЕНИЕ"),
-            .toggle(69, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
-            .disclosure(70, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
-            .info(71, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
-            .header(78, 10, "БОТЫ"),
-            .toggle(79, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
-            .header(88, 11, "ДРУГОЕ"),
-            .toggle(89, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
+            .toggle(35, 4, "hideServiceMessages", "Отключить служебные сообщения", s.hideServiceMessages, true),
+            .header(36, 5, "ГОЛОС В ТЕКСТ"),
+            .disclosure(37, 5, "transcription", "Сервис", transcription),
+            .header(39, 6, "ЗАПИСЬ"),
+            .disclosure(40, 6, "camera", "Камера в кружках", cameraTitle),
+            .toggle(41, 6, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
+            .toggle(42, 6, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
+            .toggle(43, 6, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
+            .disclosure(44, 6, "pauseMusicOnRecording", "Пауза музыки при записи", "\(musicOptions.filter { s.musicPlaybackExceptions.contains($0) }.count)/3"),
+            .toggle(45, 6, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
+            .header(49, 7, "ВИДЕО"),
+            .disclosure(50, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
+            .toggle(51, 7, "autoPause", "Авто пауза", s.autoPause, true),
+            .disclosure(52, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
+            .header(59, 8, "КАНАЛЫ"),
+            .toggle(60, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
+            .disclosure(61, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
+            .header(69, 9, "ВОСПРОИЗВЕДЕНИЕ"),
+            .toggle(70, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
+            .disclosure(71, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
+            .info(72, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
+            .header(79, 10, "БОТЫ"),
+            .toggle(80, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
+            .header(89, 11, "ДРУГОЕ"),
+            .toggle(90, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
-        result.append(.toggle(90, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
-        result.append(.disclosure(91, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
-        result.append(.toggle(92, 11, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true))
-        result.append(.info(93, 11, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению."))
+        result.append(.toggle(91, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
+        result.append(.disclosure(92, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
+        // The confirmations come before «В начало чата», so its explanation stays the footer of the section.
+        result.append(.toggle(93, 11, "confirmReactionsInUnjoinedChats", "Подтверждать реакции без вступления", s.confirmReactionsInUnjoinedChats, true))
+        result.append(.toggle(94, 11, "confirmTelegramLinks", "Подтверждать переход по ссылкам Telegram", s.confirmTelegramLinks, true))
+        result.append(.toggle(95, 11, "confirmChatPreviewEntry", "Подтверждать вход из предпросмотра", s.confirmChatPreviewEntry, true))
+        result.append(.toggle(96, 11, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true))
+        result.append(.info(97, 11, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению."))
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {
@@ -408,6 +413,10 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "hidePaidReactions": s.hidePaidReactions = value
         case "hideViaBot": s.hideViaBot = value
         case "removeLinkPreviews": s.removeLinkPreviews = value
+        case "hideServiceMessages": s.hideServiceMessages = value
+        case "confirmReactionsInUnjoinedChats": s.confirmReactionsInUnjoinedChats = value
+        case "confirmTelegramLinks": s.confirmTelegramLinks = value
+        case "confirmChatPreviewEntry": s.confirmChatPreviewEntry = value
         case "hideBotAutomation": s.hideBotAutomation = value
         case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value

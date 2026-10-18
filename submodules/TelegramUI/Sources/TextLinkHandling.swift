@@ -5,6 +5,7 @@ import Display
 import SwiftSignalKit
 import TelegramUIPreferences
 import AccountContext
+import DGSimpleSettings
 import AccountContext
 import SafariServices
 import OpenInExternalAppUI
@@ -146,6 +147,11 @@ func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, n
                     // A login part hides the host the link opens (see `externalUrlWithLoginPart`).
                     let loginPartUrl = externalUrlWithLoginPart(url)
                     if parsedConcealed || loginPartUrl != nil {
+                        concealed = true
+                    }
+                    // «Подтверждать переход по ссылкам Telegram». Only text that belongs to a chat (a bio, a description)
+                    // has a peer: the app's own screens open their t.me links here too, with no peer, and are not asked about.
+                    if peerId != nil && DGSimpleSettings.shared.confirmTelegramLinks && isTelegramLinkUrl(url) {
                         concealed = true
                     }
                     

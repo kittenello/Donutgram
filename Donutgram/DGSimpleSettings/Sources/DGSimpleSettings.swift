@@ -225,6 +225,10 @@ public final class DGSimpleSettings {
         static let autoPause = "donutgram.chats.autoPause"
         static let doubleTapSeekSeconds = "donutgram.chats.doubleTapSeekSeconds"
         static let showPollResultsBeforeVoting = "donutgram.chats.showPollResultsBeforeVoting"
+        static let hideServiceMessages = "donutgram.chats.hideServiceMessages"
+        static let confirmReactionsInUnjoinedChats = "donutgram.chats.confirmReactionsInUnjoinedChats"
+        static let confirmTelegramLinks = "donutgram.chats.confirmTelegramLinks"
+        static let confirmChatPreviewEntry = "donutgram.chats.confirmChatPreviewEntry"
         static let showChannelForwardCount = "donutgram.chats.showChannelForwardCount"
         static let autoPauseMedia = "donutgram.chats.autoPauseMedia"
         static let editedIcon = "donutgram.chats.editedIcon"
@@ -1085,6 +1089,10 @@ public final class DGSimpleSettings {
     }
 
     public var showPollResultsBeforeVoting: Bool { get { bool(Key.showPollResultsBeforeVoting) } set { setBool(newValue, Key.showPollResultsBeforeVoting) } }
+    public var hideServiceMessages: Bool { get { bool(Key.hideServiceMessages) } set { setBool(newValue, Key.hideServiceMessages) } }
+    public var confirmReactionsInUnjoinedChats: Bool { get { bool(Key.confirmReactionsInUnjoinedChats) } set { setBool(newValue, Key.confirmReactionsInUnjoinedChats) } }
+    public var confirmTelegramLinks: Bool { get { bool(Key.confirmTelegramLinks) } set { setBool(newValue, Key.confirmTelegramLinks) } }
+    public var confirmChatPreviewEntry: Bool { get { bool(Key.confirmChatPreviewEntry) } set { setBool(newValue, Key.confirmChatPreviewEntry) } }
     public var showChannelForwardCount: Bool { get { bool(Key.showChannelForwardCount) } set { setBool(newValue, Key.showChannelForwardCount) } }
     /// Bitmask: video = 1, voice = 2, round video = 4.
     public var autoPauseMedia: Int {
