@@ -73,10 +73,13 @@ public struct ICloudFileDescription {
     public struct VideoMetadata {
         public let duration: Double
         public let dimensions: PixelDimensions
+        /// The `moov` atom comes before `mdat`, so the video can be played before it is fully downloaded.
+        public let supportsStreaming: Bool
 
-        public init(duration: Double, dimensions: PixelDimensions) {
+        public init(duration: Double, dimensions: PixelDimensions, supportsStreaming: Bool) {
             self.duration = duration
             self.dimensions = dimensions
+            self.supportsStreaming = supportsStreaming
         }
     }
     
@@ -131,6 +134,57 @@ private func audioArtworkData(from asset: AVURLAsset) -> Data? {
     }
 
     return nil
+}
+
+/// Walks the top-level atoms of an ISO media file (mp4, mov) and reports whether `moov` comes before `mdat`.
+/// Anything unreadable or unexpected answers false, which only costs streaming playback.
+private func isoMediaMoovPrecedesMdat(url: URL) -> Bool {
+    guard let handle = try? FileHandle(forReadingFrom: url) else {
+        return false
+    }
+    defer {
+        try? handle.close()
+    }
+    guard let fileSize = try? handle.seekToEnd() else {
+        return false
+    }
+    var offset: UInt64 = 0
+    for _ in 0 ..< 64 {
+        guard offset + 8 <= fileSize else {
+            return false
+        }
+        guard let _ = try? handle.seek(toOffset: offset), let header = try? handle.read(upToCount: 16), header.count >= 8 else {
+            return false
+        }
+        let bytes = [UInt8](header)
+        var size: UInt64 = 0
+        for i in 0 ..< 4 {
+            size = (size << 8) | UInt64(bytes[i])
+        }
+        let type = String(bytes: bytes[4 ..< 8], encoding: .ascii)
+        if type == "moov" {
+            return true
+        } else if type == "mdat" {
+            return false
+        }
+        if size == 1 {
+            guard bytes.count >= 16 else {
+                return false
+            }
+            size = 0
+            for i in 8 ..< 16 {
+                size = (size << 8) | UInt64(bytes[i])
+            }
+        } else if size == 0 {
+            // The atom extends to the end of the file.
+            return false
+        }
+        guard size >= 8, size <= fileSize - offset else {
+            return false
+        }
+        offset += size
+    }
+    return false
 }
 
 private func videoThumbnailImage(url: URL) -> UIImage? {
@@ -217,7 +271,7 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             let width = Int32(abs(transformedSize.width))
             let height = Int32(abs(transformedSize.height))
             let dimensions = width > 0 && height > 0 ? PixelDimensions(width: width, height: height) : PixelDimensions(width: 640, height: 360)
-            videoMetadata = ICloudFileDescription.VideoMetadata(duration: duration, dimensions: dimensions)
+            videoMetadata = ICloudFileDescription.VideoMetadata(duration: duration, dimensions: dimensions, supportsStreaming: isoMediaMoovPrecedesMdat(url: url))
         }
         
         let result = ICloudFileDescription(

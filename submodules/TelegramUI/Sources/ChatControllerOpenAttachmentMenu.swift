@@ -1469,7 +1469,8 @@ extension ChatControllerImpl {
                                         attributes.append(.Audio(isVoice: false, duration: audioMetadata.duration, title: audioMetadata.title, performer: audioMetadata.performer, waveform: nil))
                                     }
                                     if let videoMetadata {
-                                        attributes.append(.Video(duration: videoMetadata.duration, size: videoMetadata.dimensions, flags: [.supportsStreaming], preloadSize: nil, coverTime: nil, videoCodec: nil))
+                                        let videoFlags: TelegramMediaVideoFlags = videoMetadata.supportsStreaming ? [.supportsStreaming] : []
+                                        attributes.append(.Video(duration: videoMetadata.duration, size: videoMetadata.dimensions, flags: videoFlags, preloadSize: nil, coverTime: nil, videoCodec: nil))
                                         previewRepresentations.append(TelegramMediaImageRepresentation(dimensions: videoMetadata.dimensions, resource: ICloudFileResource(urlData: item.urlData, thumbnail: true), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
                                     }
 
