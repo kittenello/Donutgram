@@ -67,6 +67,10 @@ def prepare(directory):
     assert "!batch.failed" in job and "DGTikTokExtractor.run(" in job
     assert "failure: failed" in job and "self.isCancelRequested" in job.split("func downloadTikTok(", 1)[1]
     assert "directory.appendingPathComponent(\"source-\\(index)\")" in job
+    # A failed attempt leaves nothing behind: its folder goes before the next source is tried, photos included.
+    attempt = job.split("func downloadTikTok(", 1)[1].split("\n    }\n", 1)[0]
+    assert attempt.index("try? FileManager.default.removeItem(at: directory)") < attempt.index("failure(error)")
+    assert "source.deletingLastPathComponent().appendingPathComponent(\"photo-\\(index).jpg\")" in job
 
     imports = "import Foundation\nimport CoreFoundation\n"
     tik = imports + "import CryptoKit\n" + "\n".join(without_imports(source("Donutgram/DGLinkDownloader/Sources/" + f)) for f in [

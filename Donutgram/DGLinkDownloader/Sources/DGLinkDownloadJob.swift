@@ -151,7 +151,7 @@ public final class DGLinkDownloadJob {
 
     /// `failure` hands the error back to the extractor, which may try TikWM next.
     private func downloadTikTok(_ item: DGTikTokItem, failure: @escaping (DGLinkDownloadError) -> Void) {
-        // Old photo tasks may still be finishing when another source is tried.
+        // Each attempt has its own folder: old photo tasks may still be finishing when another source is tried.
         let directory = self.workDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -164,6 +164,9 @@ public final class DGLinkDownloadJob {
             if self.isCancelRequested {
                 self.finish(.failure(.cancelled))
             } else {
+                // A failed attempt's files are never sent, and a success keeps the work folder, so they go now: a page
+                // saved as the video, the photos made so far. A task still running cannot move its file in any more.
+                try? FileManager.default.removeItem(at: directory)
                 failure(error)
             }
         }
@@ -319,7 +322,8 @@ public final class DGLinkDownloadJob {
                 self.finish(.failure(.cancelled))
                 return
             }
-            let destination = self.workDirectory.appendingPathComponent("photo-\(index).jpg")
+            // Next to its source, in the attempt's folder, which a failed attempt removes.
+            let destination = source.deletingLastPathComponent().appendingPathComponent("photo-\(index).jpg")
             guard let size = DGMediaProcessor.normalizePhoto(sourceURL: source, destinationURL: destination) else {
                 if let failure { failure(.processingFailed) } else { self.finish(.failure(.processingFailed)) }
                 return
