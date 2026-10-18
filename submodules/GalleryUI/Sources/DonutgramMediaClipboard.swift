@@ -6,6 +6,7 @@ import AccountContext
 import TelegramCore
 import SwiftSignalKit
 import Pasteboard
+import SaveToCameraRoll
 
 private func donutgramImageMetadata(_ path: String) -> String? {
     guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil), let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as NSDictionary? else {
