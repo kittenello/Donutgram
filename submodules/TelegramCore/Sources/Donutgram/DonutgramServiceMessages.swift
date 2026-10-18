@@ -1,9 +1,23 @@
 import Postbox
-import DGSimpleSettings
 
-public func donutgramShouldHideServiceMessage(_ message: Message) -> Bool {
-    guard DGSimpleSettings.shared.hideServiceMessages else {
-        return false
+/// Whether «Отключить служебные сообщения» hides `message`: notices about who joined or left, edits of the chat
+/// (title, photo, theme, pin, timers) and of polls and to-do lists. Calls, gifts, payments, giveaways, suggested
+/// posts and anything else a person acts on stay visible, as does every action added later.
+public func donutgramIsHideableServiceMessage(_ message: Message) -> Bool {
+    for media in message.media {
+        guard let action = media as? TelegramMediaAction else {
+            continue
+        }
+        switch action.action {
+        case .addedMembers, .removedMembers, .joinedByLink, .joinedByRequest, .joinedChannel, .joinedViaCommunity, .peerJoined,
+             .groupCreated, .titleUpdated, .photoUpdated, .pinnedMessageUpdated, .channelMigratedFromGroup, .groupMigratedToChannel,
+             .historyCleared, .messageAutoremoveTimeoutUpdated, .setChatTheme, .setChatWallpaper, .setSameChatWallpaper,
+             .topicEdited, .boostsApplied, .paidMessagesPriceEdited, .groupCreatorChange, .copyProtectionToggle, .communityChanged,
+             .pollOptionAppended, .pollOptionDeleted, .todoCompletions, .todoAppendTasks:
+            return true
+        default:
+            return false
+        }
     }
-    return message.media.contains { $0 is TelegramMediaAction }
+    return false
 }

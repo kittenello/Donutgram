@@ -743,6 +743,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     }
 
     private let donutgramShadowBanPromise = ValuePromise<DonutgramShadowBan.State>(DonutgramShadowBan.State.current, ignoreRepeated: true)
+    private let donutgramHideServiceMessagesPromise = ValuePromise<Bool>(DGSimpleSettings.shared.hideServiceMessages, ignoreRepeated: true)
     private var donutgramShadowBanObserver: NSObjectProtocol?
     private var donutgramDeletedMessagesAppearanceObserver: NSObjectProtocol?
     private var donutgramHiddenWindowWalk = DonutgramShadowBan.HiddenWindowWalk()
@@ -1476,6 +1477,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             guard let self = self else {
                 return
             }
+            // «Отключить служебные сообщения» rebuilds the entries (ignoreRepeated keeps other changes from doing so).
+            self.donutgramHideServiceMessagesPromise.set(DGSimpleSettings.shared.hideServiceMessages)
             let transcriptionBackend = DGSimpleSettings.shared.transcriptionBackend
             let stickerAppearance = (DGSimpleSettings.shared.stickerSize, DGSimpleSettings.shared.hideStickerTime, DGSimpleSettings.shared.stickerReplyOptions, DGSimpleSettings.shared.stickerShape, DGSimpleSettings.shared.hideStickerChecks)
             let stickerAppearanceChanged = self.donutgramStickerAppearance != stickerAppearance
@@ -2072,7 +2075,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             self.scrollToMessageIdPromise.get(),
             self.chatHasBotsPromise.get(),
             self.allAdMessagesPromise.get(),
-            self.donutgramShadowBanPromise.get()
+            combineLatest(self.donutgramShadowBanPromise.get(), self.donutgramHideServiceMessagesPromise.get())
         )
         
         let contentSettings = self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ContentSettings())
@@ -2186,7 +2189,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             contentSettings |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_contentSettings")
         ) |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_firstChatHistoryTransition")).startStrict(next: { [weak self] update, chatPresentationData, selectedMessages, updatingMedia, networkType, preferredStoryHighQuality, animatedEmojiAndGiftStickers, additionalAnimatedEmojiStickers, customChannelDiscussionReadState, customThreadOutgoingReadState, availableReactions, availableMessageEffects, savedMessageTags, defaultReaction, accountPeer, accountCountry, suggestAudioTranscription, promises, topicAuthorId, translationState, maxReadStoryId, recommendedChannels, audioTranscriptionTrial, chatThemes, deviceContactsNumbers, contentSettings in
             let (animatedEmojiStickers, premiumGiftStickers, tonGiftStickers) = animatedEmojiAndGiftStickers
-            let (historyAppearsCleared, pendingUnpinnedAllMessages, pendingRemovedMessages, currentlyPlayingMessageIdAndType, scrollToMessageId, chatHasBots, allAdMessages, shadowBanState) = promises
+            let (historyAppearsCleared, pendingUnpinnedAllMessages, pendingRemovedMessages, currentlyPlayingMessageIdAndType, scrollToMessageId, chatHasBots, allAdMessages, (shadowBanState, hideServiceMessages)) = promises
             
             if measure_isFirstTime {
                 measure_isFirstTime = false
@@ -2481,6 +2484,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     pendingUnpinnedAllMessages: pendingUnpinnedAllMessages,
                     pendingRemovedMessages: pendingRemovedMessages,
                     shadowBan: mode == .bubbles ? shadowBanState : nil,
+                    hideServiceMessages: mode == .bubbles && hideServiceMessages,
                     associatedData: associatedData,
                     updatingMedia: updatingMedia,
                     customChannelDiscussionReadState: customChannelDiscussionReadState,
