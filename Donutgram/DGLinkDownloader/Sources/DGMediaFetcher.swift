@@ -70,6 +70,44 @@ final class DGMediaFetcher: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    /// Where a request ends up after redirects, whatever the final status: only the address is needed.
+    func finalURL(_ request: URLRequest, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
+        self.queue.async {
+            guard !self.isCancelled, let session = self.session else {
+                completion(.failure(.cancelled))
+                return
+            }
+            let task = session.dataTask(with: request, completionHandler: { _, response, error in
+                if let error {
+                    completion(.failure(DGLinkDownloadError(error)))
+                } else if let url = response?.url {
+                    completion(.success(url))
+                } else {
+                    completion(.failure(.httpStatus(0)))
+                }
+            })
+            self.tasks.append(task)
+            task.resume()
+        }
+    }
+
+    /// Cookies a page's script would set (TikTok's bot check). Queued like requests, so they apply to the next one.
+    func setCookies(_ cookies: [HTTPCookie]) {
+        self.queue.async {
+            for cookie in cookies {
+                self.session?.configuration.httpCookieStorage?.setCookie(cookie)
+            }
+        }
+    }
+
+    func deleteCookies(_ cookies: [HTTPCookie]) {
+        self.queue.async {
+            for cookie in cookies {
+                self.session?.configuration.httpCookieStorage?.deleteCookie(cookie)
+            }
+        }
+    }
+
     func download(_ request: URLRequest, alternatives: [URLRequest] = [], to destination: URL, maxBytes: Int64, progress: @escaping (Int64, Int64?) -> Void, completion: @escaping (Result<URL, DGLinkDownloadError>) -> Void) {
         self.downloadSingle(request, to: destination, maxBytes: maxBytes, progress: progress, completion: { result in
             if case let .failure(.httpStatus(code)) = result, [403, 404, 410].contains(code), let next = alternatives.first {

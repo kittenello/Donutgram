@@ -43,4 +43,37 @@ if case let .failure(error) = download("/limited", alternatives: ["/unexpected"]
 if case let .failure(error) = download("/cancelled", alternatives: ["/unexpected"], cancel: true) {
     check(error == .cancelled, "cancelled download must not retry")
 } else { fatalError("cancellation expected") }
+func fetch(_ fetcher: DGMediaFetcher, _ path: String) {
+    let done = DispatchSemaphore(value: 0)
+    fetcher.fetchData(URLRequest(url: URL(string: base + path)!), completion: { result in
+        if case .failure = result { fatalError("request \(path) failed") }
+        done.signal()
+    })
+    check(done.wait(timeout: .now() + 10) == .success, "request \(path) timed out")
+}
+
+// TikTok's bot check answer: set before the reload, joined with the page's own cookies, gone after it.
+let cookieFetcher = DGMediaFetcher()
+fetch(cookieFetcher, "/set-cookie")
+let answer = HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": "answer=YWJj=; Path=/"], for: URL(string: base)!)
+check(answer.count == 1, "test cookie")
+cookieFetcher.setCookies(answer)
+fetch(cookieFetcher, "/echo-cookie")
+cookieFetcher.deleteCookies(answer)
+fetch(cookieFetcher, "/echo-cookie")
+cookieFetcher.invalidate()
+
+// A short link is followed only for where it leads: the final address counts, whatever its status.
+let resolver = DGMediaFetcher()
+var head = URLRequest(url: URL(string: base + "/redirect")!)
+head.httpMethod = "HEAD"
+let landed = DispatchSemaphore(value: 0)
+var landing: Result<URL, DGLinkDownloadError>?
+resolver.finalURL(head, completion: { result in
+    landing = result
+    landed.signal()
+})
+check(landed.wait(timeout: .now() + 10) == .success, "final URL timed out")
+check((try? landing?.get())?.path == "/landing", "the redirect target is reported although it answers 404")
+resolver.invalidate()
 print("HTTP download fallback checks passed")

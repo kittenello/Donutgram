@@ -129,7 +129,28 @@ public final class DGLinkDownloadJob {
         }
     }
 
-    private func runTikTok(_ url: URL, useFallback: Bool = false) {
+    /// TikTok's own page first, TikWM after it: `DGTikTokExtractor.run` decides when and names both errors.
+    private func runTikTok(_ url: URL) {
+        DGTikTokExtractor.run(url, fetcher: self.fetcher, willUseFallback: {
+            self.queue.async {
+                self.report(.resolving)
+            }
+        }, download: { item, failure in
+            self.queue.async {
+                guard !self.isFinished else {
+                    return
+                }
+                self.downloadTikTok(item, failure: failure)
+            }
+        }, failure: { error in
+            self.queue.async {
+                self.finish(.failure(error))
+            }
+        })
+    }
+
+    /// `failure` hands the error back to the extractor, which may try TikWM next.
+    private func downloadTikTok(_ item: DGTikTokItem, failure: @escaping (DGLinkDownloadError) -> Void) {
         // Old photo tasks may still be finishing when another source is tried.
         let directory = self.workDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         do {
@@ -138,57 +159,34 @@ public final class DGLinkDownloadJob {
             self.finish(.failure(.processingFailed))
             return
         }
-        let completion: (Result<DGTikTokItem, DGLinkDownloadError>) -> Void = { result in
-            self.queue.async {
-                guard !self.isFinished else {
-                    return
-                }
-                switch result {
-                case let .failure(error):
-                    self.finish(.failure(error))
-                case let .success(.video(file, _)):
-                    self.kind = .video
-                    let destination = directory.appendingPathComponent("tiktok.mp4")
-                    self.download([(DGTikTokExtractor.mediaRequest(file.url), destination, file.expectedSize)], alternatives: [file.alternateURLs.map(DGTikTokExtractor.mediaRequest)], failure: { error in
-                        self.retryTikTok(url, error: error, usedFallback: useFallback)
-                    }, completion: { urls in
-                        self.completeVideo(fileURL: urls[0], failure: { error in
-                            self.retryTikTok(url, error: error, usedFallback: useFallback)
-                        })
-                    })
-                case let .success(.photos(files)):
-                    self.kind = .photos
-                    var selected = files
-                    if let maxPhotos = self.maxPhotos, selected.count > maxPhotos {
-                        selected = Array(selected.prefix(maxPhotos))
-                    }
-                    let items = selected.enumerated().map { index, file in
-                        return (DGTikTokExtractor.mediaRequest(file.url), directory.appendingPathComponent("source-\(index)"), file.expectedSize)
-                    }
-                    self.download(items, failure: { error in
-                        self.retryTikTok(url, error: error, usedFallback: useFallback)
-                    }, completion: { urls in
-                        self.completePhotos(urls, failure: { error in
-                            self.retryTikTok(url, error: error, usedFallback: useFallback)
-                        })
-                    })
-                }
+        let failed: (DGLinkDownloadError) -> Void = { error in
+            // cancel() is synchronous: a job that is being cancelled asks no other source.
+            if self.isCancelRequested {
+                self.finish(.failure(.cancelled))
+            } else {
+                failure(error)
             }
         }
-        if useFallback {
-            DGTikTokExtractor.resolveFallback(url, fetcher: self.fetcher, completion: completion)
-        } else {
-            DGTikTokExtractor.resolve(url, fetcher: self.fetcher, completion: completion)
+        switch item {
+        case let .video(file, _):
+            self.kind = .video
+            let destination = directory.appendingPathComponent("tiktok.mp4")
+            self.download([(DGTikTokExtractor.mediaRequest(file.url), destination, file.expectedSize)], alternatives: [file.alternateURLs.map(DGTikTokExtractor.mediaRequest)], failure: failed, completion: { urls in
+                self.completeVideo(fileURL: urls[0], failure: failed)
+            })
+        case let .photos(files):
+            self.kind = .photos
+            var selected = files
+            if let maxPhotos = self.maxPhotos, selected.count > maxPhotos {
+                selected = Array(selected.prefix(maxPhotos))
+            }
+            let items = selected.enumerated().map { index, file in
+                return (DGTikTokExtractor.mediaRequest(file.url), directory.appendingPathComponent("source-\(index)"), file.expectedSize)
+            }
+            self.download(items, failure: failed, completion: { urls in
+                self.completePhotos(urls, failure: failed)
+            })
         }
-    }
-
-    private func retryTikTok(_ url: URL, error: DGLinkDownloadError, usedFallback: Bool) {
-        guard !usedFallback, !self.isCancelRequested, error != .cancelled, error != .tooLarge else {
-            self.finish(.failure(error))
-            return
-        }
-        self.report(.resolving)
-        self.runTikTok(url, useFallback: true)
     }
 
     private func runYouTube(_ videoId: String) {
