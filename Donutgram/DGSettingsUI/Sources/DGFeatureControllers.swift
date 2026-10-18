@@ -187,7 +187,7 @@ func dgAppearanceSettingsController(context: AccountContext, focusKey: String? =
             .toggle(35, 4, "mutualContact", "Показывать взаимный контакт", s.showMutualContact, true),
             .toggle(38, 4, "relativeOnlineTime", "Относительное время онлайна", s.relativeOnlineTime, true),
             .toggle(39, 4, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
-            .toggle(36, 4, "disableGiftStarsRedirect", "не открывать звёзды после продажи подарка", s.disableGiftStarsRedirect, true),
+            .toggle(36, 4, "disableGiftStarsRedirect", "Не открывать звёзды после продажи подарка", s.disableGiftStarsRedirect, true),
             .header(40, 5, "ДРУГОЕ"),
             .toggle(41, 5, "disableAds", "Отключить рекламу", s.disableAds, true),
             .toggle(42, 5, "confirmCalls", "Подтверждение вызова", s.confirmCalls, true)
