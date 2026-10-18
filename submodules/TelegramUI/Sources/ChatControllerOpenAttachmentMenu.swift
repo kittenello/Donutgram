@@ -1396,7 +1396,7 @@ extension ChatControllerImpl {
             let (accountPeer, limits, premiumLimits) = result
             let isPremium = accountPeer?.isPremium ?? false
 
-            strongSelf.present(legacyICloudFilePicker(theme: strongSelf.presentationData.theme, hasMultiselection: !editingMessage, documentTypes: documentTypes, completion: { [weak self] urls in
+            strongSelf.present(legacyICloudFilePicker(theme: strongSelf.presentationData.theme, mode: .import, hasMultiselection: !editingMessage, documentTypes: documentTypes, completion: { [weak self] urls in
                 if let strongSelf = self, !urls.isEmpty {
                     var signals: [Signal<ICloudFileDescription?, NoError>] = []
                     for url in urls {
@@ -1453,7 +1453,7 @@ extension ChatControllerImpl {
                             for item in results {
                                 if let item = item {
                                     let fileId = Int64.random(in: Int64.min ... Int64.max)
-                                    let mimeType = guessMimeTypeByFileExtension((item.fileName as NSString).pathExtension)
+                                    let mimeType = guessMimeTypeByFileExtension((item.fileName as NSString).pathExtension.lowercased())
                                     var previewRepresentations: [TelegramMediaImageRepresentation] = []
                                     if mimeType.hasPrefix("image/") || mimeType == "application/pdf" || item.audioMetadata?.hasAudioArtwork == true {
                                         previewRepresentations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: 320, height: 320), resource: ICloudFileResource(urlData: item.urlData, thumbnail: true), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))

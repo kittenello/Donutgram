@@ -130,8 +130,11 @@ private func audioArtworkData(from asset: AVURLAsset) -> Data? {
 
 private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
     if #available(iOSApplicationExtension 9.0, iOS 9.0, *) {
-        guard url.startAccessingSecurityScopedResource() else {
-            return nil
+        let hasSecurityScope = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope {
+                url.stopAccessingSecurityScopedResource()
+            }
         }
         
         guard let urlData = try? url.bookmarkData(options: URL.BookmarkCreationOptions.suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil) else {
@@ -188,14 +191,18 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
 
         if videoFileExtensions.contains(fileExtension) {
             let asset = AVURLAsset(url: url)
+            let durationValue = CMTimeGetSeconds(asset.duration)
+            let duration = durationValue.isFinite && durationValue > 0.0 ? durationValue : 0.0
+            let dimensions: PixelDimensions
             if let track = asset.tracks(withMediaType: .video).first {
-                let duration = CMTimeGetSeconds(asset.duration)
                 let transformedSize = track.naturalSize.applying(track.preferredTransform)
-                let dimensions = PixelDimensions(width: Int32(abs(transformedSize.width)), height: Int32(abs(transformedSize.height)))
-                if duration.isFinite && duration > 0.0 && dimensions.width > 0 && dimensions.height > 0 {
-                    videoMetadata = ICloudFileDescription.VideoMetadata(duration: duration, dimensions: dimensions)
-                }
+                let width = Int32(abs(transformedSize.width))
+                let height = Int32(abs(transformedSize.height))
+                dimensions = width > 0 && height > 0 ? PixelDimensions(width: width, height: height) : PixelDimensions(width: 640, height: 360)
+            } else {
+                dimensions = PixelDimensions(width: 640, height: 360)
             }
+            videoMetadata = ICloudFileDescription.VideoMetadata(duration: duration, dimensions: dimensions)
         }
         
         let result = ICloudFileDescription(
@@ -205,8 +212,6 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             audioMetadata: audioMetadata,
             videoMetadata: videoMetadata
         )
-        
-        url.stopAccessingSecurityScopedResource()
         
         return result
     } else {
@@ -319,10 +324,7 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
             }
         }
         
-        guard url.startAccessingSecurityScopedResource() else {
-            subscriber.putCompletion()
-            return EmptyDisposable
-        }
+        let _ = url.startAccessingSecurityScopedResource()
         
         let complete = {
             if resource.thumbnail {

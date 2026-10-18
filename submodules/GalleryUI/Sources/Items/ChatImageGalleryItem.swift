@@ -796,18 +796,6 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
                         })
                     })))
 
-                    items.append(.action(ContextMenuActionItem(text: dgLocalized("Копировать метаданные", languageCode: self.presentationData.strings.primaryComponent.languageCode), icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.actionSheet.primaryTextColor) }, action: { [weak self] _, f in
-                        f(.default)
-                        guard let self else {
-                            return
-                        }
-                        let _ = donutgramCopyImageMetadata(context: context, mediaReference: media, completion: { [weak self] success in
-                            guard let self, let controller = self.galleryController(), success else {
-                                return
-                            }
-                            controller.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: dgLocalized("Метаданные скопированы", languageCode: self.presentationData.strings.primaryComponent.languageCode)), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
-                        })
-                    })))
                 }
             }
             

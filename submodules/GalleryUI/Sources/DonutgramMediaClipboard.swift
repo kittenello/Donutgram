@@ -1,42 +1,11 @@
 import Foundation
 import UIKit
 import AVFoundation
-import ImageIO
 import AccountContext
 import TelegramCore
 import SwiftSignalKit
 import Pasteboard
 import SaveToCameraRoll
-
-private func donutgramImageMetadata(_ path: String) -> String? {
-    guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil), let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as NSDictionary? else {
-        return nil
-    }
-
-    let fields: [(CFString, String)] = [
-        (kCGImagePropertyPixelWidth, "ширина"),
-        (kCGImagePropertyPixelHeight, "высота"),
-        (kCGImagePropertyTIFFMake, "камера"),
-        (kCGImagePropertyTIFFModel, "модель"),
-        (kCGImagePropertyTIFFSoftware, "программа"),
-        (kCGImagePropertyExifDateTimeOriginal, "дата съёмки"),
-        (kCGImagePropertyExifLensModel, "объектив"),
-        (kCGImagePropertyExifFocalLength, "фокусное расстояние"),
-        (kCGImagePropertyExifExposureTime, "выдержка"),
-        (kCGImagePropertyExifFNumber, "диафрагма"),
-        (kCGImagePropertyExifISOSpeedRatings, "iso"),
-        (kCGImagePropertyGPSLatitude, "широта"),
-        (kCGImagePropertyGPSLongitude, "долгота")
-    ]
-
-    var result: [String] = []
-    for (key, title) in fields {
-        if let value = properties[key] {
-            result.append("\(title): \(value)")
-        }
-    }
-    return result.isEmpty ? nil : result.joined(separator: "\n")
-}
 
 private func donutgramCopyFetchedImage(path: String) -> Bool {
     guard let image = UIImage(contentsOfFile: path) else {
@@ -74,16 +43,5 @@ func donutgramCopyVideoFrame(context: AccountContext, mediaReference: AnyMediaRe
             return
         }
         completion(donutgramCopyFetchedVideoFrame(path: data.path, timestamp: timestamp))
-    })
-}
-
-func donutgramCopyImageMetadata(context: AccountContext, mediaReference: AnyMediaReference, completion: @escaping (Bool) -> Void) -> Disposable {
-    return (fetchMediaData(context: context, userLocation: .other, mediaReference: mediaReference)
-    |> deliverOnMainQueue).start(next: { value, _ in
-        guard case let .data(data) = value, data.isComplete, let metadata = donutgramImageMetadata(data.path) else {
-            return
-        }
-        UIPasteboard.general.string = metadata
-        completion(true)
     })
 }
