@@ -369,7 +369,7 @@ enum DGTikTokExtractor {
                     } else if response.url?.path == "/login" {
                         completion(.failure(.tiktokLoginRequired))
                     } else {
-                        completion(.failure(.tiktokShortLinkRedirected(response.url?.path ?? "")))
+                        completion(.failure(DGTikTokExtractor.redirectError(response.url?.path ?? "", shortLink: true)))
                     }
                 })
             }
@@ -471,9 +471,18 @@ enum DGTikTokExtractor {
             return .failure(.tiktokLoginRequired)
         }
         if DGTikTokExtractor.itemId(from: url) == nil {
-            return .failure(.tiktokRedirected(url.path))
+            return .failure(DGTikTokExtractor.redirectError(url.path, shortLink: false))
         }
         return result
+    }
+
+    /// The page TikTok sent a short link or a post to. "/hk/about" is where TikTok sends every request from Hong
+    /// Kong, so the network itself goes out there (a VPN server) and no other link would get through either.
+    private static func redirectError(_ path: String, shortLink: Bool) -> DGLinkDownloadError {
+        if dgPathSegments(path).first?.lowercased() == "hk" {
+            return .tiktokHongKong
+        }
+        return shortLink ? .tiktokShortLinkRedirected(path) : .tiktokRedirected(path)
     }
 
     /// An HTTP error on a page is TikTok refusing the page, not a file.

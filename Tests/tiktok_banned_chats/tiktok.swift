@@ -217,6 +217,13 @@ check(run.failure?.reason == "TikTok просит войти в аккаунт. 
 run = flow(post, [htmlResponse("<title>TikTok - Make Your Day</title>", url: URL(string: "https://www.tiktok.com/foryou?lang=ru")!), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokRedirected("/foryou"), .tiktokDownloadServiceStatus(403)), "a post page sent to the feed")
 check(run.failure?.reason == "TikTok открыл /foryou вместо видео. Сервис скачивания TikTok вернул HTTP 403", "redirect reason")
+// TikTok left Hong Kong in 2020: a network that goes out there gets "/hk/about" for a short link and a post alike.
+let hongKong = URL(string: "https://www.tiktok.com/hk/about")!
+run = flow(short, [htmlResponse("<title>TikTok</title>", url: hongKong), htmlResponse("", url: hongKong), .failure(.httpStatus(403))], files: [])
+check(run.failure == .tiktokFailed(.tiktokHongKong, .tiktokDownloadServiceStatus(403)), "a short link sent to the Hong Kong notice")
+check(run.failure?.reason == "TikTok не работает в Гонконге, а интернет идёт через Гонконг (смените страну VPN). Сервис скачивания TikTok вернул HTTP 403", "Hong Kong reason")
+run = flow(post, [htmlResponse("<title>TikTok</title>", url: hongKong), .failure(.httpStatus(403))], files: [])
+check(run.failure == .tiktokFailed(.tiktokHongKong, .tiktokDownloadServiceStatus(403)), "a post page sent to the Hong Kong notice")
 run = flow(post, [htmlResponse("<html><head><TITLE>\n  Verify &amp; continue  </TITLE></head><body></body></html>", url: post), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokNoData("Verify & continue"), .tiktokDownloadServiceStatus(403)), "an unknown page is named by its title")
 check(run.failure?.reason == "TikTok прислал страницу без видео: «Verify & continue». Сервис скачивания TikTok вернул HTTP 403", "title reason")

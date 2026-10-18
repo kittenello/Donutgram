@@ -12,6 +12,8 @@ public enum DGLinkDownloadError: Error, Equatable {
     /// TikTok sent the post page, or a short link, to another page: its path.
     case tiktokRedirected(String)
     case tiktokShortLinkRedirected(String)
+    /// TikTok left Hong Kong in 2020 and sends every request from there to "/hk/about".
+    case tiktokHongKong
     case tiktokLoginRequired
     case tiktokAgeRestricted
     case tiktokNoFile
@@ -59,6 +61,8 @@ public enum DGLinkDownloadError: Error, Equatable {
             return "TikTok открыл \(DGLinkDownloadError.placeName(path)) вместо видео"
         case let .tiktokShortLinkRedirected(path):
             return "Короткая ссылка TikTok ведёт на \(DGLinkDownloadError.placeName(path)), а не на видео"
+        case .tiktokHongKong:
+            return "TikTok не работает в Гонконге, а интернет идёт через Гонконг (смените страну VPN)"
         case .tiktokLoginRequired:
             return "TikTok просит войти в аккаунт"
         case .tiktokAgeRestricted:
