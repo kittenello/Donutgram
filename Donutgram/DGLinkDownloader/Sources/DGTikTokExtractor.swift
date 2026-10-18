@@ -7,7 +7,7 @@ enum DGTikTokItem: Equatable {
     case photos([DGRemoteFile])
 }
 
-/// Tries TikTok first, then resolves the original link through TikWM if TikTok blocks access.
+/// Tries TikTok first, then resolves the post through TikWM if TikTok blocks access.
 enum DGTikTokExtractor {
     static let userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     private static let rehydrationMarker = "<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\""
@@ -296,12 +296,12 @@ enum DGTikTokExtractor {
         return Data(base64Encoded: trimmed + String(repeating: "=", count: (4 - trimmed.count % 4) % 4))
     }
 
-    /// TikTok's own page first. When the page or one of its files fails, the original link goes to TikWM, once: a
-    /// redirect to a login, challenge or home page does not prove that a share link expired. When TikWM fails too,
-    /// the error names both answers. `download` fetches an item's files and calls its argument only on failure;
-    /// `willUseFallback` runs before TikWM is asked.
+    /// TikTok's own page first. When the page or one of its files fails, the post goes to TikWM, once
+    /// (`fallbackLink`): a redirect to a login, challenge or home page does not prove that a share link expired. When
+    /// TikWM fails too, the error names both answers. `download` fetches an item's files and calls its argument only
+    /// on failure; `willUseFallback` runs before TikWM is asked.
     static func run(_ url: URL, fetcher: DGMediaFetcher, willUseFallback: @escaping () -> Void, download: @escaping (DGTikTokItem, @escaping (DGLinkDownloadError) -> Void) -> Void, failure: @escaping (DGLinkDownloadError) -> Void) {
-        let fallback: (DGLinkDownloadError) -> Void = { directError in
+        let fallback: (DGLinkDownloadError, String?) -> Void = { directError, itemId in
             switch directError {
             case .cancelled, .tooLarge, .tiktokPrivate:
                 // TikWM serves the same file, so it would be just as large, and it is not logged in either: a private
@@ -309,7 +309,7 @@ enum DGTikTokExtractor {
                 failure(directError)
             default:
                 willUseFallback()
-                DGTikTokExtractor.resolveFallback(url, fetcher: fetcher, completion: { result in
+                DGTikTokExtractor.resolveFallback(DGTikTokExtractor.fallbackLink(url, itemId: itemId), fetcher: fetcher, completion: { result in
                     switch result {
                     case let .failure(error):
                         failure(DGTikTokExtractor.combine(directError, error))
@@ -321,20 +321,36 @@ enum DGTikTokExtractor {
                 })
             }
         }
-        DGTikTokExtractor.resolveDirect(url, fetcher: fetcher, completion: { result in
+        DGTikTokExtractor.resolveDirect(url, fetcher: fetcher, completion: { result, itemId in
             switch result {
             case let .failure(error):
-                fallback(error)
+                fallback(error, itemId)
             case let .success(item):
                 download(item, { error in
                     if case let .httpStatus(code) = error {
-                        fallback(.tiktokFileStatus(code))
+                        fallback(.tiktokFileStatus(code), itemId)
                     } else {
-                        fallback(error)
+                        fallback(error, itemId)
                     }
                 })
             }
         })
+    }
+
+    /// The link TikWM gets. TikWM reads only the post's id from it (checked live: the same id under another author,
+    /// under "/photo/" or alone brings the same post), so a post whose id is known goes as the bare post link, and
+    /// any other link goes without its query and fragment: TikTok's share parameters (`_t`, `_r`, `sender_device`)
+    /// tie a link to whoever shared it.
+    static func fallbackLink(_ url: URL, itemId: String?) -> URL {
+        if let itemId = itemId ?? DGTikTokExtractor.itemId(from: url), let link = DGTikTokExtractor.pageURL(itemId: itemId) {
+            return link
+        }
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        components.query = nil
+        components.fragment = nil
+        return components.url ?? url
     }
 
     private static func combine(_ directError: DGLinkDownloadError, _ fallbackError: DGLinkDownloadError) -> DGLinkDownloadError {
@@ -348,30 +364,34 @@ enum DGTikTokExtractor {
     }
 
     /// Short links (vm./vt./t/) are followed first: they redirect to "/@/video/<id>". When TikTok sends this network to
-    /// another page instead (a login wall, the home page), the link is followed again the way yt-dlp does it.
-    private static func resolveDirect(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>) -> Void) {
+    /// another page instead (a login wall, the home page), the link is followed again the way yt-dlp does it. The
+    /// post's id goes along with the answer once it is known, for `fallbackLink`.
+    private static func resolveDirect(_ url: URL, fetcher: DGMediaFetcher, completion: @escaping (Result<DGTikTokItem, DGLinkDownloadError>, String?) -> Void) {
+        let fetch: (String) -> Void = { itemId in
+            DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: { completion($0, itemId) })
+        }
         if let itemId = DGTikTokExtractor.itemId(from: url) {
-            DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
+            fetch(itemId)
             return
         }
         fetcher.fetchData(DGTikTokExtractor.pageRequest(url), completion: { result in
             switch result {
             case let .failure(error):
-                completion(.failure(DGTikTokExtractor.pageError(error)))
+                completion(.failure(DGTikTokExtractor.pageError(error)), nil)
             case let .success(response):
                 if let itemId = response.url.flatMap({ DGTikTokExtractor.itemId(from: $0) }) {
-                    DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
+                    fetch(itemId)
                     return
                 }
                 fetcher.finalURL(DGTikTokExtractor.previewRequest(url), completion: { preview in
                     if case let .success(previewURL) = preview, let itemId = DGTikTokExtractor.itemId(from: previewURL) {
-                        DGTikTokExtractor.fetchItem(itemId: itemId, fetcher: fetcher, completion: completion)
+                        fetch(itemId)
                     } else if case .failure(.cancelled) = preview {
-                        completion(.failure(.cancelled))
+                        completion(.failure(.cancelled), nil)
                     } else if response.url?.path == "/login" {
-                        completion(.failure(.tiktokLoginRequired))
+                        completion(.failure(.tiktokLoginRequired), nil)
                     } else {
-                        completion(.failure(DGTikTokExtractor.redirectError(response.url?.path ?? "", shortLink: true)))
+                        completion(.failure(DGTikTokExtractor.redirectError(response.url?.path ?? "", shortLink: true)), nil)
                     }
                 })
             }

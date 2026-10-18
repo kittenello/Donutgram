@@ -99,6 +99,14 @@ func tikwmRequests() -> Int {
     return fetcher.requests.filter { $0.url?.host == "www.tikwm.com" }.count
 }
 
+/// The link the provider was asked about in the last flow.
+func tikwmLink() -> String? {
+    guard let url = fetcher.requests.last(where: { $0.url?.host == "www.tikwm.com" })?.url else {
+        return nil
+    }
+    return URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "url" })?.value
+}
+
 var run = flow(post, [htmlResponse(html, url: post)])
 if case let .video(file, _)? = run.items.first {
     check(file.url.absoluteString == "https://cdn.example/direct.mp4", "keep working direct extraction")
@@ -114,8 +122,11 @@ if case let .video(file, duration)? = run.items.first {
 check(run.failure == nil && run.fallbacks == 1 && fetcher.requests.count == 3 && tikwmRequests() == 1, "one fallback request")
 check(fetcher.requests[1].httpMethod == "HEAD" && fetcher.requests[1].url == short, "the short link is followed once more before the provider")
 check(fetcher.requests[1].value(forHTTPHeaderField: "User-Agent") == "facebookexternalhit/1.1", "as Facebook's preview bot, like yt-dlp")
-let query = URLComponents(url: fetcher.requests[2].url!, resolvingAgainstBaseURL: false)!.queryItems!
-check(query.first { $0.name == "url" }?.value == short.absoluteString, "pass original short link without corrupting its query")
+// TikTok's share parameters tie a link to whoever shared it; the provider needs only the post.
+check(tikwmLink() == "https://vm.tiktok.com/ABC123/", "a short link goes to the provider without its query")
+let sharedPost = URL(string: "https://www.tiktok.com/@scout2015/photo/6718335390845095173?_t=8share&_r=1&sender_device=pc#comments")!
+run = flow(sharedPost, [.failure(.httpStatus(403)), response(video)])
+check(run.failure == nil && tikwmLink() == "https://www.tiktok.com/@/video/6718335390845095173", "a known post goes to the provider as the bare post link")
 
 run = flow(post, [.failure(.httpStatus(403)), response(video)])
 check(run.items.count == 1 && run.failure == nil && run.fallbacks == 1, "page HTTP 403 must use fallback")
@@ -210,6 +221,8 @@ let wall = URL(string: "https://www.tiktok.com/login?redirect_url=https%3A%2F%2F
 check(DGTikTokExtractor.itemId(from: wall) == "6718335390845095173", "a login wall keeps the post in redirect_url")
 run = flow(short, [htmlResponse("login", url: wall), htmlResponse(html, url: post)])
 check(run.failure == nil && run.items.count == 1 && fetcher.requests.count == 2, "a short link behind a login wall still finds the post")
+run = flow(short, [htmlResponse("login", url: wall), .failure(.httpStatus(403)), response(video)])
+check(run.failure == nil && tikwmLink() == "https://www.tiktok.com/@/video/6718335390845095173", "a short link whose post was found goes to the provider as that post")
 let login = URL(string: "https://www.tiktok.com/login")!
 run = flow(short, [htmlResponse("login", url: login), htmlResponse("", url: login), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokLoginRequired, .tiktokDownloadServiceStatus(403)), "a short link that only reaches the login form")

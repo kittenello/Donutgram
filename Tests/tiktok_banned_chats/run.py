@@ -71,6 +71,9 @@ def prepare(directory):
     attempt = job.split("func downloadTikTok(", 1)[1].split("\n    }\n", 1)[0]
     assert attempt.index("try? FileManager.default.removeItem(at: directory)") < attempt.index("failure(error)")
     assert "source.deletingLastPathComponent().appendingPathComponent(\"photo-\\(index).jpg\")" in job
+    # TikWM sees the post and the user's IP: the downloads page says so.
+    downloads = source("Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift").split("func dgDownloadsSettingsController(", 1)[1].split("\n}\n", 1)[0]
+    assert "tikwm.com" in downloads
 
     imports = "import Foundation\nimport CoreFoundation\n"
     tik = imports + "import CryptoKit\n" + "\n".join(without_imports(source("Donutgram/DGLinkDownloader/Sources/" + f)) for f in [

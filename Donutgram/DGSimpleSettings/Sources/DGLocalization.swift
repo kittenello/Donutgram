@@ -216,6 +216,7 @@ private let dgEnglishStrings: [String: String] = [
     "Скачивать TikTok": "Download TikTok Videos",
     "Скачивать YT Shorts": "Download YouTube Shorts",
     "Подписывать": "Add Attribution",
+    "Если TikTok не отдаёт видео или фото, они запрашиваются через сторонний сервис tikwm.com: он видит ссылку на пост и ваш IP-адрес.": "If TikTok does not serve a video or photos, they are requested through the third-party service tikwm.com, which sees the post link and your IP address.",
     "Авто": "Auto",
     "Telegram, пока он может расшифровать сообщение сам — с Premium или бесплатными попытками. Иначе Apple.": "Use Telegram when transcription is available through Premium or free attempts. Otherwise use Apple.",
     "Telegram использует облачный сервис распознавания.": "Telegram uses cloud speech recognition.",
