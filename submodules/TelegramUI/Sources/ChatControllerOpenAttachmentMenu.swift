@@ -1454,8 +1454,8 @@ extension ChatControllerImpl {
                                 if let item = item {
                                     let fileId = Int64.random(in: Int64.min ... Int64.max)
                                     let guessedMimeType = guessMimeTypeByFileExtension((item.fileName as NSString).pathExtension.lowercased())
-                                    let isVideo = item.videoMetadata != nil || guessedMimeType.hasPrefix("video/")
-                                    let mimeType = isVideo && !guessedMimeType.hasPrefix("video/") ? "video/mp4" : guessedMimeType
+                                    let videoMetadata = item.videoMetadata
+                                    let mimeType = videoMetadata != nil && !guessedMimeType.hasPrefix("video/") ? "video/mp4" : guessedMimeType
                                     var previewRepresentations: [TelegramMediaImageRepresentation] = []
                                     if mimeType.hasPrefix("image/") || mimeType == "application/pdf" || item.audioMetadata?.hasAudioArtwork == true {
                                         previewRepresentations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: 320, height: 320), resource: ICloudFileResource(urlData: item.urlData, thumbnail: true), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
@@ -1465,8 +1465,7 @@ extension ChatControllerImpl {
                                     if let audioMetadata = item.audioMetadata {
                                         attributes.append(.Audio(isVoice: false, duration: audioMetadata.duration, title: audioMetadata.title, performer: audioMetadata.performer, waveform: nil))
                                     }
-                                    if isVideo {
-                                        let videoMetadata = item.videoMetadata ?? ICloudFileDescription.VideoMetadata(duration: 0.0, dimensions: PixelDimensions(width: 640, height: 360))
+                                    if let videoMetadata {
                                         attributes.append(.Video(duration: videoMetadata.duration, size: videoMetadata.dimensions, flags: [.supportsStreaming], preloadSize: nil, coverTime: nil, videoCodec: nil))
                                         previewRepresentations.append(TelegramMediaImageRepresentation(dimensions: videoMetadata.dimensions, resource: ICloudFileResource(urlData: item.urlData, thumbnail: true), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
                                     }

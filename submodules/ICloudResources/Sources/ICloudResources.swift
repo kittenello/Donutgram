@@ -133,6 +133,19 @@ private func audioArtworkData(from asset: AVURLAsset) -> Data? {
     return nil
 }
 
+private func videoThumbnailImage(url: URL) -> UIImage? {
+    let asset = AVURLAsset(url: url)
+    if asset.tracks(withMediaType: .video).isEmpty {
+        return nil
+    }
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    guard let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil) else {
+        return nil
+    }
+    return generateScaledImage(image: UIImage(cgImage: cgImage), size: CGSize(width: cgImage.width, height: cgImage.height).fitted(CGSize(width: 256, height: 256.0)))
+}
+
 private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
     if #available(iOSApplicationExtension 9.0, iOS 9.0, *) {
         let hasSecurityScope = url.startAccessingSecurityScopedResource()
@@ -194,21 +207,16 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             }
         }
 
+        // Only a file AVFoundation can read a video track from is sent as video: formats it cannot open
+        // (avi, wmv, ...) and audio in an mp4 container would show as an unplayable 0:00 video.
         let videoAsset = AVURLAsset(url: url)
-        let hasVideoTrack = !videoAsset.tracks(withMediaType: .video).isEmpty
-        if videoFileExtensions.contains(fileExtension) || hasVideoTrack {
-            let asset = videoAsset
-            let durationValue = CMTimeGetSeconds(asset.duration)
+        if let track = videoAsset.tracks(withMediaType: .video).first {
+            let durationValue = CMTimeGetSeconds(videoAsset.duration)
             let duration = durationValue.isFinite && durationValue > 0.0 ? durationValue : 0.0
-            let dimensions: PixelDimensions
-            if let track = asset.tracks(withMediaType: .video).first {
-                let transformedSize = track.naturalSize.applying(track.preferredTransform)
-                let width = Int32(abs(transformedSize.width))
-                let height = Int32(abs(transformedSize.height))
-                dimensions = width > 0 && height > 0 ? PixelDimensions(width: width, height: height) : PixelDimensions(width: 640, height: 360)
-            } else {
-                dimensions = PixelDimensions(width: 640, height: 360)
-            }
+            let transformedSize = track.naturalSize.applying(track.preferredTransform)
+            let width = Int32(abs(transformedSize.width))
+            let height = Int32(abs(transformedSize.height))
+            let dimensions = width > 0 && height > 0 ? PixelDimensions(width: width, height: height) : PixelDimensions(width: 640, height: 360)
             videoMetadata = ICloudFileDescription.VideoMetadata(duration: duration, dimensions: dimensions)
         }
         
@@ -343,17 +351,15 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
                 if isAudioFile, let artworkData = audioArtworkData(from: AVURLAsset(url: url)), let originalImage = UIImage(data: artworkData), let image = generateScaledImage(image: originalImage, size: originalImage.size.fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
                     data = jpegData
                 } else if !isAudioFile {
-                    let fileExtension = url.pathExtension.lowercased()
-                    if videoFileExtensions.contains(fileExtension), !AVURLAsset(url: url).tracks(withMediaType: .video).isEmpty {
-                        let asset = AVURLAsset(url: url)
-                        let generator = AVAssetImageGenerator(asset: asset)
-                        generator.appliesPreferredTrackTransform = true
-                        if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil), let image = generateScaledImage(image: UIImage(cgImage: cgImage), size: CGSize(width: cgImage.width, height: cgImage.height).fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
-                            data = jpegData
-                        }
+                    let isVideoFile = videoFileExtensions.contains(fileExtension)
+                    if isVideoFile, let image = videoThumbnailImage(url: url), let jpegData = image.jpegData(compressionQuality: 0.5) {
+                        data = jpegData
                     } else if let imageData = try? Data(contentsOf: url, options: .mappedIfSafe), let originalImage = UIImage(data: imageData), let image = generateScaledImage(image: originalImage, size: originalImage.size.fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
                         data = jpegData
                     } else if let image = generatePdfPreviewImage(url: url, size: CGSize(width: 256, height: 256.0)), let jpegData = image.jpegData(compressionQuality: 0.5) {
+                        data = jpegData
+                    } else if !isVideoFile, let image = videoThumbnailImage(url: url), let jpegData = image.jpegData(compressionQuality: 0.5) {
+                        // Videos with other extensions (3gp, qt, ...) are sent as video when AVFoundation finds a video track.
                         data = jpegData
                     }
                 }
