@@ -17,6 +17,7 @@ import PresentationDataUtils
 import UrlWhitelist
 import UndoUI
 import BrowserUI
+import OpenUserGeneratedUrl
 
 func handleTextLinkActionImpl(context: AccountContext, peerId: EnginePeer.Id?, navigateDisposable: MetaDisposable, controller: ViewController, action: TextLinkItemActionType, itemLink: TextLinkItem) {
     let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
