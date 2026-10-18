@@ -7,7 +7,6 @@ import Display
 import AccountContext
 import TelegramPresentationData
 import UndoUI
-import TooltipUI
 
 struct DGSettingItemTag: ItemListItemTag {
     let key: String
@@ -144,10 +143,6 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
                 actionSheet?.dismissAnimated()
             })
         ])])
-        let targetFrame = target.view.convert(target.view.bounds, to: controller.view)
-        controller.present(TooltipScreen(account: self.context.account, sharedContext: self.context.sharedContext, text: .plain(text: target.view.accessibilityLabel ?? target.key), icon: .downArrows, location: .point(targetFrame, .bottom), displayDuration: .custom(2.0), shouldDismissOnTouch: { _, _ in
-            return true
-        }), in: .window(.root))
         // The sheet ignores the keyboard inset: with a text field focused it would open under the keyboard.
         controller.view.endEditing(true)
         controller.present(actionSheet, in: .window(.root))

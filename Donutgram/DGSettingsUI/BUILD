@@ -33,7 +33,6 @@ swift_library(
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/SettingsUI:SettingsUI",
         "//submodules/UndoUI:UndoUI",
-        "//submodules/TooltipUI:TooltipUI",
         "//submodules/ItemListPeerItem:ItemListPeerItem",
         "//submodules/ItemListPeerActionItem:ItemListPeerActionItem",
     ],
