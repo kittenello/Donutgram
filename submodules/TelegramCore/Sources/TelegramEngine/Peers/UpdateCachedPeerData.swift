@@ -1022,10 +1022,14 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                             }
                         } else {
                             // Donutgram: a chat kept after a ban keeps what it knew: the pinned message, and the migration
-                            // reference that brings in the history from before it became a supergroup.
+                            // reference that brings in the history from before it became a supergroup. Not a call that was
+                            // on at the ban: the account no longer hears that it ended.
                             let isPreservedBannedChat = donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId)
                             transaction.updatePeerCachedData(peerIds: [peerId], update: { _, current in
                                 if isPreservedBannedChat, let current {
+                                    if let current = current as? CachedChannelData {
+                                        return current.withUpdatedActiveCall(nil)
+                                    }
                                     return current
                                 }
                                 if maybePeer is TelegramCommunity {

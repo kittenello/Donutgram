@@ -9,10 +9,14 @@ enum Participation { case member, left, kicked }
 struct GroupFlags: OptionSet {
     let rawValue: Int
     static let deactivated = GroupFlags(rawValue: 1)
+    static let hasVoiceChat = GroupFlags(rawValue: 2)
+    static let hasActiveVoiceChat = GroupFlags(rawValue: 4)
 }
 struct ChannelFlags: OptionSet {
     let rawValue: Int
     static let isForum = ChannelFlags(rawValue: 1)
+    static let hasVoiceChat = ChannelFlags(rawValue: 2)
+    static let hasActiveVoiceChat = ChannelFlags(rawValue: 4)
 }
 // The fields of the real peers, in the order of their initializers; the payloads are simplified.
 struct TelegramGroup: Peer {
@@ -182,19 +186,22 @@ check(!donutgramPeerIsBanned(TelegramGroup(id: id, membership: .Removed, flags: 
 check(!donutgramPeerIsBanned(TelegramGroup(id: id, membership: .Left)), "voluntary basic-group leave")
 
 // A ban arrives as a stripped object: the kept chat must not lose what only the member's object had.
-let forum = TelegramChannel(id: id, accessHash: 1, title: "Форум", username: "forum", photo: ["photo"], creationDate: 100, version: 7, participationStatus: .member, info: "group", flags: .isForum, adminRights: "admin", usernames: ["forum"], nameColor: 3)
+let forum = TelegramChannel(id: id, accessHash: 1, title: "Форум", username: "forum", photo: ["photo"], creationDate: 100, version: 7, participationStatus: .member, info: "group", flags: [.isForum, .hasVoiceChat, .hasActiveVoiceChat], adminRights: "admin", usernames: ["forum"], nameColor: 3)
 let forbidden = TelegramChannel(id: id, accessHash: 2, title: "Форум", participationStatus: .kicked, info: "broadcast", bannedRights: "read")
 let kept = donutgramPreservedBannedPeer(previous: forum, updated: forbidden) as! TelegramChannel
 check(kept.photo == ["photo"] && kept.username == "forum" && kept.usernames == ["forum"] && kept.nameColor == 3, "a kept chat keeps its photo, username and colour")
 check(kept.creationDate == 100 && kept.version == 7 && kept.info == "group", "a kept chat keeps its age and kind")
 check(kept.flags.contains(.isForum), "a kept forum still opens by topics")
+// Nothing tells a banned account that the call ended: shown live, it would stay live in the chat list for good.
+check(kept.flags == .isForum, "a voice chat that was on at the ban is not kept")
 check(kept.participationStatus == .kicked && kept.adminRights == nil && kept.bannedRights == "read" && kept.accessHash == 2, "membership, rights and access hash come from the ban")
 check(donutgramPeerIsBanned(kept), "a kept chat stays banned for input restrictions")
 check((donutgramPreservedBannedPeer(previous: nil, updated: forbidden) as! TelegramChannel).accessHash == 2, "without a previous object the new one is stored")
-let fullGroup = TelegramGroup(id: id, title: "Группа", photo: ["photo"], participantCount: 5, role: .admin, membership: .Member, creationDate: 50)
+let fullGroup = TelegramGroup(id: id, title: "Группа", photo: ["photo"], participantCount: 5, role: .admin, membership: .Member, flags: [.hasVoiceChat, .hasActiveVoiceChat], creationDate: 50)
 let keptGroup = donutgramPreservedBannedPeer(previous: fullGroup, updated: TelegramGroup(id: id, title: "Группа", membership: .Removed)) as! TelegramGroup
 check(keptGroup.photo == ["photo"] && keptGroup.participantCount == 5 && keptGroup.creationDate == 50, "a kept basic group keeps its photo and members count")
 check(keptGroup.membership == .Removed && keptGroup.role == .member, "removal and the lost admin role come from the ban")
+check(keptGroup.flags.isEmpty, "nor in a basic group")
 
 // The server's pinned lists leave out a kept chat; it keeps its place among the pins here.
 let pins = Transaction()

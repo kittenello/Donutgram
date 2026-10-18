@@ -36,9 +36,11 @@ def prepare(directory):
     assert "transaction.setPinnedItemIds(groupId: groupId, itemIds: donutgramKeepingPinnedBannedChats(transaction: transaction, currentItemIds: localItemIds, itemIds: serverItemIds))" in pins
     assert "if remoteItemIds == serverItemIds {" in pins and "for itemId in serverItemIds {" in pins and "setPinnedItemIds(groupId: groupId, itemIds: resultingItemIds)" not in pins
     cached = source("submodules/TelegramCore/Sources/TelegramEngine/Peers/UpdateCachedPeerData.swift")
-    # getFullChannel fails in a channel the account is banned from; a kept chat must not lose its pin and migration link.
+    # getFullChannel fails in a channel the account is banned from; a kept chat must not lose its pin and migration link,
+    # but drops a call that was on at the ban: nothing tells the account it ended.
     failed = cached.split("let isPreservedBannedChat = donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId)", 1)[1]
-    assert failed.index("if isPreservedBannedChat, let current {\n                                    return current") < failed.index("withUpdatedIsNotAccessible(true)")
+    keep = "if isPreservedBannedChat, let current {\n                                    if let current = current as? CachedChannelData {\n                                        return current.withUpdatedActiveCall(nil)\n                                    }\n                                    return current\n"
+    assert failed.index(keep) < failed.index("withUpdatedIsNotAccessible(true)")
     sync = source("submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift")
     poll = sync.split("private func pollChannel(", 1)[1]
     assert poll.index("if donutgramPeerIsBanned(peer)") < poll.index("network.request(")
