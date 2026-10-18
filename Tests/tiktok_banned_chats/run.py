@@ -35,11 +35,16 @@ def prepare(directory):
     assert "case .kicked:" in panels and "case .Removed, .Left:" in panels
     content = source("submodules/TelegramUI/Sources/ChatControllerContentData.swift")
     assert "shouldDismiss = false\n                        strongSelf.state.performDismissAction = .bannedChat" in content
+    # Only a chat that was kept loses the "no access" screen and gets the alert; other banned chats behave as in Telegram.
+    preserved = "donutgramIsPreservedBannedChat(peer: peerView.peers[peerView.peerId], groupId: peerView.groupId)"
+    assert content.count("isNotAccessible = cachedChannelData.isNotAccessible && !" + preserved) == 2
+    assert "let isPreservedBannedChat = " + preserved + "\n                    if isPreservedBannedChat, shouldDismiss" in content
+    assert "keepBannedChats" not in content
     ui = source("submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift")
     alert = ui.split("case .bannedChat:", 1)[1].split("self.updatePreloadNextChatPeerId", 1)[0]
     assert "Common_OK" in alert and "self.dismiss()" not in alert
     node = source("submodules/TelegramUI/Sources/ChatControllerNode.swift")
-    assert "isNotAccessible && !donutgramPeerIsBanned(chatPresentationInterfaceState.renderedPeer?.peer)" in node
+    assert "} else if chatPresentationInterfaceState.isNotAccessible {" in node and "donutgram" not in node.split("var restrictionText: String?", 1)[1][:2000]
     job = source("Donutgram/DGLinkDownloader/Sources/DGLinkDownloadJob.swift")
     assert "!batch.failed" in job and "DGTikTokExtractor.run(" in job
     assert "failure: failed" in job and "self.isCancelRequested" in job.split("func downloadTikTok(", 1)[1]

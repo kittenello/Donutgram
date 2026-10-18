@@ -24,6 +24,7 @@ struct TelegramCommunity: Peer {
     var participationStatus: Participation = .member
     var collapsedInDialogs: Bool? = true
 }
+enum PeerGroupId: Equatable { case root, group(Int32) }
 enum PeerChatListInclusion: Equatable {
     case notIncluded
     case included(group: String, pin: Int)
@@ -95,6 +96,9 @@ check(donutgramIsPreservedBannedChat(transaction: transaction, peerId: id), "ban
 check(!shouldExcludePeerFromChatList(transaction: transaction, peerId: id), "sync keeps the archive")
 check(transaction.inclusions[id] == .included(group: "archive", pin: 3), "keep folder and pin")
 check(transaction.holes.isEmpty, "no unfillable root or forum history holes")
+check(donutgramIsPreservedBannedChat(peer: banned, groupId: .group(1)), "the chat UI sees a kept chat")
+check(!donutgramIsPreservedBannedChat(peer: banned, groupId: nil), "a banned chat out of the list keeps the stock no-access screen")
+check(!donutgramIsPreservedBannedChat(peer: member, groupId: .root), "a member's chat is not an archive")
 check(banned.participationStatus == .kicked, "membership must stay banned for input restrictions")
 
 let reopened = Transaction()

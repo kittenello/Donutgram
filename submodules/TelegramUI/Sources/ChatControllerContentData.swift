@@ -1,5 +1,4 @@
 import Foundation
-import DGSimpleSettings
 import TelegramPresentationData
 import AccountContext
 import Postbox
@@ -793,11 +792,12 @@ extension ChatControllerImpl {
                         shouldDismiss = true
                     }
 
-                    let isBanned = donutgramPeerIsBanned(peerView.peers[peerView.peerId])
-                    if DGSimpleSettings.shared.keepBannedChats, isBanned, shouldDismiss || strongSelf.state.peerView == nil {
+                    // Donutgram: a chat kept after a ban stays open and says why; any other banned chat closes as before.
+                    let isPreservedBannedChat = donutgramIsPreservedBannedChat(peer: peerView.peers[peerView.peerId], groupId: peerView.groupId)
+                    if isPreservedBannedChat, shouldDismiss || strongSelf.state.peerView == nil {
                         shouldDismiss = false
                         strongSelf.state.performDismissAction = .bannedChat
-                    } else if !isBanned, let previous = strongSelf.state.peerView, donutgramPeerIsBanned(previous.peers[previous.peerId]) {
+                    } else if !isPreservedBannedChat, case .bannedChat? = strongSelf.state.performDismissAction {
                         strongSelf.state.performDismissAction = nil
                     }
                     
@@ -950,7 +950,8 @@ extension ChatControllerImpl {
                     
                     var isNotAccessible: Bool = false
                     if let cachedChannelData = peerView.cachedData as? CachedChannelData {
-                        isNotAccessible = cachedChannelData.isNotAccessible
+                        // Donutgram: a chat kept after a ban shows its saved history instead of the "no access" screen.
+                        isNotAccessible = cachedChannelData.isNotAccessible && !donutgramIsPreservedBannedChat(peer: peerView.peers[peerView.peerId], groupId: peerView.groupId)
                     }
                     
                     if firstTime && isNotAccessible {
@@ -1748,7 +1749,7 @@ extension ChatControllerImpl {
                         
                         var isNotAccessible: Bool = false
                         if let cachedChannelData = peerView.cachedData as? CachedChannelData {
-                            isNotAccessible = cachedChannelData.isNotAccessible
+                            isNotAccessible = cachedChannelData.isNotAccessible && !donutgramIsPreservedBannedChat(peer: peerView.peers[peerView.peerId], groupId: peerView.groupId)
                         }
                         
                         if firstTime && isNotAccessible {

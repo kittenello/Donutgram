@@ -21,6 +21,13 @@ public func donutgramPeerIsBanned(_ peer: Peer?) -> Bool {
     return false
 }
 
+/// `donutgramIsPreservedBannedChat(transaction:peerId:peer:)` as the UI sees it in a `PeerView`: a banned chat that is
+/// still in the chat list. `updatePeersCustom` takes every banned chat it does not keep out of the list in the same
+/// transaction, so the peer and the list position of one view answer it without the item cache, and never disagree.
+public func donutgramIsPreservedBannedChat(peer: Peer?, groupId: PeerGroupId?) -> Bool {
+    return groupId != nil && donutgramPeerIsBanned(peer)
+}
+
 /// A local archive keeps the real banned membership, so normal input restrictions still apply.
 func donutgramIsPreservedBannedChat(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
     guard donutgramPeerIsBanned(peer ?? transaction.getPeer(peerId)),
