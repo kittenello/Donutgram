@@ -3833,6 +3833,22 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     })))
                 }
                 
+                if let (message, file, _) = strongSelf.contentInfo(), let file, !message.isCopyProtected() && !item.peerIsCopyProtected && message.paidContent == nil {
+                    let context = strongSelf.context
+                    items.append(.action(ContextMenuActionItem(text: dgLocalized("Копировать кадр", languageCode: strongSelf.presentationData.strings.primaryComponent.languageCode), icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor) }, action: { [weak self] _, f in
+                        f(.default)
+                        guard let self else {
+                            return
+                        }
+                        let _ = donutgramCopyVideoFrame(context: context, mediaReference: .message(message: MessageReference(message), media: file), timestamp: self.playerStatusValue?.timestamp ?? 0.0, completion: { [weak self] success in
+                            guard let self, let controller = self.galleryController(), success else {
+                                return
+                            }
+                            controller.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: dgLocalized("Кадр скопирован", languageCode: self.presentationData.strings.primaryComponent.languageCode)), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
+                        })
+                    })))
+                }
+
                 if !items.isEmpty {
                     items.append(.separator)
                 }

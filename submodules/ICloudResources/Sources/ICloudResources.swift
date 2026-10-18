@@ -69,14 +69,21 @@ public struct ICloudFileDescription {
         public let duration: Int
         public let hasAudioArtwork: Bool
     }
+
+    public struct VideoMetadata {
+        public let duration: Double
+        public let dimensions: PixelDimensions
+    }
     
     public let urlData: String
     public let fileName: String
     public let fileSize: Int
     public let audioMetadata: AudioMetadata?
+    public let videoMetadata: VideoMetadata?
 }
 
 private let audioFileExtensions: Set<String> = ["mp3", "m4a", "aac", "flac"]
+private let videoFileExtensions: Set<String> = ["mp4", "m4v", "mov"]
 
 private func validatedAudioArtworkData(_ data: Data?) -> Data? {
     guard let data, UIImage(data: data) != nil else {
@@ -140,6 +147,7 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
         }
         
         var audioMetadata: ICloudFileDescription.AudioMetadata?
+        var videoMetadata: ICloudFileDescription.VideoMetadata?
         let fileExtension = url.pathExtension.lowercased()
         var hasAudioArtwork = false
         let audioAsset: AVURLAsset?
@@ -177,12 +185,25 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
                 audioMetadata = ICloudFileDescription.AudioMetadata(title: title, performer: performer, duration: Int(duration), hasAudioArtwork: hasAudioArtwork)
             }
         }
+
+        if videoFileExtensions.contains(fileExtension) {
+            let asset = AVURLAsset(url: url)
+            if let track = asset.tracks(withMediaType: .video).first {
+                let duration = CMTimeGetSeconds(asset.duration)
+                let transformedSize = track.naturalSize.applying(track.preferredTransform)
+                let dimensions = PixelDimensions(width: Int32(abs(transformedSize.width)), height: Int32(abs(transformedSize.height)))
+                if duration.isFinite && duration > 0.0 && dimensions.width > 0 && dimensions.height > 0 {
+                    videoMetadata = ICloudFileDescription.VideoMetadata(duration: duration, dimensions: dimensions)
+                }
+            }
+        }
         
         let result = ICloudFileDescription(
             urlData: urlData.base64EncodedString(),
             fileName: fileName,
             fileSize: fileSize,
-            audioMetadata: audioMetadata
+            audioMetadata: audioMetadata,
+            videoMetadata: videoMetadata
         )
         
         url.stopAccessingSecurityScopedResource()
@@ -313,7 +334,15 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
                 if isAudioFile, let artworkData = audioArtworkData(from: AVURLAsset(url: url)), let originalImage = UIImage(data: artworkData), let image = generateScaledImage(image: originalImage, size: originalImage.size.fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
                     data = jpegData
                 } else if !isAudioFile {
-                    if let imageData = try? Data(contentsOf: url, options: .mappedIfSafe), let originalImage = UIImage(data: imageData), let image = generateScaledImage(image: originalImage, size: originalImage.size.fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
+                    let fileExtension = url.pathExtension.lowercased()
+                    if videoFileExtensions.contains(fileExtension), !AVURLAsset(url: url).tracks(withMediaType: .video).isEmpty {
+                        let asset = AVURLAsset(url: url)
+                        let generator = AVAssetImageGenerator(asset: asset)
+                        generator.appliesPreferredTrackTransform = true
+                        if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil), let image = generateScaledImage(image: UIImage(cgImage: cgImage), size: CGSize(width: 256, height: 256)), let jpegData = image.jpegData(compressionQuality: 0.5) {
+                            data = jpegData
+                        }
+                    } else if let imageData = try? Data(contentsOf: url, options: .mappedIfSafe), let originalImage = UIImage(data: imageData), let image = generateScaledImage(image: originalImage, size: originalImage.size.fitted(CGSize(width: 256, height: 256.0))), let jpegData = image.jpegData(compressionQuality: 0.5) {
                         data = jpegData
                     } else if let image = generatePdfPreviewImage(url: url, size: CGSize(width: 256, height: 256.0)), let jpegData = image.jpegData(compressionQuality: 0.5) {
                         data = jpegData
