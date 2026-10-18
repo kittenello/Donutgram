@@ -62,7 +62,7 @@ struct TelegramCommunity: Peer {
     var participationStatus: Participation = .member
     var collapsedInDialogs: Bool? = true
 }
-enum PeerGroupId: Equatable { case root, group(Int32) }
+public enum PeerGroupId: Equatable { case root, group(Int32) }
 enum PinnedItemId: Hashable { case peer(PeerId) }
 enum PeerChatListInclusion: Equatable {
     case notIncluded
