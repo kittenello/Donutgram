@@ -66,7 +66,8 @@ func donutgramUpdateBannedChat(transaction: Transaction, previous: Peer?, update
     guard updated is TelegramGroup || updated is TelegramChannel else { return }
     let cacheId = donutgramBannedChatCacheId(updated.id)
     if !donutgramPeerIsBanned(updated) {
-        if transaction.retrieveItemCacheEntry(id: cacheId) != nil {
+        // Only a banned chat can have the marker, so the hundreds of updates of a chat list load skip the item cache.
+        if donutgramPeerIsBanned(previous), transaction.retrieveItemCacheEntry(id: cacheId) != nil {
             transaction.removeItemCacheEntry(id: cacheId)
             // Membership was restored: allow normal history synchronization again.
             transaction.addHole(peerId: updated.id, threadId: nil, namespace: Namespaces.Message.Cloud, space: .everywhere, range: 1 ... (Int32.max - 1))

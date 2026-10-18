@@ -103,9 +103,13 @@ final class Transaction {
     var inclusions: [PeerId: PeerChatListInclusion] = [:]
     var cache: [ItemCacheEntryId: CodableEntry] = [:]
     var holes: Set<String> = []
+    var cacheReads = 0
     func getPeer(_ id: PeerId) -> Peer? { peers[id] }
     func getPeerChatListInclusion(_ id: PeerId) -> PeerChatListInclusion { inclusions[id] ?? .notIncluded }
-    func retrieveItemCacheEntry(id: ItemCacheEntryId) -> CodableEntry? { cache[id] }
+    func retrieveItemCacheEntry(id: ItemCacheEntryId) -> CodableEntry? {
+        cacheReads += 1
+        return cache[id]
+    }
     func putItemCacheEntry(id: ItemCacheEntryId, entry: CodableEntry) { cache[id] = entry }
     func removeItemCacheEntry(id: ItemCacheEntryId) { cache.removeValue(forKey: id) }
     func setMessageHistoryThreads(peerId: PeerId) -> [Int64] { [5, 9] }
@@ -156,6 +160,10 @@ donutgramUpdateBannedChat(transaction: transaction, previous: banned, updated: m
 transaction.peers[id] = member
 check(transaction.cache.isEmpty, "rejoining removes the archive marker")
 check(transaction.holes == ["1:0", "1:5", "1:9"], "rejoining resumes history sync")
+let readsBefore = transaction.cacheReads
+donutgramUpdateBannedChat(transaction: transaction, previous: member, updated: member)
+donutgramUpdateBannedChat(transaction: transaction, previous: nil, updated: member)
+check(transaction.cacheReads == readsBefore, "an update of a chat that was not banned does not read the item cache")
 check(!shouldExcludePeerFromChatList(transaction: transaction, peerId: id), "member is visible normally")
 
 DGSimpleSettings.shared.keepBannedChats = true
