@@ -512,24 +512,14 @@ final class VideoRecorder {
             return
         }
 
-        var audioSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVEncoderBitRateKey: 64_000
-        ]
-        if let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) {
-            audioSettings[AVSampleRateKey] = streamDescription.pointee.mSampleRate
-            audioSettings[AVNumberOfChannelsKey] = streamDescription.pointee.mChannelsPerFrame
-        }
-
-        var channelLayoutSize = 0
-        if let channelLayout = CMAudioFormatDescriptionGetChannelLayout(formatDescription, sizeOut: &channelLayoutSize), channelLayoutSize > 0 {
-            audioSettings[AVChannelLayoutKey] = Data(bytes: channelLayout, count: channelLayoutSize)
-        }
-
-        guard assetWriter.canApply(outputSettings: audioSettings, forMediaType: .audio) else {
+        guard let audioSettings = roundVideoAudioSettings(formatDescription: formatDescription, canApply: { settings in
+            return assetWriter.canApply(outputSettings: settings, forMediaType: .audio)
+        }) else {
+            roundVideoRecorderLog("no sound settings accepted for \(roundVideoAudioFormatSummary(formatDescription))")
             self.fail(.audioInitializationError)
             return
         }
+        roundVideoRecorderLog("sound \(roundVideoAudioFormatSummary(formatDescription)), \(roundVideoAudioSettingsSummary(audioSettings))")
         let audioInput = AVAssetWriterInput(
             mediaType: .audio,
             outputSettings: audioSettings,
@@ -537,6 +527,7 @@ final class VideoRecorder {
         )
         audioInput.expectsMediaDataInRealTime = true
         guard assetWriter.canAdd(audioInput) else {
+            roundVideoRecorderLog("sound input not added")
             self.fail(.audioInitializationError)
             return
         }
@@ -553,6 +544,7 @@ final class VideoRecorder {
         }
 
         guard assetWriter.startWriting() else {
+            roundVideoRecorderLog("startWriting failed: \(String(describing: assetWriter.error))")
             self.fail()
             return
         }
@@ -700,6 +692,7 @@ final class VideoRecorder {
                 continue
             }
             guard audioInput.append(sample.sampleBuffer) else {
+                roundVideoRecorderLog("sound append failed for \(roundVideoAudioFormatSummary(CMSampleBufferGetFormatDescription(sample.sampleBuffer))): \(String(describing: self.assetWriter?.error))")
                 self.fail(.audioInitializationError)
                 return
             }
@@ -830,6 +823,7 @@ final class VideoRecorder {
         guard !self.isTerminal else {
             return
         }
+        roundVideoRecorderLog("failed: \(error)")
         self.state = .failed
         self.assetWriter?.cancelWriting()
         self.discardSingleCameraSwitch()

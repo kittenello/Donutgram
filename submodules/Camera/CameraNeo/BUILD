@@ -57,6 +57,7 @@ swift_library(
         "//submodules/Camera",
         "//submodules/GZip",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/TelegramCore:TelegramCore",
         "//submodules/Utils/DeviceModel",
         "//submodules/LottieBinding:LottieBinding",
         "//submodules/LottieSettings:LottieSettings",
