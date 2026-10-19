@@ -1281,7 +1281,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.controller = controller
             self.context = controller.context
             
-            let useModernVideoMessagePipeline = self.context.sharedContext.immediateExperimentalUISettings.useModernVideoMessagePipeline ?? false
+            let useModernVideoMessagePipeline = self.context.sharedContext.immediateExperimentalUISettings.useModernVideoMessagePipeline ?? (self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") == nil)
             if useModernVideoMessagePipeline {
                 self.cameraImpl = NeoCameraImpl.shared
             } else {
@@ -1303,7 +1303,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.clipsToBounds = true
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
-            let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true)
+            let isDualCameraEnabled = false
             let cameraSettings = DGSimpleSettings.shared
             let initialCamera = cameraSettings.rememberRoundVideoCamera ? cameraSettings.lastRoundVideoCamera : cameraSettings.roundVideoCamera
             let isFrontPosition = initialCamera != .rear
