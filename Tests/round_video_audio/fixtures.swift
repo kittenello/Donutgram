@@ -113,12 +113,18 @@ func encodes(sampleRate: Double, settings: [String: Any], format: CMAudioFormatD
         print("  finishWriting failed: \(String(describing: writer.error))")
         return false
     }
-    let asset = AVURLAsset(url: url)
-    let duration = CMTimeGetSeconds(asset.duration)
-    return asset.tracks(withMediaType: .audio).count == 1 && duration > 1.8
+    // AVAudioFile opens the file's sound track, so a file without one fails here.
+    guard let file = try? AVAudioFile(forReading: url) else {
+        print("  the written file has no readable sound")
+        return false
+    }
+    let duration = Double(file.length) / file.fileFormat.sampleRate
+    return duration > 1.8
 }
 
-let sampleRates: [Double] = [8_000, 16_000, 24_000, 44_100, 48_000]
+// 8, 16 and 24 kHz are Bluetooth headsets in a call-style route (CVSD, mSBC and wider), 32 kHz newer ones (LC3-SWB),
+// 44.1 and 48 kHz the built-in and wired microphones; 11.025 and 22.05 kHz are covered for completeness.
+let sampleRates: [Double] = [8_000, 11_025, 16_000, 22_050, 24_000, 32_000, 44_100, 48_000]
 print("sample rate | encoder bit rates | 64 kbps writes | picked bit rate")
 for sampleRate in sampleRates {
     let format = microphoneFormat(sampleRate: sampleRate)
