@@ -1281,12 +1281,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.controller = controller
             self.context = controller.context
             
-            let useModernVideoMessagePipeline = self.context.sharedContext.immediateExperimentalUISettings.useModernVideoMessagePipeline ?? (self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") == nil)
-            if useModernVideoMessagePipeline {
-                self.cameraImpl = NeoCameraImpl.shared
-            } else {
-                self.cameraImpl = LegacyCameraImpl.shared
-            }
+            self.cameraImpl = NeoCameraImpl.shared
             self.updateState = ActionSlot<CameraState>()
             
             self.presentationData = controller.updatedPresentationData?.initial ?? self.context.sharedContext.currentPresentationData.with { $0 }
