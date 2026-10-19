@@ -1298,7 +1298,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.clipsToBounds = true
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
-            let isDualCameraEnabled = false
+            let isDualCameraEnabled = cameraImpl.isDualCameraSupported(forRoundVideo: true) && UserDefaults.standard.bool(forKey: "DonutgramDualRoundVideoEnabled")
             let cameraSettings = DGSimpleSettings.shared
             let initialCamera = cameraSettings.rememberRoundVideoCamera ? cameraSettings.lastRoundVideoCamera : cameraSettings.roundVideoCamera
             let isFrontPosition = initialCamera != .rear
