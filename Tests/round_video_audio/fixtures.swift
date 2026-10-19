@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 import CoreMedia
 
 // PRODUCTION_HELPERS
@@ -118,11 +119,12 @@ func encodes(sampleRate: Double, settings: [String: Any], format: CMAudioFormatD
 }
 
 let sampleRates: [Double] = [8_000, 16_000, 24_000, 44_100, 48_000]
-print("sample rate | 64 kbps accepted | picked bit rate")
+print("sample rate | encoder bit rates | 64 kbps writes | picked bit rate")
 for sampleRate in sampleRates {
     let format = microphoneFormat(sampleRate: sampleRate)
     let (writer, url) = makeWriter()
     let canApply: ([String: Any]) -> Bool = { writer.canApply(outputSettings: $0, forMediaType: .audio) }
+    // What the recorder used before: 64 kbps whatever the microphone. Printed, not checked, as the cause on record.
     let old: [String: Any] = [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVEncoderBitRateKey: 64_000,
@@ -131,8 +133,12 @@ for sampleRate in sampleRates {
     ]
     let picked = roundVideoAudioSettings(formatDescription: format, canApply: canApply)
     try? FileManager.default.removeItem(at: url)
+    let applicable = roundVideoApplicableAudioBitRates(sampleRate: sampleRate, channels: 1)
+        .map { $0.lowerBound == $0.upperBound ? "\($0.lowerBound)" : "\($0.lowerBound)-\($0.upperBound)" }
+        .joined(separator: ",")
+    let oldWrites = encodes(sampleRate: sampleRate, settings: old, format: format)
     let pickedBitRate = (picked?[AVEncoderBitRateKey] as? Int).map { "\($0)" } ?? (picked == nil ? "none" : "encoder default")
-    print("\(Int(sampleRate)) Hz | \(canApply(old)) | \(pickedBitRate)")
+    print("\(Int(sampleRate)) Hz | \(applicable) | \(oldWrites) | \(pickedBitRate)")
 
     guard let picked else {
         check(false, "no AAC settings for \(Int(sampleRate)) Hz mono")
@@ -143,6 +149,14 @@ for sampleRate in sampleRates {
     }
     check(encodes(sampleRate: sampleRate, settings: picked, format: format), "\(Int(sampleRate)) Hz mono encodes to an mp4 with sound")
 }
+
+// The choice among what the encoder reports.
+check(roundVideoAudioBitRate(applicable: [8_000 ... 8_000, 64_000 ... 64_000, 96_000 ... 96_000]) == 64_000, "64 kbps when listed")
+check(roundVideoAudioBitRate(applicable: [8_000 ... 8_000, 24_000 ... 24_000, 32_000 ... 32_000]) == 32_000, "the highest listed below 64 kbps")
+check(roundVideoAudioBitRate(applicable: [16_000 ... 96_000]) == 64_000, "64 kbps inside a range")
+check(roundVideoAudioBitRate(applicable: [8_000 ... 40_000]) == 40_000, "the top of a range below 64 kbps")
+check(roundVideoAudioBitRate(applicable: [96_000 ... 128_000]) == nil, "nothing at or below 64 kbps")
+check(roundVideoAudioBitRate(applicable: []) == nil, "nothing reported")
 
 if failures > 0 {
     print("\(failures) check(s) failed")
