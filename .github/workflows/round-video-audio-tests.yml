@@ -1,0 +1,23 @@
+name: Round video audio tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'submodules/Camera/CameraNeo/Sources/RoundVideoAudioSettings.swift'
+      - 'submodules/Camera/CameraNeo/Sources/VideoRecorder.swift'
+      - 'Tests/round_video_audio/**'
+      - '.github/workflows/round-video-audio-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check that a headset microphone's sound can be written
+        run: python3 Tests/round_video_audio/run.py
