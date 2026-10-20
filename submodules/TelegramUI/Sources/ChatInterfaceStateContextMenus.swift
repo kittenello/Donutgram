@@ -490,7 +490,7 @@ private func ephemeralReplacementContextMenuItems(chatPresentationInterfaceState
     }
 }
 
-func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, messages: [EngineRawMessage], controllerInteraction: ChatControllerInteraction?, selectAll: Bool, interfaceInteraction: ChatPanelInterfaceInteraction?, readStats: MessageReadStats? = nil, messageNode: ChatMessageItemView? = nil) -> Signal<ContextController.Items, NoError> {
+func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, messages: [EngineRawMessage], controllerInteraction: ChatControllerInteraction?, selectAll: Bool, interfaceInteraction: ChatPanelInterfaceInteraction?, readStats: MessageReadStats? = nil, messageNode: ChatMessageItemView? = nil, selectAuthorMessages: (() -> Void)? = nil) -> Signal<ContextController.Items, NoError> {
     guard let interfaceInteraction = interfaceInteraction, let controllerInteraction = controllerInteraction else {
         return .single(ContextController.Items(content: .list([])))
     }
@@ -2182,6 +2182,30 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.beginMessageSelection(messages.map { $0.id }, { transition in
                         f(.custom(transition))
                     })
+                })))
+            }
+
+            // «Выбрать все сообщения: …» selects every message of the pressed message's author in the chat, the
+            // account's own messages included; the controller loads them from the server (see
+            // ChatControllerDonutgramSelectAuthorMessages.swift).
+            if let selectAuthorMessages, let author = message.author {
+                if !actions.isEmpty && !didAddSeparator {
+                    didAddSeparator = true
+                    actions.append(.separator)
+                }
+
+                let languageCode = chatPresentationInterfaceState.strings.primaryComponent.languageCode
+                let title: String
+                if author.id == context.account.peerId {
+                    title = dgLocalized("Выбрать все мои сообщения", languageCode: languageCode)
+                } else {
+                    title = dgLocalized("Выбрать все сообщения: %@", languageCode: languageCode).replacingOccurrences(of: "%@", with: EnginePeer(author).compactDisplayTitle)
+                }
+                actions.append(.action(ContextMenuActionItem(text: title, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/SelectAll"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    f(.dismissWithoutContent)
+                    selectAuthorMessages()
                 })))
             }
         }
@@ -4145,4 +4169,32 @@ private final class ChatRateTranscriptionContextItemNode: ASDisplayNode, Context
     func actionNode(at point: CGPoint) -> ContextActionNodeProtocol {
         return self
     }
+}
+
+/// The messages of `author` that «Выбрать все сообщения: …» selects: the ones the context menu's own «Select» could
+/// select (no service, expired, ad, ephemeral or local typing-draft messages).
+func donutgramSelectableMessageIds(author authorId: EnginePeer.Id, forEachLoadedMessage: ((EngineRawMessage) -> Bool) -> Void) -> [EngineMessage.Id] {
+    var result: [EngineMessage.Id] = []
+    forEachLoadedMessage { message in
+        guard message.author?.id == authorId else {
+            return true
+        }
+        if message.id.namespace < 0 || Namespaces.Message.allEphemeral.contains(message.id.namespace) || message.adAttribute != nil {
+            return true
+        }
+        if message.id.namespace == Namespaces.Message.Local && message.attributes.contains(where: { $0 is TypingDraftMessageAttribute }) {
+            return true
+        }
+        for media in message.effectiveMedia {
+            if media is TelegramMediaAction || media is TelegramMediaExpiredContent {
+                return true
+            }
+            if let story = media as? TelegramMediaStory, story.isMention {
+                return true
+            }
+        }
+        result.append(message.id)
+        return true
+    }
+    return result
 }
