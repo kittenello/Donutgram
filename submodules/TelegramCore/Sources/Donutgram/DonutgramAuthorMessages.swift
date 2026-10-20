@@ -15,6 +15,7 @@ private let donutgramAuthorMessagesPageLimit: Int32 = 100
 
 private struct DonutgramAuthorMessagesPage {
     var ids: [MessageId]
+    /// The server's exact count of the author's messages in the source, nil when it gave none or an estimate.
     var total: Int?
     var nextOffsetId: Int32?
     var failed: Bool = false
@@ -112,16 +113,18 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                 var total: Int?
                 // A plain `.messages` answer is the whole result; only a slice has further pages.
                 var isComplete = false
+                // An `inexact` count is an estimate that can be lower than the real one, so it must not end the paging.
+                let inexactFlag: Int32 = 1 << 1
                 switch result {
                 case let .messages(data):
                     (apiMessages, chats, users) = (data.messages, data.chats, data.users)
                     isComplete = true
                 case let .messagesSlice(data):
                     (apiMessages, chats, users) = (data.messages, data.chats, data.users)
-                    total = Int(data.count)
+                    total = (data.flags & inexactFlag) == 0 ? Int(data.count) : nil
                 case let .channelMessages(data):
                     (apiMessages, chats, users) = (data.messages, data.chats, data.users)
-                    total = Int(data.count)
+                    total = (data.flags & inexactFlag) == 0 ? Int(data.count) : nil
                 case .messagesNotModified:
                     isComplete = true
                 }
