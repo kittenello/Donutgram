@@ -175,11 +175,23 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
         func finish() -> Signal<DonutgramAuthorMessagesResult, NoError> {
             return postbox.transaction { transaction -> DonutgramAuthorMessagesResult in
                 var reachedLimit = didReachLimit.with { $0 }
+                // A reply thread's head is drawn without a selection checkbox, and an album head with all its items.
+                // The chat leaves it out only while it is in the loaded window, so it is left out here as well.
                 var seen = Set<MessageId>()
+                for source in sources {
+                    if let topMsgId = source.topMsgId {
+                        let headId = MessageId(peerId: source.peer.id, namespace: Namespaces.Message.Cloud, id: topMsgId)
+                        seen.insert(headId)
+                        if let headGroup = transaction.getMessageGroup(headId) {
+                            seen.formUnion(headGroup.map(\.id))
+                        }
+                    }
+                }
+                let excludedCount = seen.count
                 var messages: [Message] = []
                 // Pages come newest first, so the limit keeps the newest messages.
                 for id in loadedIds.with({ $0 }) {
-                    if seen.count >= donutgramAuthorMessagesLimit {
+                    if seen.count - excludedCount >= donutgramAuthorMessagesLimit {
                         if !seen.contains(id) {
                             reachedLimit = true
                             break
