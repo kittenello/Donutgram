@@ -4,12 +4,11 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
-public enum DonutgramAuthorMessagesResult {
-    /// `loaded` messages are found so far, of `total` the server reported (nil until the first page).
-    case progress(loaded: Int, total: Int?)
-    /// The author's messages in the chat, stored in the local database, newest first. `isComplete` is false when
-    /// a page failed to load, so only part of them were found.
-    case result([Message], isComplete: Bool)
+public struct DonutgramAuthorMessagesResult {
+    /// The author's messages in the chat, stored in the local database, newest first.
+    public let messages: [Message]
+    /// False when a page failed to load, so only part of them were found.
+    public let isComplete: Bool
 }
 
 private let donutgramAuthorMessagesPageLimit: Int32 = 100
@@ -43,7 +42,7 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                 return true
             })
             messages.sort(by: { $0.index > $1.index })
-            return .result(messages, isComplete: true)
+            return DonutgramAuthorMessagesResult(messages: messages, isComplete: true)
         }
     }
 
@@ -87,7 +86,7 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
     }
     |> mapToSignal { sources, fromPeer -> Signal<DonutgramAuthorMessagesResult, NoError> in
         guard let fromPeer, !sources.isEmpty else {
-            return .single(.result([], isComplete: fromPeer != nil))
+            return .single(DonutgramAuthorMessagesResult(messages: [], isComplete: fromPeer != nil))
         }
 
         func loadPage(_ source: Source, offsetId: Int32) -> Signal<DonutgramAuthorMessagesPage, NoError> {
@@ -154,7 +153,6 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
         }
 
         let loadedIds = Atomic<[MessageId]>(value: [])
-        let knownTotals = Atomic<[Int: Int]>(value: [:])
         let didFail = Atomic<Bool>(value: false)
 
         func finish() -> Signal<DonutgramAuthorMessagesResult, NoError> {
@@ -175,7 +173,7 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                     }
                 }
                 messages.sort(by: { $0.index > $1.index })
-                return .result(messages, isComplete: !didFail.with { $0 })
+                return DonutgramAuthorMessagesResult(messages: messages, isComplete: !didFail.with { $0 })
             }
         }
 
@@ -187,33 +185,25 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                     let _ = didFail.swap(true)
                 }
                 let ids = loadedIds.modify { $0 + page.ids }
-                let totals = knownTotals.modify { current in
-                    var current = current
-                    if let total = page.total {
-                        current[index] = total
-                    }
-                    return current
-                }
-                let progress: DonutgramAuthorMessagesResult = .progress(loaded: ids.count, total: totals.isEmpty ? nil : totals.values.reduce(0, +))
                 let sourceIds = Set(ids.filter { $0.peerId == source.peer.id })
                 let sourceCompleted = page.nextOffsetId == nil || (page.total.map { sourceIds.count >= $0 } ?? false)
                 if let nextOffsetId = page.nextOffsetId, !sourceCompleted {
-                    return .single(progress) |> then(loadSource(index, offsetId: nextOffsetId))
+                    return loadSource(index, offsetId: nextOffsetId)
                 } else if index + 1 < sources.count {
-                    return .single(progress) |> then(loadSource(index + 1, offsetId: 0))
+                    return loadSource(index + 1, offsetId: 0)
                 } else {
-                    return .single(progress) |> then(finish())
+                    return finish()
                 }
             }
         }
 
-        return .single(.progress(loaded: 0, total: nil)) |> then(loadSource(0, offsetId: 0))
+        return loadSource(0, offsetId: 0)
     }
 }
 
 public extension TelegramEngine.Messages {
     /// Every message of `authorId` in the chat (in the thread when `threadId` is given), loaded from the server
-    /// page by page and stored locally, for selecting them all. Reports progress while it pages.
+    /// page by page and stored locally, for selecting them all.
     /// `sourceMessageId` is a message of the author, used to address an author the account has no access hash for.
     func donutgramAuthorMessages(peerId: EnginePeer.Id, threadId: Int64?, authorId: EnginePeer.Id, sourceMessageId: EngineMessage.Id?) -> Signal<DonutgramAuthorMessagesResult, NoError> {
         return _internal_donutgramAuthorMessages(account: self.account, peerId: peerId, threadId: threadId, authorId: authorId, sourceMessageId: sourceMessageId)

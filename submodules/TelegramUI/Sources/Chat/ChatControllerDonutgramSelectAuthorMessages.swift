@@ -93,9 +93,6 @@ extension ChatControllerImpl {
 
         disposable.set((self.context.engine.messages.donutgramAuthorMessages(peerId: peerId, threadId: self.chatLocation.threadId, authorId: authorId, sourceMessageId: sourceMessageId)
         |> deliverOnMainQueue).startStrict(next: { [weak self] result in
-            guard case let .result(messages, isComplete) = result else {
-                return
-            }
             isFinished = true
             progressController?.dismiss()
             progressController = nil
@@ -108,7 +105,7 @@ extension ChatControllerImpl {
             var seen = Set<EngineMessage.Id>()
             var ids: [EngineMessage.Id] = []
             let foundIds = donutgramSelectableMessageIds(author: authorId, forEachLoadedMessage: { f in
-                for message in messages {
+                for message in result.messages {
                     if !f(message) {
                         break
                     }
@@ -124,7 +121,7 @@ extension ChatControllerImpl {
             }
             self.interfaceInteraction?.beginMessageSelection(ids, { _ in })
 
-            if !isComplete {
+            if !result.isComplete {
                 let languageCode = presentationData.strings.primaryComponent.languageCode
                 self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: dgLocalized("Не все сообщения удалось загрузить, выбраны только найденные.", languageCode: languageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
             }
