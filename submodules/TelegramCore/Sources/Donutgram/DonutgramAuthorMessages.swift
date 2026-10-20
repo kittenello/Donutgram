@@ -9,7 +9,13 @@ public struct DonutgramAuthorMessagesResult {
     public let messages: [Message]
     /// False when a page failed to load, so only part of them were found.
     public let isComplete: Bool
+    /// True when the author has more messages than `donutgramAuthorMessagesLimit`, so only the newest are found.
+    public let reachedLimit: Bool
 }
+
+/// The most messages one «Выбрать все сообщения» selects. A long private chat holds tens of thousands of an
+/// author's messages: hundreds of requests in a row, and a selection whose panel watches every message separately.
+public let donutgramAuthorMessagesLimit = 10_000
 
 private let donutgramAuthorMessagesPageLimit: Int32 = 100
 
@@ -43,7 +49,8 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                 return true
             })
             messages.sort(by: { $0.index > $1.index })
-            return DonutgramAuthorMessagesResult(messages: messages, isComplete: true)
+            let reachedLimit = messages.count > donutgramAuthorMessagesLimit
+            return DonutgramAuthorMessagesResult(messages: Array(messages.prefix(donutgramAuthorMessagesLimit)), isComplete: true, reachedLimit: reachedLimit)
         }
     }
 
@@ -93,7 +100,7 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
     |> mapToSignal { sources, fromPeer -> Signal<DonutgramAuthorMessagesResult, NoError> in
         // Neither the author nor the chat (or its thread) could be addressed, so the server was not asked at all.
         guard let fromPeer, !sources.isEmpty else {
-            return .single(DonutgramAuthorMessagesResult(messages: [], isComplete: false))
+            return .single(DonutgramAuthorMessagesResult(messages: [], isComplete: false, reachedLimit: false))
         }
 
         func loadPage(_ source: Source, offsetId: Int32) -> Signal<DonutgramAuthorMessagesPage, NoError> {
@@ -163,26 +170,41 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
 
         let loadedIds = Atomic<[MessageId]>(value: [])
         let didFail = Atomic<Bool>(value: false)
+        let didReachLimit = Atomic<Bool>(value: false)
 
         func finish() -> Signal<DonutgramAuthorMessagesResult, NoError> {
             return postbox.transaction { transaction -> DonutgramAuthorMessagesResult in
+                var reachedLimit = didReachLimit.with { $0 }
                 var seen = Set<MessageId>()
                 var messages: [Message] = []
+                // Pages come newest first, so the limit keeps the newest messages.
                 for id in loadedIds.with({ $0 }) {
+                    if seen.count >= donutgramAuthorMessagesLimit {
+                        if !seen.contains(id) {
+                            reachedLimit = true
+                            break
+                        }
+                        continue
+                    }
                     if seen.insert(id).inserted, let message = transaction.getMessage(id) {
                         messages.append(message)
                     }
                 }
-                // A saved deleted message is no longer on the server, but the chat still shows it.
+                let oldestIndex = messages.map(\.index).min()
+                // A saved deleted message is no longer on the server, but the chat still shows it. Past the limit only
+                // the ones among the newest are added, so the selection still ends where the loaded messages do.
                 for source in sources {
                     for message in donutgramDeletedMessages(transaction: transaction, peerId: source.peer.id, fromId: authorId, threadId: source.threadId) {
+                        if reachedLimit, let oldestIndex, message.index < oldestIndex {
+                            continue
+                        }
                         if seen.insert(message.id).inserted {
                             messages.append(message)
                         }
                     }
                 }
                 messages.sort(by: { $0.index > $1.index })
-                return DonutgramAuthorMessagesResult(messages: messages, isComplete: !didFail.with { $0 })
+                return DonutgramAuthorMessagesResult(messages: messages, isComplete: !didFail.with { $0 }, reachedLimit: reachedLimit)
             }
         }
 
@@ -196,6 +218,11 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                 let ids = loadedIds.modify { $0 + page.ids }
                 let sourceIds = Set(ids.filter { $0.peerId == source.peer.id })
                 let sourceCompleted = page.nextOffsetId == nil || (page.total.map { sourceIds.count >= $0 } ?? false)
+                let hasMore = !sourceCompleted || index + 1 < sources.count
+                if hasMore && Set(ids).count >= donutgramAuthorMessagesLimit {
+                    let _ = didReachLimit.swap(true)
+                    return finish()
+                }
                 if let nextOffsetId = page.nextOffsetId, !sourceCompleted {
                     return loadSource(index, offsetId: nextOffsetId)
                 } else if index + 1 < sources.count {

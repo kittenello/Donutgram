@@ -3,6 +3,7 @@ import UIKit
 import SwiftSignalKit
 import TelegramCore
 import Display
+import TelegramPresentationData
 import AccountContext
 import OverlayStatusController
 import PresentationDataUtils
@@ -121,9 +122,15 @@ extension ChatControllerImpl {
             }
             self.interfaceInteraction?.beginMessageSelection(ids, { _ in })
 
+            let languageCode = presentationData.strings.primaryComponent.languageCode
+            var notice: String?
             if !result.isComplete {
-                let languageCode = presentationData.strings.primaryComponent.languageCode
-                self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: dgLocalized("Не все сообщения удалось загрузить, выбраны только найденные.", languageCode: languageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
+                notice = dgLocalized("Не все сообщения удалось загрузить, выбраны только найденные.", languageCode: languageCode)
+            } else if result.reachedLimit {
+                notice = dgLocalized("Выбраны последние %@ сообщений: больше за раз выбрать нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: presentationStringsFormattedNumber(Int32(donutgramAuthorMessagesLimit), presentationData.dateTimeFormat.groupingSeparator))
+            }
+            if let notice {
+                self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: notice, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
             }
         }))
     }
