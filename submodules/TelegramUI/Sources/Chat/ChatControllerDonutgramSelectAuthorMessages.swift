@@ -7,6 +7,7 @@ import AccountContext
 import OverlayStatusController
 import PresentationDataUtils
 import UndoUI
+import AlertUI
 import DGSimpleSettings
 
 extension ChatControllerImpl {
@@ -128,5 +129,22 @@ extension ChatControllerImpl {
                 self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: dgLocalized("Не все сообщения удалось загрузить, выбраны только найденные.", languageCode: languageCode), timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
             }
         }))
+    }
+
+    /// Forwarding goes out at most 100 messages per request, so a selection made by «Выбрать все сообщения» of a
+    /// thousand or more takes long and lands in the target chat in batches. Above that the user is asked first.
+    func donutgramConfirmLargeForwardIfNeeded(count: Int, _ proceed: @escaping () -> Void) {
+        if count <= 1000 {
+            proceed()
+            return
+        }
+        let presentationData = self.presentationData
+        let languageCode = presentationData.strings.primaryComponent.languageCode
+        self.present(textAlertController(context: self.context, title: dgLocalized("Переслать больше 1000 сообщений?", languageCode: languageCode), text: dgLocalized("Сервер принимает пересылку по 100 сообщений за раз, поэтому пересылка займёт время, а сообщения будут появляться в чате частями.", languageCode: languageCode), actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Conversation_ContextMenuForward, action: {
+                proceed()
+            })
+        ]), in: .window(.root))
     }
 }

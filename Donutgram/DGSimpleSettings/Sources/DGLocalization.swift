@@ -297,6 +297,8 @@ private let dgEnglishStrings: [String: String] = [
     "Выбрать все мои сообщения": "Select All My Messages",
     "Выбрать все сообщения: %@": "Select All Messages from %@",
     "Не все сообщения удалось загрузить, выбраны только найденные.": "Couldn't load all messages, only the ones found are selected.",
+    "Переслать больше 1000 сообщений?": "Forward More Than 1,000 Messages?",
+    "Сервер принимает пересылку по 100 сообщений за раз, поэтому пересылка займёт время, а сообщения будут появляться в чате частями.": "The server takes forwards 100 messages at a time, so this will take a while and the messages will appear in the chat in batches.",
     "Теневой бан": "Shadow Ban",
     "Убрать из теневого бана": "Remove from Shadow Ban",
     "%@ в теневом бане": "%@ is shadow banned",

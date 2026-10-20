@@ -2102,7 +2102,9 @@ extension ChatControllerImpl {
                 strongSelf.commitPurposefulAction()
                 if let forwardMessageIdsSet = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds {
                     let forwardMessageIds = Array(forwardMessageIdsSet).sorted()
-                    strongSelf.forwardMessages(messageIds: forwardMessageIds)
+                    strongSelf.donutgramConfirmLargeForwardIfNeeded(count: forwardMessageIds.count, { [weak strongSelf] in
+                        strongSelf?.forwardMessages(messageIds: forwardMessageIds)
+                    })
                 }
             }
         }, forwardCurrentForwardMessages: { [weak self] in
