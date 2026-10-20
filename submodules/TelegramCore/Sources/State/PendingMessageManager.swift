@@ -349,6 +349,9 @@ private final class CorrelationIdToSentMessageId {
 
 private struct PendingForwardBatchKey: Hashable {
     let destination: PeerIdAndNamespace
+    // One forward request takes messages of a single source chat, so a forward of messages from two chats
+    // (a supergroup and the group it was migrated from) must never share a batch.
+    let source: PeerId
     let fromEphemeral: Bool
 }
 
@@ -917,6 +920,7 @@ public final class PendingMessageManager {
                                     isForward = true
                                     let batchKey = PendingForwardBatchKey(
                                         destination: PeerIdAndNamespace(peerId: message.id.peerId, namespace: message.id.namespace),
+                                        source: forwardInfo.messageId.peerId,
                                         fromEphemeral: Namespaces.Message.allEphemeral.contains(forwardInfo.messageId.namespace)
                                     )
                                     if messagesToForward[batchKey] == nil {
@@ -955,7 +959,8 @@ public final class PendingMessageManager {
                 Logger.shared.log("PendingMessageManager", "beginSendingMessages messagesToForward.count: \(messagesToForward.count)")
                 
                 let forwardGroupLimit = 100
-                for (_, ungroupedMessages) in messagesToForward {
+                // Batches go out in the order their messages were enqueued, whichever source chat they come from.
+                for (_, ungroupedMessages) in messagesToForward.sorted(by: { $0.value[0].1.index < $1.value[0].1.index }) {
                     var messageGroups: [[(PendingMessageContext, Message, ForwardSourceInfoAttribute)]] = []
                     
                     for message in ungroupedMessages {
