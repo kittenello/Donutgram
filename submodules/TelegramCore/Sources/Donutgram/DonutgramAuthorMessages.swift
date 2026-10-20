@@ -74,7 +74,12 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
         var topMsgId: Int32?
         if let threadId {
             if peer.isMonoForum {
-                savedPeer = transaction.getPeer(PeerId(threadId)).flatMap(apiInputPeer)
+                // Without the thread's user the search would cover the whole monoforum, and the selection is
+                // what gets deleted, so nothing is found instead.
+                guard let threadPeer = transaction.getPeer(PeerId(threadId)).flatMap(apiInputPeer) else {
+                    return ([], fromPeer)
+                }
+                savedPeer = threadPeer
             } else {
                 topMsgId = Int32(clamping: threadId)
             }
@@ -86,8 +91,9 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
         return (sources, fromPeer)
     }
     |> mapToSignal { sources, fromPeer -> Signal<DonutgramAuthorMessagesResult, NoError> in
+        // Neither the author nor the chat (or its thread) could be addressed, so the server was not asked at all.
         guard let fromPeer, !sources.isEmpty else {
-            return .single(DonutgramAuthorMessagesResult(messages: [], isComplete: fromPeer != nil))
+            return .single(DonutgramAuthorMessagesResult(messages: [], isComplete: false))
         }
 
         func loadPage(_ source: Source, offsetId: Int32) -> Signal<DonutgramAuthorMessagesPage, NoError> {
