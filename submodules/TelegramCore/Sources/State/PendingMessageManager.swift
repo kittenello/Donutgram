@@ -1001,6 +1001,9 @@ public final class PendingMessageManager {
                                 countedMessageGroups[countedMessageGroups.count - 1].append(contentsOf: messageGroup[0 ..< fittingFreeMessageCount])
                                 messageGroups.insert(Array(messageGroup[fittingFreeMessageCount ..< messageGroup.count]), at: 0)
                             } else {
+                                // An album that does not fit the current batch starts the next one; it was already
+                                // taken off the queue, so without putting it back it is never sent in this pass.
+                                messageGroups.insert(messageGroup, at: 0)
                                 countedMessageGroups.append([])
                             }
                         }
