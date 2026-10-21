@@ -1,0 +1,22 @@
+name: Profile header layout tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift'
+      - 'Tests/profile_header_layout/**'
+      - '.github/workflows/profile-header-layout-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check status and rating layout with an empty name
+        run: python3 Tests/profile_header_layout/run.py
