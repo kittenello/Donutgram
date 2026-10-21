@@ -127,7 +127,7 @@ extension ChatControllerImpl {
             if !result.isComplete {
                 notice = dgLocalized("Не все сообщения удалось загрузить, выбраны только найденные.", languageCode: languageCode)
             } else if result.reachedLimit {
-                notice = dgLocalized("Выбраны последние %@ сообщений: больше за раз выбрать нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: presentationStringsFormattedNumber(Int32(donutgramAuthorMessagesLimit), presentationData.dateTimeFormat.groupingSeparator))
+                notice = dgLocalized("Выбраны последние %@ сообщений: больше за раз выбрать нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: presentationStringsFormattedNumber(Int32(clamping: ids.count), presentationData.dateTimeFormat.groupingSeparator))
             }
             if let notice {
                 self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: notice, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)

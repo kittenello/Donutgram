@@ -9,7 +9,8 @@ public struct DonutgramAuthorMessagesResult {
     public let messages: [Message]
     /// False when a page failed to load, so only part of them were found.
     public let isComplete: Bool
-    /// True when the author has more messages than `donutgramAuthorMessagesLimit`, so only the newest are found.
+    /// True when only the newest messages are found: the author has more than `donutgramAuthorMessagesLimit`, or a
+    /// private chat's history is longer than is read through at once.
     public let reachedLimit: Bool
 }
 
@@ -19,11 +20,17 @@ public let donutgramAuthorMessagesLimit = 10_000
 
 private let donutgramAuthorMessagesPageLimit: Int32 = 100
 
+/// How many messages of a private chat's history are read through at most, both sides together, so a chat where the
+/// author wrote little does not page through a history of hundreds of thousands.
+private let donutgramAuthorMessagesHistoryScanLimit = 50_000
+
 private struct DonutgramAuthorMessagesPage {
     var ids: [MessageId]
     /// The server's exact count of the author's messages in the source, nil when it gave none or an estimate.
     var total: Int?
     var nextOffsetId: Int32?
+    /// Messages the page held, the other side's included when the history is paged.
+    var scannedCount: Int = 0
     var failed: Bool = false
 }
 
@@ -60,6 +67,10 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
         let threadId: Int64?
         let topMsgId: Int32?
         let savedPeer: Api.InputPeer?
+        /// A private chat is read through its whole history and filtered here. On a device `messages.search` by
+        /// `from_id` found only part of the other user's messages there (no official client searches a private
+        /// chat by sender), while the history holds all of them.
+        let pagesHistory: Bool
     }
 
     return postbox.transaction { transaction -> (sources: [Source], fromPeer: Api.InputPeer?) in
@@ -91,9 +102,9 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                 topMsgId = Int32(clamping: threadId)
             }
         }
-        var sources = [Source(peer: peer, inputPeer: inputPeer, threadId: threadId, topMsgId: topMsgId, savedPeer: savedPeer)]
+        var sources = [Source(peer: peer, inputPeer: inputPeer, threadId: threadId, topMsgId: topMsgId, savedPeer: savedPeer, pagesHistory: peer is TelegramUser)]
         if threadId == nil, let cachedData = transaction.getPeerCachedData(peerId: peerId) as? CachedChannelData, let migrationReference = cachedData.migrationReference, let migratedPeer = transaction.getPeer(migrationReference.maxMessageId.peerId), let migratedInputPeer = apiInputPeer(migratedPeer) {
-            sources.append(Source(peer: migratedPeer, inputPeer: migratedInputPeer, threadId: nil, topMsgId: nil, savedPeer: nil))
+            sources.append(Source(peer: migratedPeer, inputPeer: migratedInputPeer, threadId: nil, topMsgId: nil, savedPeer: nil, pagesHistory: false))
         }
         return (sources, fromPeer)
     }
@@ -111,7 +122,13 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
             if source.savedPeer != nil {
                 flags |= 1 << 2
             }
-            return network.request(Api.functions.messages.search(flags: flags, peer: source.inputPeer, q: "", fromId: fromPeer, savedPeerId: source.savedPeer, savedReaction: nil, topMsgId: source.topMsgId, filter: .inputMessagesFilterEmpty, minDate: 0, maxDate: Int32.max - 1, offsetId: offsetId, addOffset: 0, limit: donutgramAuthorMessagesPageLimit, maxId: Int32.max - 1, minId: 0, hash: 0))
+            let request: Signal<Api.messages.Messages, MTRpcError>
+            if source.pagesHistory {
+                request = network.request(Api.functions.messages.getHistory(peer: source.inputPeer, offsetId: offsetId, offsetDate: 0, addOffset: 0, limit: donutgramAuthorMessagesPageLimit, maxId: 0, minId: 0, hash: 0))
+            } else {
+                request = network.request(Api.functions.messages.search(flags: flags, peer: source.inputPeer, q: "", fromId: fromPeer, savedPeerId: source.savedPeer, savedReaction: nil, topMsgId: source.topMsgId, filter: .inputMessagesFilterEmpty, minDate: 0, maxDate: Int32.max - 1, offsetId: offsetId, addOffset: 0, limit: donutgramAuthorMessagesPageLimit, maxId: Int32.max - 1, minId: 0, hash: 0))
+            }
+            return request
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.messages.Messages?, NoError> in
                 return .single(nil)
@@ -145,9 +162,14 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
 
                     var ids: [MessageId] = []
+                    var pageIds: [MessageId] = []
                     var missingMessages: [StoreMessage] = []
                     for apiMessage in apiMessages {
                         guard let message = StoreMessage(apiMessage: apiMessage, accountPeerId: accountPeerId, peerIsForum: source.peer.isForumOrMonoForum), case let .Id(id) = message.id else {
+                            continue
+                        }
+                        pageIds.append(id)
+                        if source.pagesHistory && message.authorId != authorId {
                             continue
                         }
                         ids.append(id)
@@ -158,12 +180,13 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                     if !missingMessages.isEmpty {
                         let _ = transaction.addMessages(donutgramPreservingLocalState(transaction: transaction, messages: missingMessages), location: .Random)
                     }
-                    var nextOffsetId = ids.map(\.id).min()
+                    var nextOffsetId = pageIds.map(\.id).min()
                     // Each page must move further back, or a server repeating a page would be paged forever.
                     if isComplete || (offsetId != 0 && (nextOffsetId ?? 0) >= offsetId) {
                         nextOffsetId = nil
                     }
-                    return DonutgramAuthorMessagesPage(ids: ids, total: total, nextOffsetId: nextOffsetId)
+                    // A history's count is the whole chat's, not the author's.
+                    return DonutgramAuthorMessagesPage(ids: ids, total: source.pagesHistory ? nil : total, nextOffsetId: nextOffsetId, scannedCount: pageIds.count)
                 }
             }
         }
@@ -171,6 +194,7 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
         let loadedIds = Atomic<[MessageId]>(value: [])
         let didFail = Atomic<Bool>(value: false)
         let didReachLimit = Atomic<Bool>(value: false)
+        let scannedCount = Atomic<Int>(value: 0)
 
         func finish() -> Signal<DonutgramAuthorMessagesResult, NoError> {
             return postbox.transaction { transaction -> DonutgramAuthorMessagesResult in
@@ -230,8 +254,9 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                 let ids = loadedIds.modify { $0 + page.ids }
                 let sourceIds = Set(ids.filter { $0.peerId == source.peer.id })
                 let sourceCompleted = page.nextOffsetId == nil || (page.total.map { sourceIds.count >= $0 } ?? false)
+                let scanned = scannedCount.modify { $0 + page.scannedCount }
                 let hasMore = !sourceCompleted || index + 1 < sources.count
-                if hasMore && Set(ids).count >= donutgramAuthorMessagesLimit {
+                if hasMore && (Set(ids).count >= donutgramAuthorMessagesLimit || scanned >= donutgramAuthorMessagesHistoryScanLimit) {
                     let _ = didReachLimit.swap(true)
                     return finish()
                 }
