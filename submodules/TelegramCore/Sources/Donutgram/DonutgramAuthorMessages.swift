@@ -38,8 +38,10 @@ private struct DonutgramAuthorMessagesPage {
 
 /// Every message `authorId` wrote in `peerId` (in `threadId` when given), for «Выбрать сообщения: …».
 ///
-/// The cloud history is paged with `messages.search` by `from_id`, a migrated group's history included, and
-/// each page is stored like `getMessagesLoadIfNecessary` stores fetched messages, because forwarding and the
+/// The cloud history is paged with `messages.search` by `from_id`, a migrated group's history included; a private
+/// chat (a bot's topic too) is paged through its whole history with `messages.getHistory` instead, at most
+/// `donutgramAuthorMessagesHistoryScanLimit` messages, and the author's (and the topic's) messages are picked here.
+/// Each page is stored like `getMessagesLoadIfNecessary` stores fetched messages, because forwarding and the
 /// delete options read the selected messages from the database. Messages already stored are kept as they are.
 /// A secret chat has no server history, so its messages are read locally; saved deleted messages are added
 /// from the local store in both cases.
