@@ -45,6 +45,8 @@ submodules/PassportUI/Sources/SecureIdLocalResource.swift
 submodules/PhotoResources/Sources/PassResources.swift
 submodules/PhotoResources/Sources/PhotoResources.swift
 submodules/PremiumUI/Sources/PremiumIntroScreen.swift
+submodules/SettingsUI/Sources/Themes/ThemeSettingsChatPreviewItem.swift
+submodules/SettingsUI/Sources/UsernameSetupController.swift
 submodules/ShareController/Sources/ShareController.swift
 submodules/ShareController/Sources/ShareControllerNode.swift
 submodules/ShareItems/Sources/ShareItems.swift
@@ -56,7 +58,11 @@ submodules/TelegramPermissionsUI/Sources/PermissionSplitTest.swift
 submodules/TelegramPresentationData/Sources/ChatControllerBackgroundNode.swift
 submodules/TelegramPresentationData/Sources/MakePresentationTheme.swift
 submodules/TelegramPresentationData/Sources/PresentationData.swift
+submodules/TelegramUI/Components/AttachmentFileController/Sources/AttachmentFileController.swift
+submodules/TelegramUI/Components/AttachmentFileController/Sources/DonutgramAudioToVoice.swift
+submodules/TelegramUI/Components/Chat/ChatChannelSubscriberInputPanelNode/Sources/ChatChannelSubscriberInputPanelNode.swift
 submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift
+submodules/TelegramUI/Components/Chat/ChatMessageItemImpl/Sources/ChatMessageDateHeader.swift
 submodules/TelegramUI/Components/Chat/ChatRecentActionsController/Sources/ChatRecentActionsHistoryTransition.swift
 submodules/TelegramUI/Components/ChatEntityKeyboardInputNode/Sources/ChatEntityKeyboardInputNode.swift
 submodules/TelegramUI/Components/DebugCompanionScreen/Sources/CompanionCatalog.swift
@@ -70,6 +76,9 @@ submodules/TelegramUI/Components/MediaEditor/Sources/MediaEditorComposerEntity.s
 submodules/TelegramUI/Components/MediaEditor/Sources/MediaEditorDraft.swift
 submodules/TelegramUI/Components/MediaEditor/Sources/MediaEditorVideoExport.swift
 submodules/TelegramUI/Components/MediaEditorScreen/Sources/StorySource.swift
+submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift
+submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift
+submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenOpenURL.swift
 submodules/TelegramUI/Components/Resources/FetchVideoMediaResource/Sources/FetchVideoMediaResource.swift
 submodules/TelegramUI/Components/StickerPickerScreen/Sources/StickerPickerScreen.swift
 submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryChatContent.swift

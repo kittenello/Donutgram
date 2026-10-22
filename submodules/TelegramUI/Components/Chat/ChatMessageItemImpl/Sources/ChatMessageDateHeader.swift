@@ -21,6 +21,8 @@ import ComponentFlow
 import EmojiStatusComponent
 import AppBundle
 import DGSimpleSettings
+// Donutgram: the online dot reads the presence table straight from Postbox (see updatePresenceSubscription).
+import Postbox
 
 private let timezoneOffset: Int32 = {
     let nowTimestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)

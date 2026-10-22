@@ -454,7 +454,8 @@ public final class NewsFeedPostComponent: Component {
             )
 
             var credibilitySize = CGSize()
-            if component.peer.isVerified {
+            // Donutgram: «Скрыть верификацию» hides the check in the feed too.
+            if component.peer.donutgramDisplayIsVerified {
                 credibilitySize = self.credibilityIcon.update(
                     transition: .immediate,
                     component: AnyComponent(EmojiStatusComponent(

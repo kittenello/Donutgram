@@ -831,13 +831,19 @@ framework_exported_symbols(
         "//submodules/TelegramUI:TelegramUI",
         ":Main",
         ":Lib",
-        ":ShareExtensionLib",
-        ":NotificationContentExtensionLib",
-        ":BroadcastUploadExtensionLib",
-        ":WidgetExtensionLib",
-        ":IntentsExtensionLib",
-        "//Telegram/NotificationService:NotificationServiceExtensionLib",
-    ],
+    ] + select({
+        # Donutgram: with the extensions off (the default) they are not built, so their
+        # libraries are no clients and are not compiled for this list either.
+        ":disableExtensionsSetting": [],
+        "//conditions:default": [
+            ":ShareExtensionLib",
+            ":NotificationContentExtensionLib",
+            ":BroadcastUploadExtensionLib",
+            ":WidgetExtensionLib",
+            ":IntentsExtensionLib",
+            "//Telegram/NotificationService:NotificationServiceExtensionLib",
+        ],
+    }),
 )
 
 ios_framework(
@@ -991,11 +997,16 @@ framework_exported_symbols(
     clients = [
         ":Main",
         ":Lib",
-        ":ShareExtensionLib",
-        ":NotificationContentExtensionLib",
-        ":BroadcastUploadExtensionLib",
-        "//Telegram/NotificationService:NotificationServiceExtensionLib",
-    ],
+    ] + select({
+        # Donutgram: see TelegramCoreFrameworkExportedSymbols.
+        ":disableExtensionsSetting": [],
+        "//conditions:default": [
+            ":ShareExtensionLib",
+            ":NotificationContentExtensionLib",
+            ":BroadcastUploadExtensionLib",
+            "//Telegram/NotificationService:NotificationServiceExtensionLib",
+        ],
+    }),
 )
 
 ios_framework(

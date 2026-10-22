@@ -12,6 +12,8 @@ swift_library(
     deps = [
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//Donutgram/DGSettingsUI:DGSettingsUI",
+        # Donutgram: PeerInfoHeaderNode, PeerInfoProfileItems and PeerInfoScreenOpenURL still import Postbox.
+        "//submodules/Postbox",
         "//submodules/UrlWhitelist",
         "//submodules/TelegramUI/Components/NavigationBarNode",
         "//submodules/TelegramUI/Components/NavigationBarComponent",

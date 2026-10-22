@@ -11,6 +11,8 @@ swift_library(
     ],
     deps = [
         "//Donutgram/DGSimpleSettings",
+        # Donutgram: AttachmentFileController and DonutgramAudioToVoice still import Postbox.
+        "//submodules/Postbox",
         "//submodules/OpusBinding",
         "//submodules/AudioWaveform",
         "//submodules/OverlayStatusController",
