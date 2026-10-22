@@ -1,7 +1,7 @@
 import Foundation
 import DGSimpleSettings
 import Postbox
-import TelegramApi
+internal import TelegramApi
 import SwiftSignalKit
 
 public func donutgramUsesPersonalNotificationSettings(peerId: PeerId, personal: Bool, removePings: Bool) -> Bool {

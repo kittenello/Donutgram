@@ -12,7 +12,6 @@ swift_library(
     deps = [
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/AsyncDisplayKit",
-        "//submodules/Postbox",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/Display",
         "//submodules/TelegramCore",

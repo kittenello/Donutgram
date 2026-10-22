@@ -19,6 +19,9 @@ final class FullscreenControlsComponent: Component {
     let insets: UIEdgeInsets
     let statusBarStyle: StatusBarStyle
     var hasBack: Bool
+    /// False beside a side strip (iPhone Duo), where the owner draws the back/close button in the strip and the row
+    /// keeps only the minimize and more buttons.
+    let showsBackButton: Bool
     let backPressed: () -> Void
     let minimizePressed: () -> Void
     let morePressed: (ASDisplayNode, ContextGesture?) -> Void
@@ -31,6 +34,7 @@ final class FullscreenControlsComponent: Component {
         insets: UIEdgeInsets,
         statusBarStyle: StatusBarStyle,
         hasBack: Bool,
+        showsBackButton: Bool = true,
         backPressed: @escaping () -> Void,
         minimizePressed: @escaping () -> Void,
         morePressed: @escaping (ASDisplayNode, ContextGesture?) -> Void
@@ -42,6 +46,7 @@ final class FullscreenControlsComponent: Component {
         self.insets = insets
         self.statusBarStyle = statusBarStyle
         self.hasBack = hasBack
+        self.showsBackButton = showsBackButton
         self.backPressed = backPressed
         self.minimizePressed = minimizePressed
         self.morePressed = morePressed
@@ -64,6 +69,9 @@ final class FullscreenControlsComponent: Component {
             return false
         }
         if lhs.hasBack != rhs.hasBack {
+            return false
+        }
+        if lhs.showsBackButton != rhs.showsBackButton {
             return false
         }
         return true
@@ -345,6 +353,11 @@ final class FullscreenControlsComponent: Component {
                 }
                 component.morePressed(node, gesture)
             }
+            
+            self.leftBackgroundView.isHidden = !component.showsBackButton
+            self.leftButton.isHidden = !component.showsBackButton
+            self.titleClippingView.isHidden = !component.showsBackButton
+            self.closeIcon.view?.isHidden = !component.showsBackButton
             
             if isFirstTime {
                 let timer = Timer(timeInterval: 2.5, target: self, selector: #selector(self.timerEvent), userInfo: nil, repeats: false)
