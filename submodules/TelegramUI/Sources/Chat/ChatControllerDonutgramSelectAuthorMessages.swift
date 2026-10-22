@@ -123,11 +123,16 @@ extension ChatControllerImpl {
             self.interfaceInteraction?.beginMessageSelection(ids, { _ in })
 
             let languageCode = presentationData.strings.primaryComponent.languageCode
+            let groupingSeparator = presentationData.dateTimeFormat.groupingSeparator
             var notice: String?
             if !result.isComplete {
                 notice = dgLocalized("Не все сообщения удалось загрузить, выбраны только найденные.", languageCode: languageCode)
             } else if result.reachedLimit {
-                notice = dgLocalized("Выбраны последние %@ сообщений: больше за раз выбрать нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: presentationStringsFormattedNumber(Int32(clamping: ids.count), presentationData.dateTimeFormat.groupingSeparator))
+                // «Выбрано сообщений: N» rather than «последние N сообщений», whose noun would have to agree with N.
+                notice = dgLocalized("Выбрано сообщений: %@. Это самые новые, больше за раз выбрать нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: presentationStringsFormattedNumber(Int32(clamping: ids.count), groupingSeparator))
+            } else if result.reachedHistoryScanLimit {
+                // The history scan stopped first, so the selection is not capped by the selection limit.
+                notice = dgLocalized("Выбрано сообщений: %1$@. В длинной переписке просматриваются только последние %2$@ сообщений.", languageCode: languageCode).replacingOccurrences(of: "%1$@", with: presentationStringsFormattedNumber(Int32(clamping: ids.count), groupingSeparator)).replacingOccurrences(of: "%2$@", with: presentationStringsFormattedNumber(Int32(donutgramAuthorMessagesHistoryScanLimit), groupingSeparator))
             }
             if let notice {
                 self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: notice, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
