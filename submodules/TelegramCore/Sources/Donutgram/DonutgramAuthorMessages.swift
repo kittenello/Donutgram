@@ -172,6 +172,11 @@ func _internal_donutgramAuthorMessages(account: Account, peerId: PeerId, threadI
                         if source.pagesHistory && message.authorId != authorId {
                             continue
                         }
+                        // A bot's topic is paged through the whole chat's history, which has no `top_msg_id`, so the
+                        // other topics' messages are left out here.
+                        if source.pagesHistory, let threadId = source.threadId, message.threadId != threadId {
+                            continue
+                        }
                         ids.append(id)
                         if !transaction.messageExists(id: id) {
                             missingMessages.append(message)
