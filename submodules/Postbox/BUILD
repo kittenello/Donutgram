@@ -47,6 +47,14 @@ package_group(
         "//submodules/TelegramUI/Components/TelegramAccountAuxiliaryMethods",
         "//submodules/TelegramUniversalVideoContent",
         "//submodules/TemporaryCachedPeerDataManager",
+        # Donutgram: fork code in these packages still uses Postbox (see AllowedImporters.txt).
+        "//Donutgram/DGFeatureTests",
+        "//Donutgram/DGSettingsUI",
+        "//submodules/SettingsUI",
+        "//submodules/TelegramUI/Components/AttachmentFileController",
+        "//submodules/TelegramUI/Components/Chat/ChatChannelSubscriberInputPanelNode",
+        "//submodules/TelegramUI/Components/Chat/ChatMessageItemImpl",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen",
     ],
 )
 
