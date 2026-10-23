@@ -127,6 +127,8 @@ private final class DGTabBarPreviewItemNode: ListViewItemNode, ItemListItemNode 
                 search: nil,
                 selectedId: AnyHashable(ObjectIdentifier(self.tabs[2])),
                 outerInsets: .zero,
+                axis: .horizontal,
+                isCompact: false,
                 layout: item.layout
             )),
             environment: {},
