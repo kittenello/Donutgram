@@ -114,5 +114,8 @@ private struct ExportMetadata: Encodable {
 }
 
 public func crashReportAlertsEnabled(override: Bool?, isInternalBuild: Bool) -> Bool {
-    return override ?? isInternalBuild
+    // Donutgram: its builds are internal (donutgram-configuration.json), but the prompt sends the log to Telegram's
+    // crash bot from the user's account, and Telegram cannot fix a Donutgram crash. The prompt stays off unless
+    // «Ask to Send Crash Logs» is switched on in Debug ▸ Crash Reports; the reports are still kept on the device.
+    return override ?? false
 }
