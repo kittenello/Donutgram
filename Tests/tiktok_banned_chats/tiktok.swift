@@ -225,6 +225,16 @@ run = flow(short, [htmlResponse("login", url: wall), htmlResponse(html, url: pos
 check(run.failure == nil && run.items.count == 1 && fetcher.requests.count == 2, "a short link behind a login wall still finds the post")
 run = flow(short, [htmlResponse("login", url: wall), .failure(.httpStatus(403)), response(video)])
 check(run.failure == nil && tikwmLink() == "https://www.tiktok.com/@/video/6718335390845095173", "a short link whose post was found goes to the provider as that post")
+// A short link usually lands on the post's own page: its data is used as it came, the page is not asked for again.
+let landing = URL(string: "https://www.tiktok.com/@scout2015/video/6718335390845095173?_r=1&_t=ZP-8share")!
+run = flow(short, [htmlResponse(html, url: landing)])
+check(run.failure == nil && run.fallbacks == 0 && run.items.count == 1 && fetcher.requests.count == 1, "a short link's landing page with the post is used as it came")
+run = flow(short, [htmlResponse(html, url: landing), response(video)], files: [.httpStatus(403), nil])
+check(run.failure == nil && run.fallbacks == 1 && tikwmLink() == "https://www.tiktok.com/@/video/6718335390845095173", "the provider still gets the bare post link")
+// A landing page that does not carry the post (an error, a bot check) still goes through the post's own page.
+run = flow(short, [htmlResponse(rehydrated([:], status: 10204), url: landing), htmlResponse(html, url: post)])
+check(run.failure == nil && run.items.count == 1 && fetcher.requests.count == 2, "a landing page without the post")
+check(fetcher.requests[1].url == DGTikTokExtractor.pageURL(itemId: "6718335390845095173"), "then the post's own page")
 let login = URL(string: "https://www.tiktok.com/login")!
 run = flow(short, [htmlResponse("login", url: login), htmlResponse("", url: login), .failure(.httpStatus(403))], files: [])
 check(run.failure == .tiktokFailed(.tiktokLoginRequired, .tiktokDownloadServiceStatus(403)), "a short link that only reaches the login form")
