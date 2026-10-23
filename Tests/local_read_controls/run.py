@@ -19,6 +19,9 @@ def prepare():
     assert "network" not in bulk and "applyInteractiveRead" not in bulk
     push = source("submodules/TelegramCore/Sources/State/SynchronizePeerReadState.swift")
     assert "if donutgramGhostLocalReadState(accountPeerId:" in push
+    # A reply ghost mode posts as scheduled for a few seconds ends a suspicious chat's state, as one sent at once.
+    enqueue = source("submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift")
+    assert "!$0.1.attributes.contains(where: { ($0 as? OutgoingScheduleInfoMessageAttribute)?.isGhostScheduled == false })" in enqueue
     entries = source("submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift")
     assert "groupItems.removeAll { $0.id == .archive }" in entries
     node = source("submodules/ChatListUI/Sources/Node/ChatListNode.swift")

@@ -1036,7 +1036,9 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
     // Sending to a user whose chat still shows the report/block panel ends its suspicious state
     // (`CachedUserData.isSuspiciousPeer`): only the report and block flags go, so an Add Contact
     // offer stays. A scheduled message reaches no one yet and changes nothing.
-    if peerId.namespace == Namespaces.Peer.CloudUser, messages.contains(where: { !$0.1.attributes.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute }) }) {
+    // Donutgram: except ghost mode's scheduled sending (`isGhostScheduled`), which the server posts
+    // within seconds: the chat diverts a reply there, and it ends the state as a reply sent at once.
+    if peerId.namespace == Namespaces.Peer.CloudUser, messages.contains(where: { !$0.1.attributes.contains(where: { ($0 as? OutgoingScheduleInfoMessageAttribute)?.isGhostScheduled == false }) }) {
         transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
             guard let current = current as? CachedUserData, current.isSuspiciousPeer, var peerStatusSettings = current.peerStatusSettings else {
                 return current
