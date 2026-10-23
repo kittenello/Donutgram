@@ -20,7 +20,23 @@ extension ChatControllerImpl {
             messageIds.map(TelegramEngine.EngineData.Item.Messages.Message.init)
         ))
         |> deliverOnMainQueue).startStandalone(next: { [weak self] messages in
-            let sortedMessages = messages.values.compactMap { $0?._asMessage() }.sorted { lhs, rhs in
+            let loadedMessages = messages.values.compactMap { $0?._asMessage() }
+            // `MessageId` orders by number before chat, and a supergroup numbers its messages anew while the group
+            // it was migrated from used the account's numbers. So a selection from both histories is ordered chat
+            // by chat, the chat whose messages start earlier first, and by id within a chat as before.
+            var chatStartTimestamps: [EnginePeer.Id: Int32] = [:]
+            for message in loadedMessages {
+                chatStartTimestamps[message.id.peerId] = min(chatStartTimestamps[message.id.peerId] ?? Int32.max, message.timestamp)
+            }
+            let sortedMessages = loadedMessages.sorted { lhs, rhs in
+                if lhs.id.peerId != rhs.id.peerId {
+                    let lhsStart = chatStartTimestamps[lhs.id.peerId] ?? 0
+                    let rhsStart = chatStartTimestamps[rhs.id.peerId] ?? 0
+                    if lhsStart != rhsStart {
+                        return lhsStart < rhsStart
+                    }
+                    return lhs.id.peerId < rhs.id.peerId
+                }
                 return lhs.id < rhs.id
             }
             self?.forwardMessages(messages: sortedMessages, options: options, resetCurrent: resetCurrent)

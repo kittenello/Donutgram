@@ -49,9 +49,11 @@ extension ChatControllerImpl {
 
             let canBypassReactionRestrictions = canBypassRestrictions(chatPresentationInterfaceState: self.presentationInterfaceState)
 
+            let selectAuthorMessages = self.donutgramSelectAuthorMessagesAction(pressedMessages: updatedMessages)
+
             let _ = combineLatest(queue: .mainQueue(),
                 self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId)),
-                contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: self.presentationInterfaceState, context: self.context, messages: updatedMessages, controllerInteraction: self.controllerInteraction, selectAll: selectAll, interfaceInteraction: self.interfaceInteraction, messageNode: node as? ChatMessageItemView),
+                contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState: self.presentationInterfaceState, context: self.context, messages: updatedMessages, controllerInteraction: self.controllerInteraction, selectAll: selectAll, interfaceInteraction: self.interfaceInteraction, messageNode: node as? ChatMessageItemView, selectAuthorMessages: selectAuthorMessages),
                 peerMessageAllowedReactions(context: self.context, message: topMessage, ignoreDefault: canBypassReactionRestrictions),
                 peerMessageSelectedReactions(context: self.context, message: EngineMessage(topMessage)),
                 topMessageReactions(context: self.context, message: topMessage, subPeerId: self.chatLocation.threadId.flatMap(EnginePeer.Id.init), ignoreDefault: canBypassReactionRestrictions),
