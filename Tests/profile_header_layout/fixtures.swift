@@ -1,4 +1,7 @@
 import Foundation
+// CGRect's members (midX, zero, maxY, offsetBy) come from the CoreGraphics overlay, which Foundation alone
+// does not make visible in a single-file build.
+import CoreGraphics
 
 extension CGRect {
     var center: CGPoint { CGPoint(x: midX, y: midY) }

@@ -41,7 +41,7 @@ private final class DonutgramEditHistoryController: ViewController {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.presentationData = presentationData
 
-        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: presentationData, style: .glass))
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: presentationData))
 
         self._hasGlassStyle = true
         self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
@@ -61,7 +61,7 @@ private final class DonutgramEditHistoryController: ViewController {
             }
             self.presentationData = presentationData
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
-            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: presentationData, style: .glass), transition: .immediate)
+            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: presentationData), transition: .immediate)
             if self.isNodeLoaded {
                 self.controllerNode.updatePresentationData(presentationData)
             }
@@ -213,7 +213,7 @@ private final class DonutgramEditHistoryControllerNode: ViewControllerTracingNod
         for (index, snapshot) in self.snapshots.enumerated().reversed() {
             let messageId = EngineMessage.Id(peerId: self.incoming ? peerId : otherPeerId, namespace: 0, id: Int32(index + 1))
             let message = EngineRawMessage(stableId: UInt32(index + 1), stableVersion: 0, id: messageId, globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: snapshot.timestamp, flags: self.incoming ? [.Incoming] : [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: author, text: snapshot.text, attributes: [], media: [], peers: EngineSimpleDictionary(), associatedMessages: EngineSimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
-            items.append(self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [message], theme: presentationData.theme, strings: presentationData.strings, wallpaper: presentationData.chatWallpaper, fontSize: presentationData.chatFontSize, chatBubbleCorners: presentationData.chatBubbleCorners, dateTimeFormat: presentationData.dateTimeFormat, nameOrder: presentationData.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.backgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false))
+            items.append(self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [EngineMessage(message)], theme: presentationData.theme, strings: presentationData.strings, wallpaper: presentationData.chatWallpaper, fontSize: presentationData.chatFontSize, chatBubbleCorners: presentationData.chatBubbleCorners, dateTimeFormat: presentationData.dateTimeFormat, nameOrder: presentationData.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.backgroundNode, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: true, isStandalone: false, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false, activateGiftMessageInput: nil))
         }
 
         if isInitial {

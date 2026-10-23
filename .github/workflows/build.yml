@@ -22,7 +22,9 @@ permissions:
 jobs:
   build:
     name: Build iOS IPA
-    runs-on: macos-26
+    # Telegram 13.1 needs Xcode 27.1 (versions.json). Only GitHub's xcode-27 image has it
+    # (macOS 27, in preview); macos-26 stops at Xcode 26.6.
+    runs-on: xcode-27
     timeout-minutes: 360
     outputs:
       app_version: ${{ steps.build.outputs.app_version }}

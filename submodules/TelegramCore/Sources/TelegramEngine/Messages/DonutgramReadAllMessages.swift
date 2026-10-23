@@ -1,7 +1,7 @@
 import Foundation
 import Postbox
 import SwiftSignalKit
-import TelegramApi
+internal import TelegramApi
 import MtProtoKit
 
 /// Explicit user action: read cloud dialogs on the server even when ghost mode suppresses automatic receipts.

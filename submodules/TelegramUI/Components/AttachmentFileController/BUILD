@@ -11,6 +11,8 @@ swift_library(
     ],
     deps = [
         "//Donutgram/DGSimpleSettings",
+        # Donutgram: AttachmentFileController and DonutgramAudioToVoice still import Postbox.
+        "//submodules/Postbox",
         "//submodules/OpusBinding",
         "//submodules/AudioWaveform",
         "//submodules/OverlayStatusController",
@@ -19,7 +21,6 @@ swift_library(
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
         "//submodules/TelegramCore",
-        "//submodules/Postbox",
         "//submodules/AccountContext",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramStringFormatting",

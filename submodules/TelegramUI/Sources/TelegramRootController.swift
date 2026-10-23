@@ -31,6 +31,7 @@ import PeerInfoScreen
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
+import NewsScreen
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -80,6 +81,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
+    public var newsController: NewsScreen?
     
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -90,9 +92,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
     
-    // Telegram's own «Show Calls Tab», and «Вкладка Контакты» / «Вкладка Звонки» as the tabs were last built: the tabs
-    // follow these settings at once, without a restart.
+    // Telegram's own «Show Calls Tab» and News tab, and «Вкладка Контакты» / «Вкладка Звонки» as the tabs were last
+    // built: the tabs follow these settings at once, without a restart.
     private var showCallsTab: Bool = true
+    private var showNewsTab: Bool = false
     private var appliedShowContactsTab: Bool?
     private var appliedShowCallsTab: Bool?
     // «Скрыть панель вкладок» as the tab bar was last laid out for it.
@@ -207,7 +210,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         super.containerLayoutUpdated(layout, transition: transition)
     }
     
-    public func addRootControllers(showCallsTab: Bool) {
+    public func addRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)
@@ -215,6 +218,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
         }
         let callListController = CallListController(context: self.context, mode: .tab)
+        // Created even when hidden, like the calls tab: `updateRootControllers` shows and hides it.
+        let newsController = NewsScreen(context: self.context)
         
         var controllers: [ViewController] = []
         
@@ -230,6 +235,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(callListController)
         }
         controllers.append(chatListController)
+        if showNewsTab {
+            controllers.append(newsController)
+        }
         
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
@@ -250,7 +258,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         accountSettingsController.parentController = self
         controllers.append(accountSettingsController)
                 
-        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
+        let chatsIndex = controllers.firstIndex(where: { $0 === chatListController }) ?? 0
+        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : chatsIndex)
         // «Скрыть панель вкладок» hides the bar on the chat list only: the chat list has a settings button
         // in its place, and the other tabs keep the bar to get back to the chats.
         tabBarController.hidesTabBarForController = { controller in
@@ -258,6 +267,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         self.appliedHideTabBar = DGSimpleSettings.shared.hideTabBar
         self.showCallsTab = showCallsTab
+        self.showNewsTab = showNewsTab
         self.appliedShowContactsTab = DGSimpleSettings.shared.showContactsTab
         self.appliedShowCallsTab = DGSimpleSettings.shared.showCallsTab
         if self.donutgramTabsObserver == nil {
@@ -267,7 +277,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
                 let settings = DGSimpleSettings.shared
                 if settings.showContactsTab != self.appliedShowContactsTab || settings.showCallsTab != self.appliedShowCallsTab {
-                    self.updateRootControllers(showCallsTab: self.showCallsTab)
+                    self.updateRootControllers(showCallsTab: self.showCallsTab, showNewsTab: self.showNewsTab)
                 }
                 if settings.hideTabBar != self.appliedHideTabBar {
                     self.appliedHideTabBar = settings.hideTabBar
@@ -278,17 +288,19 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         self.contactsController = contactsController
         self.callListController = callListController
+        self.newsController = newsController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
     }
         
-    public func updateRootControllers(showCallsTab: Bool) {
+    public func updateRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
         self.showCallsTab = showCallsTab
+        self.showNewsTab = showNewsTab
         self.appliedShowContactsTab = DGSimpleSettings.shared.showContactsTab
         self.appliedShowCallsTab = DGSimpleSettings.shared.showCallsTab
         var controllers: [ViewController] = []
@@ -299,9 +311,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(self.callListController!)
         }
         controllers.append(self.chatListController!)
+        if showNewsTab, let newsController = self.newsController {
+            controllers.append(newsController)
+        }
         controllers.append(self.accountSettingsController!)
-        
-        rootTabController.setControllers(controllers, selectedIndex: nil)
+
+        // A removed selected tab would otherwise fall back to index 0 (Contacts): select Chats instead.
+        var selectedIndex: Int?
+        if let currentController = rootTabController.currentController, !controllers.contains(where: { $0 === currentController }) {
+            selectedIndex = controllers.firstIndex(where: { $0 === self.chatListController })
+        }
+        rootTabController.setControllers(controllers, selectedIndex: selectedIndex)
     }
     
     public func openChatsController(activateSearch: Bool, filter: ChatListSearchFilter = .chats, query: String? = nil) {

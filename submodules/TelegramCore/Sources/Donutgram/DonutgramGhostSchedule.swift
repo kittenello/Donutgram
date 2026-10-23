@@ -1,6 +1,6 @@
 import Foundation
 import Postbox
-import TelegramApi
+internal import TelegramApi
 
 /// Whether the server kept a just-sent message scheduled instead of posting it at once.
 /// `serverMessage` is the message returned in `result`, if any, and `serverTimestamp` is

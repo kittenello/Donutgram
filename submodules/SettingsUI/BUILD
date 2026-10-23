@@ -13,11 +13,12 @@ swift_library(
     ],
     deps = [
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
+        # Donutgram: ThemeSettingsChatPreviewItem and UsernameSetupController still import Postbox.
+        "//submodules/Postbox:Postbox",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
-        "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/MtProtoKit:MtProtoKit",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
