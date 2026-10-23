@@ -2813,6 +2813,7 @@ private final class ProfileGiftsContextImpl {
         if let count = self.count {
             self.count = max(0, count - 1)
         }
+        self.removeFromDisplayedCount(reference: reference)
         self.gifts.removeAll(where: { $0.reference == reference })
         self.filteredGifts.removeAll(where: { $0.reference == reference })
         self.pushState()
@@ -2843,6 +2844,7 @@ private final class ProfileGiftsContextImpl {
                     if let count = self.count {
                         self.count = max(0, count - 1)
                     }
+                    self.removeFromDisplayedCount(reference: reference)
                     self.gifts.removeAll(where: { $0.reference == reference })
                     self.filteredGifts.removeAll(where: { $0.reference == reference })
                     self.pushState()
