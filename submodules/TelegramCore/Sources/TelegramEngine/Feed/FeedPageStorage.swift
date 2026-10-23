@@ -22,7 +22,8 @@ func storeFeedMessages(transaction: Transaction, accountPeerId: PeerId, messages
         }
         if transaction.getMessage(id) != nil {
             transaction.updateMessage(id, update: { previousMessage in
-                return .update(mergedServerMessageUpdate(previous: previousMessage, updated: storeMessage))
+                // Donutgram: what only this client keeps survives the refresh, as it survives an edit update.
+                return .update(donutgramMergedServerMessageUpdate(transaction: transaction, previous: previousMessage, updated: storeMessage))
             })
         } else {
             addedMessages.append(storeMessage)

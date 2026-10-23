@@ -201,6 +201,27 @@ func donutgramPreservingLocalState(transaction: Transaction, messages: [StoreMes
     return result
 }
 
+/// `mergedServerMessageUpdate` for a server copy that refreshes the stored `previous` the way an
+/// edit update does, as a News feed page does: like `.EditMessage` in AccountStateManagementUtils,
+/// the copy takes the local form of a pseudo-reply, the text it replaces is stored as a revision,
+/// and the local-only tags and saved view-once media stay.
+func donutgramMergedServerMessageUpdate(transaction: Transaction, previous: Message, updated serverMessage: StoreMessage) -> StoreMessage {
+    let message = donutgramPseudoReplyLocalForm(previous: previous, updated: serverMessage)
+    let hasStoredRevision = donutgramStorePreviousMessageRevision(transaction: transaction, previousMessage: previous, updatedText: message.text)
+    let updated = mergedServerMessageUpdate(previous: previous, updated: message)
+    var localTags = updated.localTags
+    if hasStoredRevision || previous.localTags.contains(.donutgramHasEditHistory) {
+        localTags.insert(.donutgramHasEditHistory)
+    }
+    if previous.localTags.contains(.donutgramDeleted) {
+        localTags.insert(.donutgramDeleted)
+    }
+    if previous.localTags.contains(.donutgramSavedViewOnce) {
+        localTags.insert(.donutgramSavedViewOnce)
+    }
+    return donutgramPreservingSavedViewOnceMedia(previous: previous, updated: updated.withUpdatedLocalTags(localTags))
+}
+
 /// `updateDeleteScheduledMessages` pairs published messages with their scheduled copies,
 /// which are deleted right after. Gives the published copy of a pseudo-reply the local form
 /// of the scheduled one, or keeps that form until the published copy is stored (it comes

@@ -26,6 +26,10 @@ def prepare():
     feed = source("submodules/TelegramCore/Sources/TelegramEngine/Feed/AddedFeedContext.swift")
     commit_read = feed[feed.index("private func commitRead()"):]
     assert commit_read.index("if donutgramGhostModeBlocksContentReads() {") < commit_read.index("#if TELEGRAM_NEWS_FEED_API")
+    # A feed page refreshes a stored post the way an edit update does, Donutgram's local state included.
+    pages = source("submodules/TelegramCore/Sources/TelegramEngine/Feed/FeedPageStorage.swift")
+    assert ".update(donutgramMergedServerMessageUpdate(transaction: transaction, previous: previousMessage, updated: storeMessage))" in pages
+    assert "mergedServerMessageUpdate(previous:" not in pages
     entries = source("submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift")
     assert "groupItems.removeAll { $0.id == .archive }" in entries
     node = source("submodules/ChatListUI/Sources/Node/ChatListNode.swift")
