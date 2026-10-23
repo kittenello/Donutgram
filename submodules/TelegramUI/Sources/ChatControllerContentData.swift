@@ -2425,7 +2425,12 @@ extension ChatControllerImpl {
                         // until the pinned list has answered: the stored message if there is one, else a skeleton.
                         // Only channels have CachedChannelData. (Not `state.renderedPeer`: it can arrive after this
                         // closure's last run, and renderedPeer is not one of its inputs.)
-                        let cachedPinnedMessageId = (cachedData as? CachedChannelData)?.pinnedMessageId
+                        var cachedPinnedMessageId = (cachedData as? CachedChannelData)?.pinnedMessageId
+                        // Donutgram: a pin by a shadow-banned author stays out of the bar while the list loads too; the
+                        // list itself leaves it out (ChatControllerImpl.topPinnedMessageState).
+                        if let id = cachedPinnedMessageId, let message = messages[id], DonutgramShadowBan.isHidden(message) {
+                            cachedPinnedMessageId = nil
+                        }
                         let listResolution: ChatPinnedListResolution
                         switch topPinnedMessage {
                         case .unresolved:
