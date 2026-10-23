@@ -328,6 +328,13 @@ private final class AddedFeedContextImpl {
         let applyLocally = account.postbox.transaction { transaction -> Void in
             applyFeedReadState(transaction: transaction, filterId: filterId, maxPosition: position)
         }
+        // Donutgram: with read receipts hidden in ghost mode the read mark stays on this device, as with
+        // the parked API below: `feed.readFeed` also reads on the server every channel it covers.
+        if donutgramGhostModeBlocksContentReads() {
+            self.readRequestDisposables.add(applyLocally.start())
+            self.persist()
+            return
+        }
 #if TELEGRAM_NEWS_FEED_API
         self.readRequestDisposables.add((applyLocally
         |> mapToSignal { _ -> Signal<Api.Updates?, NoError> in
