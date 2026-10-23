@@ -41,7 +41,7 @@ private final class DonutgramEditHistoryController: ViewController {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.presentationData = presentationData
 
-        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: presentationData, style: .glass))
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: presentationData))
 
         self._hasGlassStyle = true
         self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
@@ -61,7 +61,7 @@ private final class DonutgramEditHistoryController: ViewController {
             }
             self.presentationData = presentationData
             self.statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
-            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: presentationData, style: .glass), transition: .immediate)
+            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: presentationData), transition: .immediate)
             if self.isNodeLoaded {
                 self.controllerNode.updatePresentationData(presentationData)
             }

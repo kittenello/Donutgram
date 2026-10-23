@@ -115,7 +115,7 @@ final class DGChatListPreviewItemNode: ListViewItemNode, ItemListItemNode {
     }
 
     func asyncLayout() -> (_ item: DGChatListPreviewItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, (ContainedViewLayoutTransition) -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: DGChatListPreviewItemNode.panelHeight(hideSearch: item.hideSearch) + 44.0), insets: itemListNeighborsGroupedInsets(neighbors, params))
             return (layout, { [weak self] transition in
                 self?.item = item

@@ -106,7 +106,7 @@ private final class DGIconIslandPreviewItemNode: ListViewItemNode {
     }
 
     func asyncLayout() -> (_ item: DGIconIslandPreviewItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: DGIconIslandPreviewItemNode.contentHeight), insets: itemListNeighborsGroupedInsets(neighbors, params))
             return (layout, { [weak self] in
                 self?.item = item

@@ -82,7 +82,7 @@ private final class DGTabBarPreviewItemNode: ListViewItemNode, ItemListItemNode 
     private var currentTheme: PresentationTheme?
 
     func asyncLayout() -> (DGTabBarPreviewItem, ListViewItemLayoutParams, ItemListNeighbors) -> (ListViewItemNodeLayout, (ContainedViewLayoutTransition) -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: 112.0), insets: itemListNeighborsGroupedInsets(neighbors, params))
             return (layout, { [weak self] transition in
                 self?.apply(item: item, params: params, transition: transition)

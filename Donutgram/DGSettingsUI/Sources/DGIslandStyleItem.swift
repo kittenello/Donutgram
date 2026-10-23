@@ -108,7 +108,7 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
     }
 
     func asyncLayout() -> (_ item: DGIslandStyleItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
-        return { item, params, neighbors in
+        return { [weak self] item, params, neighbors in
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: DGIslandStyleItemNode.contentHeight), insets: itemListNeighborsGroupedInsets(neighbors, params))
             return (layout, { [weak self] in
                 self?.item = item
