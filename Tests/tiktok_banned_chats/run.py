@@ -44,6 +44,13 @@ def prepare(directory):
     sync = source("submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift")
     poll = sync.split("private func pollChannel(", 1)[1]
     assert poll.index("if donutgramPeerIsBanned(peer)") < poll.index("network.request(")
+    # A kept chat is a channel the account is not in (kicked), and such a channel keeps no read state since 13.1: it is
+    # still read like any chat, and the synchronizer confirms that read without a request.
+    read = source("submodules/TelegramCore/Sources/TelegramEngine/Messages/ApplyMaxReadIndexInteractively.swift")
+    guards = [line.strip() for line in read.splitlines() if line.strip().startswith("guard peerKeepsReadState(")]
+    assert len(guards) == 2 and all("|| donutgramIsPreservedBannedChat(transaction: transaction, peerId: " in line for line in guards), guards
+    read_sync = source("submodules/TelegramCore/Sources/State/SynchronizePeerReadState.swift")
+    assert "if !keepsReadState {\n            return confirmSynchronized(postbox: postbox, peerId: peerId)" in read_sync
     panels = source("submodules/TelegramUI/Sources/ChatInterfaceStateInputPanels.swift")
     assert "case .kicked:" in panels and "case .Removed, .Left:" in panels
     content = source("submodules/TelegramUI/Sources/ChatControllerContentData.swift")
