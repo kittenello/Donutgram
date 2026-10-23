@@ -80,6 +80,10 @@ def prepare(directory):
     attempt = job.split("func downloadTikTok(", 1)[1].split("\n    }\n", 1)[0]
     assert attempt.index("try? FileManager.default.removeItem(at: directory)") < attempt.index("failure(error)")
     assert "source.deletingLastPathComponent().appendingPathComponent(\"photo-\\(index).jpg\")" in job
+    # Photos are made as they arrive, six downloads at a time (TikTok's photo CDN is HTTP/2); one that cannot be made
+    # fails its attempt like a failed download, so TikWM is still tried.
+    assert "self.download(items, limit: 6, prepare: { index, source in" in job
+    assert "guard let prepared = prepare(index, url) else {\n                            fail(.processingFailed)" in job
     # TikWM sees the post and the user's IP: the downloads page says so.
     downloads = source("Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift").split("func dgDownloadsSettingsController(", 1)[1].split("\n}\n", 1)[0]
     assert "tikwm.com" in downloads

@@ -384,7 +384,15 @@ enum DGTikTokExtractor {
                 completion(.failure(DGTikTokExtractor.pageError(error)), nil)
             case let .success(response):
                 if let itemId = response.url.flatMap({ DGTikTokExtractor.itemId(from: $0) }) {
-                    fetch(itemId)
+                    // The redirect usually ends on the post's page itself, with the post's data (checked live on vt.
+                    // and /t/ links): asking for that page again cost a second page load, 0.3-1 s measured, since
+                    // TikTok renders the page anew for every request. Whatever else it holds (a login wall, a bot
+                    // check, an error) goes through the post's own page as before.
+                    if case let .success(item) = DGTikTokExtractor.parsePage(String(decoding: response.data, as: UTF8.self)) {
+                        completion(.success(item), itemId)
+                    } else {
+                        fetch(itemId)
+                    }
                     return
                 }
                 fetcher.finalURL(DGTikTokExtractor.previewRequest(url), completion: { preview in
