@@ -1,3 +1,4 @@
+import Foundation
 import Display
 import AccountContext
 import DGSimpleSettings
@@ -9,43 +10,790 @@ import SettingsUI
 import PresentationDataUtils
 import OverlayStatusController
 
-public func dgSpySettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+/// The value picked in a row's menu: the options of the row «key» are selected as "key:value".
+private func dgMenuChoice(_ selection: String, of key: String) -> String? {
+    let prefix = key + ":"
+    return selection.hasPrefix(prefix) ? String(selection.dropFirst(prefix.count)) : nil
+}
+
+private func dgUpdatedMask(_ mask: Int, bit: Int, isOn: Bool) -> Int {
+    return isOn ? (mask | bit) : (mask & ~bit)
+}
+
+// MARK: - Приватность
+
+func dgGhostSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
-    let accountId = context.account.peerId.toInt64()
-    return dgController(context: context, page: .general, title: "Основные", focusKey: focusKey, entries: {
-        var result: [DGListEntry] = [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .disclosure(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Включен" : "Выключен"), .header(10, 1, "ОСНОВНЫЕ"), .toggle(11, 1, "saveDeleted", "Сохранять удаленки", s.saveDeletedMessages, true)]
-        if s.saveDeletedMessages { result.append(.toggle(12, 1, "saveOwnDeleted", "Сохранять свои удаленки", s.saveOwnDeletedMessages, true)) }
-        // Shown with saving off as well: what was saved before stays, and keeps its look, until it is deleted here.
-        result.append(contentsOf: [.toggle(13, 1, "transparentDeleted", "Полупрозрачные удаленки", s.semiTransparentDeletedMessages, true), .disclosure(14, 1, "savedDeleted", "Сохраненные удаленки", "")])
-        result.append(contentsOf: [.toggle(15, 1, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true), .toggle(16, 1, "saveOnce", "Сохранять одноразки", s.saveViewOnceMedia, true), .toggle(17, 1, "saveBots", "Сохранять в чатах с ботами", s.saveInBotChats, true), .toggle(18, 1, "disappearedGifts", "Видеть удаленные подарки", s.showDisappearedGifts, true), .toggle(19, 1, "saveProtectedStories", "Сохранять запрещенные истории", s.saveProtectedStories, true), .toggle(20, 1, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true)])
-        // Its own append: one more case with a ternary in the literal above risks the compiler's type-check time limit.
-        let shadowBanCount = s.shadowBannedPeerIds.count
-        result.append(.disclosure(21, 1, "shadowBan", "Теневой бан", shadowBanCount == 0 ? "Выключен" : "\(shadowBanCount)"))
-        result.append(.toggle(22, 1, "keepBannedChats", "Обход бана в чатах", s.keepBannedChats, true))
-        result.append(contentsOf: [.header(23, 2, "ПЕРЕСЫЛКА"), .toggle(24, 2, "bypassForward", "Запрещенная рассылка", s.bypassForwardRestrictions, true)])
-        result.append(contentsOf: [.toggle(25, 2, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true)])
-        result.append(contentsOf: [.header(27, 3, "УСКОРЕНИЕ ЗАГРУЗКИ"), .speedSlider(28, 3, s.downloadAcceleration), .toggle(29, 3, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true), .info(30, 3, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео."), .header(31, 4, "ДРУГОЕ"), .disclosure(32, 4, "visualPhone", "Визуальный номер", s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"), .disclosure(33, 4, "visualRating", "Визуальный рейтинг", s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"), .disclosure(34, 4, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"), .disclosure(35, 4, "visualId", "Визуальный ID", s.visualProfileId(accountId: accountId).isEmpty ? "Выключен" : s.visualProfileId(accountId: accountId))])
-        result.append(.disclosure(36, 4, "visualLabel", "Визуальная метка", s.visualLabel(accountId: accountId).title))
-        result.append(.toggle(37, 4, "localPremium", "Локальный TG Premium", s.localPremium(accountId: accountId), true))
-        if s.localPremium(accountId: accountId) {
-            result.append(.info(38, 4, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
+    let silentTitles = ["Никогда", "В режиме призрака", "Всегда"]
+    return dgController(context: context, page: .ghost, title: "Режим призрака", focusKey: focusKey, entries: {
+        // What is not sent is checked together with the main switch, so without it those rows stay off and locked.
+        let isOn = s.ghostModeEnabled
+        var result: [DGListEntry] = [
+            .toggle(1, 0, "enabled", "Режим призрака", isOn, true),
+            .info(2, 0, "Собеседники не узнают, что вы прочитали сообщения, посмотрели истории или были в сети."),
+            .header(10, 1, "НЕ ОТПРАВЛЯТЬ"),
+            .toggle(11, 1, "messages", "Отметки о прочтении сообщений", isOn && !s.ghostReadMessages, isOn),
+            .toggle(12, 1, "storyViews", "Отметки о просмотре историй", isOn && !s.ghostReadStories, isOn),
+            .toggle(13, 1, "online", "Статус «онлайн»", isOn && !s.ghostSendOnline, isOn),
+            .toggle(14, 1, "typing", "Статус «печатает»", isOn && !s.ghostSendTyping, isOn)
+        ]
+        if !isOn {
+            result.append(.info(15, 1, "Параметры действуют только при включённом режиме призрака."))
         }
-        result.append(contentsOf: [.header(41, 5, "СТАТИСТИКА"), .toggle(42, 5, "telegramStatistics", "Отправлять статистику в Telegram", s.sendTelegramStatistics, true), .info(43, 5, "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.")])
+        let silent = silentTitles[min(max(s.ghostSendWithoutSound, 0), 2)]
+        result.append(contentsOf: [
+            .header(20, 2, "ПОВЕДЕНИЕ"),
+            .toggle(21, 2, "offline", "Автоматический «офлайн»", isOn && s.ghostAutomaticOffline, isOn),
+            .toggle(22, 2, "readOnAction", "Читать при действиях", s.ghostReadOnAction, isOn),
+            .toggle(23, 2, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, isOn),
+            .menu(24, 2, "silent", "Отправлять без звука", silent),
+            .toggle(25, 2, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true),
+            .header(30, 3, "ЧТЕНИЕ"),
+            .action(31, 3, "readAll", "Прочитать все на сервере"),
+            .action(32, 3, "readAllLocal", "Прочитать все локально")
+        ])
         return result
-    }, restartRequiredKeys: ["localPremium"], toggle: { key, value in
-        switch key { case "telegramStatistics": s.sendTelegramStatistics = value; case "saveDeleted": s.saveDeletedMessages = value; case "saveOwnDeleted": s.saveOwnDeletedMessages = value; case "transparentDeleted": s.semiTransparentDeletedMessages = value; case "saveEdits": s.saveEditHistory = value; case "saveOnce": s.saveViewOnceMedia = value; case "saveBots": s.saveInBotChats = value; case "saveProtectedStories": s.saveProtectedStories = value; case "gifUnlock": s.gifUnlock = value; case "keepBannedChats": s.keepBannedChats = value; case "disappearedGifts": s.showDisappearedGifts = value; case "bypassForward": s.bypassForwardRestrictions = value; case "protectedScreenshots": s.allowProtectedScreenshots = value; case "accelerateUpload": s.accelerateUpload = value; case "localPremium": s.setLocalPremium(value, accountId: accountId); default: break }
+    }, toggle: { key, value in
+        switch key {
+        case "enabled": s.ghostModeEnabled = value
+        case "messages": s.ghostReadMessages = !value
+        case "storyViews": s.ghostReadStories = !value
+        case "online": s.ghostSendOnline = !value
+        case "typing": s.ghostSendTyping = !value
+        case "offline": s.ghostAutomaticOffline = value
+        case "readOnAction": s.ghostReadOnAction = value
+        case "scheduled": s.ghostUseScheduledMessages = value
+        case "stories": s.ghostSuggestForStories = value
+        default: break
+        }
+    }, select: { key in
+        if let value = dgMenuChoice(key, of: "silent").flatMap({ Int($0) }) {
+            s.ghostSendWithoutSound = value
+        }
+    }, menu: { key in
+        guard key == "silent" else {
+            return []
+        }
+        return silentTitles.enumerated().map { index, title in
+            DGMenuOption(key: "silent:\(index)", title: title, isSelected: s.ghostSendWithoutSound == index)
+        }
+    }, perform: { key, controller in
+        if key == "readAll" { dgPresentReadAllOnServer(context: context, controller: controller) }
+        if key == "readAllLocal" { dgPresentReadAllLocally(context: context, controller: controller) }
+    })
+}
+
+private func dgPresentReadAllLocally(context: AccountContext, controller: ViewController) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let languageCode = presentationData.strings.primaryComponent.languageCode
+    controller.present(textAlertController(context: context, title: nil, text: dgLocalized("Прочитать все сообщения только на этом устройстве?", languageCode: languageCode), actions: [
+        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+        TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
+            let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
+            controller?.present(progress, in: .window(.root))
+            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] _ in
+                progress.dismiss()
+                let text = dgLocalized("Все сообщения прочитаны", languageCode: languageCode)
+                controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            })
+        })
+    ]), in: .window(.root))
+}
+
+private func dgPresentReadAllOnServer(context: AccountContext, controller: ViewController) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let languageCode = presentationData.strings.primaryComponent.languageCode
+    controller.present(textAlertController(context: context, title: nil, text: dgLocalized("Прочитать все сообщения?", languageCode: languageCode), actions: [
+        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+        TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
+            let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
+            controller?.present(progress, in: .window(.root))
+            let _ = (context.engine.messages.donutgramReadAllMessagesOnServer() |> deliverOnMainQueue).startStandalone(next: { [weak controller] succeeded in
+                progress.dismiss()
+                let text = succeeded ? "Все сообщения прочитаны" : "Не удалось прочитать все сообщения. Попробуйте ещё раз."
+                controller?.present(textAlertController(context: context, title: nil, text: dgLocalized(text, languageCode: languageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            })
+        })
+    ]), in: .window(.root))
+}
+
+func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .saving, title: "Сохранение", focusKey: focusKey, entries: {
+        var result: [DGListEntry] = [.header(0, 0, "СООБЩЕНИЯ"), .toggle(1, 0, "saveDeleted", "Сохранять удаленки", s.saveDeletedMessages, true)]
+        if s.saveDeletedMessages {
+            result.append(.toggle(2, 0, "saveOwnDeleted", "Сохранять свои удаленки", s.saveOwnDeletedMessages, true))
+        }
+        // The look and the storage are shown with saving off as well: what was saved before stays until it is deleted.
+        result.append(contentsOf: [
+            .toggle(3, 0, "saveBots", "Сохранять в чатах с ботами", s.saveInBotChats, true),
+            .toggle(4, 0, "transparentDeleted", "Полупрозрачные удаленки", s.semiTransparentDeletedMessages, true),
+            .toggle(5, 0, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true),
+            .header(10, 1, "МЕДИА И ПРОЧЕЕ"),
+            .toggle(11, 1, "saveOnce", "Сохранять одноразки", s.saveViewOnceMedia, true),
+            .toggle(12, 1, "saveProtectedStories", "Сохранять запрещенные истории", s.saveProtectedStories, true),
+            .toggle(13, 1, "disappearedGifts", "Видеть удаленные подарки", s.showDisappearedGifts, true),
+            .toggle(14, 1, "keepBannedChats", "Обход бана в чатах", s.keepBannedChats, true),
+            .header(20, 2, "ХРАНИЛИЩЕ"),
+            .disclosure(21, 2, "savedDeleted", "Сохраненные удаленки", ""),
+            .info(22, 2, "Сохраненные удаленки хранятся только на этом устройстве. Если выключить «Сохранять удаленки», уже сохраненные останутся.")
+        ])
+        return result
+    }, toggle: { key, value in
+        switch key {
+        case "saveDeleted": s.saveDeletedMessages = value
+        case "saveOwnDeleted": s.saveOwnDeletedMessages = value
+        case "saveBots": s.saveInBotChats = value
+        case "transparentDeleted": s.semiTransparentDeletedMessages = value
+        case "saveEdits": s.saveEditHistory = value
+        case "saveOnce": s.saveViewOnceMedia = value
+        case "saveProtectedStories": s.saveProtectedStories = value
+        case "disappearedGifts": s.showDisappearedGifts = value
+        case "keepBannedChats": s.keepBannedChats = value
+        default: break
+        }
+    }, open: { key in
+        return key == "savedDeleted" ? dgSavedDeletedMessagesController(context: context) : nil
+    })
+}
+
+/// What tg://bg/spy opens: the saving of deleted messages and edits, the feature the link is named after.
+public func dgSpySettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    return dgSavingSettingsController(context: context, focusKey: focusKey)
+}
+
+func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .bypass, title: "Обход ограничений", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .toggle(1, 0, "bypassForward", "Пересылка из защищённых чатов", s.bypassForwardRestrictions, true),
+            .toggle(2, 0, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true),
+            .toggle(3, 0, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true)
+        ]
+        return result
+    }, toggle: { key, value in
+        switch key {
+        case "bypassForward": s.bypassForwardRestrictions = value
+        case "protectedScreenshots": s.allowProtectedScreenshots = value
+        case "gifUnlock": s.gifUnlock = value
+        default: break
+        }
+    })
+}
+
+// MARK: - Интерфейс
+
+func dgMainScreenSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    let titleModes: [DGSimpleSettings.ChatListTitleMode] = [.donutgram, .username, .nickname, .chats]
+    return dgController(context: context, page: .mainScreen, title: "Главный экран", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "ЗАГОЛОВОК"),
+            .chatListPreview(1, 0, s.forceSnow, s.chatListHideEmojiStatus, s.chatListCenteredTitle, s.chatListHideSearch, s.chatListTitleMode.rawValue),
+            .menu(2, 0, "titleMode", "Текст в заголовке", dgChatListTitleModeTitle(s.chatListTitleMode)),
+            .toggle(3, 0, "centerTitle", "Заголовок по центру", s.chatListCenteredTitle, true),
+            .toggle(4, 0, "hideEmojiStatus", "Скрыть эмодзи-статус", s.chatListHideEmojiStatus, true),
+            .toggle(5, 0, "hideStatus", "Скрыть статус соединения", s.chatListHideStatus, true),
+            .header(10, 1, "СПИСОК ЧАТОВ"),
+            .toggle(11, 1, "hideSearch", "Скрыть строку поиска", s.chatListHideSearch, true),
+            .toggle(12, 1, "foldersAtBottom", "Папки внизу", s.chatListFoldersAtBottom, true),
+            .toggle(13, 1, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true),
+            .toggle(14, 1, "hideStories", "Скрыть сторис", s.hideStories, true),
+            .toggle(15, 1, "disableStoryCameraSwipe", "Отключить камеру по свайпу", s.disableStoryCameraSwipe, true),
+            .header(20, 2, "ВКЛАДКИ"),
+            .tabBarPreview(21, 2, s.tabBarLayout),
+            .toggle(22, 2, "hideTabBar", "Скрыть панель вкладок", s.hideTabBar, true),
+            .toggle(23, 2, "contacts", "Вкладка Контакты", s.showContactsTab, true),
+            .toggle(24, 2, "calls", "Вкладка Звонки", s.showCallsTab, true),
+            .toggle(25, 2, "wideTabBar", "Широкая Панель", s.wideTabBar, true)
+        ]
+        return result
+    }, restartRequiredKeys: ["hideStories"], toggle: { key, value in
+        switch key {
+        case "centerTitle": s.chatListCenteredTitle = value
+        case "hideEmojiStatus": s.chatListHideEmojiStatus = value
+        case "hideStatus": s.chatListHideStatus = value
+        case "hideSearch": s.chatListHideSearch = value
+        case "foldersAtBottom": s.chatListFoldersAtBottom = value
+        case "hideArchive": s.hideArchive = value
+        case "hideStories": s.hideStories = value
+        case "disableStoryCameraSwipe": s.disableStoryCameraSwipe = value
+        case "hideTabBar": s.hideTabBar = value
+        case "contacts": s.showContactsTab = value
+        case "calls": s.showCallsTab = value
+        case "wideTabBar": s.wideTabBar = value
+        default: break
+        }
+    }, select: { key in
+        if let value = dgMenuChoice(key, of: "titleMode").flatMap({ Int($0) }), let mode = DGSimpleSettings.ChatListTitleMode(rawValue: value) {
+            s.chatListTitleMode = mode
+        }
+    }, menu: { key in
+        guard key == "titleMode" else {
+            return []
+        }
+        return titleModes.map { mode in
+            DGMenuOption(key: "titleMode:\(mode.rawValue)", title: dgChatListTitleModeTitle(mode), isSelected: s.chatListTitleMode == mode)
+        }
+    })
+}
+
+private func dgChatListTitleModeTitle(_ mode: DGSimpleSettings.ChatListTitleMode) -> String {
+    switch mode {
+    case .donutgram: return "Donutgram"
+    case .username: return "Юзернейм"
+    case .nickname: return "Никнейм"
+    case .chats: return "Чаты"
+    }
+}
+
+/// The emoji the message previews show: none at first, then the first status emoji.
+private func dgPreviewEmoji(context: AccountContext) -> Signal<TelegramMediaFile?, NoError> {
+    let emoji = context.engine.stickers.loadedStickerPack(reference: .iconStatusEmoji, forceActualized: false)
+    |> map { result -> TelegramMediaFile? in
+        if case let .result(_, items, _) = result { return items.first?.file._parse() }
+        return nil
+    }
+    return Signal<TelegramMediaFile?, NoError>.single(nil) |> then(emoji)
+}
+
+/// The sticker the sticker preview shows: none at first, then a saved or recent sticker of the account, or a greeting sticker.
+private func dgPreviewSticker(context: AccountContext) -> Signal<TelegramMediaFile?, NoError> {
+    let sticker: Signal<TelegramMediaFile?, NoError> = context.account.postbox.transaction { transaction -> TelegramMediaFile? in
+        for entry in transaction.getOrderedListItems(collectionId: Namespaces.OrderedItemList.CloudSavedStickers) {
+            if let file = entry.contents.get(SavedStickerItem.self)?.file._parse(), file.isSticker, !file.isPremiumSticker {
+                return file
+            }
+        }
+        for entry in transaction.getOrderedListItems(collectionId: Namespaces.OrderedItemList.CloudRecentStickers) {
+            if let file = entry.contents.get(RecentMediaItem.self)?.media._parse(), file.isSticker, !file.isPremiumSticker {
+                return file
+            }
+        }
+        return nil
+    }
+    |> mapToSignal { file -> Signal<TelegramMediaFile?, NoError> in
+        if let file { return .single(file) }
+        return context.engine.stickers.randomGreetingSticker() |> map { $0?.file }
+    }
+    return Signal<TelegramMediaFile?, NoError>.single(nil) |> then(sticker)
+}
+
+func dgMessagesSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    var previewEmoji: TelegramMediaFile?
+    let previewUpdates = dgPreviewEmoji(context: context)
+    |> deliverOnMainQueue
+    |> map { emoji -> Void in
+        previewEmoji = emoji
+    }
+    return dgController(context: context, page: .messages, title: "Сообщения", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "ПУЗЫРИ"),
+            .messagePreview(1, 0, s.messagePreviewConfiguration, previewEmoji),
+            .toggle(2, 0, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
+            .toggle(3, 0, "seconds", "Показывать секунды", s.showMessageSeconds, true),
+            .toggle(4, 0, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
+            .toggle(5, 0, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
+            .toggle(6, 0, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
+            .header(10, 1, "ОТВЕТЫ И УПОМИНАНИЯ"),
+            .toggle(11, 1, "replies", "Отключить цветные ответы", s.disableColoredReplies, true),
+            .toggle(12, 1, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
+            .toggle(13, 1, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
+            .toggle(14, 1, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
+            .toggle(15, 1, "removePings", "Убрать пинги", s.removePings, true),
+            .header(20, 2, "СОДЕРЖИМОЕ"),
+            .toggle(21, 2, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
+            .toggle(22, 2, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
+            .toggle(23, 2, "hideServiceMessages", "Отключить служебные сообщения", s.hideServiceMessages, true),
+            .toggle(24, 2, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
+            .toggle(25, 2, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
+            .toggle(26, 2, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
+            .header(30, 3, "ПЕРЕСЛАННЫЕ"),
+            .toggle(31, 3, "forwardDate", "Время пересылки", s.showForwardDate, true),
+            .toggle(32, 3, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
+            .header(40, 4, "КАНАЛЫ"),
+            .toggle(41, 4, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
+            .menu(42, 4, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
+            .info(43, 4, "«Обсудить» открывает группу обсуждения канала. В каналах без обсуждения кнопка скрыта."),
+            .header(50, 5, "МЕНЮ АВАТАРКИ"),
+            .toggle(51, 5, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true),
+            .info(52, 5, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению.")
+        ]
+        return result
+    }, additionalUpdates: previewUpdates, toggle: { key, value in
+        switch key {
+        case "tails": s.removeMessageTails = value
+        case "seconds": s.showMessageSeconds = value
+        case "editedIcon": s.editedIcon = value
+        case "onlineIndicator": s.showOnlineIndicator = value
+        case "customBackgrounds": s.disableCustomBackgrounds = value
+        case "replies": s.disableColoredReplies = value
+        case "hidePremiumReplyEmoji": s.hidePremiumReplyEmoji = value
+        case "mentionComma": s.commaAfterMention = value
+        case "mentionAvatars": s.mentionAvatars = value
+        case "removePings": s.removePings = value
+        case "removeLinkPreviews": s.removeLinkPreviews = value
+        case "hideViaBot": s.hideViaBot = value
+        case "hideServiceMessages": s.hideServiceMessages = value
+        case "greetingSticker": s.hideGreetingSticker = value
+        case "pollResultsBeforeVoting": s.showPollResultsBeforeVoting = value
+        case "hideBotAutomation": s.hideBotAutomation = value
+        case "forwardDate": s.showForwardDate = value
+        case "channelForwardCount": s.showChannelForwardCount = value
+        case "wideChannelPosts": s.wideChannelPosts = value
+        case "jumpToStart": s.jumpToStartInChatMenu = value
+        default: break
+        }
+    }, select: { key in
+        if let value = dgMenuChoice(key, of: "channelBottomButton").flatMap({ Int($0) }), let button = DGSimpleSettings.ChannelBottomButton(rawValue: value) {
+            s.channelBottomButton = button
+        }
+    }, menu: { key in
+        guard key == "channelBottomButton" else {
+            return []
+        }
+        return DGSimpleSettings.ChannelBottomButton.allCases.map { button in
+            DGMenuOption(key: "channelBottomButton:\(button.rawValue)", title: dgChannelBottomButtonTitle(button), isSelected: s.channelBottomButton == button)
+        }
+    })
+}
+
+private func dgChannelBottomButtonTitle(_ value: DGSimpleSettings.ChannelBottomButton) -> String {
+    switch value {
+    case .discuss: return "Обсудить"
+    case .mute: return "Убрать звук"
+    case .hidden: return "Скрыть"
+    }
+}
+
+func dgStickersSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    var previewSticker: TelegramMediaFile?
+    var previewEmoji: TelegramMediaFile?
+    let previewUpdates = combineLatest(dgPreviewSticker(context: context), dgPreviewEmoji(context: context))
+    |> deliverOnMainQueue
+    |> map { sticker, emoji -> Void in
+        previewSticker = sticker
+        previewEmoji = emoji
+    }
+    return dgController(context: context, page: .stickers, title: "Стикеры и реакции", focusKey: focusKey, entries: {
+        let hiddenReactions = s.hiddenReactions
+        let result: [DGListEntry] = [
+            .header(0, 0, "СТИКЕРЫ"),
+            .stickerSizeSlider(1, 0, s.stickerSize),
+            .stickerPreview(2, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.stickerReplyOptions, s.stickerShape, s.messagePreviewConfiguration, previewSticker, previewEmoji),
+            .toggle(3, 0, "hideStickerTime", "Скрыть время на стикерах", s.hideStickerTime, true),
+            .toggle(4, 0, "hideStickerChecks", "Скрыть галочки на стикерах", s.hideStickerChecks, true),
+            .toggle(5, 0, "hideStickerReplyColors", "Скрыть цвета", s.hideStickerReplyColors, true),
+            .toggle(6, 0, "hideStickerReplyEmoji", "Скрыть эмодзи", s.hideStickerReplyEmoji, true),
+            .toggle(7, 0, "hideStickerReplyBackground", "Скрыть фон", s.hideStickerReplyBackground, true),
+            .header(10, 1, "ФОРМА СТИКЕРОВ"),
+            .stickerShape(11, 1, s.stickerShape),
+            .header(20, 2, "ПАНЕЛЬ СТИКЕРОВ"),
+            .toggle(21, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
+            .toggle(22, 2, "recent", "Беск. недавние стикеры", s.infiniteRecentStickers, true),
+            .header(30, 3, "РЕАКЦИИ"),
+            .toggle(31, 3, "reactionsInChannels", "Скрыть реакции в каналах", hiddenReactions & 1 != 0, true),
+            .toggle(32, 3, "reactionsInGroups", "Скрыть реакции в группах", hiddenReactions & 2 != 0, true),
+            .toggle(33, 3, "reactionsInPrivateChats", "Скрыть реакции в личных чатах", hiddenReactions & 4 != 0, true),
+            .toggle(34, 3, "hidePaidReactions", "Скрыть платные реакции", s.hidePaidReactions, true)
+        ]
+        return result
+    }, additionalUpdates: previewUpdates, toggle: { key, value in
+        switch key {
+        case "hideStickerTime": s.hideStickerTime = value
+        case "hideStickerChecks": s.hideStickerChecks = value
+        case "hideStickerReplyColors": s.hideStickerReplyColors = value
+        case "hideStickerReplyEmoji": s.hideStickerReplyEmoji = value
+        case "hideStickerReplyBackground": s.hideStickerReplyBackground = value
+        case "onlyAdded": s.onlyAddedStickers = value
+        case "recent": s.infiniteRecentStickers = value
+        case "reactionsInChannels": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 1, isOn: value)
+        case "reactionsInGroups": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 2, isOn: value)
+        case "reactionsInPrivateChats": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 4, isOn: value)
+        case "hidePaidReactions": s.hidePaidReactions = value
+        default: break
+        }
+    }, select: { key in
+        if key == "resetStickerAppearance" {
+            s.stickerSize = 11
+            s.hideStickerTime = false
+            s.hideStickerChecks = false
+            s.stickerReplyOptions = 7
+            s.stickerShape = 0
+        } else if let value = Int(key.split(separator: ":").last ?? "") {
+            if key.hasPrefix("stickerSize:") { s.stickerSize = value }
+            else if key.hasPrefix("stickerShape:") { s.stickerShape = value }
+        }
+    })
+}
+
+func dgProfilesSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .profiles, title: "Профили", focusKey: focusKey, entries: {
+        var result: [DGListEntry] = [.header(0, 0, "ИНФОРМАЦИЯ"), .toggle(1, 0, "profileId", "ID Профилей", s.showProfileId, true)]
+        if s.showProfileId {
+            result.append(.menu(2, 0, "dialogIdFormat", "Показывать ID диалога", s.dialogIdFormat == .botApi ? "Bot API" : "Telegram API"))
+        }
+        result.append(contentsOf: [
+            .toggle(3, 0, "dc", "Показывать дата-центр (DC)", s.showDc, true),
+            .toggle(4, 0, "regDate", "Показывать дату регистрации", s.showRegistrationDate, true),
+            .toggle(5, 0, "chatDate", "Показывать дату создания чата", s.showChatCreationDate, true),
+            .toggle(6, 0, "mutualContact", "Показывать взаимный контакт", s.showMutualContact, true),
+            .toggle(7, 0, "relativeOnlineTime", "Относительное время онлайна", s.relativeOnlineTime, true),
+            .toggle(8, 0, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
+            .header(10, 1, "ЗНАЧКИ У ИМЁН"),
+            .toggle(11, 1, "premiumStatuses", "Скрыть премиум статусы", s.hidePremiumStatuses, true),
+            .toggle(12, 1, "hideVerification", "Скрыть верификацию", s.hideVerification, true)
+        ])
+        return result
+    }, restartRequiredKeys: ["premiumStatuses", "hideVerification"], toggle: { key, value in
+        switch key {
+        case "profileId": s.showProfileId = value
+        case "dc": s.showDc = value
+        case "regDate": s.showRegistrationDate = value
+        case "chatDate": s.showChatCreationDate = value
+        case "mutualContact": s.showMutualContact = value
+        case "relativeOnlineTime": s.relativeOnlineTime = value
+        case "hidePhoneNumber": s.hidePhoneNumber = value
+        case "premiumStatuses": s.hidePremiumStatuses = value
+        case "hideVerification": s.hideVerification = value
+        default: break
+        }
+    }, select: { key in
+        if let value = dgMenuChoice(key, of: "dialogIdFormat") {
+            s.dialogIdFormat = value == "1" ? .botApi : .telegramApi
+        }
+    }, menu: { key in
+        guard key == "dialogIdFormat" else {
+            return []
+        }
+        return [
+            DGMenuOption(key: "dialogIdFormat:0", title: "Telegram API", isSelected: s.dialogIdFormat == .telegramApi),
+            DGMenuOption(key: "dialogIdFormat:1", title: "Bot API", isSelected: s.dialogIdFormat == .botApi)
+        ]
+    })
+}
+
+func dgIconAndEffectsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .iconAndEffects, title: "Иконка и эффекты", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "ПРИЛОЖЕНИЕ"),
+            dgIconAndIslandRow(context: context, id: 1, section: 0),
+            .header(10, 1, "ЭФФЕКТЫ"),
+            .toggle(11, 1, "snow", "Снег", s.forceSnow, true),
+            .toggle(12, 1, "avatarGlow", "Свечение аватарок", s.avatarGlow, true),
+            .toggle(13, 1, "reactionGlow", "Свечение реакций", s.reactionGlow, true)
+        ]
+        return result
+    }, toggle: { key, value in
+        switch key {
+        case "snow": s.forceSnow = value
+        case "avatarGlow": s.avatarGlow = value
+        case "reactionGlow": s.reactionGlow = value
+        default: break
+        }
+    }, open: { key in
+        return key == "iconAndIsland" ? dgIconAndIslandController(context: context) : nil
+    })
+}
+
+/// The row that opens «Иконка и остров», the same row as in the stock appearance settings.
+private func dgIconAndIslandRow(context: AccountContext, id: Int32, section: Int32) -> DGListEntry {
+    let iconName = context.sharedContext.applicationBindings.getAlternateIconName()
+    return .iconAndIsland(id, section, DGSimpleSettings.appMarkIndex(iconName: iconName), DGSimpleSettings.shared.islandMarkIndex(iconName: iconName))
+}
+
+/// «Иконка и остров»: the app icon, the island under the notch or the Dynamic Island, and «Остров как у иконки».
+/// Devices without a notch or an island (iPad, iPhones with a Home button) get the icon picker alone.
+/// Also opened from the stock appearance settings and the «Иконка приложения» home screen quick action.
+public func dgIconAndIslandController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    let bindings = context.sharedContext.applicationBindings
+    let hasIsland = DeviceMetrics.deviceHasAppBadge
+    return dgController(context: context, page: .iconAndIsland, title: donutgramIconAndIslandTitle(), focusKey: focusKey, entries: {
+        let iconName = bindings.getAlternateIconName()
+        var entries: [DGListEntry] = []
+        if hasIsland {
+            entries.append(contentsOf: [
+                .header(0, 0, "ПРЕДПРОСМОТР"),
+                .iconIslandPreview(1, 0, DGSimpleSettings.appMarkIndex(iconName: iconName), s.islandMarkIndex(iconName: iconName)),
+                .toggle(10, 1, "islandFollowsIcon", "Остров как у иконки", s.islandFollowsIcon, true)
+            ])
+            if !s.islandFollowsIcon {
+                // The islands join the switch's block: turning it off shows them right under the finger, next to the
+                // preview, instead of below the six rows of icons.
+                entries.append(contentsOf: [.islandStyles(11, 1, s.islandStyle), .info(12, 1, "Иконка и остров выбираются отдельно.")])
+            }
+        }
+        entries.append(contentsOf: [.header(20, 2, "ИКОНКА"), .appIcons(21, 2, DGSimpleSettings.appMarkIndex(iconName: iconName))])
+        return entries
+    }, toggle: { key, value in
+        guard key == "islandFollowsIcon" else {
+            return
+        }
+        if !value {
+            // The island on screen stays: it becomes the one picked by hand.
+            s.islandStyle = DGSimpleSettings.appMarkIndex(iconName: bindings.getAlternateIconName())
+        }
+        s.islandFollowsIcon = value
+        dgApplyIslandBadge(context: context)
+    }, select: { key in
+        if key.hasPrefix("islandStyle:"), let value = Int(key.split(separator: ":").last ?? "") {
+            s.islandStyle = value
+            dgApplyIslandBadge(context: context)
+        }
+    })
+}
+
+// MARK: - Медиа и сеть
+
+private func dgRoundVideoCameraTitle(_ camera: DGSimpleSettings.RoundVideoCamera) -> String {
+    switch camera {
+    case .front: return "Фронтальная"
+    case .rear: return "Основная"
+    case .ask: return "Спрашивать"
+    }
+}
+
+private func dgTranscriptionBackendTitle(_ backend: DGSimpleSettings.TranscriptionBackend) -> String {
+    switch backend {
+    case .auto: return "Авто"
+    case .telegram: return "Telegram"
+    case .apple: return "Apple"
+    }
+}
+
+private func dgTranscriptionBackendInfo(_ backend: DGSimpleSettings.TranscriptionBackend) -> String {
+    switch backend {
+    case .auto: return "Telegram, пока он может расшифровать сообщение сам — с Premium или бесплатными попытками. Иначе Apple."
+    case .telegram: return "Telegram использует облачный сервис распознавания."
+    case .apple: return "Apple распознаёт речь на устройстве, а если язык не поддерживается — на серверах Apple."
+    }
+}
+
+func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    let cameras: [DGSimpleSettings.RoundVideoCamera] = [.front, .rear, .ask]
+    let seekValues = [0, 5, 10, 15, 30]
+    let backends: [DGSimpleSettings.TranscriptionBackend] = [.auto, .telegram, .apple]
+    // The switches say whether music pauses; the setting keeps the cases where it does not.
+    let musicPauses: [String: DGSimpleSettings.MusicPlaybackExceptions] = [
+        "pauseMusicRoundVideos": .roundVideos,
+        "pauseMusicVoiceRecording": .voiceRecording,
+        "pauseMusicVoicePlayback": .voicePlayback
+    ]
+    return dgController(context: context, page: .media, title: "Запись и воспроизведение", focusKey: focusKey, entries: {
+        let exceptions = s.musicPlaybackExceptions
+        let seek = s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."
+        var result: [DGListEntry] = [
+            .header(0, 0, "КРУЖКИ"),
+            .menu(1, 0, "camera", "Камера в кружках", dgRoundVideoCameraTitle(s.roundVideoCamera)),
+            .toggle(2, 0, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
+            .toggle(3, 0, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
+            .toggle(4, 0, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
+            .toggle(5, 0, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
+            .header(10, 1, "ПАУЗА МУЗЫКИ"),
+            .toggle(11, 1, "pauseMusicRoundVideos", "При записи кружков", !exceptions.contains(.roundVideos), true),
+            .toggle(12, 1, "pauseMusicVoiceRecording", "При записи голосовых", !exceptions.contains(.voiceRecording), true),
+            .toggle(13, 1, "pauseMusicVoicePlayback", "При прослушивании голосовых", !exceptions.contains(.voicePlayback), true),
+            .info(14, 1, "Если выключить, музыка продолжит играть."),
+            .header(20, 2, "ВОСПРОИЗВЕДЕНИЕ"),
+            .menu(21, 2, "doubleTapSeek", "Перемотка двойным нажатием", seek),
+            .header(30, 3, "АВТОПАУЗА"),
+            .toggle(31, 3, "autoPause", "Автопауза", s.autoPause, true)
+        ]
+        if s.autoPause {
+            let paused = s.autoPauseMedia
+            result.append(contentsOf: [
+                .toggle(32, 3, "autoPauseVideo", "Видео", paused & 1 != 0, true),
+                .toggle(33, 3, "autoPauseVoice", "Голосовые", paused & 2 != 0, true),
+                .toggle(34, 3, "autoPauseRound", "Кружки", paused & 4 != 0, true)
+            ])
+        }
+        result.append(contentsOf: [
+            .info(35, 3, "Ставит на паузу, когда вы сворачиваете приложение или блокируете экран."),
+            .header(40, 4, "АВТОВОСПРОИЗВЕДЕНИЕ"),
+            .toggle(41, 4, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true)
+        ])
+        if s.disableMediaAutoplay {
+            let stopped = s.disabledAutoplayMediaTypes
+            result.append(contentsOf: [
+                .toggle(42, 4, "autoplayVoice", "Голосовые", stopped & 1 != 0, true),
+                .toggle(43, 4, "autoplayRound", "Кружки", stopped & 2 != 0, true)
+            ])
+        }
+        result.append(contentsOf: [
+            .info(44, 4, "Если включено, следующее ГС или кружок не запустится автоматически."),
+            .header(50, 5, "ГОЛОС В ТЕКСТ"),
+            .menu(51, 5, "transcription", "Сервис", dgTranscriptionBackendTitle(s.transcriptionBackend)),
+            .info(52, 5, dgTranscriptionBackendInfo(s.transcriptionBackend))
+        ])
+        return result
+    }, toggle: { key, value in
+        if let option = musicPauses[key] {
+            if value {
+                s.musicPlaybackExceptions.remove(option)
+            } else {
+                s.musicPlaybackExceptions.insert(option)
+            }
+            return
+        }
+        switch key {
+        case "rememberCamera": s.rememberRoundVideoCamera = value
+        case "zoomSlider": s.roundVideoZoomSlider = value
+        case "staticZoom": s.staticRoundVideoZoom = value
+        case "builtInMic": s.forceBuiltInMicrophone = value
+        case "autoPause": s.autoPause = value
+        case "autoPauseVideo": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 1, isOn: value)
+        case "autoPauseVoice": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 2, isOn: value)
+        case "autoPauseRound": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 4, isOn: value)
+        case "autoplayMedia": s.disableMediaAutoplay = value
+        case "autoplayVoice": s.disabledAutoplayMediaTypes = dgUpdatedMask(s.disabledAutoplayMediaTypes, bit: 1, isOn: value)
+        case "autoplayRound": s.disabledAutoplayMediaTypes = dgUpdatedMask(s.disabledAutoplayMediaTypes, bit: 2, isOn: value)
+        default: break
+        }
+    }, select: { key in
+        if let value = dgMenuChoice(key, of: "camera").flatMap({ Int($0) }), let camera = DGSimpleSettings.RoundVideoCamera(rawValue: value) {
+            s.roundVideoCamera = camera
+        } else if let value = dgMenuChoice(key, of: "doubleTapSeek").flatMap({ Int($0) }) {
+            s.doubleTapSeekSeconds = value
+        } else if let value = dgMenuChoice(key, of: "transcription"), let backend = DGSimpleSettings.TranscriptionBackend(rawValue: value) {
+            s.transcriptionBackend = backend
+        }
+    }, menu: { key in
+        switch key {
+        case "camera":
+            return cameras.map { camera in
+                DGMenuOption(key: "camera:\(camera.rawValue)", title: dgRoundVideoCameraTitle(camera), isSelected: s.roundVideoCamera == camera)
+            }
+        case "doubleTapSeek":
+            return seekValues.map { value in
+                DGMenuOption(key: "doubleTapSeek:\(value)", title: value == 0 ? "Отключено" : "\(value) секунд", isSelected: s.doubleTapSeekSeconds == value)
+            }
+        case "transcription":
+            return backends.map { backend in
+                DGMenuOption(key: "transcription:\(backend.rawValue)", title: dgTranscriptionBackendTitle(backend), isSelected: s.transcriptionBackend == backend)
+            }
+        default:
+            return []
+        }
+    })
+}
+
+func dgDownloadsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .downloads, title: "Загрузки и сеть", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "СКАЧИВАНИЕ"),
+            .toggle(1, 0, "downloadTikTok", "Скачивать TikTok", s.downloadTikTok, true),
+            .toggle(2, 0, "downloadShorts", "Скачивать YT Shorts", s.downloadYouTubeShorts, true),
+            .toggle(3, 0, "signDownloads", "Подписывать", s.signDownloadedMedia, true),
+            .info(4, 0, "Если TikTok не отдаёт видео или фото, они запрашиваются через сторонний сервис tikwm.com: он видит ссылку на пост и ваш IP-адрес."),
+            .header(10, 1, "УСКОРЕНИЕ ЗАГРУЗКИ"),
+            .speedSlider(11, 1, s.downloadAcceleration),
+            .toggle(12, 1, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true),
+            .info(13, 1, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео.")
+        ]
+        return result
+    }, toggle: { key, value in
+        switch key {
+        case "downloadTikTok": s.downloadTikTok = value
+        case "downloadShorts": s.downloadYouTubeShorts = value
+        case "signDownloads": s.signDownloadedMedia = value
+        case "accelerateUpload": s.accelerateUpload = value
+        default: break
+        }
     }, select: { key in
         if key.hasPrefix("downloadAcceleration:"), let value = Int(key.split(separator: ":").last ?? "") { s.downloadAcceleration = value }
+    })
+}
+
+// MARK: - Прочее
+
+func dgSecuritySettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .security, title: "Безопасность", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "ПОДТВЕРЖДЕНИЯ"),
+            .toggle(1, 0, "confirmCalls", "Подтверждение вызова", s.confirmCalls, true),
+            .toggle(2, 0, "confirmReactionsInUnjoinedChats", "Подтверждать реакции без вступления", s.confirmReactionsInUnjoinedChats, true),
+            .toggle(3, 0, "confirmTelegramLinks", "Подтверждать переход по ссылкам Telegram", s.confirmTelegramLinks, true),
+            .toggle(4, 0, "confirmChatPreviewEntry", "Подтверждать вход из предпросмотра", s.confirmChatPreviewEntry, true),
+            .header(10, 1, "СТАТИСТИКА"),
+            .toggle(11, 1, "telegramStatistics", "Отправлять статистику в Telegram", s.sendTelegramStatistics, true),
+            .info(12, 1, "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.")
+        ]
+        return result
+    }, toggle: { key, value in
+        switch key {
+        case "confirmCalls": s.confirmCalls = value
+        case "confirmReactionsInUnjoinedChats": s.confirmReactionsInUnjoinedChats = value
+        case "confirmTelegramLinks": s.confirmTelegramLinks = value
+        case "confirmChatPreviewEntry": s.confirmChatPreviewEntry = value
+        case "telegramStatistics": s.sendTelegramStatistics = value
+        default: break
+        }
+    })
+}
+
+func dgAdsAndGiftsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    return dgController(context: context, page: .adsAndGifts, title: "Реклама и подарки", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "РЕКЛАМА"),
+            .toggle(1, 0, "disableAds", "Отключить рекламу", s.disableAds, true),
+            .header(10, 1, "ПОДАРКИ"),
+            .toggle(11, 1, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true),
+            .toggle(12, 1, "hideBirthdayNotifications", "Скрыть уведомление о дне рождении", s.hideBirthdayNotifications, true),
+            .toggle(13, 1, "disableGiftStarsRedirect", "Не открывать звёзды после продажи подарка", s.disableGiftStarsRedirect, true)
+        ]
+        return result
+    }, toggle: { key, value in
+        switch key {
+        case "disableAds": s.disableAds = value
+        case "hideGiftButton": s.hideGiftButton = value
+        case "hideBirthdayNotifications": s.hideBirthdayNotifications = value
+        case "disableGiftStarsRedirect": s.disableGiftStarsRedirect = value
+        default: break
+        }
+    })
+}
+
+func dgLocalProfileSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let s = DGSimpleSettings.shared
+    let accountId = context.account.peerId.toInt64()
+    return dgController(context: context, page: .localProfile, title: "Локальный профиль", focusKey: focusKey, entries: {
+        let phone = s.visualPhoneEnabled ? (s.visualPhoneNumber.isEmpty ? "Включен" : s.visualPhoneNumber) : "Выключен"
+        let rating = s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выключен"
+        let profileId = s.visualProfileId(accountId: accountId)
+        let premium = s.localPremium(accountId: accountId)
+        var result: [DGListEntry] = [
+            .header(0, 0, "ПРОФИЛЬ"),
+            .disclosure(1, 0, "visualPhone", "Визуальный номер", phone),
+            .disclosure(2, 0, "visualRating", "Визуальный рейтинг", rating),
+            .disclosure(3, 0, "visualUsernames", "Визуальные NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"),
+            .disclosure(4, 0, "visualId", "Визуальный ID", profileId.isEmpty ? "Выключен" : profileId),
+            .disclosure(5, 0, "visualLabel", "Визуальная метка", s.visualLabel(accountId: accountId).title),
+            .toggle(6, 0, "localPremium", "Локальный TG Premium", premium, true)
+        ]
+        if premium {
+            result.append(.info(7, 0, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
+        } else {
+            result.append(.info(7, 0, "Меняется только то, что видите вы на этом устройстве. Собеседники видят ваш настоящий профиль."))
+        }
+        return result
+    }, restartRequiredKeys: ["localPremium"], toggle: { key, value in
+        if key == "localPremium" { s.setLocalPremium(value, accountId: accountId) }
     }, open: { key in
         switch key {
-        case "ghost": return dgGhostSettingsController(context: context)
         case "visualPhone": return dgVisualPhoneController(context: context)
-        case "visualLabel": return dgVisualLabelController(context: context)
         case "visualRating": return dgVisualRatingController(context: context)
         case "visualUsernames": return dgVisualUsernamesController(context: context)
         case "visualId": return dgVisualIdController(context: context)
-        case "shadowBan": return dgShadowBanController(context: context)
-        case "savedDeleted": return dgSavedDeletedMessagesController(context: context)
+        case "visualLabel": return dgVisualLabelController(context: context)
         default: return nil
         }
     })
@@ -106,589 +854,173 @@ private func dgVisualPhoneController(context: AccountContext, focusKey: String? 
     })
 }
 
-private func dgGhostSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .ghost, title: "Режим призрака", focusKey: focusKey, entries: {
-        let count = s.ghostModeEnabled ? [s.ghostReadMessages, s.ghostReadStories, s.ghostSendOnline, s.ghostSendTyping, !s.ghostAutomaticOffline].filter { !$0 }.count : 0
-        let silent = ["Никогда", "В режиме призрака", "Всегда"][min(max(s.ghostSendWithoutSound, 0), 2)]
-        return [.header(0, 0, "РЕЖИМ ПРИЗРАКА"), .toggle(1, 0, "enabled", "Режим призрака", s.ghostModeEnabled, true), .disclosure(2, 0, "options", "Параметры режима призрака", "\(count)/5"), .toggle(3, 0, "readOnAction", "Читать при действиях", s.ghostReadOnAction, s.ghostModeEnabled), .toggle(4, 0, "scheduled", "Использовать отложку", s.ghostUseScheduledMessages, s.ghostModeEnabled), .disclosure(5, 0, "silent", "Отправлять без звука", silent), .toggle(6, 0, "stories", "Предлагать призрака для сторис", s.ghostSuggestForStories, true), .header(10, 1, "ЧТЕНИЕ"), .disclosure(11, 1, "readAll", "Прочитать все на сервере", ""), .disclosure(12, 1, "readAllLocal", "Прочитать все локально", "")]
-    }, toggle: { key, value in
-        switch key { case "enabled": s.ghostModeEnabled = value; case "readOnAction": s.ghostReadOnAction = value; case "scheduled": s.ghostUseScheduledMessages = value; case "stories": s.ghostSuggestForStories = value; default: break }
-    }, open: { key in key == "options" ? dgGhostOptionsController(context: context) : (key == "silent" ? dgSilentModeController(context: context) : nil) }, perform: { key, controller in
-        if key == "readAll" { dgPresentReadAllOnServer(context: context, controller: controller) }
-        if key == "readAllLocal" { dgPresentReadAllLocally(context: context, controller: controller) }
-    })
-}
-
-private func dgPresentReadAllLocally(context: AccountContext, controller: ViewController) {
-    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-    let languageCode = presentationData.strings.primaryComponent.languageCode
-    controller.present(textAlertController(context: context, title: nil, text: dgLocalized("Прочитать все сообщения только на этом устройстве?", languageCode: languageCode), actions: [
-        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
-        TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
-            let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
-            controller?.present(progress, in: .window(.root))
-            let _ = (context.engine.messages.donutgramReadAllMessagesLocally() |> deliverOnMainQueue).startStandalone(next: { [weak controller] _ in
-                progress.dismiss()
-                let text = dgLocalized("Все сообщения прочитаны", languageCode: languageCode)
-                controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-            })
-        })
-    ]), in: .window(.root))
-}
-
-private func dgPresentReadAllOnServer(context: AccountContext, controller: ViewController) {
-    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-    let languageCode = presentationData.strings.primaryComponent.languageCode
-    controller.present(textAlertController(context: context, title: nil, text: dgLocalized("Прочитать все сообщения?", languageCode: languageCode), actions: [
-        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
-        TextAlertAction(type: .defaultAction, title: dgLocalized("Прочитать", languageCode: languageCode), action: { [weak controller] in
-            let progress = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
-            controller?.present(progress, in: .window(.root))
-            let _ = (context.engine.messages.donutgramReadAllMessagesOnServer() |> deliverOnMainQueue).startStandalone(next: { [weak controller] succeeded in
-                progress.dismiss()
-                let text = succeeded ? "Все сообщения прочитаны" : "Не удалось прочитать все сообщения. Попробуйте ещё раз."
-                controller?.present(textAlertController(context: context, title: nil, text: dgLocalized(text, languageCode: languageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-            })
-        })
-    ]), in: .window(.root))
-}
-
-private func dgGhostOptionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .ghostOptions, title: "Параметры призрака", focusKey: focusKey, entries: {
-        // Every option is checked together with the main switch, so without it they stay off and locked.
-        let isOn = s.ghostModeEnabled
-        var result: [DGListEntry] = [.header(0, 0, "НЕ ОТПРАВЛЯТЬ"), .toggle(1, 0, "messages", "Отметки о прочтении сообщений", isOn && !s.ghostReadMessages, isOn), .toggle(2, 0, "stories", "Отметки о просмотре историй", isOn && !s.ghostReadStories, isOn), .toggle(3, 0, "online", "Статус «онлайн»", isOn && !s.ghostSendOnline, isOn), .toggle(4, 0, "typing", "Статус «печатает»", isOn && !s.ghostSendTyping, isOn), .toggle(5, 0, "offline", "Автоматический «офлайн»", isOn && s.ghostAutomaticOffline, isOn)]
-        if !isOn {
-            result.append(.info(6, 0, "Параметры действуют только при включённом режиме призрака."))
-        }
-        return result
-    }, toggle: { key, value in
-        switch key { case "messages": s.ghostReadMessages = !value; case "stories": s.ghostReadStories = !value; case "online": s.ghostSendOnline = !value; case "typing": s.ghostSendTyping = !value; case "offline": s.ghostAutomaticOffline = value; default: break }
-    })
-}
-
-private func dgSilentModeController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .silent, title: "Отправлять без звука", focusKey: focusKey, entries: { [.checkbox(0, 0, "0", "Никогда", s.ghostSendWithoutSound == 0), .checkbox(1, 0, "1", "В режиме призрака", s.ghostSendWithoutSound == 1), .checkbox(2, 0, "2", "Всегда", s.ghostSendWithoutSound == 2)] }, select: { s.ghostSendWithoutSound = Int($0) ?? 0 })
-}
-
-func dgAppearanceSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .appearance, title: "Оформление", focusKey: focusKey, entries: {
-        var entries: [DGListEntry] = [
-            .header(0, 0, "ОСНОВНОЕ"),
-            .toggle(1, 0, "premiumStatuses", "Скрыть премиум статусы", s.hidePremiumStatuses, true),
-            .toggle(2, 0, "hideVerification", "Скрыть верификацию", s.hideVerification, true),
-            .toggle(3, 0, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
-            .toggle(4, 0, "hideStories", "Скрыть сторис", s.hideStories, true),
-            .toggle(5, 0, "hideBirthdayNotifications", "Скрыть уведомление о дне рождении", s.hideBirthdayNotifications, true),
-            .toggle(6, 0, "disableStoryCameraSwipe", "Отключить камеру по свайпу", s.disableStoryCameraSwipe, true),
-            .header(10, 1, "ПРИЛОЖЕНИЕ"), dgIconAndIslandRow(context: context, id: 11, section: 1),
-            .header(20, 3, "ВКЛАДКИ"),
-            .tabBarPreview(21, 3, s.tabBarLayout),
-            .toggle(22, 3, "hideTabBar", "Скрыть панель вкладок", s.hideTabBar, true),
-            .toggle(23, 3, "contacts", "Вкладка Контакты", s.showContactsTab, true),
-            .toggle(24, 3, "calls", "Вкладка Звонки", s.showCallsTab, true),
-            .toggle(25, 3, "wideTabBar", "Широкая Панель", s.wideTabBar, true),
-            .header(30, 4, "ПРОФИЛЬ"),
-            .toggle(31, 4, "profileId", "ID Профилей", s.showProfileId, true)
+func dgAboutController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? ""
+    let version = build.isEmpty ? dgAppVersion() : "\(dgAppVersion()) (\(build))"
+    return dgController(context: context, page: .about, title: "О Donutgram", focusKey: focusKey, entries: {
+        let result: [DGListEntry] = [
+            .header(0, 0, "DONUTGRAM"),
+            .value(1, 0, "version", "Версия", version),
+            .info(2, 0, "Раздел подготовлен для ссылок на поддержку и информацию о Donutgram.")
         ]
-        if s.showProfileId {
-            entries.append(.disclosure(37, 4, "dialogIdFormat", "Показывать ID диалога", s.dialogIdFormat == .botApi ? "Bot API" : "Telegram API"))
-        }
-        entries.append(contentsOf: [
-            .toggle(32, 4, "dc", "Показывать дата-центр (DC)", s.showDc, true),
-            .toggle(33, 4, "regDate", "Показывать дату регистрации", s.showRegistrationDate, true),
-            .toggle(34, 4, "chatDate", "Показывать дату создания чата", s.showChatCreationDate, true),
-            .toggle(35, 4, "mutualContact", "Показывать взаимный контакт", s.showMutualContact, true),
-            .toggle(38, 4, "relativeOnlineTime", "Относительное время онлайна", s.relativeOnlineTime, true),
-            .toggle(39, 4, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
-            .toggle(36, 4, "disableGiftStarsRedirect", "Не открывать звёзды после продажи подарка", s.disableGiftStarsRedirect, true),
-            .header(40, 5, "ДРУГОЕ"),
-            .toggle(41, 5, "disableAds", "Отключить рекламу", s.disableAds, true),
-            .toggle(42, 5, "confirmCalls", "Подтверждение вызова", s.confirmCalls, true)
-        ])
-        return entries
-    }, restartRequiredKeys: ["premiumStatuses", "hideVerification", "hideStories"], toggle: { key, value in
-        switch key { case "hideBirthdayNotifications": s.hideBirthdayNotifications = value; case "premiumStatuses": s.hidePremiumStatuses = value; case "hideVerification": s.hideVerification = value; case "customBackgrounds": s.disableCustomBackgrounds = value; case "hideStories": s.hideStories = value; case "disableStoryCameraSwipe": s.disableStoryCameraSwipe = value; case "snow": s.forceSnow = value; case "hideTabBar": s.hideTabBar = value; case "contacts": s.showContactsTab = value; case "calls": s.showCallsTab = value; case "wideTabBar": s.wideTabBar = value; case "profileId": s.showProfileId = value; case "dc": s.showDc = value; case "regDate": s.showRegistrationDate = value; case "chatDate": s.showChatCreationDate = value; case "mutualContact": s.showMutualContact = value; case "relativeOnlineTime": s.relativeOnlineTime = value; case "hidePhoneNumber": s.hidePhoneNumber = value; case "disableGiftStarsRedirect": s.disableGiftStarsRedirect = value; case "confirmCalls": s.confirmCalls = value; case "disableAds": s.disableAds = value; default: break }
-    }, open: { key in
-        switch key {
-        case "dialogIdFormat": return dgDialogIdFormatController(context: context)
-        case "iconAndIsland": return dgIconAndIslandController(context: context)
-        default: return nil
-        }
-    })
-}
-
-/// The row on «Оформление» that opens «Иконка и остров», the same row as in the stock appearance settings.
-private func dgIconAndIslandRow(context: AccountContext, id: Int32, section: Int32) -> DGListEntry {
-    let iconName = context.sharedContext.applicationBindings.getAlternateIconName()
-    return .iconAndIsland(id, section, DGSimpleSettings.appMarkIndex(iconName: iconName), DGSimpleSettings.shared.islandMarkIndex(iconName: iconName))
-}
-
-/// «Иконка и остров»: the app icon, the island under the notch or the Dynamic Island, and «Остров как у иконки».
-/// Devices without a notch or an island (iPad, iPhones with a Home button) get the icon picker alone.
-/// Also opened from the stock appearance settings and the «Иконка приложения» home screen quick action.
-public func dgIconAndIslandController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    let bindings = context.sharedContext.applicationBindings
-    let hasIsland = DeviceMetrics.deviceHasAppBadge
-    return dgController(context: context, page: .iconAndIsland, title: donutgramIconAndIslandTitle(), focusKey: focusKey, entries: {
-        let iconName = bindings.getAlternateIconName()
-        var entries: [DGListEntry] = []
-        if hasIsland {
-            entries.append(contentsOf: [
-                .header(0, 0, "ПРЕДПРОСМОТР"),
-                .iconIslandPreview(1, 0, DGSimpleSettings.appMarkIndex(iconName: iconName), s.islandMarkIndex(iconName: iconName)),
-                .toggle(10, 1, "islandFollowsIcon", "Остров как у иконки", s.islandFollowsIcon, true)
-            ])
-            if !s.islandFollowsIcon {
-                // The islands join the switch's block: turning it off shows them right under the finger, next to the
-                // preview, instead of below the six rows of icons.
-                entries.append(contentsOf: [.islandStyles(11, 1, s.islandStyle), .info(12, 1, "Иконка и остров выбираются отдельно.")])
-            }
-        }
-        entries.append(contentsOf: [.header(20, 2, "ИКОНКА"), .appIcons(21, 2, DGSimpleSettings.appMarkIndex(iconName: iconName))])
-        return entries
-    }, toggle: { key, value in
-        guard key == "islandFollowsIcon" else {
-            return
-        }
-        if !value {
-            // The island on screen stays: it becomes the one picked by hand.
-            s.islandStyle = DGSimpleSettings.appMarkIndex(iconName: bindings.getAlternateIconName())
-        }
-        s.islandFollowsIcon = value
-        dgApplyIslandBadge(context: context)
-    }, select: { key in
-        if key.hasPrefix("islandStyle:"), let value = Int(key.split(separator: ":").last ?? "") {
-            s.islandStyle = value
-            dgApplyIslandBadge(context: context)
-        }
-    })
-}
-
-private func dgDialogIdFormatController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .dialogId, title: "ID диалога", focusKey: focusKey, entries: {
-        [.checkbox(0, 0, "0", "Telegram API", s.dialogIdFormat == .telegramApi),
-         .checkbox(1, 0, "1", "Bot API", s.dialogIdFormat == .botApi)]
-    }, select: { s.dialogIdFormat = $0 == "1" ? .botApi : .telegramApi })
-}
-
-func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    var previewSticker: TelegramMediaFile?
-    var previewEmoji: TelegramMediaFile?
-    let stickerSource: Signal<TelegramMediaFile?, NoError> = context.account.postbox.transaction { transaction -> TelegramMediaFile? in
-        for entry in transaction.getOrderedListItems(collectionId: Namespaces.OrderedItemList.CloudSavedStickers) {
-            if let file = entry.contents.get(SavedStickerItem.self)?.file._parse(), file.isSticker, !file.isPremiumSticker {
-                return file
-            }
-        }
-        for entry in transaction.getOrderedListItems(collectionId: Namespaces.OrderedItemList.CloudRecentStickers) {
-            if let file = entry.contents.get(RecentMediaItem.self)?.media._parse(), file.isSticker, !file.isPremiumSticker {
-                return file
-            }
-        }
-        return nil
-    }
-    |> mapToSignal { file -> Signal<TelegramMediaFile?, NoError> in
-        if let file { return .single(file) }
-        return context.engine.stickers.randomGreetingSticker() |> map { $0?.file }
-    }
-    let emojiSource = context.engine.stickers.loadedStickerPack(reference: .iconStatusEmoji, forceActualized: false)
-    |> map { result -> TelegramMediaFile? in
-        if case let .result(_, items, _) = result { return items.first?.file._parse() }
-        return nil
-    }
-    let previewUpdates = combineLatest(
-        Signal<TelegramMediaFile?, NoError>.single(nil) |> then(stickerSource),
-        Signal<TelegramMediaFile?, NoError>.single(nil) |> then(emojiSource)
-    )
-    |> deliverOnMainQueue
-    |> map { sticker, emoji -> Void in
-        previewSticker = sticker
-        previewEmoji = emoji
-    }
-    return dgController(context: context, page: .chats, title: "Внешний вид", focusKey: focusKey, entries: {
-        let hiddenCount = [1, 2, 4].filter { s.hiddenReactions & $0 != 0 }.count
-        let transcription = dgTranscriptionBackendTitle(s.transcriptionBackend)
-        let cameraTitle: String
-        switch s.roundVideoCamera {
-        case .front: cameraTitle = "Фронтальная"
-        case .rear: cameraTitle = "Основная"
-        case .ask: cameraTitle = "Спрашивать"
-        }
-        let musicOptions: [DGSimpleSettings.MusicPlaybackExceptions] = [.roundVideos, .voiceRecording, .voicePlayback]
-        var result: [DGListEntry] = [
-            .header(-30, 0, "СТИКЕРЫ"),
-            .stickerSizeSlider(-29, 0, s.stickerSize),
-            .stickerPreview(-28, 0, s.stickerSize, s.hideStickerTime, s.hideStickerChecks, s.stickerReplyOptions, s.stickerShape, s.messagePreviewConfiguration, previewSticker, previewEmoji),
-            .toggle(-27, 0, "hideStickerTime", "Скрыть время на стикерах", s.hideStickerTime, true),
-            .toggle(-26, 0, "hideStickerChecks", "Скрыть галочки на стикерах", s.hideStickerChecks, true),
-            .toggle(-25, 0, "hideStickerReplyColors", "Скрыть цвета", s.hideStickerReplyColors, true),
-            .toggle(-24, 0, "hideStickerReplyEmoji", "Скрыть эмодзи", s.hideStickerReplyEmoji, true),
-            .toggle(-23, 0, "hideStickerReplyBackground", "Скрыть фон", s.hideStickerReplyBackground, true)
-        ]
-        result.append(contentsOf: [
-            .header(-22, 1, "ФОРМА СТИКЕРОВ"),
-            .stickerShape(-21, 1, s.stickerShape),
-            .header(0, 2, "СТИКЕРЫ И ЭМОДЗИ"),
-            .toggle(1, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
-            .toggle(2, 2, "recent", "Беск. недавние стикеры", s.infiniteRecentStickers, true),
-            .disclosure(3, 2, "reactions", "Скрыть реакции", "\(hiddenCount)/3"),
-            .toggle(6, 2, "hidePaidReactions", "Скрыть платные реакции", s.hidePaidReactions, true),
-            .header(7, 3, "ВНЕШНИЙ ВИД"),
-            .chatListPreview(8, 3, s.forceSnow, s.chatListHideEmojiStatus, s.chatListCenteredTitle, s.chatListHideSearch, s.chatListTitleMode.rawValue),
-            .toggle(9, 3, "snow", "Снег", s.forceSnow, true),
-            .toggle(10, 3, "hideStatus", "Скрыть статус соединения", s.chatListHideStatus, true),
-            .toggle(11, 3, "hideEmojiStatus", "Скрыть эмодзи-статус", s.chatListHideEmojiStatus, true),
-            .toggle(12, 3, "centerTitle", "Заголовок по центру", s.chatListCenteredTitle, true),
-            .toggle(13, 3, "hideSearch", "Скрыть строку поиска", s.chatListHideSearch, true),
-            .disclosure(14, 3, "titleMode", "Текст в заголовке", dgChatListTitleModeTitle(s.chatListTitleMode)),
-            .toggle(15, 3, "foldersAtBottom", "Папки внизу", s.chatListFoldersAtBottom, true),
-            .header(18, 4, "СООБЩЕНИЯ"),
-            .messagePreview(19, 4, s.messagePreviewConfiguration, previewEmoji),
-            .toggle(20, 4, "tails", "Убрать хвост у сообщений", s.removeMessageTails, true),
-            .toggle(21, 4, "seconds", "Показывать секунды", s.showMessageSeconds, true),
-            .toggle(22, 4, "replies", "Отключить цветные ответы", s.disableColoredReplies, true),
-            .toggle(23, 4, "hidePremiumReplyEmoji", "Скрыть премиум эмодзи", s.hidePremiumReplyEmoji, true),
-            .toggle(24, 4, "editedIcon", "Заменять «изменено» иконкой", s.editedIcon, true),
-            .toggle(25, 4, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
-            .toggle(26, 4, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
-            .toggle(27, 4, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
-            .toggle(28, 4, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
-            .toggle(29, 4, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
-            .toggle(30, 4, "channelForwardCount", "Счетчик пересылок в каналах", s.showChannelForwardCount, true),
-            .toggle(31, 4, "forwardDate", "Время пересылки", s.showForwardDate, true),
-            .toggle(32, 4, "removePings", "Убрать пинги", s.removePings, true),
-            .toggle(33, 4, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
-            .toggle(34, 4, "removeLinkPreviews", "Удалить превью-ссылки", s.removeLinkPreviews, true),
-            .toggle(35, 4, "hideServiceMessages", "Отключить служебные сообщения", s.hideServiceMessages, true),
-            .header(36, 5, "ГОЛОС В ТЕКСТ"),
-            .disclosure(37, 5, "transcription", "Сервис", transcription),
-            .header(39, 6, "ЗАПИСЬ"),
-            .disclosure(40, 6, "camera", "Камера в кружках", cameraTitle),
-            .toggle(41, 6, "rememberCamera", "Запоминать последнюю камеру", s.rememberRoundVideoCamera, true),
-            .toggle(42, 6, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
-            .toggle(43, 6, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
-            .disclosure(44, 6, "pauseMusicOnRecording", "Пауза музыки при записи", "\(musicOptions.filter { s.musicPlaybackExceptions.contains($0) }.count)/3"),
-            .toggle(45, 6, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
-            .header(49, 7, "ВИДЕО"),
-            .disclosure(50, 7, "doubleTapSeek", "Перемотка двойным нажатием", s.doubleTapSeekSeconds == 0 ? "Отключено" : "\(s.doubleTapSeekSeconds) сек."),
-            .toggle(51, 7, "autoPause", "Авто пауза", s.autoPause, true),
-            .disclosure(52, 7, "autoPauseMedia", "Приостанавливать", "\([1, 2, 4].filter { s.autoPauseMedia & $0 != 0 }.count)/3"),
-            .header(59, 8, "КАНАЛЫ"),
-            .toggle(60, 8, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
-            .disclosure(61, 8, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .header(69, 9, "ВОСПРОИЗВЕДЕНИЕ"),
-            .toggle(70, 9, "autoplayMedia", "Отключить автовоспроизведение медиа", s.disableMediaAutoplay, true),
-            .disclosure(71, 9, "autoplayMediaTypes", "Останавливать после", "\([1, 2].filter { s.disabledAutoplayMediaTypes & $0 != 0 }.count)/2"),
-            .info(72, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
-            .header(79, 10, "БОТЫ"),
-            .toggle(80, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
-            .header(89, 11, "ДРУГОЕ"),
-            .toggle(90, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
-        ])
-        result.append(.toggle(91, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
-        result.append(.disclosure(92, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
-        // The confirmations come before «В начало чата», so its explanation stays the footer of the section.
-        result.append(.toggle(93, 11, "confirmReactionsInUnjoinedChats", "Подтверждать реакции без вступления", s.confirmReactionsInUnjoinedChats, true))
-        result.append(.toggle(94, 11, "confirmTelegramLinks", "Подтверждать переход по ссылкам Telegram", s.confirmTelegramLinks, true))
-        result.append(.toggle(95, 11, "confirmChatPreviewEntry", "Подтверждать вход из предпросмотра", s.confirmChatPreviewEntry, true))
-        result.append(.toggle(96, 11, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true))
-        result.append(.info(97, 11, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению."))
         return result
-    }, additionalUpdates: previewUpdates, toggle: { key, value in
-        switch key {
-        case "snow": s.forceSnow = value
-        case "hideStatus": s.chatListHideStatus = value
-        case "hideEmojiStatus": s.chatListHideEmojiStatus = value
-        case "centerTitle": s.chatListCenteredTitle = value
-        case "hideSearch": s.chatListHideSearch = value
-        case "foldersAtBottom": s.chatListFoldersAtBottom = value
-        case "hidePaidReactions": s.hidePaidReactions = value
-        case "hideViaBot": s.hideViaBot = value
-        case "removeLinkPreviews": s.removeLinkPreviews = value
-        case "hideServiceMessages": s.hideServiceMessages = value
-        case "confirmReactionsInUnjoinedChats": s.confirmReactionsInUnjoinedChats = value
-        case "confirmTelegramLinks": s.confirmTelegramLinks = value
-        case "confirmChatPreviewEntry": s.confirmChatPreviewEntry = value
-        case "hideBotAutomation": s.hideBotAutomation = value
-        case "autoplayMedia": s.disableMediaAutoplay = value
-        case "onlyAdded": s.onlyAddedStickers = value
-        case "recent": s.infiniteRecentStickers = value
-        case "hideStickerTime": s.hideStickerTime = value
-        case "hideStickerChecks": s.hideStickerChecks = value
-        case "hideStickerReplyColors": s.hideStickerReplyColors = value
-        case "hideStickerReplyEmoji": s.hideStickerReplyEmoji = value
-        case "hideStickerReplyBackground": s.hideStickerReplyBackground = value
-        case "hidePremiumReplyEmoji": s.hidePremiumReplyEmoji = value
-        case "tails": s.removeMessageTails = value
-        case "seconds": s.showMessageSeconds = value
-        case "replies": s.disableColoredReplies = value
-        case "editedIcon": s.editedIcon = value
-        case "onlineIndicator": s.showOnlineIndicator = value
-        case "greetingSticker": s.hideGreetingSticker = value
-        case "mentionComma": s.commaAfterMention = value
-        case "mentionAvatars": s.mentionAvatars = value
-        case "removePings": s.removePings = value
-        case "pollResultsBeforeVoting": s.showPollResultsBeforeVoting = value
-        case "channelForwardCount": s.showChannelForwardCount = value
-        case "forwardDate": s.showForwardDate = value
-        case "wideChannelPosts": s.wideChannelPosts = value
-        case "rememberCamera": s.rememberRoundVideoCamera = value
-        case "zoomSlider": s.roundVideoZoomSlider = value
-        case "staticZoom": s.staticRoundVideoZoom = value
-        case "builtInMic": s.forceBuiltInMicrophone = value
-        case "autoPause": s.autoPause = value
-        case "hideArchive": s.hideArchive = value
-        case "hideGiftButton": s.hideGiftButton = value
-        case "jumpToStart": s.jumpToStartInChatMenu = value
-        default: break
-        }
-    }, select: { key in
-        if key == "resetStickerAppearance" {
-            s.stickerSize = 11
-            s.hideStickerTime = false
-            s.hideStickerChecks = false
-            s.stickerReplyOptions = 7
-            s.stickerShape = 0
-        } else if let value = Int(key.split(separator: ":").last ?? "") {
-            if key.hasPrefix("stickerSize:") { s.stickerSize = value }
-            else if key.hasPrefix("stickerShape:") { s.stickerShape = value }
-        }
-    }, open: { key in
-        switch key {
-        case "reactions": return dgHiddenReactionsController(context: context)
-        case "channelBottomButton": return dgChannelBottomButtonController(context: context)
-        case "glow": return dgGlowController(context: context)
-        case "transcription": return dgTranscriptionController(context: context)
-        case "camera": return dgRoundVideoCameraController(context: context)
-        case "autoplayMediaTypes": return dgAutoplayMediaController(context: context)
-        case "autoPauseMedia": return dgAutoPauseMediaController(context: context)
-        case "doubleTapSeek": return dgDoubleTapSeekController(context: context)
-        case "titleMode": return dgChatListTitleModeController(context: context)
-        case "pauseMusicOnRecording": return dgMusicPlaybackExceptionsController(context: context)
-        default: return nil
-        }
     })
 }
 
-private func dgChannelBottomButtonTitle(_ value: DGSimpleSettings.ChannelBottomButton) -> String {
-    switch value {
-    case .discuss: return "Обсудить"
-    case .mute: return "Убрать звук"
-    case .hidden: return "Скрыть"
-    }
-}
-
-private func dgChannelBottomButtonController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    return dgController(context: context, page: .channelBottomButton, title: "Нижняя кнопка", focusKey: focusKey, entries: {
-        DGSimpleSettings.ChannelBottomButton.allCases.enumerated().map { index, value in
-            .checkbox(Int32(index), 0, String(value.rawValue), dgChannelBottomButtonTitle(value), settings.channelBottomButton == value)
-        } + [.info(3, 0, "«Обсудить» открывает группу обсуждения канала. В каналах без обсуждения кнопка скрыта.")]
-    }, select: { key in
-        settings.channelBottomButton = DGSimpleSettings.ChannelBottomButton(rawValue: Int(key) ?? 1) ?? .mute
-    })
-}
-
-private func dgGlowController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    return dgController(context: context, page: .glow, title: "Свечение", focusKey: focusKey, entries: {
-        [.toggle(0, 0, "avatarGlow", "Свечение аватарок", settings.avatarGlow, true),
-         .toggle(1, 0, "reactionGlow", "Свечение реакций", settings.reactionGlow, true)]
-    }, toggle: { key, value in
-        if key == "avatarGlow" { settings.avatarGlow = value }
-        else if key == "reactionGlow" { settings.reactionGlow = value }
-    })
-}
-
-// Keep previously shared links opening the controls at their new inline location.
-private func dgChatListAppearanceController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    return dgChatsSettingsController(context: context, focusKey: focusKey ?? "chatListPreview")
-}
-
-private func dgMusicPlaybackExceptionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    let options: [(String, DGSimpleSettings.MusicPlaybackExceptions)] = [
-        ("Кружки", .roundVideos),
-        ("Голосовые сообщения", .voiceRecording),
-        ("Прослушивание голосовые сообщения", .voicePlayback)
-    ]
-    return dgController(context: context, page: .musicPlaybackExceptions, title: "Пауза музыки при записи", focusKey: focusKey, entries: {
-        options.enumerated().map { index, option in
-            .checkbox(Int32(index), 0, String(option.1.rawValue), option.0, s.musicPlaybackExceptions.contains(option.1))
-        }
-    }, select: { key in
-        guard let option = options.first(where: { String($0.1.rawValue) == key })?.1 else { return }
-        s.musicPlaybackExceptions.formSymmetricDifference(option)
-    })
-}
-
-private func dgChatListTitleModeTitle(_ mode: DGSimpleSettings.ChatListTitleMode) -> String {
-    switch mode {
-    case .donutgram: return "Donutgram"
-    case .username: return "Юзернейм"
-    case .nickname: return "Никнейм"
-    case .chats: return "Чаты"
-    }
-}
-
-private func dgChatListTitleModeController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    let modes: [DGSimpleSettings.ChatListTitleMode] = [.donutgram, .username, .nickname, .chats]
-    return dgController(context: context, page: .chatListTitle, title: "Текст в заголовке", focusKey: focusKey, entries: {
-        modes.enumerated().map { index, mode in
-            .checkbox(Int32(index), 0, String(mode.rawValue), dgChatListTitleModeTitle(mode), settings.chatListTitleMode == mode)
-        }
-    }, select: { key in
-        settings.chatListTitleMode = DGSimpleSettings.ChatListTitleMode(rawValue: Int(key) ?? 0) ?? .chats
-    })
-}
-
-private func dgDoubleTapSeekController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    let values = [0, 5, 10, 15, 30]
-    return dgController(context: context, page: .doubleTapSeek, title: "Перемотка двойным нажатием", focusKey: focusKey, entries: {
-        values.enumerated().map { index, value in
-            .checkbox(Int32(index), 0, String(value), value == 0 ? "Отключено" : "\(value) секунд", settings.doubleTapSeekSeconds == value)
-        }
-    }, select: { settings.doubleTapSeekSeconds = Int($0) ?? 15 })
-}
-
-private func dgRoundVideoCameraController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .camera, title: "Камера в кружках", focusKey: focusKey, entries: {
-        [.checkbox(0, 0, "0", "Фронтальная", s.roundVideoCamera == .front),
-         .checkbox(1, 0, "1", "Основная", s.roundVideoCamera == .rear),
-         .checkbox(2, 0, "2", "Спрашивать", s.roundVideoCamera == .ask)]
-    }, select: { s.roundVideoCamera = DGSimpleSettings.RoundVideoCamera(rawValue: Int($0) ?? 0) ?? .front })
-}
-
-private func dgAutoPauseMediaController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .autoPause, title: "Авто пауза", focusKey: focusKey, entries: {
-        [.toggle(0, 0, "1", "Видео", s.autoPauseMedia & 1 != 0, true),
-         .toggle(1, 0, "2", "Голосовых", s.autoPauseMedia & 2 != 0, true),
-         .toggle(2, 0, "4", "Кружков", s.autoPauseMedia & 4 != 0, true)]
-    }, toggle: { key, value in
-        let bit = Int(key) ?? 0
-        s.autoPauseMedia = value ? (s.autoPauseMedia | bit) : (s.autoPauseMedia & ~bit)
-    })
-}
-
-func dgDownloadsSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let settings = DGSimpleSettings.shared
-    return dgController(context: context, page: .downloads, title: "Скачивание", focusKey: focusKey, entries: {
-        [.header(0, 0, "СКАЧИВАНИЕ"), .toggle(1, 0, "downloadTikTok", "Скачивать TikTok", settings.downloadTikTok, true), .toggle(2, 0, "downloadShorts", "Скачивать YT Shorts", settings.downloadYouTubeShorts, true), .toggle(3, 0, "signDownloads", "Подписывать", settings.signDownloadedMedia, true), .info(4, 0, "Если TikTok не отдаёт видео или фото, они запрашиваются через сторонний сервис tikwm.com: он видит ссылку на пост и ваш IP-адрес.")]
-    }, toggle: { key, value in
-        switch key { case "downloadTikTok": settings.downloadTikTok = value; case "downloadShorts": settings.downloadYouTubeShorts = value; case "signDownloads": settings.signDownloadedMedia = value; default: break }
-    })
-}
-
-private func dgTranscriptionBackendTitle(_ backend: DGSimpleSettings.TranscriptionBackend) -> String {
-    switch backend {
-    case .auto: return "Авто"
-    case .telegram: return "Telegram"
-    case .apple: return "Apple"
-    }
-}
-
-private func dgTranscriptionController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .transcription, title: "Голос в текст", focusKey: focusKey, entries: {
-        let backend = s.transcriptionBackend
-        let info: String
-        switch backend {
-        case .auto: info = "Telegram, пока он может расшифровать сообщение сам — с Premium или бесплатными попытками. Иначе Apple."
-        case .telegram: info = "Telegram использует облачный сервис распознавания."
-        case .apple: info = "Apple распознаёт речь на устройстве, а если язык не поддерживается — на серверах Apple."
-        }
-        return [.checkbox(0, 0, "auto", "Авто", backend == .auto), .checkbox(1, 0, "telegram", "Telegram", backend == .telegram), .checkbox(2, 0, "apple", "Apple", backend == .apple), .info(3, 0, info)]
-    }, select: { s.transcriptionBackend = DGSimpleSettings.TranscriptionBackend(rawValue: $0) ?? .auto })
-}
-
-private func dgAutoplayMediaController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .autoplayMedia, title: "Отключить автовоспроизведение медиа", focusKey: focusKey, entries: {
-        [.toggle(0, 0, "1", "Голосовые", s.disabledAutoplayMediaTypes & 1 != 0, s.disableMediaAutoplay),
-         .toggle(1, 0, "2", "Кружки", s.disabledAutoplayMediaTypes & 2 != 0, s.disableMediaAutoplay)]
-    }, toggle: { key, value in
-        guard let mask = Int(key) else { return }
-        s.disabledAutoplayMediaTypes = value ? (s.disabledAutoplayMediaTypes | mask) : (s.disabledAutoplayMediaTypes & ~mask)
-    })
-}
-
-private func dgHiddenReactionsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    let s = DGSimpleSettings.shared
-    return dgController(context: context, page: .reactions, title: "Скрыть реакции", focusKey: focusKey, entries: { [.toggle(0, 0, "1", "Каналы", s.hiddenReactions & 1 != 0, true), .toggle(1, 0, "2", "Группы", s.hiddenReactions & 2 != 0, true), .toggle(2, 0, "4", "Личные чаты", s.hiddenReactions & 4 != 0, true)] }, toggle: { key, value in
-        let mask = Int(key) ?? 0
-        s.hiddenReactions = value ? (s.hiddenReactions | mask) : (s.hiddenReactions & ~mask)
-    })
-}
-
-func dgSupportController(context: AccountContext, focusKey: String? = nil) -> ViewController {
-    dgController(context: context, page: .support, title: "Поддержка", focusKey: focusKey, entries: { [.header(0, 0, "ПОДДЕРЖКА"), .info(1, 0, "Раздел подготовлен для ссылок на поддержку и информацию о Donutgram.")] })
-}
+// MARK: - Ссылки
 
 public func dgSettingsControllerForLink(context: AccountContext, page: String, key: String) -> ViewController? {
     guard let page = DGSettingsPage(rawValue: page) else {
         return nil
     }
-    let focusKey: String
-    if page == .chats && key == "openArchiveOnPull" {
-        // Links to rows that are gone lead to the switches that replaced them.
-        focusKey = "hideArchive"
-    } else if page == .chats && key == "chatListAppearance" {
-        focusKey = "chatListPreview"
-    } else if page == .chats && key == "stickerReplies" {
-        focusKey = "hideStickerReplyColors"
-    } else if page == .appearance && key == "dialogIdFormat" && !DGSimpleSettings.shared.showProfileId {
-        focusKey = "profileId"
-    } else if page == .general && key == "saveOwnDeleted" && !DGSimpleSettings.shared.saveDeletedMessages {
-        focusKey = "saveDeleted"
-    } else {
-        focusKey = key
-    }
-    let makeController: (AccountContext, String?) -> ViewController
+    let (target, row) = dgCurrentRowLocation(page: page, key: key)
+    return dgPageController(target, context: context, focusKey: dgShownRow(page: target, key: row))
+}
+
+/// Where the row of a link lives now. Links name the page the row was on when they were copied.
+private func dgCurrentRowLocation(page: DGSettingsPage, key: String) -> (DGSettingsPage, String) {
     switch page {
-    case .root: makeController = dgSettingsController
-    case .general: makeController = dgSpySettingsController
-    case .ghost: makeController = dgGhostSettingsController
-    case .ghostOptions: makeController = dgGhostOptionsController
-    case .silent: makeController = dgSilentModeController
-    case .appearance: makeController = dgAppearanceSettingsController
-    case .iconAndIsland: makeController = dgIconAndIslandController
-    case .dialogId: makeController = dgDialogIdFormatController
-    case .chats: makeController = dgChatsSettingsController
-    case .channelBottomButton: makeController = dgChannelBottomButtonController
-    case .chatListAppearance: makeController = dgChatListAppearanceController
-    case .chatListTitle: makeController = dgChatListTitleModeController
-    case .doubleTapSeek: makeController = dgDoubleTapSeekController
-    case .camera: makeController = dgRoundVideoCameraController
-    case .autoplayMedia: makeController = dgAutoplayMediaController
-    case .autoPause: makeController = dgAutoPauseMediaController
-    case .musicPlaybackExceptions: makeController = dgMusicPlaybackExceptionsController
-    case .downloads: makeController = dgDownloadsSettingsController
-    case .transcription: makeController = dgTranscriptionController
-    case .reactions: makeController = dgHiddenReactionsController
-    case .stickerReplies: makeController = { context, _ in
-        dgChatsSettingsController(context: context, focusKey: "hideStickerReplyColors")
+    case .root:
+        // The rows of the old root lead to the sections that took their place.
+        let sections = ["spy": "ghost", "chats": "messages", "appearance": "mainScreen", "support": "about"]
+        return (.root, sections[key] ?? key)
+    case .general, .appearance, .chats:
+        return dgMovedRowLocation(key: key)
+    case .ghost:
+        return (.ghost, key == "options" ? "messages" : key)
+    case .ghostOptions:
+        return (.ghost, key == "stories" ? "storyViews" : key)
+    case .silent:
+        return (.ghost, "silent")
+    case .dialogId:
+        return (.profiles, "dialogIdFormat")
+    case .channelBottomButton:
+        return (.messages, "channelBottomButton")
+    case .glow:
+        return (.iconAndEffects, key == "reactionGlow" ? "reactionGlow" : "avatarGlow")
+    case .stickerReplies:
+        return (.stickers, "hideStickerReplyColors")
+    case .chatListAppearance:
+        return (.mainScreen, "chatListPreview")
+    case .chatListTitle:
+        return (.mainScreen, "titleMode")
+    case .doubleTapSeek:
+        return (.media, "doubleTapSeek")
+    case .camera:
+        return (.media, "camera")
+    case .transcription:
+        return (.media, "transcription")
+    case .autoPause:
+        // The keys of the old page were the media bits.
+        return (.media, ["1": "autoPauseVideo", "2": "autoPauseVoice", "4": "autoPauseRound"][key] ?? "autoPause")
+    case .autoplayMedia:
+        return (.media, ["1": "autoplayVoice", "2": "autoplayRound"][key] ?? "autoplayMedia")
+    case .musicPlaybackExceptions:
+        return (.media, ["1": "pauseMusicRoundVideos", "2": "pauseMusicVoiceRecording", "4": "pauseMusicVoicePlayback"][key] ?? "pauseMusicRoundVideos")
+    case .reactions:
+        return (.stickers, ["1": "reactionsInChannels", "2": "reactionsInGroups", "4": "reactionsInPrivateChats"][key] ?? "reactionsInChannels")
+    case .support:
+        return (.about, key)
+    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .iconAndEffects, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .visualLabel, .savedDeleted:
+        return (page, key)
     }
-    case .glow: makeController = dgGlowController
-    case .visualId: makeController = dgVisualIdController
-    case .visualRating: makeController = dgVisualRatingController
-    case .visualUsernames: makeController = dgVisualUsernamesController
-    case .visualPhone: makeController = dgVisualPhoneController
-    case .visualLabel: makeController = dgVisualLabelController
-    case .shadowBan: makeController = dgShadowBanController
-    case .savedDeleted: makeController = dgSavedDeletedMessagesController
-    case .support: makeController = dgSupportController
+}
+
+/// The section a row of the old «Основные», «Оформление» or «Внешний вид» moved to. Their keys never overlapped.
+private func dgMovedRowLocation(key: String) -> (DGSettingsPage, String) {
+    switch key {
+    case "ghost", "shadowBan":
+        return (.root, key)
+    case "saveDeleted", "saveOwnDeleted", "transparentDeleted", "savedDeleted", "saveEdits", "saveOnce", "saveBots", "disappearedGifts", "saveProtectedStories", "keepBannedChats":
+        return (.saving, key)
+    case "gifUnlock", "bypassForward", "protectedScreenshots":
+        return (.bypass, key)
+    case "chatListPreview", "titleMode", "centerTitle", "hideEmojiStatus", "hideStatus", "hideSearch", "foldersAtBottom", "hideArchive", "hideStories", "disableStoryCameraSwipe", "tabBarPreview", "hideTabBar", "contacts", "calls", "wideTabBar":
+        return (.mainScreen, key)
+    case "openArchiveOnPull":
+        // Links to rows that are gone lead to the switches that replaced them.
+        return (.mainScreen, "hideArchive")
+    case "chatListAppearance":
+        return (.mainScreen, "chatListPreview")
+    case "tails", "seconds", "editedIcon", "onlineIndicator", "customBackgrounds", "replies", "hidePremiumReplyEmoji", "mentionComma", "mentionAvatars", "removePings", "removeLinkPreviews", "hideViaBot", "hideServiceMessages", "greetingSticker", "pollResultsBeforeVoting", "hideBotAutomation", "forwardDate", "channelForwardCount", "wideChannelPosts", "channelBottomButton", "jumpToStart":
+        return (.messages, key)
+    case "stickerSize", "stickerShape", "hideStickerTime", "hideStickerChecks", "hideStickerReplyColors", "hideStickerReplyEmoji", "hideStickerReplyBackground", "onlyAdded", "recent", "hidePaidReactions":
+        return (.stickers, key)
+    case "stickerReplies":
+        return (.stickers, "hideStickerReplyColors")
+    case "reactions":
+        return (.stickers, "reactionsInChannels")
+    case "profileId", "dialogIdFormat", "dc", "regDate", "chatDate", "mutualContact", "relativeOnlineTime", "hidePhoneNumber", "premiumStatuses", "hideVerification":
+        return (.profiles, key)
+    case "iconAndIsland", "snow":
+        return (.iconAndEffects, key)
+    case "glow":
+        return (.iconAndEffects, "avatarGlow")
+    case "camera", "rememberCamera", "zoomSlider", "staticZoom", "builtInMic", "doubleTapSeek", "autoPause", "autoplayMedia", "transcription":
+        return (.media, key)
+    case "pauseMusicOnRecording":
+        return (.media, "pauseMusicRoundVideos")
+    case "autoPauseMedia":
+        return (.media, "autoPause")
+    case "autoplayMediaTypes":
+        return (.media, "autoplayMedia")
+    case "downloadAcceleration", "accelerateUpload":
+        return (.downloads, key)
+    case "confirmCalls", "confirmReactionsInUnjoinedChats", "confirmTelegramLinks", "confirmChatPreviewEntry", "telegramStatistics":
+        return (.security, key)
+    case "disableAds", "hideGiftButton", "hideBirthdayNotifications", "disableGiftStarsRedirect":
+        return (.adsAndGifts, key)
+    case "visualPhone", "visualRating", "visualUsernames", "visualId", "visualLabel", "localPremium":
+        return (.localProfile, key)
+    default:
+        return (.root, key)
     }
-    return makeController(context, focusKey)
+}
+
+/// A row shown only while the switch above it is on: until then a link to it leads to that switch.
+private func dgShownRow(page: DGSettingsPage, key: String) -> String {
+    let s = DGSimpleSettings.shared
+    switch page {
+    case .saving where key == "saveOwnDeleted" && !s.saveDeletedMessages:
+        return "saveDeleted"
+    case .profiles where key == "dialogIdFormat" && !s.showProfileId:
+        return "profileId"
+    case .media where ["autoPauseVideo", "autoPauseVoice", "autoPauseRound"].contains(key) && !s.autoPause:
+        return "autoPause"
+    case .media where ["autoplayVoice", "autoplayRound"].contains(key) && !s.disableMediaAutoplay:
+        return "autoplayMedia"
+    default:
+        return key
+    }
+}
+
+private func dgPageController(_ page: DGSettingsPage, context: AccountContext, focusKey: String) -> ViewController {
+    switch page {
+    case .root: return dgSettingsController(context: context, focusKey: focusKey)
+    case .ghost: return dgGhostSettingsController(context: context, focusKey: focusKey)
+    case .saving: return dgSavingSettingsController(context: context, focusKey: focusKey)
+    case .bypass: return dgBypassSettingsController(context: context, focusKey: focusKey)
+    case .shadowBan: return dgShadowBanController(context: context, focusKey: focusKey)
+    case .mainScreen: return dgMainScreenSettingsController(context: context, focusKey: focusKey)
+    case .messages: return dgMessagesSettingsController(context: context, focusKey: focusKey)
+    case .stickers: return dgStickersSettingsController(context: context, focusKey: focusKey)
+    case .profiles: return dgProfilesSettingsController(context: context, focusKey: focusKey)
+    case .iconAndEffects: return dgIconAndEffectsSettingsController(context: context, focusKey: focusKey)
+    case .media: return dgMediaSettingsController(context: context, focusKey: focusKey)
+    case .downloads: return dgDownloadsSettingsController(context: context, focusKey: focusKey)
+    case .security: return dgSecuritySettingsController(context: context, focusKey: focusKey)
+    case .adsAndGifts: return dgAdsAndGiftsSettingsController(context: context, focusKey: focusKey)
+    case .localProfile: return dgLocalProfileSettingsController(context: context, focusKey: focusKey)
+    case .about: return dgAboutController(context: context, focusKey: focusKey)
+    case .iconAndIsland: return dgIconAndIslandController(context: context, focusKey: focusKey)
+    case .visualId: return dgVisualIdController(context: context, focusKey: focusKey)
+    case .visualRating: return dgVisualRatingController(context: context, focusKey: focusKey)
+    case .visualUsernames: return dgVisualUsernamesController(context: context, focusKey: focusKey)
+    case .visualPhone: return dgVisualPhoneController(context: context, focusKey: focusKey)
+    case .visualLabel: return dgVisualLabelController(context: context, focusKey: focusKey)
+    case .savedDeleted: return dgSavedDeletedMessagesController(context: context, focusKey: focusKey)
+    case .general, .ghostOptions, .silent, .appearance, .dialogId, .chats, .channelBottomButton, .glow, .stickerReplies, .chatListAppearance, .chatListTitle, .doubleTapSeek, .camera, .autoplayMedia, .autoPause, .musicPlaybackExceptions, .transcription, .reactions, .support:
+        // dgCurrentRowLocation never leads to a page that is gone.
+        return dgSettingsController(context: context, focusKey: focusKey)
+    }
 }
