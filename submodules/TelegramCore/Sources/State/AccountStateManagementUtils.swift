@@ -4266,6 +4266,7 @@ func replayFinalState(
         switch operation {
         case let .AddMessages(messages, location):
             if case .UpperHistoryBlock = location {
+                donutgramRecordMessageActivity(transaction: transaction, accountPeerId: accountPeerId, messages: messages)
                 for message in messages {
                     if case let .Id(id) = message.id {
                         if message.flags.contains(.Incoming) {

@@ -145,6 +145,8 @@ public final class DGSimpleSettings {
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
+        static let approximateLastSeen = "donutgram.spy.approximateLastSeen"
+        static let approximateLastSeenStartedAt = "donutgram.spy.approximateLastSeenStartedAt"
 
         static let ghostModeEnabled = "donutgram.ghost.enabled"
         static let ghostReadMessages = "donutgram.ghost.readMessages"
@@ -262,6 +264,10 @@ public final class DGSimpleSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+
+        if defaults.bool(forKey: Key.approximateLastSeen) && defaults.object(forKey: Key.approximateLastSeenStartedAt) == nil {
+            defaults.set(Int32(Date().timeIntervalSince1970), forKey: Key.approximateLastSeenStartedAt)
+        }
 
         if defaults.object(forKey: Key.saveDeletedMessages) == nil {
             defaults.set(true, forKey: Key.saveDeletedMessages)
@@ -672,6 +678,26 @@ public final class DGSimpleSettings {
     public var showProfileId: Bool { get { bool(Key.showProfileId) } set { setBool(newValue, Key.showProfileId) } }
     public var dialogIdFormat: DialogIdFormat { get { DialogIdFormat(rawValue: integer(Key.dialogIdFormat)) ?? .telegramApi } set { setInteger(newValue.rawValue, Key.dialogIdFormat) } }
     public var relativeOnlineTime: Bool { get { bool(Key.relativeOnlineTime) } set { setBool(newValue, Key.relativeOnlineTime) } }
+    public var approximateLastSeen: Bool {
+        get { bool(Key.approximateLastSeen) }
+        set {
+            guard newValue != self.approximateLastSeen else {
+                return
+            }
+            if newValue {
+                self.defaults.set(Int32(Date().timeIntervalSince1970), forKey: Key.approximateLastSeenStartedAt)
+            } else {
+                self.defaults.removeObject(forKey: Key.approximateLastSeenStartedAt)
+            }
+            setBool(newValue, Key.approximateLastSeen)
+        }
+    }
+    public var approximateLastSeenStartedAt: Int32? {
+        guard self.approximateLastSeen, self.defaults.object(forKey: Key.approximateLastSeenStartedAt) != nil else {
+            return nil
+        }
+        return Int32(clamping: self.defaults.integer(forKey: Key.approximateLastSeenStartedAt))
+    }
     public var hidePhoneNumber: Bool { get { bool(Key.hidePhoneNumber) } set { setBool(newValue, Key.hidePhoneNumber) } }
     public var showDc: Bool { get { bool(Key.showDc) } set { setBool(newValue, Key.showDc) } }
     public var showRegistrationDate: Bool { get { bool(Key.showRegistrationDate) } set { setBool(newValue, Key.showRegistrationDate) } }

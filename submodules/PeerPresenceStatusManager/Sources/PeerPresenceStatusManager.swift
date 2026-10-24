@@ -25,6 +25,10 @@ private func suggestedUserPresenceStringRefreshTimeout(_ presence: EnginePeer.Pr
         let activeUntil = presence.lastActivity + 30
         if activeUntil >= timestamp {
             return Double(activeUntil - timestamp + 1)
+        } else if let lastMessage = donutgramApproximateLastSeenTimestamp(presence, relativeTo: timestamp) {
+            let now = Date(timeIntervalSince1970: TimeInterval(timestamp))
+            let midnight = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)) ?? now.addingTimeInterval(24 * 60 * 60)
+            return max(1.0, min(midnight.timeIntervalSince(now), Double(lastMessage) + 3 * 24 * 60 * 60 - Double(timestamp)))
         } else {
             return Double.infinity
         }
