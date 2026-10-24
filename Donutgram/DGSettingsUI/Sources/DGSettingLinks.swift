@@ -22,12 +22,36 @@ struct DGSettingItemTag: ItemListItemTag {
 // and dgSettingsControllerForLink maps it back to that factory.
 enum DGSettingsPage: String {
     case root
-    case general
+    // The sections of the root, in its order.
     case ghost
+    case saving
+    case bypass
+    case shadowBan = "shadow-ban"
+    case mainScreen = "main-screen"
+    case messages
+    case stickers
+    case profiles
+    case iconAndEffects = "icon-and-effects"
+    case media
+    case downloads
+    case security
+    case adsAndGifts = "ads-and-gifts"
+    case localProfile = "local-profile"
+    case about
+    // The screens opened from a section.
+    case iconAndIsland = "icon-and-island"
+    case visualId = "visual-id"
+    case visualRating = "visual-rating"
+    case visualUsernames = "visual-usernames"
+    case visualPhone = "visual-phone"
+    case visualLabel = "visual-label"
+    case savedDeleted = "saved-deleted"
+    // Pages that are gone: their rows moved into the sections, and the one-choice pages became menus in a row.
+    // Kept so that links copied before still open, at the row that took their place.
+    case general
     case ghostOptions = "ghost-options"
     case silent
     case appearance
-    case iconAndIsland = "icon-and-island"
     case dialogId = "dialog-id"
     case chats
     case channelBottomButton = "channel-bottom-button"
@@ -40,16 +64,8 @@ enum DGSettingsPage: String {
     case autoplayMedia = "autoplay-media"
     case autoPause = "auto-pause"
     case musicPlaybackExceptions = "music-playback-exceptions"
-    case downloads
     case transcription
     case reactions
-    case visualId = "visual-id"
-    case visualRating = "visual-rating"
-    case visualUsernames = "visual-usernames"
-    case visualPhone = "visual-phone"
-    case visualLabel = "visual-label"
-    case shadowBan = "shadow-ban"
-    case savedDeleted = "saved-deleted"
     case support
 }
 

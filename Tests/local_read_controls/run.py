@@ -42,8 +42,9 @@ def prepare():
         assert "openArchiveOnPull" not in source(path)
     # The switch is gone; its old links lead to the archive switch.
     features = source("Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift")
-    assert [line.strip() for line in features.splitlines() if "openArchiveOnPull" in line] == ['if page == .chats && key == "openArchiveOnPull" {']
-    assert 'focusKey = "hideArchive"' in features and "updateChatArchiveSettings" not in features
+    assert [line.strip() for line in features.splitlines() if "openArchiveOnPull" in line] == ['case "openArchiveOnPull":']
+    assert 'case "openArchiveOnPull":\n        // Links to rows that are gone lead to the switches that replaced them.\n        return (.mainScreen, "hideArchive")' in features
+    assert "updateChatArchiveSettings" not in features
     controller_node = source("submodules/ChatListUI/Sources/ChatListControllerNode.swift")
     assert "if isPrimary {\n                                    self.mainContainerNode.currentItemNode.revealScrollHiddenItem()" in controller_node
     return Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8").replace("// PRODUCTION", ghost + "\n" + bulk)
