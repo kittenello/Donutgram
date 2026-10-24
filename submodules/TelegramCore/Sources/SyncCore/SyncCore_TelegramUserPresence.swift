@@ -83,24 +83,28 @@ public enum UserPresenceStatus: Comparable, PostboxCoding {
 public final class TelegramUserPresence: PeerPresence, Equatable {
     public let status: UserPresenceStatus
     public let lastActivity: Int32
+    public let donutgramLastMessageTimestamp: Int32
     
-    public init(status: UserPresenceStatus, lastActivity: Int32) {
+    public init(status: UserPresenceStatus, lastActivity: Int32, donutgramLastMessageTimestamp: Int32 = 0) {
         self.status = status
         self.lastActivity = lastActivity
+        self.donutgramLastMessageTimestamp = donutgramLastMessageTimestamp
     }
     
     public init(decoder: PostboxDecoder) {
         self.status = UserPresenceStatus(decoder: decoder)
         self.lastActivity = decoder.decodeInt32ForKey("la", orElse: 0)
+        self.donutgramLastMessageTimestamp = decoder.decodeInt32ForKey("dgma", orElse: 0)
     }
     
     public func encode(_ encoder: PostboxEncoder) {
         self.status.encode(encoder)
         encoder.encodeInt32(self.lastActivity, forKey: "la")
+        encoder.encodeInt32(self.donutgramLastMessageTimestamp, forKey: "dgma")
     }
     
     public static func ==(lhs: TelegramUserPresence, rhs: TelegramUserPresence) -> Bool {
-        return lhs.status == rhs.status && lhs.lastActivity == rhs.lastActivity
+        return lhs.status == rhs.status && lhs.lastActivity == rhs.lastActivity && lhs.donutgramLastMessageTimestamp == rhs.donutgramLastMessageTimestamp
     }
     
     public func isEqual(to: PeerPresence) -> Bool {

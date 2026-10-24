@@ -51,10 +51,12 @@ public enum EnginePeer: Equatable {
 
         public var status: Status
         public var lastActivity: Int32
+        public var donutgramLastMessageTimestamp: Int32
 
-        public init(status: Status, lastActivity: Int32) {
+        public init(status: Status, lastActivity: Int32, donutgramLastMessageTimestamp: Int32 = 0) {
             self.status = status
             self.lastActivity = lastActivity
+            self.donutgramLastMessageTimestamp = donutgramLastMessageTimestamp
         }
     }
 
@@ -391,7 +393,7 @@ public extension EnginePeer.Presence {
                 mappedStatus = .lastMonth(isHidden: isHidden)
             }
 
-            self.init(status: mappedStatus, lastActivity: presence.lastActivity)
+            self.init(status: mappedStatus, lastActivity: presence.lastActivity, donutgramLastMessageTimestamp: presence.donutgramLastMessageTimestamp)
         } else {
             preconditionFailure()
         }
@@ -411,7 +413,7 @@ public extension EnginePeer.Presence {
         case let .lastMonth(isHidden):
             mappedStatus = .lastMonth(isHidden: isHidden)
         }
-        return TelegramUserPresence(status: mappedStatus, lastActivity: self.lastActivity)
+        return TelegramUserPresence(status: mappedStatus, lastActivity: self.lastActivity, donutgramLastMessageTimestamp: self.donutgramLastMessageTimestamp)
     }
 }
 

@@ -4265,6 +4265,7 @@ func replayFinalState(
     for operation in finalState.state.operations {
         switch operation {
         case let .AddMessages(messages, location):
+            donutgramRecordMessageActivity(transaction: transaction, accountPeerId: accountPeerId, messages: messages)
             if case .UpperHistoryBlock = location {
                 for message in messages {
                     if case let .Id(id) = message.id {

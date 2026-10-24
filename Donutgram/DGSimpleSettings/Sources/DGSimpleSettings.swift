@@ -145,6 +145,7 @@ public final class DGSimpleSettings {
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
+        static let approximateLastSeen = "donutgram.spy.approximateLastSeen"
 
         static let ghostModeEnabled = "donutgram.ghost.enabled"
         static let ghostReadMessages = "donutgram.ghost.readMessages"
@@ -672,6 +673,7 @@ public final class DGSimpleSettings {
     public var showProfileId: Bool { get { bool(Key.showProfileId) } set { setBool(newValue, Key.showProfileId) } }
     public var dialogIdFormat: DialogIdFormat { get { DialogIdFormat(rawValue: integer(Key.dialogIdFormat)) ?? .telegramApi } set { setInteger(newValue.rawValue, Key.dialogIdFormat) } }
     public var relativeOnlineTime: Bool { get { bool(Key.relativeOnlineTime) } set { setBool(newValue, Key.relativeOnlineTime) } }
+    public var approximateLastSeen: Bool { get { bool(Key.approximateLastSeen) } set { setBool(newValue, Key.approximateLastSeen) } }
     public var hidePhoneNumber: Bool { get { bool(Key.hidePhoneNumber) } set { setBool(newValue, Key.hidePhoneNumber) } }
     public var showDc: Bool { get { bool(Key.showDc) } set { setBool(newValue, Key.showDc) } }
     public var showRegistrationDate: Bool { get { bool(Key.showRegistrationDate) } set { setBool(newValue, Key.showRegistrationDate) } }

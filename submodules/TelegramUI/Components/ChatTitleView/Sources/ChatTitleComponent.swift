@@ -985,7 +985,7 @@ public final class ChatTitleComponent: Component {
                                     } else {
                                         userPresence = TelegramUserPresence(status: .none, lastActivity: 0)
                                     }
-                                    let (string, activity) = stringAndActivityForUserPresence(strings: component.strings, dateTimeFormat: component.dateTimeFormat, presence: EnginePeer.Presence(userPresence), relativeTo: Int32(timestamp), expanded: !DGSimpleSettings.shared.relativeOnlineTime)
+                                    let (string, activity) = stringAndActivityForUserPresence(strings: component.strings, dateTimeFormat: component.dateTimeFormat, presence: EnginePeer.Presence(userPresence), relativeTo: Int32(timestamp), expanded: !DGSimpleSettings.shared.relativeOnlineTime, approximateLastSeen: DGSimpleSettings.shared.approximateLastSeen)
                                     let attributedString = NSAttributedString(string: string, font: subtitleFont, textColor: activity ? component.theme.rootController.navigationBar.accentTextColor : component.theme.chat.inputPanel.inputControlColor)
                                     state = .info(attributedString, activity ? .online : .lastSeenTime)
                                 } else {

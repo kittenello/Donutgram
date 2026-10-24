@@ -294,7 +294,7 @@ extension ChatControllerImpl {
             }
             
             if case let .peer(peerView) = self.chatLocationInfoData, let peerId = peerId {
-                peerView.set(context.account.viewTracker.peerView(peerId))
+                peerView.set(donutgramActivityPeerView(account: context.account, peerId: peerId))
                 var onlineMemberCount: Signal<(total: Int32?, recent: Int32?), NoError> = .single((nil, nil))
                 var hasScheduledMessages: Signal<Bool, NoError> = .single(false)
                 var hasTopics: Signal<Bool, NoError> = .single(false)

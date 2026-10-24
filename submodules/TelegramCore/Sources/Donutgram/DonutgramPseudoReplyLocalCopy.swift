@@ -184,6 +184,9 @@ func donutgramPreservingLocalState(transaction: Transaction, previous: Message, 
 /// `Transaction.addMessages`, which replaces the text, attributes and media of a message
 /// that is already stored. A published scheduled pseudo-reply gets its local form as well.
 func donutgramPreservingLocalState(transaction: Transaction, messages: [StoreMessage]) -> [StoreMessage] {
+    if let accountState = transaction.getState() as? AuthorizedAccountState {
+        donutgramRecordMessageActivity(transaction: transaction, accountPeerId: accountState.peerId, messages: messages)
+    }
     let result = donutgramPreservingSavedViewOnceMedia(transaction: transaction, messages: messages).map { message -> StoreMessage in
         // Pseudo-replies are outgoing.
         guard !message.flags.contains(.Incoming), case let .Id(id) = message.id else {

@@ -1239,7 +1239,7 @@ func peerInfoScreenData(
             
             enum StatusInputData: Equatable {
                 case none
-                case presence(TelegramUserPresence)
+                case presence(TelegramUserPresence, approximateLastSeen: Bool)
                 case bot(subscriberCount: Int32?)
                 case support
             }
@@ -1257,7 +1257,7 @@ func peerInfoScreenData(
                         }
                         if let presence = manager.currentValue {
                             let timestamp = context.account.network.globalTime
-                            let (text, isActivity) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(presence), relativeTo: Int32(timestamp), expanded: !DGSimpleSettings.shared.relativeOnlineTime, includeExactTime: isOwnHiddenPresence)
+                            let (text, isActivity) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(presence), relativeTo: Int32(timestamp), expanded: !DGSimpleSettings.shared.relativeOnlineTime, includeExactTime: isOwnHiddenPresence, approximateLastSeen: DGSimpleSettings.shared.approximateLastSeen)
                             var isHiddenStatus = false
                             switch presence.status {
                             case .recently(let isHidden), .lastWeek(let isHidden), .lastMonth(let isHidden):
@@ -1288,7 +1288,7 @@ func peerInfoScreenData(
                         }
                     }
                 }
-                let disposable = (combineLatest(context.account.viewTracker.peerView(userPeerId, updateData: false), ownPresenceUpdates)
+                let disposable = (combineLatest(donutgramActivityPeerView(account: context.account, peerId: userPeerId), ownPresenceUpdates)
                 |> deliverOnMainQueue
                 |> map { view, _ -> StatusInputData in
                     guard let user = view.peers[userPeerId] as? TelegramUser else {
@@ -1301,14 +1301,14 @@ func peerInfoScreenData(
                         let now = Int32(context.account.network.globalTime)
                         let serverOnlineUntil = DGSimpleSettings.shared.serverOnlineUntil(accountId: context.account.id.int64)
                         if let serverOnlineUntil, serverOnlineUntil > now {
-                            return .presence(TelegramUserPresence(status: .present(until: serverOnlineUntil), lastActivity: 0))
+                            return .presence(TelegramUserPresence(status: .present(until: serverOnlineUntil), lastActivity: 0), approximateLastSeen: false)
                         }
                         // An online the server reported and nothing ended lasted until it expired.
                         let lastSeen = max(DGSimpleSettings.shared.lastOnlineTimestamp(accountId: context.account.id.int64) ?? 0, serverOnlineUntil ?? 0)
                         if lastSeen > 0 {
-                            return .presence(TelegramUserPresence(status: .present(until: min(lastSeen, now - 1)), lastActivity: 0))
+                            return .presence(TelegramUserPresence(status: .present(until: min(lastSeen, now - 1)), lastActivity: 0), approximateLastSeen: false)
                         }
-                        return .presence(TelegramUserPresence(status: .recently(isHidden: false), lastActivity: 0))
+                        return .presence(TelegramUserPresence(status: .recently(isHidden: false), lastActivity: 0), approximateLastSeen: false)
                     }
                     if user.isDeleted {
                         return .none
@@ -1322,7 +1322,7 @@ func peerInfoScreenData(
                     guard let presence = view.peerPresences[userPeerId] as? TelegramUserPresence else {
                         return .none
                     }
-                    return .presence(presence)
+                    return .presence(presence, approximateLastSeen: DGSimpleSettings.shared.approximateLastSeen)
                 }
                 |> distinctUntilChanged).start(next: { inputData in
                     switch inputData {
@@ -1336,7 +1336,7 @@ func peerInfoScreenData(
                         subscriber.putNext(PeerInfoStatusData(text: strings.Bot_GenericSupportStatus, isActivity: false, key: nil))
                     default:
                         var presence: TelegramUserPresence?
-                        if case let .presence(value) = inputData {
+                        if case let .presence(value, _) = inputData {
                             presence = value
                         }
                         let _ = statusManager.with { manager -> Void in
