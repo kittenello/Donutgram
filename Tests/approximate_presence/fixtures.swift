@@ -84,8 +84,18 @@ final class Transaction {
     }
 }
 final class DGSimpleSettings {
-    static let shared = DGSimpleSettings()
-    var approximateLastSeen = true
+    static let shared = DGSimpleSettings(defaults: UserDefaults(suiteName: "approximate-presence-\(UUID().uuidString)")!)
+    static let didChangeNotification = Notification.Name("settings-changed")
+    let defaults: UserDefaults
+    private enum Key {
+        static let approximateLastSeen = "donutgram.spy.approximateLastSeen"
+        static let approximateLastSeenStartedAt = "donutgram.spy.approximateLastSeenStartedAt"
+    }
+    init(defaults: UserDefaults) {
+        self.defaults = defaults
+        SETTINGS_MIGRATION
+    }
+    SETTINGS_MEMBERS
 }
 public enum EnginePeer {
     public struct Presence {
@@ -130,6 +140,15 @@ func message(_ chat: PeerId, author: PeerId? = user, time: Int32 = now - 60, fla
 func recorded() -> Int32 { (transaction.presences[user] as? TelegramUserPresence)?.donutgramLastMessageTimestamp ?? 0 }
 func record(_ messages: [StoreMessage]) { donutgramRecordMessageActivity(transaction: transaction, accountPeerId: account, messages: messages) }
 
+DGSimpleSettings.shared.approximateLastSeen = true
+let firstActivation = DGSimpleSettings.shared.approximateLastSeenStartedAt!
+record([message(user, time: firstActivation - 1), message(group, time: firstActivation)])
+check(recorded() == 0, "ignore messages from before activation including the boundary second")
+let oldEvidence = EnginePeer.Presence(status: .recently(isHidden: true), donutgramLastMessageTimestamp: firstActivation - 1)
+check(donutgramApproximateLastSeenTimestamp(oldEvidence, relativeTo: now) == nil, "hide cached evidence from before activation")
+DGSimpleSettings.shared.defaults.set(now - 120, forKey: "donutgram.spy.approximateLastSeenStartedAt")
+DGSimpleSettings.shared.approximateLastSeen = true
+check(DGSimpleSettings.shared.approximateLastSeenStartedAt == now - 120, "setting an enabled toggle again keeps the activation")
 transaction.presences[user] = TelegramUserPresence(status: .recently(isHidden: true), lastActivity: now - 50)
 record([message(user)])
 check(recorded() == now - 60, "private message")
@@ -146,7 +165,22 @@ check(transaction.presences[bot] == nil && transaction.presences[account] == nil
 DGSimpleSettings.shared.approximateLastSeen = false
 record([message(user, time: now - 1)])
 check(recorded() == now - 20, "disabled collection")
+check(DGSimpleSettings.shared.approximateLastSeenStartedAt == nil, "disabled tracking has no activation")
 DGSimpleSettings.shared.approximateLastSeen = true
+let nextActivation = DGSimpleSettings.shared.approximateLastSeenStartedAt!
+check(nextActivation >= firstActivation && nextActivation > now - 120, "reenabling starts a new tracking period")
+check(donutgramApproximateLastSeenTimestamp(EnginePeer.Presence(status: .recently(isHidden: true), donutgramLastMessageTimestamp: recorded()), relativeTo: now) == nil, "reenabling hides previous tracking data")
+record([message(user, time: now - 10)])
+check(recorded() == now - 20, "delayed messages from a previous period are ignored")
+let reopenedSettings = DGSimpleSettings(defaults: DGSimpleSettings.shared.defaults)
+check(reopenedSettings.approximateLastSeenStartedAt == nextActivation, "restart preserves activation")
+DGSimpleSettings.shared.defaults.set(now - 120, forKey: "donutgram.spy.approximateLastSeenStartedAt")
+record([message(user, time: now - 10)])
+check(recorded() == now - 10, "new messages during the tracking period update evidence")
+let legacyDefaults = UserDefaults(suiteName: "approximate-presence-migration-\(UUID().uuidString)")!
+legacyDefaults.set(true, forKey: "donutgram.spy.approximateLastSeen")
+let migratedSettings = DGSimpleSettings(defaults: legacyDefaults)
+check(migratedSettings.approximateLastSeenStartedAt != nil && migratedSettings.approximateLastSeenStartedAt! >= firstActivation, "an already enabled old version starts tracking at migration")
 let stored = transaction.presences[user] as! TelegramUserPresence
 check(stored.status == .recently(isHidden: true) && stored.lastActivity == now - 50, "message evidence leaves real presence unchanged")
 let encoder = PostboxEncoder()

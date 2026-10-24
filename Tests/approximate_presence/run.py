@@ -37,6 +37,14 @@ def main():
         "public func stringForDonutgramApproximatePresence(",
     )]
     fixture = Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
+    settings = (ROOT / "Donutgram/DGSimpleSettings/Sources/DGSimpleSettings.swift").read_text(encoding="utf-8")
+    fixture = fixture.replace("SETTINGS_MIGRATION", extract(settings, "if defaults.bool(forKey: Key.approximateLastSeen)"))
+    fixture = fixture.replace("SETTINGS_MEMBERS", "\n".join(extract(settings, marker) for marker in (
+        "private func bool(",
+        "private func setBool(",
+        "public var approximateLastSeen: Bool",
+        "public var approximateLastSeenStartedAt: Int32?",
+    )))
     fixture = fixture.replace("PRODUCTION_CODE", presence + "\n" + "\n".join(functions))
     with tempfile.TemporaryDirectory(prefix="approximate-presence-") as directory:
         directory = Path(directory)

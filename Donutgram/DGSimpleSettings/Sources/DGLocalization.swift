@@ -20,7 +20,7 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 private let dgEnglishStrings: [String: String] = [
     "Активность": "Activity",
     "Примерный онлайн": "Approximate Last Seen",
-    "Вместо «был(а) недавно» показывает время последнего доступного сообщения в личном чате или общих группах с отметкой ~. Это примерное время активности, а не точный выход из Telegram.": "Replaces last seen recently with the time of the latest available message in your private chat or mutual groups, marked with ~. This estimates activity, not the exact time they left Telegram.",
+    "После включения запоминает время новых сообщений в личном чате и общих группах и показывает его с отметкой ~ вместо «был(а) недавно». Старые сообщения не учитываются. Повторное включение начинает сбор заново.": "After enabling, remembers the time of new messages in your private chat and mutual groups and shows it with ~ instead of last seen recently. Older messages are ignored. Enabling it again starts tracking afresh.",
     "Не открывать звёзды после продажи подарка": "Do not open stars after selling a gift",
     "Настройки Donutgram": "Donutgram Settings",
     "Настройки сообщений": "Message Settings",
