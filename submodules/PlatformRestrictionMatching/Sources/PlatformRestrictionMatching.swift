@@ -1,5 +1,6 @@
 import Foundation
 import TelegramCore
+import DGSimpleSettings
 
 public extension EngineRawMessage {
     func isRestricted(platform: String, contentSettings: ContentSettings) -> Bool {
@@ -18,6 +19,9 @@ public extension EngineRawMessage {
 
 public extension RestrictedContentMessageAttribute {
     func platformText(platform: String, contentSettings: ContentSettings) -> String? {
+        if DGSimpleSettings.shared.bypassContentRestrictions {
+            return nil
+        }
         for rule in self.rules {
             if rule.reason == "sensitive" {
                 continue

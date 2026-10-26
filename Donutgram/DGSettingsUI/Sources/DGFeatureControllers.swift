@@ -339,6 +339,8 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .header(0, 2, "СТИКЕРЫ И ЭМОДЗИ"),
             .toggle(1, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
             .toggle(2, 2, "recent", "Беск. недавние стикеры", s.infiniteRecentStickers, true),
+            .toggle(4, 2, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
+            .info(5, 2, "Отправляет стикеры без ссылки на набор. В секретных чатах настройка не действует."),
             .disclosure(3, 2, "reactions", "Скрыть реакции", "\(hiddenCount)/3"),
             .toggle(6, 2, "hidePaidReactions", "Скрыть платные реакции", s.hidePaidReactions, true),
             .header(7, 3, "ВНЕШНИЙ ВИД"),
@@ -390,6 +392,8 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .info(72, 9, "Если включено, следующее ГС или кружок не запустится автоматически."),
             .header(79, 10, "БОТЫ"),
             .toggle(80, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
+            .toggle(81, 10, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
+            .info(82, 10, "Показывает ботов, каналы и сообщения, скрытые ограничениями приложения."),
             .header(89, 11, "ДРУГОЕ"),
             .toggle(90, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
@@ -418,6 +422,8 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "confirmTelegramLinks": s.confirmTelegramLinks = value
         case "confirmChatPreviewEntry": s.confirmChatPreviewEntry = value
         case "hideBotAutomation": s.hideBotAutomation = value
+        case "bypassContentRestrictions": s.bypassContentRestrictions = value
+        case "anonymousStickerSending": s.anonymousStickerSending = value
         case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value
         case "recent": s.infiniteRecentStickers = value

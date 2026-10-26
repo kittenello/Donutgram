@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/TelegramCore:TelegramCore",
+        "//Donutgram/DGSimpleSettings:DGSimpleSettings",
     ],
     visibility = [
         "//visibility:public",

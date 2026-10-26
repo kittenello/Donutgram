@@ -140,6 +140,8 @@ public final class DGSimpleSettings {
         static let saveEditHistory = "donutgram.spy.saveEditHistory"
         static let saveViewOnceMedia = "donutgram.spy.saveViewOnceMedia"
         static let saveProtectedStories = "donutgram.spy.saveProtectedStories"
+        static let bypassContentRestrictions = "donutgram.general.bypassContentRestrictions"
+        static let anonymousStickerSending = "donutgram.chats.anonymousStickerSending"
         static let gifUnlock = "donutgram.general.gifUnlock"
         static let keepBannedChats = "donutgram.general.keepBannedChats"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
@@ -1114,6 +1116,8 @@ public final class DGSimpleSettings {
     }
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
+    public var bypassContentRestrictions: Bool { get { bool(Key.bypassContentRestrictions) } set { setBool(newValue, Key.bypassContentRestrictions) } }
+    public var anonymousStickerSending: Bool { get { bool(Key.anonymousStickerSending) } set { setBool(newValue, Key.anonymousStickerSending) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
     /// Shared with the notification extension (`DGMessagePreservationSettings`).
     public var keepBannedChats: Bool {

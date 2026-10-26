@@ -21,6 +21,9 @@ public extension Peer {
     }
     
     func restrictionText(platform: String, contentSettings: ContentSettings) -> String? {
+        if DGSimpleSettings.shared.bypassContentRestrictions {
+            return nil
+        }
         var restrictionInfo: PeerAccessRestrictionInfo?
         switch self {
         case let user as TelegramUser:
