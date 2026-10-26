@@ -21,9 +21,6 @@ public extension Peer {
     }
     
     func restrictionText(platform: String, contentSettings: ContentSettings) -> String? {
-        if DGSimpleSettings.shared.bypassContentRestrictions {
-            return nil
-        }
         var restrictionInfo: PeerAccessRestrictionInfo?
         switch self {
         case let user as TelegramUser:
@@ -36,6 +33,10 @@ public extension Peer {
         
         if let restrictionInfo = restrictionInfo {
             for rule in restrictionInfo.rules {
+                let isLocalLaw = DGSimpleSettings.isLocalLawRestriction(rule.text)
+                if isLocalLaw ? DGSimpleSettings.shared.bypassRegionalRestrictions : DGSimpleSettings.shared.bypassContentRestrictions {
+                    continue
+                }
                 if rule.reason == "sensitive" {
                     continue
                 }

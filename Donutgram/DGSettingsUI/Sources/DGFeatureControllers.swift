@@ -394,6 +394,8 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(80, 10, "hideBotAutomation", "Скрыть автоматизацию ботов", s.hideBotAutomation, true),
             .toggle(81, 10, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
             .info(82, 10, "Показывает ботов, каналы и сообщения, скрытые ограничениями приложения."),
+            .toggle(83, 10, "bypassRegionalRestrictions", "Обход региональных ограничений", s.bypassRegionalRestrictions, true),
+            .info(84, 10, "Пытается открыть каналы, скрытые из-за местных законов. Доступ зависит от сервера Telegram."),
             .header(89, 11, "ДРУГОЕ"),
             .toggle(90, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
@@ -423,6 +425,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "confirmChatPreviewEntry": s.confirmChatPreviewEntry = value
         case "hideBotAutomation": s.hideBotAutomation = value
         case "bypassContentRestrictions": s.bypassContentRestrictions = value
+        case "bypassRegionalRestrictions": s.bypassRegionalRestrictions = value
         case "anonymousStickerSending": s.anonymousStickerSending = value
         case "autoplayMedia": s.disableMediaAutoplay = value
         case "onlyAdded": s.onlyAddedStickers = value

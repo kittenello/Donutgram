@@ -140,6 +140,7 @@ public final class DGSimpleSettings {
         static let saveEditHistory = "donutgram.spy.saveEditHistory"
         static let saveViewOnceMedia = "donutgram.spy.saveViewOnceMedia"
         static let saveProtectedStories = "donutgram.spy.saveProtectedStories"
+        static let bypassRegionalRestrictions = "donutgram.general.bypassRegionalRestrictions"
         static let bypassContentRestrictions = "donutgram.general.bypassContentRestrictions"
         static let anonymousStickerSending = "donutgram.chats.anonymousStickerSending"
         static let gifUnlock = "donutgram.general.gifUnlock"
@@ -1116,6 +1117,11 @@ public final class DGSimpleSettings {
     }
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
+    public static func isLocalLawRestriction(_ text: String) -> Bool {
+        return text.lowercased().contains("violated local laws")
+    }
+
+    public var bypassRegionalRestrictions: Bool { get { bool(Key.bypassRegionalRestrictions) } set { setBool(newValue, Key.bypassRegionalRestrictions) } }
     public var bypassContentRestrictions: Bool { get { bool(Key.bypassContentRestrictions) } set { setBool(newValue, Key.bypassContentRestrictions) } }
     public var anonymousStickerSending: Bool { get { bool(Key.anonymousStickerSending) } set { setBool(newValue, Key.anonymousStickerSending) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }

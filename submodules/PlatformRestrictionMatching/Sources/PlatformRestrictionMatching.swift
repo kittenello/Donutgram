@@ -19,10 +19,11 @@ public extension EngineRawMessage {
 
 public extension RestrictedContentMessageAttribute {
     func platformText(platform: String, contentSettings: ContentSettings) -> String? {
-        if DGSimpleSettings.shared.bypassContentRestrictions {
-            return nil
-        }
         for rule in self.rules {
+            let isLocalLaw = DGSimpleSettings.isLocalLawRestriction(rule.text)
+            if isLocalLaw ? DGSimpleSettings.shared.bypassRegionalRestrictions : DGSimpleSettings.shared.bypassContentRestrictions {
+                continue
+            }
             if rule.reason == "sensitive" {
                 continue
             }
