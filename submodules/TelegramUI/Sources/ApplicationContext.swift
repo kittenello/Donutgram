@@ -33,6 +33,7 @@ import AttachmentUI
 import MinimizedContainer
 import BrowserUI
 import NewsFeedSupport
+import DGSimpleSettings
 
 final class UnauthorizedApplicationContext {
     let sharedContext: SharedAccountContextImpl
@@ -167,6 +168,8 @@ final class AuthorizedApplicationContext {
         self.lockedCoveringView = LockedWindowCoveringView(theme: presentationData.theme)
         
         self.context = context
+        // Donutgram: «Скрывать сообщения заблокированных» hides the blocked peers of the account shown.
+        DGSimpleSettings.shared.setBlockedPeersShownAccountId(context.account.peerId.toInt64())
         
         self.showCallsTab = showCallsTab
         self.showNewsTab = isNewsFeedEnabled(appConfiguration: context.currentAppConfiguration.with { $0 })

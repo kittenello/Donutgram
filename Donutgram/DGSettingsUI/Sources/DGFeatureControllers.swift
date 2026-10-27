@@ -188,15 +188,19 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
             .info(13, 1, "Чаты, каналы и истории с запретом копирования видны на скриншотах, а такие истории можно сохранить. Секретные чаты и медиа с таймером на снимках по-прежнему скрыты."),
             .header(20, 2, "GIF"),
             .toggle(21, 2, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true),
-            .info(22, 2, "Где админы запретили GIF, но разрешили видео, GIF уйдёт видео без звука. Админы это увидят.")
+            .info(22, 2, "Где админы запретили GIF, но разрешили видео, GIF уйдёт видео без звука. Админы это увидят."),
+            .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
+            .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
+            .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram.")
         ]
         return result
-    }, toggle: { key, value in
+    }, restartRequiredKeys: ["bypassContentRestrictions"], toggle: { key, value in
         switch key {
         case "bypassForward": s.bypassForwardRestrictions = value
         case "protectedScreenshots": s.allowProtectedScreenshots = value
         case "saveProtectedStories": s.saveProtectedStories = value
         case "gifUnlock": s.gifUnlock = value
+        case "bypassContentRestrictions": s.bypassContentRestrictions = value
         default: break
         }
     })
@@ -427,6 +431,9 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
             .header(20, 2, "ПАНЕЛЬ СТИКЕРОВ"),
             .toggle(21, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
             .toggle(22, 2, "recent", "Недавние стикеры без лимита", s.infiniteRecentStickers, true),
+            .header(23, 4, "ОТПРАВКА"),
+            .toggle(24, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
+            .info(25, 4, "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно."),
             .header(30, 3, "РЕАКЦИИ"),
             .toggle(31, 3, "reactionsInChannels", "Скрыть реакции в каналах", hiddenReactions & 1 != 0, true),
             .toggle(32, 3, "reactionsInGroups", "Скрыть реакции в группах", hiddenReactions & 2 != 0, true),
@@ -444,6 +451,7 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
         case "hideStickerReplyBackground": s.hideStickerReplyBackground = value
         case "onlyAdded": s.onlyAddedStickers = value
         case "recent": s.infiniteRecentStickers = value
+        case "anonymousStickerSending": s.anonymousStickerSending = value
         case "reactionsInChannels": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 1, isOn: value)
         case "reactionsInGroups": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 2, isOn: value)
         case "reactionsInPrivateChats": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 4, isOn: value)

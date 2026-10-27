@@ -130,8 +130,9 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
         return true
     }
     
+    // Donutgram: a sticker this account sent with «Анонимная отправка стикеров» opens the set kept on this device.
     var localStickerData: ChatMessageGalleryControllerData?
-    if let file = params.message.media.first as? TelegramMediaFile, file.isSticker, let reference = donutgramAnonymousStickerPack(accountPeerId: params.context.account.peerId, messageId: params.message.id) {
+    if let file = params.message.media.first as? TelegramMediaFile, let reference = donutgramAnonymousStickerPack(accountPeerId: params.context.account.peerId, file: file) {
         localStickerData = .stickerPack(reference, file)
     }
     if let mediaData = localStickerData ?? chatMessageGalleryControllerData(context: params.context, chatLocation: params.chatLocation, chatFilterTag: params.chatFilterTag, chatLocationContextHolder: params.chatLocationContextHolder, message: params.message, mediaSubject: params.mediaSubject, navigationController: params.navigationController, standalone: params.standalone, reverseMessageGalleryOrder: params.reverseMessageGalleryOrder, mode: params.mode, source: params.gallerySource, synchronousLoad: false, actionInteraction: params.actionInteraction) {

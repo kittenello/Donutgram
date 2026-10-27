@@ -2717,6 +2717,9 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                         for case let .Sticker(_, packReference, _) in file.attributes {
                             if let _ = packReference {
                                 optionsMap[id]!.insert(.viewStickerPack)
+                            } else if donutgramAnonymousStickerPack(accountPeerId: accountPeerId, file: file) != nil {
+                                // Donutgram: a sticker sent with «Анонимная отправка стикеров» opens the set kept here.
+                                optionsMap[id]!.insert(.viewStickerPack)
                             }
                             break
                         }

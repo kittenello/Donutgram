@@ -2322,7 +2322,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     // The hidden message is not in the chat, so there is nowhere to go.
                     if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
                         return .optionalAction({
-                            item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip(strings: item.presentationData.strings), false, replyInfoNode, nil)
+                            item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip(strings: item.presentationData.strings, message: item.message), false, replyInfoNode, nil)
                         })
                     }
                     for attribute in item.message.attributes {
@@ -2576,11 +2576,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         }
                     })
                     
-                    if donutgramAnonymousStickerPack(accountPeerId: item.context.account.peerId, messageId: item.message.id) != nil {
-                        return .optionalAction({
-                            let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default))
-                        })
-                    } else if file.isPremiumSticker && !noPremium {
+                    if file.isPremiumSticker && !noPremium {
                         return .optionalAction({
                             if self.additionalAnimationNodes.isEmpty {
                                 self.playedPremiumStickerAnimation = false

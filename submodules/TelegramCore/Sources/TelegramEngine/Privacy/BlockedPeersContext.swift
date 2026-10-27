@@ -1,5 +1,4 @@
 import Foundation
-import DGSimpleSettings
 internal import TelegramApi
 import Postbox
 import SwiftSignalKit
@@ -223,10 +222,7 @@ public final class BlockedPeersContext {
             |> mapError { _ -> BlockedPeersContextAddError in
                 return .generic
             }
-            |> mapToSignal { [weak self] _ -> Signal<Never, BlockedPeersContextAddError> in
-                if let self, case .blocked = self.subject {
-                    NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: self.account.peerId.toInt64())
-                }
+            |> mapToSignal { _ -> Signal<Never, BlockedPeersContextAddError> in
                 return .complete()
             }
         }
@@ -234,6 +230,7 @@ public final class BlockedPeersContext {
     
     public func add(peerId: PeerId) -> Signal<Never, BlockedPeersContextAddError> {
         assert(Queue.mainQueue().isCurrent())
+        let accountPeerId = self.account.peerId
         
         let postbox = self.account.postbox
         let network = self.account.network
@@ -258,6 +255,9 @@ public final class BlockedPeersContext {
             }
             |> mapToSignal { _ -> Signal<Peer?, BlockedPeersContextAddError> in
                 return postbox.transaction { transaction -> Peer? in
+                    if case .blocked = subject {
+                        donutgramUpdateBlockedPeer(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, isBlocked: true)
+                    }
                     if peerId.namespace == Namespaces.Peer.CloudUser {
                         transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                             let previous: CachedUserData
@@ -300,9 +300,6 @@ public final class BlockedPeersContext {
                 }
                 
                 strongSelf._state = BlockedPeersContextState(isLoadingMore: strongSelf._state.isLoadingMore, canLoadMore: strongSelf._state.canLoadMore, totalCount: updatedTotalCount, peers: mergedPeers)
-                if case .blocked = strongSelf.subject {
-                    NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: strongSelf.account.peerId.toInt64())
-                }
                 return .complete()
             }
         }
@@ -310,6 +307,7 @@ public final class BlockedPeersContext {
     
     public func remove(peerId: PeerId) -> Signal<Never, BlockedPeersContextRemoveError> {
         assert(Queue.mainQueue().isCurrent())
+        let accountPeerId = self.account.peerId
         let postbox = self.account.postbox
         let network = self.account.network
         let subject = self.subject
@@ -333,6 +331,9 @@ public final class BlockedPeersContext {
             }
             |> mapToSignal { value in
                 return postbox.transaction { transaction -> Peer? in
+                    if case .blocked = subject {
+                        donutgramUpdateBlockedPeer(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, isBlocked: false)
+                    }
                     if peerId.namespace == Namespaces.Peer.CloudUser {
                         transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                             let previous: CachedUserData
@@ -382,9 +383,6 @@ public final class BlockedPeersContext {
                 }
                 
                 strongSelf._state = BlockedPeersContextState(isLoadingMore: strongSelf._state.isLoadingMore, canLoadMore: strongSelf._state.canLoadMore, totalCount: updatedTotalCount, peers: mergedPeers)
-                if case .blocked = strongSelf.subject {
-                    NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: strongSelf.account.peerId.toInt64())
-                }
                 return .complete()
             }
         }

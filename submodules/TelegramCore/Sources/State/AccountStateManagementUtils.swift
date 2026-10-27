@@ -1500,6 +1500,10 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 }
             case let .updatePeerBlocked(updatePeerBlockedData):
                 let userPeerId = updatePeerBlockedData.peerId.peerId
+                // Donutgram: a block or unblock, from another device too, for «Скрывать сообщения заблокированных». A bot
+                // is left out when it is known here; the filter itself never hides a bot's messages either.
+                let isBot = (updatedState.peers[userPeerId] as? TelegramUser)?.botInfo != nil
+                DGSimpleSettings.shared.setPeerBlocked((updatePeerBlockedData.flags & (1 << 0)) != 0 && !isBot, peerId: userPeerId.toInt64(), accountId: accountPeerId.toInt64())
                 updatedState.updateCachedPeerData(userPeerId, { current in
                     let previous: CachedUserData
                     if let current = current as? CachedUserData {

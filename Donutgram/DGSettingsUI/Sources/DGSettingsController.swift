@@ -351,7 +351,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
     return dgController(context: context, page: .root, title: "Настройки Donutgram", focusKey: focusKey, entries: {
         // Every guard of the ghost page counts, «Автоматический «офлайн»» included: without it sending shows the account online.
         let hiddenByGhost = [!s.ghostReadMessages, !s.ghostReadStories, !s.ghostSendOnline, s.ghostAutomaticOffline, !s.ghostSendTyping].filter { $0 }.count
-        let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.saveProtectedStories, s.gifUnlock].filter { $0 }.count
+        let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.saveProtectedStories, s.gifUnlock, s.bypassContentRestrictions].filter { $0 }.count
         let isSaving = s.saveDeletedMessages || s.saveEditHistory || s.saveViewOnceMedia || s.showDisappearedGifts || s.keepBannedChats
         let shadowBanned = s.shadowBannedPeerIds.count
         let acceleration = ["", "Быстро", "Ультра"][s.downloadAcceleration]
@@ -367,7 +367,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         entries.append(.header(0, 0, "ПРИВАТНОСТЬ"))
         entries.append(.rootRow(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Вкл · \(hiddenByGhost) из 5" : "Выкл", "eye.slash.fill", 0x5E5CE6))
         entries.append(.rootRow(2, 0, "saving", "Удалённые и правки", isSaving ? "Вкл" : "Выкл", "trash.slash.fill", 0xFF9F0A))
-        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 4", "lock.open.fill", 0x00C7BE))
+        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 5", "lock.open.fill", 0x00C7BE))
         entries.append(.rootRow(4, 0, "shadowBan", "Теневой бан", shadowBanned == 0 ? "Нет" : "\(shadowBanned)", "person.crop.circle.fill.badge.xmark", 0xFF453A))
         entries.append(.rootRow(5, 0, "security", "Подтверждения и статистика", "", "checkmark.shield.fill", 0x8E8E93))
         entries.append(.header(10, 1, "ИНТЕРФЕЙС"))

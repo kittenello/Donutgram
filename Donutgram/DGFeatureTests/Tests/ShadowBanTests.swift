@@ -19,6 +19,10 @@ final class ShadowBanTests: XCTestCase {
         return TelegramUser(id: id, accessHash: nil, firstName: "User", lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
     }
 
+    private func botUser(_ id: PeerId) -> TelegramUser {
+        return TelegramUser(id: id, accessHash: nil, firstName: "Bot", lastName: nil, username: nil, phone: nil, photo: [], botInfo: BotUserInfo(flags: [], inlinePlaceholder: nil), restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
+    }
+
     private func channelPeer(_ id: PeerId, broadcast: Bool, flags: TelegramChannelFlags = []) -> TelegramChannel {
         let info: TelegramChannelInfo = broadcast ? .broadcast(TelegramChannelBroadcastInfo(flags: [])) : .group(TelegramChannelGroupInfo(flags: []))
         return TelegramChannel(id: id, accessHash: nil, title: "Chat", username: nil, photo: [], creationDate: 0, version: 0, participationStatus: .member, info: info, flags: flags, restrictionInfo: nil, adminRights: nil, bannedRights: nil, defaultBannedRights: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, emojiStatus: nil, approximateBoostLevel: nil, subscriptionUntilDate: nil, verificationIconFileId: nil, sendPaidMessageStars: nil, linkedMonoforumId: nil)
@@ -43,8 +47,8 @@ final class ShadowBanTests: XCTestCase {
         return Message(stableId: UInt32(id), stableVersion: 0, id: MessageId(peerId: chatPeerId, namespace: Namespaces.Message.Cloud, id: id), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: incoming ? [.Incoming] : [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: forwardInfo, author: author, text: "", attributes: attributes, media: media, peers: peers, associatedMessages: associated, associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
     }
 
-    private func state(banned: [PeerId], revealed: [PeerId] = []) -> DonutgramShadowBan.State {
-        return DonutgramShadowBan.State(bannedPeerIds: Set(banned.map { $0.toInt64() }), revealedChatIds: Set(revealed.map { $0.toInt64() }))
+    private func state(banned: [PeerId], revealed: [PeerId] = [], blocked: [PeerId] = []) -> DonutgramShadowBan.State {
+        return DonutgramShadowBan.State(bannedPeerIds: Set(banned.map { $0.toInt64() }), revealedChatIds: Set(revealed.map { $0.toInt64() }), blockedPeerIds: Set(blocked.map { $0.toInt64() }))
     }
 
     private func index(_ id: Int32) -> MessageIndex {
@@ -59,7 +63,7 @@ final class ShadowBanTests: XCTestCase {
     }
 
     func testBlockedAuthorsAreHiddenOnlyInGroups() {
-        let state = DonutgramShadowBan.State(bannedPeerIds: [], revealedChatIds: [], blockedPeerIds: [self.alice.toInt64()])
+        let state = self.state(banned: [], blocked: [self.alice])
         XCTAssertTrue(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.alice)), state: state))
         XCTAssertTrue(DonutgramShadowBan.isHidden(self.message(in: self.group, author: self.user(self.alice)), state: state))
         XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.bob)), state: state))
@@ -67,6 +71,26 @@ final class ShadowBanTests: XCTestCase {
         XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.alice), incoming: false), state: state))
         XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.bob), forwardInfo: self.forward(author: self.user(self.alice))), state: state))
         XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.alice)), state: self.state(banned: [])))
+    }
+
+    func testBlockedAuthorFollowsRevealRepliesChatAndReplyHeaders() {
+        let state = self.state(banned: [], blocked: [self.alice])
+        let revealed = self.state(banned: [], revealed: [self.supergroup], blocked: [self.alice])
+        let message = self.message(in: self.supergroup, author: self.user(self.alice))
+        XCTAssertFalse(DonutgramShadowBan.isHidden(message, state: revealed))
+        XCTAssertTrue(DonutgramShadowBan.isBlockedContent(message, blockedPeerIds: revealed.blockedPeerIds))
+        XCTAssertTrue(DonutgramShadowBan.isHidden(self.message(in: self.replies, author: self.user(self.replies), forwardInfo: self.forward(author: self.user(self.alice))), state: state))
+        XCTAssertTrue(DonutgramShadowBan.isPeerHidden(self.alice, inChat: self.supergroup, state: state))
+        XCTAssertFalse(DonutgramShadowBan.isPeerHidden(self.alice, inChat: self.supergroup, state: revealed))
+        let replyAttribute = ReplyMessageAttribute(messageId: message.id, threadMessageId: nil, quote: nil, isQuote: false, innerSubject: nil)
+        let reply = self.message(in: self.supergroup, author: self.user(self.bob), id: 2, attributes: [replyAttribute], associatedMessages: [message])
+        XCTAssertFalse(DonutgramShadowBan.isHidden(reply, state: state))
+        XCTAssertTrue(DonutgramShadowBan.hidesReplyHeader(in: reply, state: state))
+    }
+
+    func testBlockedBotStaysVisible() {
+        XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.botUser(self.bot)), state: self.state(banned: [], blocked: [self.bot])))
+        XCTAssertTrue(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.botUser(self.bot)), state: self.state(banned: [self.bot])))
     }
 
     func testPrivateAndSecretChatsAreNeverFiltered() {

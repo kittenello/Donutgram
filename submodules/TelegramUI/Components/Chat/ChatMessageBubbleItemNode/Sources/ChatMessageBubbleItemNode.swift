@@ -6010,7 +6010,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         // The hidden message is not in the chat, so there is nowhere to go.
                         if DonutgramShadowBan.hidesReplyHeader(in: item.message) {
                             return .action(InternalBubbleTapAction.Action({ [weak replyInfoNode] in
-                                item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip(strings: item.presentationData.strings), false, replyInfoNode, nil)
+                                item.controllerInteraction.displayMessageTooltip(item.message.id, ChatMessageReplyInfoNode.donutgramHiddenTooltip(strings: item.presentationData.strings, message: item.message), false, replyInfoNode, nil)
                             }, contextMenuOnLongPress: true))
                         }
 

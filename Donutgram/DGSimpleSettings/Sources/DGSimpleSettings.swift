@@ -83,9 +83,8 @@ public final class DGSimpleSettings {
     /// under `serverOfflineWasOnlineKey`.
     public static let serverReportedStatusNotification = Notification.Name("donutgram.presence.serverReportedStatus")
     public static let lastOnlineDidChangeNotification = Notification.Name("donutgram.presence.lastOnlineDidChange")
-    /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
-    /// send account.updateStatus.
-    public static let blockedPeersDidChangeNotification = Notification.Name("donutgram.blockedPeers.didChange")
+    /// The shadow ban list, the hidden blocked peers or a chat's «Показать скрытые» changed. Separate from
+    /// didChangeNotification, which makes presence send account.updateStatus.
     public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
     /// «Полупрозрачные удалённые» changed. Separate from didChangeNotification for the same reason.
     public static let deletedMessagesAppearanceDidChangeNotification = Notification.Name("donutgram.deletedMessages.appearanceDidChange")
@@ -833,8 +832,9 @@ public final class DGSimpleSettings {
         return self.shadowBanIdsLocked()
     }
 
+    /// Whether anything is hidden: a shadow-banned peer, or blocked peers with «Скрывать сообщения заблокированных» on.
     public var hasShadowBans: Bool {
-        return !self.shadowBannedPeerIds.isEmpty
+        return !self.shadowBannedPeerIds.isEmpty || !self.hiddenBlockedPeerIds.isEmpty
     }
 
     public func isShadowBanned(_ peerId: Int64) -> Bool {
@@ -882,6 +882,103 @@ public final class DGSimpleSettings {
         self.shadowBanLock.unlock()
         if changed {
             NotificationCenter.default.post(name: DGSimpleSettings.shadowBanDidChangeNotification, object: self)
+        }
+    }
+
+    private let blockedPeersLock = NSLock()
+    private var blockedPeersCache: [Int64: Set<Int64>] = [:]
+    private var blockedPeersShownAccountId: Int64?
+
+    private func blockedPeersKey(accountId: Int64) -> String {
+        return "donutgram.blockedPeers.\(accountId)"
+    }
+
+    // Call with blockedPeersLock held.
+    private func blockedPeerIdsLocked(accountId: Int64) -> Set<Int64> {
+        if let cached = self.blockedPeersCache[accountId] {
+            return cached
+        }
+        let stored = Set((self.defaults.stringArray(forKey: self.blockedPeersKey(accountId: accountId)) ?? []).compactMap { Int64($0) })
+        self.blockedPeersCache[accountId] = stored
+        return stored
+    }
+
+    /// The peers an account blocked, as `PeerId.toInt64()`, bots left out. TelegramCore keeps the list: the whole of it
+    /// from the server once per launch while «Скрывать сообщения заблокированных» is on, then every block and unblock.
+    public func blockedPeerIds(accountId: Int64) -> Set<Int64> {
+        self.blockedPeersLock.lock()
+        defer { self.blockedPeersLock.unlock() }
+        return self.blockedPeerIdsLocked(accountId: accountId)
+    }
+
+    /// The blocked peers to hide: those of the account the app shows, while «Скрывать сообщения заблокированных» is on.
+    public var hiddenBlockedPeerIds: Set<Int64> {
+        if !self.hideBlockedMessages {
+            return []
+        }
+        self.blockedPeersLock.lock()
+        defer { self.blockedPeersLock.unlock() }
+        guard let accountId = self.blockedPeersShownAccountId else {
+            return []
+        }
+        return self.blockedPeerIdsLocked(accountId: accountId)
+    }
+
+    /// The account the app shows, whose blocked peers are hidden. Set when its interface is created.
+    public func setBlockedPeersShownAccountId(_ accountId: Int64) {
+        self.blockedPeersLock.lock()
+        let changed = self.blockedPeersShownAccountId != accountId
+        self.blockedPeersShownAccountId = accountId
+        self.blockedPeersLock.unlock()
+        if changed && self.hideBlockedMessages {
+            self.postBlockedPeersChange()
+        }
+    }
+
+    /// Replaces an account's blocked peers, e.g. with the whole list from the server.
+    public func setBlockedPeerIds(_ peerIds: Set<Int64>, accountId: Int64) {
+        self.updateBlockedPeerIds(accountId: accountId, { ids in
+            ids = peerIds
+        })
+    }
+
+    /// One peer blocked or unblocked by an account.
+    public func setPeerBlocked(_ blocked: Bool, peerId: Int64, accountId: Int64) {
+        self.updateBlockedPeerIds(accountId: accountId, { ids in
+            if blocked {
+                ids.insert(peerId)
+            } else {
+                ids.remove(peerId)
+            }
+        })
+    }
+
+    private func updateBlockedPeerIds(accountId: Int64, _ update: (inout Set<Int64>) -> Void) {
+        self.blockedPeersLock.lock()
+        let previous = self.blockedPeerIdsLocked(accountId: accountId)
+        var ids = previous
+        update(&ids)
+        let changed = ids != previous
+        if changed {
+            self.blockedPeersCache[accountId] = ids
+            self.defaults.set(ids.map { String($0) }.sorted(), forKey: self.blockedPeersKey(accountId: accountId))
+        }
+        let isShown = self.blockedPeersShownAccountId == accountId
+        self.blockedPeersLock.unlock()
+        if changed && isShown && self.hideBlockedMessages {
+            self.postBlockedPeersChange()
+        }
+    }
+
+    // TelegramCore changes the blocked peers on its own queues; the hidden-message filters are told on the main one.
+    private func postBlockedPeersChange() {
+        let post = {
+            NotificationCenter.default.post(name: DGSimpleSettings.shadowBanDidChangeNotification, object: self)
+        }
+        if Thread.isMainThread {
+            post()
+        } else {
+            DispatchQueue.main.async(execute: post)
         }
     }
 
@@ -1046,7 +1143,18 @@ public final class DGSimpleSettings {
         return try body()
     }
 
-    public var hideBlockedMessages: Bool { get { bool(Key.hideBlockedMessages) } set { setBool(newValue, Key.hideBlockedMessages) } }
+    /// «Скрывать сообщения заблокированных»: switching it changes what the hidden-message filters hide.
+    public var hideBlockedMessages: Bool {
+        get { bool(Key.hideBlockedMessages) }
+        set {
+            if self.hideBlockedMessages == newValue {
+                return
+            }
+            setBool(newValue, Key.hideBlockedMessages)
+            NotificationCenter.default.post(name: DGSimpleSettings.shadowBanDidChangeNotification, object: self)
+        }
+    }
+
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
     public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
@@ -1149,12 +1257,45 @@ public final class DGSimpleSettings {
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var bypassContentRestrictions: Bool { get { bool(Key.bypassContentRestrictions) } set { setBool(newValue, Key.bypassContentRestrictions) } }
-    public func setAnonymousStickerPackData(_ data: Data, accountId: Int64, peerId: Int64, namespace: Int32, messageId: Int32) {
-        defaults.set(data, forKey: "donutgram.stickerPack.\(accountId).\(peerId).\(namespace).\(messageId)")
+
+    /// How many sets of stickers sent with «Анонимная отправка стикеров» an account keeps; older stickers lose theirs.
+    public static let anonymousStickerPackLimit = 1000
+
+    private let anonymousStickerPacksLock = NSLock()
+
+    private func anonymousStickerPacksKey(accountId: Int64) -> String {
+        return "donutgram.chats.anonymousStickerPacks.\(accountId)"
     }
 
-    public func anonymousStickerPackData(accountId: Int64, peerId: Int64, namespace: Int32, messageId: Int32) -> Data? {
-        return defaults.data(forKey: "donutgram.stickerPack.\(accountId).\(peerId).\(namespace).\(messageId)")
+    /// Keeps the set of a sticker an account sent with «Анонимная отправка стикеров», by the id of the file the server
+    /// made (`MediaId.id`): the same file in a published scheduled message, a quick reply or a forward finds it too.
+    public func setAnonymousStickerPackData(_ data: Data, accountId: Int64, fileId: Int64) {
+        let key = self.anonymousStickerPacksKey(accountId: accountId)
+        let id = String(fileId)
+        self.anonymousStickerPacksLock.lock()
+        defer { self.anonymousStickerPacksLock.unlock() }
+        let stored = self.defaults.dictionary(forKey: key)
+        var order = stored?["order"] as? [String] ?? []
+        var packs = stored?["packs"] as? [String: Data] ?? [:]
+        order.removeAll(where: { $0 == id })
+        order.append(id)
+        packs[id] = data
+        let excess = order.count - DGSimpleSettings.anonymousStickerPackLimit
+        if excess > 0 {
+            for removedId in order.prefix(excess) {
+                packs[removedId] = nil
+            }
+            order.removeFirst(excess)
+        }
+        let value: [String: Any] = ["order": order, "packs": packs]
+        self.defaults.set(value, forKey: key)
+    }
+
+    public func anonymousStickerPackData(accountId: Int64, fileId: Int64) -> Data? {
+        self.anonymousStickerPacksLock.lock()
+        defer { self.anonymousStickerPacksLock.unlock() }
+        let packs = self.defaults.dictionary(forKey: self.anonymousStickerPacksKey(accountId: accountId))?["packs"] as? [String: Data]
+        return packs?[String(fileId)]
     }
 
     public var anonymousStickerSending: Bool { get { bool(Key.anonymousStickerSending) } set { setBool(newValue, Key.anonymousStickerSending) } }
