@@ -381,5 +381,14 @@ private let dgEnglishStrings: [String: String] = [
     "Закрыть приложение": "Close App",
     "Настройки разложены по разделам": "Settings Are Now in Sections",
     "Каждый раздел назван по месту в приложении, где видны его настройки. Ссылки на настройки, скопированные раньше, открывают их на новом месте.": "Each section is named after the place in the app where its settings show. Setting links copied earlier open them in their new place.",
-    "Нет": "None"
+    "Нет": "None",
+    "Ограниченный контент": "Restricted Content",
+    "Обход ограничений контента": "Bypass Content Restrictions",
+    "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram.": "Channels, bots and messages that Telegram restricts on iOS open as usual. 18+ content still follows your Telegram setting.",
+    "Анонимная отправка стикеров": "Send Stickers Anonymously",
+    "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно.": "A sticker is sent as a new file without a link to its set, so the other person can't tell where it's from. Tapping it still opens the set for you, on this device only. In secret chats stickers are sent as usual.",
+    "Скрывать сообщения заблокированных": "Hide Messages from Blocked Users",
+    "Сообщения тех, кого вы заблокировали, скрыты в группах и комментариях, как в теневом бане. Боты не скрываются: остановленный бот тоже числится заблокированным.": "Messages from people you blocked are hidden in groups and comments, as with the shadow ban. Bots stay visible: a stopped bot counts as blocked too.",
+    "Автор заблокирован": "The author is blocked",
+    "Сообщение скрыто: автор заблокирован": "This message is hidden: you blocked the author"
 ]

@@ -358,6 +358,26 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
                 updatedId = currentMessage.id
             }
             
+            // Donutgram: a sticker sent with «Анонимная отправка стикеров» comes back without its set. The set is kept
+            // for the file the server made, which a published scheduled message or a quick reply shares.
+            if messageId != nil, let originalFile = currentMessage.media.first as? TelegramMediaFile, let sentFile = media.first as? TelegramMediaFile, sentFile.isSticker {
+                let originalReference = originalFile.attributes.compactMap { attribute -> StickerPackReference? in
+                    if case let .Sticker(_, reference, _) = attribute {
+                        return reference
+                    }
+                    return nil
+                }.first
+                let sentHasReference = sentFile.attributes.contains { attribute in
+                    if case let .Sticker(_, reference, _) = attribute {
+                        return reference != nil
+                    }
+                    return false
+                }
+                if let originalReference = originalReference, !sentHasReference {
+                    donutgramSaveAnonymousStickerPack(originalReference, accountPeerId: accountPeerId, file: sentFile)
+                }
+            }
+
             for attribute in currentMessage.attributes {
                 if let attribute = attribute as? OutgoingMessageInfoAttribute {
                     bubbleUpEmojiOrStickersets = attribute.bubbleUpEmojiOrStickersets

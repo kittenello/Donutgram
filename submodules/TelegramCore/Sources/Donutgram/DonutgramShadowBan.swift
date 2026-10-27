@@ -5,25 +5,29 @@ import DGSimpleSettings
 
 /// Local shadow ban. Messages of the peers in `DGSimpleSettings.shadowBannedPeerIds` are hidden in groups, channels,
 /// comments and the Replies chat, with their typing, reaction avatars and stories. Private chats are never filtered,
-/// and nothing goes to the server: the person never learns about it.
+/// and nothing goes to the server: the person never learns about it. With «Скрывать сообщения заблокированных» on, the
+/// messages blocked peers send are hidden the same way.
 public enum DonutgramShadowBan {
-    /// The ban list and the chats with «Показать скрытые» on, read once for a whole computation.
+    /// The ban list, the blocked peers to hide and the chats with «Показать скрытые» on, read once for a whole computation.
     public struct State: Equatable {
         public var bannedPeerIds: Set<Int64>
         public var revealedChatIds: Set<Int64>
+        /// `DGSimpleSettings.hiddenBlockedPeerIds`: empty while «Скрывать сообщения заблокированных» is off.
+        public var blockedPeerIds: Set<Int64>
 
-        public init(bannedPeerIds: Set<Int64>, revealedChatIds: Set<Int64>) {
+        public init(bannedPeerIds: Set<Int64>, revealedChatIds: Set<Int64>, blockedPeerIds: Set<Int64> = []) {
             self.bannedPeerIds = bannedPeerIds
             self.revealedChatIds = revealedChatIds
+            self.blockedPeerIds = blockedPeerIds
         }
 
         public static var current: State {
             let settings = DGSimpleSettings.shared
-            return State(bannedPeerIds: settings.shadowBannedPeerIds, revealedChatIds: settings.shadowBanRevealedChatIds)
+            return State(bannedPeerIds: settings.shadowBannedPeerIds, revealedChatIds: settings.shadowBanRevealedChatIds, blockedPeerIds: settings.hiddenBlockedPeerIds)
         }
     }
 
-    /// The current state, then every change of the list or of «Показать скрытые».
+    /// The current state, then every change of the list, of the hidden blocked peers or of «Показать скрытые».
     public static func stateSignal() -> Signal<State, NoError> {
         return Signal<State, NoError> { subscriber in
             subscriber.putNext(State.current)
@@ -89,16 +93,38 @@ public enum DonutgramShadowBan {
         return false
     }
 
-    public static func isBannedContent(_ message: Message) -> Bool {
-        return self.isBannedContent(message, bannedPeerIds: DGSimpleSettings.shared.shadowBannedPeerIds)
-    }
-
-    /// Whether `message` is hidden: banned content in a chat without «Показать скрытые».
-    public static func isHidden(_ message: Message, state: State) -> Bool {
-        if state.bannedPeerIds.isEmpty || state.revealedChatIds.contains(message.id.peerId.toInt64()) {
+    /// Whether `message` comes from a blocked peer in a filtered chat, ignoring «Показать скрытые». Only the sender counts
+    /// (the reply's author in the Replies chat), so forwards of a blocked peer's messages stay. Bots stay too: stopping a
+    /// bot blocks it, and its messages in groups, captchas among them, must not vanish.
+    public static func isBlockedContent(_ message: Message, blockedPeerIds: Set<Int64>) -> Bool {
+        if blockedPeerIds.isEmpty {
             return false
         }
-        return self.isBannedContent(message, bannedPeerIds: state.bannedPeerIds)
+        let chatPeerId = message.id.peerId
+        if !message.flags.contains(.Incoming) || !self.appliesToChat(chatPeerId, chatPeer: message.peers[chatPeerId]) {
+            return false
+        }
+        guard let author = self.banTarget(of: message), author.id != chatPeerId else {
+            return false
+        }
+        if let user = author as? TelegramUser, user.botInfo != nil {
+            return false
+        }
+        return blockedPeerIds.contains(author.id.toInt64())
+    }
+
+    /// Whether `message` is banned or blocked content, ignoring «Показать скрытые»: what that switch brings back.
+    public static func isBannedContent(_ message: Message) -> Bool {
+        let state = State.current
+        return self.isBannedContent(message, bannedPeerIds: state.bannedPeerIds) || self.isBlockedContent(message, blockedPeerIds: state.blockedPeerIds)
+    }
+
+    /// Whether `message` is hidden: banned or blocked content in a chat without «Показать скрытые».
+    public static func isHidden(_ message: Message, state: State) -> Bool {
+        if (state.bannedPeerIds.isEmpty && state.blockedPeerIds.isEmpty) || state.revealedChatIds.contains(message.id.peerId.toInt64()) {
+            return false
+        }
+        return self.isBannedContent(message, bannedPeerIds: state.bannedPeerIds) || self.isBlockedContent(message, blockedPeerIds: state.blockedPeerIds)
     }
 
     public static func isHidden(_ message: Message) -> Bool {
@@ -112,20 +138,21 @@ public enum DonutgramShadowBan {
         return self.isHidden(message._asMessage())
     }
 
-    /// Whether to hide `peerId`'s typing and avatars in a chat. Decided by the chat's id alone, so a monoforum counts as a
-    /// channel here.
+    /// Whether to hide `peerId`'s typing and avatars in a chat, as a banned or blocked peer. Decided by the chat's id
+    /// alone, so a monoforum counts as a channel here.
     public static func isPeerHidden(_ peerId: PeerId, inChat chatPeerId: PeerId, state: State = State.current) -> Bool {
-        if state.bannedPeerIds.isEmpty || peerId == chatPeerId || state.revealedChatIds.contains(chatPeerId.toInt64()) {
+        if (state.bannedPeerIds.isEmpty && state.blockedPeerIds.isEmpty) || peerId == chatPeerId || state.revealedChatIds.contains(chatPeerId.toInt64()) {
             return false
         }
         if !self.appliesToChat(chatPeerId, chatPeer: nil) {
             return false
         }
-        return state.bannedPeerIds.contains(peerId.toInt64())
+        let id = peerId.toInt64()
+        return state.bannedPeerIds.contains(id) || state.blockedPeerIds.contains(id)
     }
 
     /// Whether the reply header of `message` must turn into a placeholder: it quotes a hidden message or, for a reply to
-    /// another chat where only the author is known, a banned author. The reply itself stays visible.
+    /// another chat where only the author is known, a banned or blocked author. The reply itself stays visible.
     public static func hidesReplyHeader(in message: Message) -> Bool {
         if !DGSimpleSettings.shared.hasShadowBans {
             return false

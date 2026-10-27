@@ -230,6 +230,7 @@ public final class BlockedPeersContext {
     
     public func add(peerId: PeerId) -> Signal<Never, BlockedPeersContextAddError> {
         assert(Queue.mainQueue().isCurrent())
+        let accountPeerId = self.account.peerId
         
         let postbox = self.account.postbox
         let network = self.account.network
@@ -254,6 +255,9 @@ public final class BlockedPeersContext {
             }
             |> mapToSignal { _ -> Signal<Peer?, BlockedPeersContextAddError> in
                 return postbox.transaction { transaction -> Peer? in
+                    if case .blocked = subject {
+                        donutgramUpdateBlockedPeer(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, isBlocked: true)
+                    }
                     if peerId.namespace == Namespaces.Peer.CloudUser {
                         transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                             let previous: CachedUserData
@@ -303,6 +307,7 @@ public final class BlockedPeersContext {
     
     public func remove(peerId: PeerId) -> Signal<Never, BlockedPeersContextRemoveError> {
         assert(Queue.mainQueue().isCurrent())
+        let accountPeerId = self.account.peerId
         let postbox = self.account.postbox
         let network = self.account.network
         let subject = self.subject
@@ -326,6 +331,9 @@ public final class BlockedPeersContext {
             }
             |> mapToSignal { value in
                 return postbox.transaction { transaction -> Peer? in
+                    if case .blocked = subject {
+                        donutgramUpdateBlockedPeer(transaction: transaction, accountPeerId: accountPeerId, peerId: peerId, isBlocked: false)
+                    }
                     if peerId.namespace == Namespaces.Peer.CloudUser {
                         transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                             let previous: CachedUserData

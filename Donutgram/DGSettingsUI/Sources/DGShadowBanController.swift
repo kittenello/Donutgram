@@ -32,13 +32,15 @@ public func dgToggleShadowBan(context: AccountContext, peer: EnginePeer, present
 
 private final class DGShadowBanArguments {
     let context: AccountContext
+    let setHideBlocked: (Bool) -> Void
     let setPeerIdWithRevealedOptions: (EnginePeer.Id?, EnginePeer.Id?) -> Void
     let addPeer: () -> Void
     let removePeer: (EnginePeer.Id) -> Void
     let openPeer: (EnginePeer) -> Void
 
-    init(context: AccountContext, setPeerIdWithRevealedOptions: @escaping (EnginePeer.Id?, EnginePeer.Id?) -> Void, addPeer: @escaping () -> Void, removePeer: @escaping (EnginePeer.Id) -> Void, openPeer: @escaping (EnginePeer) -> Void) {
+    init(context: AccountContext, setHideBlocked: @escaping (Bool) -> Void, setPeerIdWithRevealedOptions: @escaping (EnginePeer.Id?, EnginePeer.Id?) -> Void, addPeer: @escaping () -> Void, removePeer: @escaping (EnginePeer.Id) -> Void, openPeer: @escaping (EnginePeer) -> Void) {
         self.context = context
+        self.setHideBlocked = setHideBlocked
         self.setPeerIdWithRevealedOptions = setPeerIdWithRevealedOptions
         self.addPeer = addPeer
         self.removePeer = removePeer
@@ -48,26 +50,41 @@ private final class DGShadowBanArguments {
 
 private enum DGShadowBanSection: Int32 {
     case peers
+    case blocked
 }
 
 private enum DGShadowBanEntryId: Hashable {
+    case hideBlocked
+    case hideBlockedInfo
     case add
     case peer(EnginePeer.Id)
     case info
 }
 
 private enum DGShadowBanEntry: ItemListNodeEntry {
+    // «Скрывать сообщения заблокированных», a block of its own above the list.
+    case hideBlocked(Bool)
+    case hideBlockedInfo(String)
     case add(PresentationTheme)
     // The peer, its subtitle and whether it is known to this account (an unknown one can't be opened).
     case peer(Int32, EnginePeer, String, Bool, ItemListPeerItemEditing)
     case info(String)
 
     var section: ItemListSectionId {
-        return DGShadowBanSection.peers.rawValue
+        switch self {
+        case .hideBlocked, .hideBlockedInfo:
+            return DGShadowBanSection.blocked.rawValue
+        default:
+            return DGShadowBanSection.peers.rawValue
+        }
     }
 
     var stableId: DGShadowBanEntryId {
         switch self {
+        case .hideBlocked:
+            return .hideBlocked
+        case .hideBlockedInfo:
+            return .hideBlockedInfo
         case .add:
             return .add
         case let .peer(_, peer, _, _, _):
@@ -79,6 +96,10 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
 
     private var sortIndex: Int32 {
         switch self {
+        case .hideBlocked:
+            return -2
+        case .hideBlockedInfo:
+            return -1
         case .add:
             return 0
         case let .peer(index, _, _, _, _):
@@ -90,6 +111,16 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
 
     static func ==(lhs: DGShadowBanEntry, rhs: DGShadowBanEntry) -> Bool {
         switch lhs {
+        case let .hideBlocked(lhsValue):
+            if case let .hideBlocked(rhsValue) = rhs, lhsValue == rhsValue {
+                return true
+            }
+            return false
+        case let .hideBlockedInfo(lhsText):
+            if case let .hideBlockedInfo(rhsText) = rhs, lhsText == rhsText {
+                return true
+            }
+            return false
         case let .add(lhsTheme):
             if case let .add(rhsTheme) = rhs, lhsTheme === rhsTheme {
                 return true
@@ -116,6 +147,12 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
         let arguments = arguments as! DGShadowBanArguments
         let languageCode = presentationData.strings.primaryComponent.languageCode
         switch self {
+        case let .hideBlocked(value):
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: dgLocalized("Скрывать сообщения заблокированных", languageCode: languageCode), value: value, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setHideBlocked(value)
+            })
+        case let .hideBlockedInfo(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .add(theme):
             return ItemListPeerActionItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesItemList.addPersonIcon(theme), title: dgLocalized("Добавить", languageCode: languageCode), sectionId: self.section, height: .generic, editing: false, action: {
                 arguments.addPeer()
@@ -140,6 +177,7 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
 private struct DGShadowBanState: Equatable {
     var editing = false
     var peerIdWithRevealedOptions: EnginePeer.Id?
+    var hideBlocked = DGSimpleSettings.shared.hideBlockedMessages
 }
 
 // A row for an id this account doesn't know (e.g. banned from another account): it can still be removed.
@@ -173,7 +211,14 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
     }
     var pushControllerImpl: ((ViewController) -> Void)?
 
-    let arguments = DGShadowBanArguments(context: context, setPeerIdWithRevealedOptions: { peerId, fromPeerId in
+    let arguments = DGShadowBanArguments(context: context, setHideBlocked: { value in
+        DGSimpleSettings.shared.hideBlockedMessages = value
+        updateState { state in
+            var state = state
+            state.hideBlocked = value
+            return state
+        }
+    }, setPeerIdWithRevealedOptions: { peerId, fromPeerId in
         updateState { state in
             var state = state
             if (peerId == nil && fromPeerId == state.peerIdWithRevealedOptions) || (peerId != nil && fromPeerId == nil) {
@@ -257,7 +302,11 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
             }
         }
 
-        var entries: [DGShadowBanEntry] = [.add(presentationData.theme)]
+        var entries: [DGShadowBanEntry] = [
+            .hideBlocked(state.hideBlocked),
+            .hideBlockedInfo(dgLocalized("Сообщения тех, кого вы заблокировали, скрыты в группах и комментариях, как в теневом бане. Боты не скрываются: остановленный бот тоже числится заблокированным.", languageCode: languageCode)),
+            .add(presentationData.theme)
+        ]
         for (index, peerId) in orderedPeerIds.enumerated() {
             let peer = peers[peerId]
             entries.append(.peer(Int32(index), peer ?? dgUnknownShadowBanPeer(peerId, languageCode: languageCode), dgShadowBanSubtitle(peer, peerId: peerId, languageCode: languageCode), peer != nil, ItemListPeerItemEditing(editable: true, editing: state.editing, revealed: peerId == state.peerIdWithRevealedOptions)))

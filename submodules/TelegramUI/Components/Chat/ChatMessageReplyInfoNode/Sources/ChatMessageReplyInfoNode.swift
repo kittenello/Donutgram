@@ -57,9 +57,18 @@ private let groupIcon: UIImage = {
 }()
 
 public class ChatMessageReplyInfoNode: ASDisplayNode {
-    /// The tooltip for a tap on the placeholder of a reply to a shadow-banned message.
-    public static func donutgramHiddenTooltip(strings: PresentationStrings) -> String {
-        return dgLocalized("Сообщение скрыто теневым баном", languageCode: strings.primaryComponent.languageCode)
+    /// The tooltip for a tap on the placeholder of the reply in `message`.
+    public static func donutgramHiddenTooltip(strings: PresentationStrings, message: EngineRawMessage) -> String {
+        let text = self.donutgramHidesOnlyBlockedAuthor(in: message) ? "Сообщение скрыто: автор заблокирован" : "Сообщение скрыто теневым баном"
+        return dgLocalized(text, languageCode: strings.primaryComponent.languageCode)
+    }
+
+    /// Whether the reply in `message` is hidden only because «Скрывать сообщения заблокированных» hides its author: the
+    /// shadow ban alone would show it.
+    static func donutgramHidesOnlyBlockedAuthor(in message: EngineRawMessage) -> Bool {
+        var banOnly = DonutgramShadowBan.State.current
+        banOnly.blockedPeerIds = []
+        return !DonutgramShadowBan.hidesReplyHeader(in: message, state: banOnly)
     }
 
     public final class TransitionReplyPanel {
@@ -713,8 +722,9 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             
             if arguments.donutgramHidden {
                 let languageCode = arguments.strings.primaryComponent.languageCode
+                let authorText = ChatMessageReplyInfoNode.donutgramHidesOnlyBlockedAuthor(in: arguments.parentMessage) ? "Автор заблокирован" : "Автор в теневом бане"
                 titleString = NSAttributedString(string: dgLocalized("Скрытое сообщение", languageCode: languageCode), font: titleFont, textColor: titleColor)
-                messageText = NSAttributedString(string: dgLocalized("Автор в теневом бане", languageCode: languageCode), font: textFont, textColor: textColor)
+                messageText = NSAttributedString(string: dgLocalized(authorText, languageCode: languageCode), font: textFont, textColor: textColor)
             }
             if arguments.isSummarized {
                 titleString = NSAttributedString(string: arguments.presentationData.strings.Conversation_Summary_Title, font: titleFont, textColor: titleColor)
