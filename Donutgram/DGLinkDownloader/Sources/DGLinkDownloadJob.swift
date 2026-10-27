@@ -295,6 +295,11 @@ public final class DGLinkDownloadJob {
                         fail(error)
                     case let .success(url):
                         self.startNext(items, alternatives: alternatives, limit: limit, batch: batch, prepare: prepare, failure: failure, completion: completion)
+                        if batch.remaining == 1 {
+                            // The last file is in: only making it is left, since a carousel's other photos were
+                            // made while it downloaded.
+                            self.report(.processing)
+                        }
                         guard let prepared = prepare(index, url) else {
                             fail(.processingFailed)
                             return
