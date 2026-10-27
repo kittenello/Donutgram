@@ -151,14 +151,13 @@ private enum DGSavedDeletedEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! DGSavedDeletedArguments
         let languageCode = presentationData.strings.primaryComponent.languageCode
-        let iconColor = presentationData.theme.list.itemPrimaryTextColor
         switch self {
         case let .usageHeader(text), let .chatsHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .messages(title, value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesSettings.donutgramOutlineIcon("tray.full", color: iconColor), title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
         case let .files(title, value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesSettings.donutgramOutlineIcon("doc", color: iconColor), title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
         case let .deleteAll(title, enabled):
             // A disabled action item still calls its action.
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: enabled ? .destructive : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {

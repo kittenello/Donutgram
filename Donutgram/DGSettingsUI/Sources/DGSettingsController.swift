@@ -50,8 +50,8 @@ enum DGListEntry: ItemListNodeEntry {
     case header(Int32, Int32, String)
     case toggle(Int32, Int32, String, String, Bool, Bool)
     case disclosure(Int32, Int32, String, String, String)
-    // A section of the root: key, title and state, then the SF Symbol drawn in white on the icon's RGB color.
-    // Only the root has icons: rows inside the sections have none, as in Telegram's own settings.
+    // A section of the root: key, title and state, then Telegram's settings glyph (`Item List/Icons/<name>`) drawn in white
+    // on the icon's RGB color. Only the root has icons: rows inside the sections have none, as in Telegram's own settings.
     case rootRow(Int32, Int32, String, String, String, String, UInt32)
     // A choice made in place: the row shows the current value and opens the page's `menu` for its key.
     case menu(Int32, Int32, String, String, String)
@@ -109,7 +109,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .header(id, section, title): return .header(id, section, tr(title))
         case let .toggle(id, section, key, title, value, enabled): return .toggle(id, section, key, tr(title), value, enabled)
         case let .disclosure(id, section, key, title, label): return .disclosure(id, section, key, tr(title), tr(label))
-        case let .rootRow(id, section, key, title, label, symbol, color): return .rootRow(id, section, key, tr(title), tr(label), symbol, color)
+        case let .rootRow(id, section, key, title, label, glyph, color): return .rootRow(id, section, key, tr(title), tr(label), glyph, color)
         case let .menu(id, section, key, title, label): return .menu(id, section, key, tr(title), tr(label))
         case let .action(id, section, key, title): return .action(id, section, key, tr(title))
         case let .value(id, section, key, title, value): return .value(id, section, key, tr(title), value)
@@ -131,8 +131,8 @@ enum DGListEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: enabled, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { arguments.toggle(key, $0) }, activatedWhileDisabled: { arguments.toggleWhileDisabled(key) }, tag: DGSettingItemTag(key: key))
         case let .disclosure(_, _, key, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
-        case let .rootRow(_, _, key, title, label, symbol, color):
-            let icon = PresentationResourcesSettings.donutgramOutlineIcon(symbol, color: .white, backgroundColor: UIColor(rgb: color))
+        case let .rootRow(_, _, key, title, label, glyph, color):
+            let icon = PresentationResourcesSettings.donutgramIcon(glyph, color: UIColor(rgb: color))
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
         case let .menu(_, _, key, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .optionArrows, action: { arguments.openMenu(key) }, tag: DGSettingItemTag(key: key))
@@ -365,24 +365,24 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
             entries.append(.notice(-1, -1, "Настройки разложены по разделам", "Каждый раздел назван по месту в приложении, где видны его настройки. Ссылки на настройки, скопированные раньше, открывают их на новом месте."))
         }
         entries.append(.header(0, 0, "ПРИВАТНОСТЬ"))
-        entries.append(.rootRow(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Вкл · \(hiddenByGhost) из 5" : "Выкл", "eye.slash.fill", 0x5E5CE6))
-        entries.append(.rootRow(2, 0, "saving", "Удалённые и правки", isSaving ? "Вкл" : "Выкл", "trash.slash.fill", 0xFF9F0A))
-        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 5", "lock.open.fill", 0x00C7BE))
-        entries.append(.rootRow(4, 0, "shadowBan", "Теневой бан", shadowBanned == 0 ? "Нет" : "\(shadowBanned)", "person.crop.circle.fill.badge.xmark", 0xFF453A))
-        entries.append(.rootRow(5, 0, "security", "Подтверждения и статистика", "", "checkmark.shield.fill", 0x8E8E93))
+        entries.append(.rootRow(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Вкл · \(hiddenByGhost) из 5" : "Выкл", "NoForward", 0x5E5CE6))
+        entries.append(.rootRow(2, 0, "saving", "Удалённые и правки", isSaving ? "Вкл" : "Выкл", "Delete", 0xFF9F0A))
+        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 5", "Key", 0x00C7BE))
+        entries.append(.rootRow(4, 0, "shadowBan", "Теневой бан", shadowBanned == 0 ? "Нет" : "\(shadowBanned)", "Block", 0xFF453A))
+        entries.append(.rootRow(5, 0, "security", "Подтверждения и статистика", "", "Checkbox", 0x8E8E93))
         entries.append(.header(10, 1, "ИНТЕРФЕЙС"))
-        entries.append(.rootRow(11, 1, "mainScreen", "Список чатов", "", "rectangle.grid.1x2.fill", 0x0A84FF))
-        entries.append(.rootRow(12, 1, "messages", "Сообщения", "", "bubble.left.and.bubble.right.fill", 0x34C759))
-        entries.append(.rootRow(13, 1, "stickers", "Стикеры и реакции", "", "face.smiling.fill", 0xFF2D55))
-        entries.append(.rootRow(14, 1, "profiles", "Профили", "", "person.crop.circle.fill", 0xAF52DE))
-        entries.append(.rootRow(15, 1, "localProfile", "Локальный профиль", localProfile ? "Вкл" : "", "theatermasks.fill", 0x32ADE6))
-        entries.append(.rootRow(16, 1, "iconAndIsland", donutgramIconAndIslandTitle(), appIcon, "app.fill", 0xFFCC02))
+        entries.append(.rootRow(11, 1, "mainScreen", "Список чатов", "", "Topics", 0x0A84FF))
+        entries.append(.rootRow(12, 1, "messages", "Сообщения", "", "Messages", 0x34C759))
+        entries.append(.rootRow(13, 1, "stickers", "Стикеры и реакции", "", "Sticker", 0xFF2D55))
+        entries.append(.rootRow(14, 1, "profiles", "Профили", "", "Profile", 0xAF52DE))
+        entries.append(.rootRow(15, 1, "localProfile", "Локальный профиль", localProfile ? "Вкл" : "", "Brush", 0x32ADE6))
+        entries.append(.rootRow(16, 1, "iconAndIsland", donutgramIconAndIslandTitle(), appIcon, "Icons", 0xFFCC02))
         entries.append(.header(20, 2, "МЕДИА И СЕТЬ"))
-        entries.append(.rootRow(21, 2, "media", "Запись и воспроизведение", "", "mic.fill", 0xFF453A))
-        entries.append(.rootRow(22, 2, "downloads", "Загрузки и сеть", acceleration, "arrow.down.circle.fill", 0x34C759))
+        entries.append(.rootRow(21, 2, "media", "Запись и воспроизведение", "", "Microphone", 0xFF453A))
+        entries.append(.rootRow(22, 2, "downloads", "Загрузки и сеть", acceleration, "Download", 0x34C759))
         entries.append(.header(30, 3, "ПРОЧЕЕ"))
-        entries.append(.rootRow(31, 3, "adsAndGifts", "Реклама и подарки", "", "gift.fill", 0xAF52DE))
-        entries.append(.rootRow(32, 3, "about", "О Donutgram", dgAppVersion(), "info.circle.fill", 0x0A84FF))
+        entries.append(.rootRow(31, 3, "adsAndGifts", "Реклама и подарки", "", "Gift", 0xAF52DE))
+        entries.append(.rootRow(32, 3, "about", "О Donutgram", dgAppVersion(), "Faq", 0x0A84FF))
         return entries
     }, select: { key in
         if key == "dismissSectionsNotice" {
