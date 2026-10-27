@@ -571,7 +571,26 @@ public func stringForStoryActivityTimestamp(strings: PresentationStrings, dateTi
     }
 }
 
-public func stringAndActivityForUserPresence(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, presence: EnginePeer.Presence, relativeTo timestamp: Int32, expanded: Bool = false, includeExactTime: Bool = false) -> (String, Bool) {
+public func stringForDonutgramApproximatePresence(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, timestamp: Int32, relativeTo now: Int32) -> String {
+    let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
+    let calendar = Calendar.current
+    let components = calendar.dateComponents([.hour, .minute, .second], from: date)
+    let time = String(format: "~%02d:%02d:%02d", components.hour ?? 0, components.minute ?? 0, components.second ?? 0)
+    if calendar.isDate(date, inSameDayAs: Date(timeIntervalSince1970: TimeInterval(now))) {
+        if strings.baseLanguageCode.lowercased().hasPrefix("ru") {
+            return "был(а) в \(time)"
+        }
+        return strings.LastSeen_AtDate(time).string
+    }
+    let dateComponents = calendar.dateComponents([.day, .month, .year], from: date)
+    let day = stringForTimestamp(day: Int32(dateComponents.day ?? 1), month: Int32(dateComponents.month ?? 1), year: Int32((dateComponents.year ?? 1900) - 1900), dateTimeFormat: dateTimeFormat)
+    if strings.baseLanguageCode.lowercased().hasPrefix("ru") {
+        return "был(а) \(day) в \(time)"
+    }
+    return strings.LastSeen_AtDate("\(day), \(time)").string
+}
+
+public func stringAndActivityForUserPresence(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, presence: EnginePeer.Presence, relativeTo timestamp: Int32, expanded: Bool = false, includeExactTime: Bool = false, approximateLastSeen: Bool = false) -> (String, Bool) {
     switch presence.status {
     case let .present(statusTimestamp):
         if statusTimestamp >= timestamp {
@@ -627,6 +646,8 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
         let activeUntil = presence.lastActivity + 30
         if activeUntil >= timestamp {
             return (strings.Presence_online, true)
+        } else if approximateLastSeen, let lastMessage = donutgramApproximateLastSeenTimestamp(presence, relativeTo: timestamp) {
+            return (stringForDonutgramApproximatePresence(strings: strings, dateTimeFormat: dateTimeFormat, timestamp: lastMessage, relativeTo: timestamp), false)
         } else {
             return (strings.LastSeen_Lately, false)
         }

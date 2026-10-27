@@ -36,6 +36,8 @@ public enum ChatTitleContent: Equatable {
         public var notificationSettings: TelegramPeerNotificationSettings?
         public var peerPresences: [EnginePeer.Id: EngineRawPeerPresence]
         public var cachedData: EngineCachedPeerData?
+        // «Примерный онлайн» when the data was made: the setting's toggle gives unequal data, so an open chat redraws its status.
+        public var approximateLastSeen: Bool
 
         public init(peerId: EnginePeer.Id, peer: EngineRawPeer?, isContact: Bool, isSavedMessages: Bool, notificationSettings: TelegramPeerNotificationSettings?, peerPresences: [EnginePeer.Id: EngineRawPeerPresence], cachedData: EngineCachedPeerData?) {
             self.peerId = peerId
@@ -45,6 +47,7 @@ public enum ChatTitleContent: Equatable {
             self.notificationSettings = notificationSettings
             self.peerPresences = peerPresences
             self.cachedData = cachedData
+            self.approximateLastSeen = DGSimpleSettings.shared.approximateLastSeen
         }
         
         public init(peerView: EngineRawPeerView) {
@@ -82,6 +85,9 @@ public enum ChatTitleContent: Equatable {
                 }
             }
             if lhs.cachedData !== rhs.cachedData {
+                return false
+            }
+            if lhs.approximateLastSeen != rhs.approximateLastSeen {
                 return false
             }
             return true
@@ -661,7 +667,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         } else {
                                             userPresence = TelegramUserPresence(status: .none, lastActivity: 0)
                                         }
-                                        let (string, activity) = stringAndActivityForUserPresence(strings: self.strings, dateTimeFormat: self.dateTimeFormat, presence: EnginePeer.Presence(userPresence), relativeTo: Int32(timestamp), expanded: !DGSimpleSettings.shared.relativeOnlineTime)
+                                        let (string, activity) = stringAndActivityForUserPresence(strings: self.strings, dateTimeFormat: self.dateTimeFormat, presence: EnginePeer.Presence(userPresence), relativeTo: Int32(timestamp), expanded: !DGSimpleSettings.shared.relativeOnlineTime, approximateLastSeen: peerView.approximateLastSeen)
                                         let attributedString = NSAttributedString(string: string, font: subtitleFont, textColor: activity ? titleTheme.rootController.navigationBar.accentTextColor : titleTheme.rootController.navigationBar.secondaryTextColor)
                                         state = .info(attributedString, activity ? .online : .lastSeenTime)
                                     } else {
