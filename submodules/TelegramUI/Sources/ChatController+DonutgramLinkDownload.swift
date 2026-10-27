@@ -45,6 +45,9 @@ private final class DonutgramLinkDownloadToast {
     func finish() {
         self.timer?.invalidate()
         self.timer = nil
+        // Show the job's last status before closing, not the timer's last frame (up to a quarter of a second old):
+        // a carousel's job ends right after its last download, and the ring would close short of full.
+        self.render()
         self.controller?.dismiss()
     }
 

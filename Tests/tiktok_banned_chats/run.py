@@ -77,6 +77,12 @@ def prepare(directory):
     # fails its attempt like a failed download, so TikWM is still tried.
     assert "self.download(items, limit: 6, prepare: { index, source in" in job
     assert "guard let prepared = prepare(index, url) else {\n                            fail(.processingFailed)" in job
+    # So a carousel's job ends right after its last download: from then on the toast shows processing, and it closes on
+    # the job's last status rather than on the frame its timer drew last.
+    arrived = job.split("case let .success(url):", 1)[1].split("\n                    }\n", 1)[0]
+    assert arrived.index("if batch.remaining == 1 {") < arrived.index("self.report(.processing)") < arrived.index("prepare(index, url)")
+    toast = source("submodules/TelegramUI/Sources/ChatController+DonutgramLinkDownload.swift").split("func finish() {", 1)[1].split("\n    }\n", 1)[0]
+    assert toast.index("self.render()") < toast.index("self.controller?.dismiss()")
     # TikWM sees the post and the user's IP: the downloads page says so.
     downloads = source("Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift").split("func dgDownloadsSettingsController(", 1)[1].split("\n}\n", 1)[0]
     assert "tikwm.com" in downloads
