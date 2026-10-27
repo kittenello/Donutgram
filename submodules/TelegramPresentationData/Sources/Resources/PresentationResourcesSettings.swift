@@ -117,32 +117,21 @@ let colorGray = UIColor(rgb: 0x8E8E93)
 let colorViolet = UIColor(rgb: 0x5E5CE6)
 
 public struct PresentationResourcesSettings {
-    /// An SF Symbol as a settings icon. With a background it is a tile like `renderSettingsIcon`'s, the gradient and
-    /// backdrop of Telegram's icons over the color, and the glyph fitted into 20×20 so wide and tall symbols match in size.
-    public static func donutgramOutlineIcon(_ symbolName: String, color: UIColor, backgroundColor: UIColor? = nil) -> UIImage? {
-        let configuration = UIImage.SymbolConfiguration(pointSize: 19.0, weight: backgroundColor == nil ? .regular : .medium)
-        guard let symbol = (UIImage(systemName: symbolName, withConfiguration: configuration) ?? UIImage(systemName: "gearshape", withConfiguration: configuration))?.withTintColor(color, renderingMode: .alwaysOriginal) else {
+    private static let donutgramIcons = NSCache<NSString, UIImage>()
+
+    /// Telegram's own settings glyph `Item List/Icons/<name>` on a tile of the color, rendered by `renderSettingsIcon` as
+    /// Telegram's icons are. The glyph is made for the 30×30 tile and already sits in its center, so nothing is fitted here.
+    /// Cached per glyph and color: the settings lists rebuild their rows on every change.
+    public static func donutgramIcon(_ name: String, color: UIColor) -> UIImage? {
+        let key = "\(name) \(color.argb)" as NSString
+        if let image = donutgramIcons.object(forKey: key) {
+            return image
+        }
+        guard let image = renderSettingsIcon(name: "Item List/Icons/\(name)", backgroundColors: [color]) else {
             return nil
         }
-        let size = CGSize(width: 30.0, height: 30.0)
-        let format = UIGraphicsImageRendererFormat.default()
-        format.opaque = false
-        return UIGraphicsImageRenderer(size: size, format: format).image { rendererContext in
-            let bounds = CGRect(origin: .zero, size: size)
-            rendererContext.cgContext.clear(bounds)
-            var symbolSize = symbol.size
-            if let backgroundColor {
-                UIBezierPath(roundedRect: bounds, cornerRadius: 8.0).addClip()
-                backgroundColor.setFill()
-                UIRectFill(bounds)
-                gradientImage?.draw(in: bounds, blendMode: .plusLighter, alpha: 1.0)
-                backdropImage?.draw(in: bounds, blendMode: .overlay, alpha: 1.0)
-                let scale = min(1.0, 20.0 / max(symbolSize.width, symbolSize.height))
-                symbolSize = CGSize(width: symbolSize.width * scale, height: symbolSize.height * scale)
-            }
-            let rect = CGRect(x: floor((size.width - symbolSize.width) / 2.0), y: floor((size.height - symbolSize.height) / 2.0), width: symbolSize.width, height: symbolSize.height)
-            symbol.draw(in: rect)
-        }
+        donutgramIcons.setObject(image, forKey: key)
+        return image
     }
 
     public static let proxy = renderSettingsIcon(name: "Item List/Icons/Proxy", backgroundColors: [colorGreen])

@@ -225,7 +225,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         }
     }
     
-    items[.donutgram]!.append(PeerInfoScreenDisclosureItem(id: 0, text: dgLocalized("Настройки Donutgram", languageCode: presentationData.strings.primaryComponent.languageCode), icon: PresentationResourcesSettings.donutgramOutlineIcon("gearshape", color: .white, backgroundColor: presentationData.theme.list.itemAccentColor), action: {
+    items[.donutgram]!.append(PeerInfoScreenDisclosureItem(id: 0, text: dgLocalized("Настройки Donutgram", languageCode: presentationData.strings.primaryComponent.languageCode), icon: PresentationResourcesSettings.donutgramIcon("Settings", color: presentationData.theme.list.itemAccentColor), action: {
         interaction.openSettings(.donutgram)
     }))
 
