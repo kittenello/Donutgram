@@ -488,8 +488,8 @@ func updatePeerPresences(transaction: Transaction, accountPeerId: PeerId, peerPr
     parsedPresences.removeValue(forKey: accountPeerId)
         
     transaction.updatePeerPresencesInternal(presences: parsedPresences, merge: { previous, updated in
-        if let previous = previous as? TelegramUserPresence, let updated = updated as? TelegramUserPresence, previous.lastActivity != updated.lastActivity {
-            return TelegramUserPresence(status: updated.status, lastActivity: max(previous.lastActivity, updated.lastActivity))
+        if let previous = previous as? TelegramUserPresence, let updated = updated as? TelegramUserPresence {
+            return TelegramUserPresence(status: updated.status, lastActivity: max(previous.lastActivity, updated.lastActivity), donutgramLastMessageTimestamp: max(previous.donutgramLastMessageTimestamp, updated.donutgramLastMessageTimestamp))
         }
         return updated
     })
@@ -515,8 +515,8 @@ func updatePeerPresencesClean(transaction: Transaction, accountPeerId: PeerId, p
     }
     
     transaction.updatePeerPresencesInternal(presences: parsedPresences, merge: { previous, updated in
-        if let previous = previous as? TelegramUserPresence, let updated = updated as? TelegramUserPresence, previous.lastActivity != updated.lastActivity {
-            return TelegramUserPresence(status: updated.status, lastActivity: max(previous.lastActivity, updated.lastActivity))
+        if let previous = previous as? TelegramUserPresence, let updated = updated as? TelegramUserPresence {
+            return TelegramUserPresence(status: updated.status, lastActivity: max(previous.lastActivity, updated.lastActivity), donutgramLastMessageTimestamp: max(previous.donutgramLastMessageTimestamp, updated.donutgramLastMessageTimestamp))
         }
         return updated
     })
@@ -539,7 +539,7 @@ func updatePeerPresenceLastActivities(transaction: Transaction, accountPeerId: P
                     default:
                         break
                 }
-                return TelegramUserPresence(status: updatedStatus, lastActivity: timestamp)
+                return TelegramUserPresence(status: updatedStatus, lastActivity: timestamp, donutgramLastMessageTimestamp: previous.donutgramLastMessageTimestamp)
             }
             return previous
         })

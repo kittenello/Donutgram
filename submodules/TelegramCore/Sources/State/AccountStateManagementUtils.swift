@@ -4261,11 +4261,13 @@ func replayFinalState(
     }
     
     var liveTypingDraftUpdates: [PeerAndThreadId: [LiveTypingDraftUpdate]] = [:]
+    var donutgramActivityMessages: [StoreMessage] = []
 
     for operation in finalState.state.operations {
         switch operation {
         case let .AddMessages(messages, location):
             if case .UpperHistoryBlock = location {
+                donutgramActivityMessages.append(contentsOf: messages)
                 for message in messages {
                     if case let .Id(id) = message.id {
                         if message.flags.contains(.Incoming) {
@@ -5950,6 +5952,8 @@ func replayFinalState(
     if !peerActivityTimestamps.isEmpty {
         updatePeerPresenceLastActivities(transaction: transaction, accountPeerId: accountPeerId, activities: peerActivityTimestamps)
     }
+    // After the replay: the authors and groups that came with these messages, and their presences, are stored by now.
+    donutgramRecordMessageActivity(transaction: transaction, accountPeerId: accountPeerId, messages: donutgramActivityMessages)
     
     if !stickerPackOperations.isEmpty {
         if stickerPackOperations.contains(where: {

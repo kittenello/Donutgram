@@ -1,0 +1,28 @@
+name: Approximate presence tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramApproximatePresence.swift'
+      - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramUserPresence.swift'
+      - 'submodules/TelegramCore/Sources/UpdatePeers.swift'
+      - 'submodules/TelegramStringFormatting/Sources/PresenceStrings.swift'
+      - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoData.swift'
+      - 'Tests/approximate_presence/**'
+      - '.github/workflows/approximate-presence-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check message activity, persistence and status formatting
+        run: python3 Tests/approximate_presence/run.py

@@ -87,7 +87,7 @@ public final class DGSimpleSettings {
     /// send account.updateStatus.
     public static let blockedPeersDidChangeNotification = Notification.Name("donutgram.blockedPeers.didChange")
     public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
-    /// «Полупрозрачные удаленки» changed. Separate from didChangeNotification for the same reason.
+    /// «Полупрозрачные удалённые» changed. Separate from didChangeNotification for the same reason.
     public static let deletedMessagesAppearanceDidChangeNotification = Notification.Name("donutgram.deletedMessages.appearanceDidChange")
 
     public enum TranscriptionBackend: String, CaseIterable {
@@ -148,6 +148,8 @@ public final class DGSimpleSettings {
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
+        static let approximateLastSeen = "donutgram.spy.approximateLastSeen"
+        static let approximateLastSeenStartedAt = "donutgram.spy.approximateLastSeenStartedAt"
 
         static let ghostModeEnabled = "donutgram.ghost.enabled"
         static let ghostReadMessages = "donutgram.ghost.readMessages"
@@ -160,6 +162,7 @@ public final class DGSimpleSettings {
         static let ghostSendWithoutSound = "donutgram.ghost.sendWithoutSound"
         static let ghostSuggestForStories = "donutgram.ghost.suggestForStories"
         static let sendTelegramStatistics = "donutgram.privacy.sendTelegramStatistics"
+        static let settingsSectionsNoticeDismissed = "donutgram.settings.sectionsNoticeDismissed"
         static let bypassForwardRestrictions = "donutgram.spy.bypassForwardRestrictions"
         static let allowProtectedScreenshots = "donutgram.spy.allowProtectedScreenshots"
         static let visualPhoneEnabled = "donutgram.profile.visualPhoneEnabled"
@@ -266,6 +269,10 @@ public final class DGSimpleSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+
+        if defaults.bool(forKey: Key.approximateLastSeen) && defaults.object(forKey: Key.approximateLastSeenStartedAt) == nil {
+            defaults.set(Int32(Date().timeIntervalSince1970), forKey: Key.approximateLastSeenStartedAt)
+        }
 
         if defaults.object(forKey: Key.saveDeletedMessages) == nil {
             defaults.set(true, forKey: Key.saveDeletedMessages)
@@ -466,6 +473,8 @@ public final class DGSimpleSettings {
     public var ghostSuggestForStories: Bool { get { bool(Key.ghostSuggestForStories) } set { setBool(newValue, Key.ghostSuggestForStories) } }
     /// App analytics, service logs and call quality data for Telegram. Off by default.
     public var sendTelegramStatistics: Bool { get { bool(Key.sendTelegramStatistics) } set { setBool(newValue, Key.sendTelegramStatistics) } }
+    /// The card on top of «Настройки Donutgram» that says the settings are now in sections, once it is closed.
+    public var settingsSectionsNoticeDismissed: Bool { get { bool(Key.settingsSectionsNoticeDismissed) } set { setBool(newValue, Key.settingsSectionsNoticeDismissed) } }
     public var bypassForwardRestrictions: Bool { get { bool(Key.bypassForwardRestrictions) } set { setBool(newValue, Key.bypassForwardRestrictions) } }
     /// Content of chats, groups and channels that forbid copying stays visible on screenshots and screen
     /// recordings. Secret chats and media with a timer stay hidden. On until switched off.
@@ -676,6 +685,26 @@ public final class DGSimpleSettings {
     public var showProfileId: Bool { get { bool(Key.showProfileId) } set { setBool(newValue, Key.showProfileId) } }
     public var dialogIdFormat: DialogIdFormat { get { DialogIdFormat(rawValue: integer(Key.dialogIdFormat)) ?? .telegramApi } set { setInteger(newValue.rawValue, Key.dialogIdFormat) } }
     public var relativeOnlineTime: Bool { get { bool(Key.relativeOnlineTime) } set { setBool(newValue, Key.relativeOnlineTime) } }
+    public var approximateLastSeen: Bool {
+        get { bool(Key.approximateLastSeen) }
+        set {
+            guard newValue != self.approximateLastSeen else {
+                return
+            }
+            if newValue {
+                self.defaults.set(Int32(Date().timeIntervalSince1970), forKey: Key.approximateLastSeenStartedAt)
+            } else {
+                self.defaults.removeObject(forKey: Key.approximateLastSeenStartedAt)
+            }
+            setBool(newValue, Key.approximateLastSeen)
+        }
+    }
+    public var approximateLastSeenStartedAt: Int32? {
+        guard self.approximateLastSeen, self.defaults.object(forKey: Key.approximateLastSeenStartedAt) != nil else {
+            return nil
+        }
+        return Int32(clamping: self.defaults.integer(forKey: Key.approximateLastSeenStartedAt))
+    }
     public var hidePhoneNumber: Bool { get { bool(Key.hidePhoneNumber) } set { setBool(newValue, Key.hidePhoneNumber) } }
     public var showDc: Bool { get { bool(Key.showDc) } set { setBool(newValue, Key.showDc) } }
     public var showRegistrationDate: Bool { get { bool(Key.showRegistrationDate) } set { setBool(newValue, Key.showRegistrationDate) } }
@@ -1057,7 +1086,7 @@ public final class DGSimpleSettings {
     public var downloadYouTubeShorts: Bool { get { bool(Key.downloadYouTubeShorts) } set { setBool(newValue, Key.downloadYouTubeShorts) } }
     public var signDownloadedMedia: Bool { get { bool(Key.signDownloadedMedia) } set { setBool(newValue, Key.signDownloadedMedia) } }
     /// Use the device microphone for voice and video recording, even with external inputs connected.
-    /// Disabled by default; the switch is «Встроенный микрофон» in «Чаты» ▸ «Запись».
+    /// Disabled by default; the switch is «Встроенный микрофон» in «Запись и воспроизведение» ▸ «Запись».
     public var forceBuiltInMicrophone: Bool {
         get { bool(Key.forceBuiltInMicrophone) }
         set { setBool(newValue, Key.forceBuiltInMicrophone) }

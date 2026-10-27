@@ -117,8 +117,10 @@ let colorGray = UIColor(rgb: 0x8E8E93)
 let colorViolet = UIColor(rgb: 0x5E5CE6)
 
 public struct PresentationResourcesSettings {
+    /// An SF Symbol as a settings icon. With a background it is a tile like `renderSettingsIcon`'s, the gradient and
+    /// backdrop of Telegram's icons over the color, and the glyph fitted into 20×20 so wide and tall symbols match in size.
     public static func donutgramOutlineIcon(_ symbolName: String, color: UIColor, backgroundColor: UIColor? = nil) -> UIImage? {
-        let configuration = UIImage.SymbolConfiguration(pointSize: 19.0, weight: .regular)
+        let configuration = UIImage.SymbolConfiguration(pointSize: 19.0, weight: backgroundColor == nil ? .regular : .medium)
         guard let symbol = (UIImage(systemName: symbolName, withConfiguration: configuration) ?? UIImage(systemName: "gearshape", withConfiguration: configuration))?.withTintColor(color, renderingMode: .alwaysOriginal) else {
             return nil
         }
@@ -128,11 +130,17 @@ public struct PresentationResourcesSettings {
         return UIGraphicsImageRenderer(size: size, format: format).image { rendererContext in
             let bounds = CGRect(origin: .zero, size: size)
             rendererContext.cgContext.clear(bounds)
+            var symbolSize = symbol.size
             if let backgroundColor {
+                UIBezierPath(roundedRect: bounds, cornerRadius: 8.0).addClip()
                 backgroundColor.setFill()
-                UIBezierPath(roundedRect: bounds, cornerRadius: 8.0).fill()
+                UIRectFill(bounds)
+                gradientImage?.draw(in: bounds, blendMode: .plusLighter, alpha: 1.0)
+                backdropImage?.draw(in: bounds, blendMode: .overlay, alpha: 1.0)
+                let scale = min(1.0, 20.0 / max(symbolSize.width, symbolSize.height))
+                symbolSize = CGSize(width: symbolSize.width * scale, height: symbolSize.height * scale)
             }
-            let rect = CGRect(x: floor((size.width - symbol.size.width) / 2.0), y: floor((size.height - symbol.size.height) / 2.0), width: symbol.size.width, height: symbol.size.height)
+            let rect = CGRect(x: floor((size.width - symbolSize.width) / 2.0), y: floor((size.height - symbolSize.height) / 2.0), width: symbolSize.width, height: symbolSize.height)
             symbol.draw(in: rect)
         }
     }
