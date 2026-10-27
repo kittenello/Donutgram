@@ -54,9 +54,17 @@ if mode == "write" {
     check(!settings.shouldStopAfterMedia(isRoundVideo: false) && !settings.shouldStopAfterMedia(isRoundVideo: true), "switch off restores Telegram autoplay for both types")
     settings.disableMediaAutoplay = true
     settings.jumpToStartInChatMenu = false
+    let packData = Data([1, 2, 3])
+    settings.setAnonymousStickerPackData(packData, accountId: 1001, peerId: 2001, namespace: 0, messageId: 3001)
+    check(settings.anonymousStickerPackData(accountId: 1001, peerId: 2001, namespace: 0, messageId: 3001) == packData, "sticker pack data is saved")
+    check(settings.anonymousStickerPackData(accountId: 1002, peerId: 2001, namespace: 0, messageId: 3001) == nil, "sticker packs are isolated by account")
+    check(settings.anonymousStickerPackData(accountId: 1001, peerId: 2002, namespace: 0, messageId: 3001) == nil, "sticker packs are isolated by chat")
+    check(settings.anonymousStickerPackData(accountId: 1001, peerId: 2001, namespace: 1, messageId: 3001) == nil, "sticker packs are isolated by namespace")
+    check(settings.anonymousStickerPackData(accountId: 1001, peerId: 2001, namespace: 0, messageId: 3002) == nil, "sticker packs are isolated by message")
     defaults.synchronize()
     print("settings behavior checks passed")
 } else if mode == "read" {
+    check(settings.anonymousStickerPackData(accountId: 1001, peerId: 2001, namespace: 0, messageId: 3001) == Data([1, 2, 3]), "sticker pack data survives process restart")
     check(settings.hidePaidReactions && settings.hideBirthdayNotifications && settings.hideViaBot, "visibility preferences must survive process restart")
     check(settings.hideBotAutomation && settings.removeLinkPreviews, "bot/link preferences must survive process restart")
     check(settings.hideServiceMessages && settings.confirmReactionsInUnjoinedChats && settings.confirmTelegramLinks && settings.confirmChatPreviewEntry, "safety preferences must survive process restart")

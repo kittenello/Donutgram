@@ -1117,6 +1117,14 @@ public final class DGSimpleSettings {
 
     public var mentionAvatars: Bool { get { bool(Key.mentionAvatars) } set { setBool(newValue, Key.mentionAvatars) } }
     public var bypassContentRestrictions: Bool { get { bool(Key.bypassContentRestrictions) } set { setBool(newValue, Key.bypassContentRestrictions) } }
+    public func setAnonymousStickerPackData(_ data: Data, accountId: Int64, peerId: Int64, namespace: Int32, messageId: Int32) {
+        defaults.set(data, forKey: "donutgram.stickerPack.\(accountId).\(peerId).\(namespace).\(messageId)")
+    }
+
+    public func anonymousStickerPackData(accountId: Int64, peerId: Int64, namespace: Int32, messageId: Int32) -> Data? {
+        return defaults.data(forKey: "donutgram.stickerPack.\(accountId).\(peerId).\(namespace).\(messageId)")
+    }
+
     public var anonymousStickerSending: Bool { get { bool(Key.anonymousStickerSending) } set { setBool(newValue, Key.anonymousStickerSending) } }
     public var gifUnlock: Bool { get { bool(Key.gifUnlock) } set { setBool(newValue, Key.gifUnlock) } }
     /// Shared with the notification extension (`DGMessagePreservationSettings`).

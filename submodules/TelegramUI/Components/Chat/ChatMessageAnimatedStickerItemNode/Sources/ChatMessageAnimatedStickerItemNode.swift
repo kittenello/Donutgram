@@ -2576,7 +2576,11 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         }
                     })
                     
-                    if file.isPremiumSticker && !noPremium {
+                    if donutgramAnonymousStickerPack(accountPeerId: item.context.account.peerId, messageId: item.message.id) != nil {
+                        return .optionalAction({
+                            let _ = item.controllerInteraction.openMessage(item.message, OpenMessageParams(mode: .default))
+                        })
+                    } else if file.isPremiumSticker && !noPremium {
                         return .optionalAction({
                             if self.additionalAnimationNodes.isEmpty {
                                 self.playedPremiumStickerAnimation = false

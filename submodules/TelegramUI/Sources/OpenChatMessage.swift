@@ -130,7 +130,11 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
         return true
     }
     
-    if let mediaData = chatMessageGalleryControllerData(context: params.context, chatLocation: params.chatLocation, chatFilterTag: params.chatFilterTag, chatLocationContextHolder: params.chatLocationContextHolder, message: params.message, mediaSubject: params.mediaSubject, navigationController: params.navigationController, standalone: params.standalone, reverseMessageGalleryOrder: params.reverseMessageGalleryOrder, mode: params.mode, source: params.gallerySource, synchronousLoad: false, actionInteraction: params.actionInteraction) {
+    var localStickerData: ChatMessageGalleryControllerData?
+    if let file = params.message.media.first as? TelegramMediaFile, file.isSticker, let reference = donutgramAnonymousStickerPack(accountPeerId: params.context.account.peerId, messageId: params.message.id) {
+        localStickerData = .stickerPack(reference, file)
+    }
+    if let mediaData = localStickerData ?? chatMessageGalleryControllerData(context: params.context, chatLocation: params.chatLocation, chatFilterTag: params.chatFilterTag, chatLocationContextHolder: params.chatLocationContextHolder, message: params.message, mediaSubject: params.mediaSubject, navigationController: params.navigationController, standalone: params.standalone, reverseMessageGalleryOrder: params.reverseMessageGalleryOrder, mode: params.mode, source: params.gallerySource, synchronousLoad: false, actionInteraction: params.actionInteraction) {
         switch mediaData {
             case let .url(url):
                 params.openUrl(url)
