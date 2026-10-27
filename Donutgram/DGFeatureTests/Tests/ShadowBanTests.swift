@@ -58,6 +58,17 @@ final class ShadowBanTests: XCTestCase {
         XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.bob)), state: state))
     }
 
+    func testBlockedAuthorsAreHiddenOnlyInGroups() {
+        let state = DonutgramShadowBan.State(bannedPeerIds: [], revealedChatIds: [], blockedPeerIds: [self.alice.toInt64()])
+        XCTAssertTrue(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.alice)), state: state))
+        XCTAssertTrue(DonutgramShadowBan.isHidden(self.message(in: self.group, author: self.user(self.alice)), state: state))
+        XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.bob)), state: state))
+        XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.alice, author: self.user(self.alice)), state: state))
+        XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.alice), incoming: false), state: state))
+        XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.bob), forwardInfo: self.forward(author: self.user(self.alice))), state: state))
+        XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.supergroup, author: self.user(self.alice)), state: self.state(banned: [])))
+    }
+
     func testPrivateAndSecretChatsAreNeverFiltered() {
         let state = self.state(banned: [self.alice])
         XCTAssertFalse(DonutgramShadowBan.isHidden(self.message(in: self.alice, author: self.user(self.alice)), state: state))

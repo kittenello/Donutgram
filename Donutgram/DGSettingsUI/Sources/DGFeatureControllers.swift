@@ -397,6 +397,8 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
             .header(89, 11, "ДРУГОЕ"),
             .toggle(90, 11, "hideArchive", "Скрывать архив из списка чатов", s.hideArchive, true)
         ])
+        result.append(.toggle(98, 11, "hideBlockedMessages", "Скрывать сообщения заблокированных", s.hideBlockedMessages, true))
+        result.append(.info(99, 11, "Скрывает сообщения заблокированных пользователей в группах и обсуждениях."))
         result.append(.toggle(91, 11, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true))
         result.append(.disclosure(92, 11, "glow", "Свечение", "\([s.avatarGlow, s.reactionGlow].filter { $0 }.count)/2"))
         // The confirmations come before «В начало чата», so its explanation stays the footer of the section.
@@ -421,6 +423,7 @@ func dgChatsSettingsController(context: AccountContext, focusKey: String? = nil)
         case "confirmReactionsInUnjoinedChats": s.confirmReactionsInUnjoinedChats = value
         case "confirmTelegramLinks": s.confirmTelegramLinks = value
         case "confirmChatPreviewEntry": s.confirmChatPreviewEntry = value
+        case "hideBlockedMessages": s.hideBlockedMessages = value
         case "hideBotAutomation": s.hideBotAutomation = value
         case "bypassContentRestrictions": s.bypassContentRestrictions = value
         case "anonymousStickerSending": s.anonymousStickerSending = value

@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 internal import TelegramApi
 import Postbox
 import SwiftSignalKit
@@ -222,7 +223,10 @@ public final class BlockedPeersContext {
             |> mapError { _ -> BlockedPeersContextAddError in
                 return .generic
             }
-            |> mapToSignal { _ -> Signal<Never, BlockedPeersContextAddError> in
+            |> mapToSignal { [weak self] _ -> Signal<Never, BlockedPeersContextAddError> in
+                if let self, case .blocked = self.subject {
+                    NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: self.account.peerId.toInt64())
+                }
                 return .complete()
             }
         }
@@ -296,6 +300,9 @@ public final class BlockedPeersContext {
                 }
                 
                 strongSelf._state = BlockedPeersContextState(isLoadingMore: strongSelf._state.isLoadingMore, canLoadMore: strongSelf._state.canLoadMore, totalCount: updatedTotalCount, peers: mergedPeers)
+                if case .blocked = strongSelf.subject {
+                    NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: strongSelf.account.peerId.toInt64())
+                }
                 return .complete()
             }
         }
@@ -375,6 +382,9 @@ public final class BlockedPeersContext {
                 }
                 
                 strongSelf._state = BlockedPeersContextState(isLoadingMore: strongSelf._state.isLoadingMore, canLoadMore: strongSelf._state.canLoadMore, totalCount: updatedTotalCount, peers: mergedPeers)
+                if case .blocked = strongSelf.subject {
+                    NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: strongSelf.account.peerId.toInt64())
+                }
                 return .complete()
             }
         }

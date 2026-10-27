@@ -11,10 +11,12 @@ public enum DonutgramShadowBan {
     public struct State: Equatable {
         public var bannedPeerIds: Set<Int64>
         public var revealedChatIds: Set<Int64>
+        public var blockedPeerIds: Set<Int64>
 
-        public init(bannedPeerIds: Set<Int64>, revealedChatIds: Set<Int64>) {
+        public init(bannedPeerIds: Set<Int64>, revealedChatIds: Set<Int64>, blockedPeerIds: Set<Int64> = []) {
             self.bannedPeerIds = bannedPeerIds
             self.revealedChatIds = revealedChatIds
+            self.blockedPeerIds = blockedPeerIds
         }
 
         public static var current: State {
@@ -95,6 +97,9 @@ public enum DonutgramShadowBan {
 
     /// Whether `message` is hidden: banned content in a chat without «Показать скрытые».
     public static func isHidden(_ message: Message, state: State) -> Bool {
+        if !state.blockedPeerIds.isEmpty, message.flags.contains(.Incoming), self.appliesToChat(message.id.peerId, chatPeer: message.peers[message.id.peerId]), let authorId = message.author?.id, authorId != message.id.peerId, state.blockedPeerIds.contains(authorId.toInt64()) {
+            return true
+        }
         if state.bannedPeerIds.isEmpty || state.revealedChatIds.contains(message.id.peerId.toInt64()) {
             return false
         }

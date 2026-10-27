@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import Postbox
 import SwiftSignalKit
 internal import TelegramApi
@@ -21,6 +22,7 @@ func _internal_requestUpdatePeerIsBlocked(account: Account, peerId: PeerId, isBl
                 |> mapToSignal { result -> Signal<Void, NoError> in
                     return account.postbox.transaction { transaction -> Void in
                         if result != nil {
+                            NotificationCenter.default.post(name: DGSimpleSettings.blockedPeersDidChangeNotification, object: account.peerId.toInt64())
                             transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in
                                 let previous: CachedUserData
                                 if let current = current as? CachedUserData {

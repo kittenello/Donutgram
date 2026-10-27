@@ -756,6 +756,11 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
 
     private let donutgramShadowBanPromise = ValuePromise<DonutgramShadowBan.State>(DonutgramShadowBan.State.current, ignoreRepeated: true)
     private let donutgramHideServiceMessagesPromise = ValuePromise<Bool>(DGSimpleSettings.shared.hideServiceMessages, ignoreRepeated: true)
+    private var donutgramBlockedPeersContext: BlockedPeersContext?
+    private let donutgramBlockedPeersDisposable = MetaDisposable()
+    private var donutgramBlockedPeerIds = Set<Int64>()
+    private var donutgramBlockedPeersLastRequestedCount: Int?
+    private var donutgramBlockedPeersObserver: NSObjectProtocol?
     private var donutgramShadowBanObserver: NSObjectProtocol?
     private var donutgramDeletedMessagesAppearanceObserver: NSObjectProtocol?
     private var donutgramHiddenWindowWalk = DonutgramShadowBan.HiddenWindowWalk()
@@ -1491,6 +1496,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             }
             // «Отключить служебные сообщения» rebuilds the entries (ignoreRepeated keeps other changes from doing so).
             self.donutgramHideServiceMessagesPromise.set(DGSimpleSettings.shared.hideServiceMessages)
+            if DGSimpleSettings.shared.hideBlockedMessages != (self.donutgramBlockedPeersContext != nil) {
+                self.refreshDonutgramBlockedPeers()
+            }
             let transcriptionBackend = DGSimpleSettings.shared.transcriptionBackend
             let stickerAppearance = (DGSimpleSettings.shared.stickerSize, DGSimpleSettings.shared.hideStickerTime, DGSimpleSettings.shared.stickerReplyOptions, DGSimpleSettings.shared.stickerShape, DGSimpleSettings.shared.hideStickerChecks)
             let stickerAppearanceChanged = self.donutgramStickerAppearance != stickerAppearance
@@ -1522,9 +1530,17 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             guard let self else {
                 return
             }
-            self.donutgramShadowBanPromise.set(DonutgramShadowBan.State.current)
+            self.updateDonutgramHiddenState()
             self.updateLoadedMessageItems(includeAllMessages: true)
         })
+
+        self.donutgramBlockedPeersObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.blockedPeersDidChangeNotification, object: nil, queue: .main, using: { [weak self] notification in
+            guard let self, let accountId = notification.object as? Int64, accountId == self.context.account.peerId.toInt64() else {
+                return
+            }
+            self.refreshDonutgramBlockedPeers()
+        })
+        self.refreshDonutgramBlockedPeers()
 
         // «Полупрозрачные удаленки» changed: draw the loaded saved deleted messages again.
         self.donutgramDeletedMessagesAppearanceObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.deletedMessagesAppearanceDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
@@ -1532,7 +1548,41 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         })
     }
 
+    private func updateDonutgramHiddenState() {
+        var state = DonutgramShadowBan.State.current
+        state.blockedPeerIds = self.donutgramBlockedPeerIds
+        self.donutgramShadowBanPromise.set(state)
+    }
+
+    private func refreshDonutgramBlockedPeers() {
+        self.donutgramBlockedPeersDisposable.set(nil)
+        self.donutgramBlockedPeersContext = nil
+        self.donutgramBlockedPeerIds = []
+        self.donutgramBlockedPeersLastRequestedCount = nil
+        self.updateDonutgramHiddenState()
+        guard DGSimpleSettings.shared.hideBlockedMessages else {
+            return
+        }
+        let blockedContext = BlockedPeersContext(account: self.context.account, subject: .blocked)
+        self.donutgramBlockedPeersContext = blockedContext
+        self.donutgramBlockedPeersDisposable.set((blockedContext.state |> deliverOnMainQueue).start(next: { [weak self, weak blockedContext] state in
+            guard let self, let blockedContext, self.donutgramBlockedPeersContext === blockedContext else {
+                return
+            }
+            self.donutgramBlockedPeerIds = Set(state.peers.map { $0.peerId.toInt64() })
+            self.updateDonutgramHiddenState()
+            if !state.isLoadingMore, state.canLoadMore, let totalCount = state.totalCount, state.peers.count < totalCount, !state.peers.isEmpty, self.donutgramBlockedPeersLastRequestedCount != state.peers.count {
+                self.donutgramBlockedPeersLastRequestedCount = state.peers.count
+                blockedContext.loadMore()
+            }
+        }))
+    }
+
     deinit {
+        self.donutgramBlockedPeersDisposable.dispose()
+        if let donutgramBlockedPeersObserver = self.donutgramBlockedPeersObserver {
+            NotificationCenter.default.removeObserver(donutgramBlockedPeersObserver)
+        }
         if let donutgramSettingsObserver = self.donutgramSettingsObserver {
             NotificationCenter.default.removeObserver(donutgramSettingsObserver)
         }

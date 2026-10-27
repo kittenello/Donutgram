@@ -85,6 +85,7 @@ public final class DGSimpleSettings {
     public static let lastOnlineDidChangeNotification = Notification.Name("donutgram.presence.lastOnlineDidChange")
     /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
     /// send account.updateStatus.
+    public static let blockedPeersDidChangeNotification = Notification.Name("donutgram.blockedPeers.didChange")
     public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
     /// «Полупрозрачные удаленки» changed. Separate from didChangeNotification for the same reason.
     public static let deletedMessagesAppearanceDidChangeNotification = Notification.Name("donutgram.deletedMessages.appearanceDidChange")
@@ -195,6 +196,7 @@ public final class DGSimpleSettings {
         static let islandFollowsIcon = "donutgram.appearance.islandFollowsIcon"
         static let pickedAppIconName = "donutgram.appearance.pickedAppIconName"
         static let localPremiumPeerIds = "donutgram.other.localPremiumPeerIds"
+        static let hideBlockedMessages = "donutgram.chats.hideBlockedMessages"
         static let shadowBannedPeerIds = "donutgram.spy.shadowBannedPeerIds"
 
         static let onlyAddedStickers = "donutgram.chats.onlyAddedStickers"
@@ -1015,6 +1017,7 @@ public final class DGSimpleSettings {
         return try body()
     }
 
+    public var hideBlockedMessages: Bool { get { bool(Key.hideBlockedMessages) } set { setBool(newValue, Key.hideBlockedMessages) } }
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
     public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
