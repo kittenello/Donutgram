@@ -46,6 +46,24 @@ final class DGSpeedSliderItem: ListViewItem, ItemListItem {
     }
 }
 
+private let dgSpeedTitles = ["Выкл", "Быстро", "Ультра"]
+
+/// VoiceOver moves a UISlider by a tenth of its range, which the step rounding undoes: here a swipe moves one step.
+private final class DGSpeedSlider: UISlider {
+    override func accessibilityIncrement() {
+        self.step(by: 1)
+    }
+
+    override func accessibilityDecrement() {
+        self.step(by: -1)
+    }
+
+    private func step(by delta: Float) {
+        self.value = min(max(self.value.rounded() + delta, self.minimumValue), self.maximumValue)
+        self.sendActions(for: .valueChanged)
+    }
+}
+
 final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
     var tag: ItemListItemTag? { DGSettingItemTag(key: "downloadAcceleration") }
     private var item: DGSpeedSliderItem?
@@ -68,7 +86,7 @@ final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
         self.blockBackground.isUserInteractionEnabled = false
         self.blockBackground.layer.cornerRadius = 22.0
         self.blockBackground.clipsToBounds = true
-        let slider = UISlider()
+        let slider = DGSpeedSlider()
         slider.minimumValue = 0
         slider.maximumValue = 2
         if #available(iOS 26.0, *) {
@@ -82,10 +100,12 @@ final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
         slider.addTarget(self, action: #selector(valueChanged), for: .valueChanged)
         self.view.addSubview(slider)
         self.slider = slider
-        for title in ["Откл.", "Быстро", "Ультра"] {
+        // The labels are the slider's value for VoiceOver, not three elements of their own.
+        for title in dgSpeedTitles {
             let label = UILabel()
             label.text = title
             label.font = .systemFont(ofSize: 14)
+            label.isAccessibilityElement = false
             self.view.addSubview(label)
             self.labels.append(label)
         }
@@ -137,8 +157,10 @@ final class DGSpeedSliderItemNode: ListViewItemNode, ItemListItemNode {
         slider?.maximumTrackTintColor = item.theme.list.itemSecondaryTextColor.withAlphaComponent(0.4)
         slider?.value = Float(item.value)
         slider?.frame = CGRect(x: leftInset + 12, y: 38, width: max(0, layoutWidth - leftInset - rightInset - 24), height: 38)
+        slider?.accessibilityLabel = dgLocalized("Ускорение загрузки", languageCode: item.languageCode)
+        slider?.accessibilityValue = dgLocalized(dgSpeedTitles[min(max(item.value, 0), 2)], languageCode: item.languageCode)
         for (index, label) in labels.enumerated() {
-            label.text = dgLocalized(["Откл.", "Быстро", "Ультра"][index], languageCode: item.languageCode)
+            label.text = dgLocalized(dgSpeedTitles[index], languageCode: item.languageCode)
             label.textColor = index == item.value ? item.theme.list.itemAccentColor : item.theme.list.itemSecondaryTextColor
             let x = index == 0 ? leftInset + 12 : (index == 1 ? layoutWidth / 2 - 40 : layoutWidth - rightInset - 92)
             label.frame = CGRect(x: x, y: 10, width: 80, height: 22)

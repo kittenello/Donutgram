@@ -30,17 +30,23 @@ final class DGListArguments {
     let open: (String) -> Void
     let openMenu: (String) -> Void
     let textUpdated: (String, String) -> Void
-    init(context: AccountContext, toggle: @escaping (String, Bool) -> Void, select: @escaping (String) -> Void, open: @escaping (String) -> Void, openMenu: @escaping (String) -> Void, textUpdated: @escaping (String, String) -> Void) {
+    let toggleWhileDisabled: (String) -> Void
+    let copyValue: (String) -> Void
+    init(context: AccountContext, toggle: @escaping (String, Bool) -> Void, select: @escaping (String) -> Void, open: @escaping (String) -> Void, openMenu: @escaping (String) -> Void, textUpdated: @escaping (String, String) -> Void, toggleWhileDisabled: @escaping (String) -> Void, copyValue: @escaping (String) -> Void) {
         self.context = context
         self.toggle = toggle
         self.select = select
         self.open = open
         self.openMenu = openMenu
         self.textUpdated = textUpdated
+        self.toggleWhileDisabled = toggleWhileDisabled
+        self.copyValue = copyValue
     }
 }
 
 enum DGListEntry: ItemListNodeEntry {
+    // A card with a close button, above the root's sections: the title, then the text. Closing it goes through `select`.
+    case notice(Int32, Int32, String, String)
     case header(Int32, Int32, String)
     case toggle(Int32, Int32, String, String, Bool, Bool)
     case disclosure(Int32, Int32, String, String, String)
@@ -51,9 +57,8 @@ enum DGListEntry: ItemListNodeEntry {
     case menu(Int32, Int32, String, String, String)
     // A one-off action, such as reading all messages: the page's `perform` runs it.
     case action(Int32, Int32, String, String)
-    // A value to read, such as the app version.
+    // A value to read, such as the app version. A tap copies it.
     case value(Int32, Int32, String, String, String)
-    case checkbox(Int32, Int32, String, String, Bool)
     case info(Int32, Int32, String)
     case input(Int32, Int32, String, String, String)
     // The flags are diff keys: the bubbles read DGSimpleSettings at layout time.
@@ -69,27 +74,24 @@ enum DGListEntry: ItemListNodeEntry {
     // bubbles show (tails, seconds, reply colors, premium emoji): diff keys, like messagePreview.
     case stickerPreview(Int32, Int32, Int, Bool, Bool, Int, Int, DGMessagePreviewConfiguration, TelegramMediaFile?, TelegramMediaFile?)
     case stickerShape(Int32, Int32, Int)
-    // The «Иконка и остров» row: DGSimpleSettings.appMarks indices of the icon and of the island, as diff keys.
-    case iconAndIsland(Int32, Int32, Int, Int)
     // «Предпросмотр» on «Иконка и остров»: DGSimpleSettings.appMarks indices of the icon and of the island.
     case iconIslandPreview(Int32, Int32, Int, Int)
 
     var section: ItemListSectionId {
         switch self {
-        case let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .rootRow(_, section, _, _, _, _, _), let .menu(_, section, _, _, _), let .action(_, section, _, _), let .value(_, section, _, _, _), let .checkbox(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _),let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconAndIsland(_, section, _, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
+        case let .notice(_, section, _, _), let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .rootRow(_, section, _, _, _, _, _), let .menu(_, section, _, _, _), let .action(_, section, _, _), let .value(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _), let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
         }
     }
     var stableId: Int32 {
         switch self {
-        case let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .rootRow(id, _, _, _, _, _, _), let .menu(id, _, _, _, _), let .action(id, _, _, _), let .value(id, _, _, _, _), let .checkbox(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _),let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconAndIsland(id, _, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
+        case let .notice(id, _, _, _), let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .rootRow(id, _, _, _, _, _, _), let .menu(id, _, _, _, _), let .action(id, _, _, _), let .value(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _), let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
         }
     }
     // The tag the row's node reports: the one item(presentationData:arguments:) gives the item,
     // or the fixed key of the speed slider and chat list preview nodes.
     var tag: ItemListItemTag? {
         switch self {
-        case let .toggle(_, _, key, _, _, _), let .disclosure(_, _, key, _, _), let .rootRow(_, _, key, _, _, _, _), let .menu(_, _, key, _, _), let .action(_, _, key, _), let .value(_, _, key, _, _), let .checkbox(_, _, key, _, _), let .input(_, _, key, _, _): return DGSettingItemTag(key: key)
-        case .iconAndIsland: return DGSettingItemTag(key: "iconAndIsland")
+        case let .toggle(_, _, key, _, _, _), let .disclosure(_, _, key, _, _), let .rootRow(_, _, key, _, _, _, _), let .menu(_, _, key, _, _), let .action(_, _, key, _), let .value(_, _, key, _, _), let .input(_, _, key, _, _): return DGSettingItemTag(key: key)
         case .speedSlider: return DGSettingItemTag(key: "downloadAcceleration")
         case .tabBarPreview: return DGSettingItemTag(key: "tabBarPreview")
         case .chatListPreview: return DGSettingItemTag(key: "chatListPreview")
@@ -103,6 +105,7 @@ enum DGListEntry: ItemListNodeEntry {
     func localized(languageCode: String) -> DGListEntry {
         func tr(_ text: String) -> String { dgLocalized(text, languageCode: languageCode) }
         switch self {
+        case let .notice(id, section, title, text): return .notice(id, section, tr(title), tr(text))
         case let .header(id, section, title): return .header(id, section, tr(title))
         case let .toggle(id, section, key, title, value, enabled): return .toggle(id, section, key, tr(title), value, enabled)
         case let .disclosure(id, section, key, title, label): return .disclosure(id, section, key, tr(title), tr(label))
@@ -110,7 +113,6 @@ enum DGListEntry: ItemListNodeEntry {
         case let .menu(id, section, key, title, label): return .menu(id, section, key, tr(title), tr(label))
         case let .action(id, section, key, title): return .action(id, section, key, tr(title))
         case let .value(id, section, key, title, value): return .value(id, section, key, tr(title), value)
-        case let .checkbox(id, section, key, title, checked): return .checkbox(id, section, key, tr(title), checked)
         case let .info(id, section, text): return .info(id, section, tr(text))
         case let .input(id, section, key, value, placeholder): return .input(id, section, key, value, tr(placeholder))
         default: return self
@@ -121,10 +123,12 @@ enum DGListEntry: ItemListNodeEntry {
         let arguments = arguments as! DGListArguments
         let languageCode = presentationData.strings.primaryComponent.languageCode
         switch self {
+        case let .notice(_, _, title, text):
+            return ItemListInfoItem(presentationData: presentationData, systemStyle: .glass, title: title, text: .plain(text), style: .blocks, sectionId: self.section, closeAction: { arguments.select("dismissSectionsNotice") })
         case let .header(_, _, title):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: title, sectionId: self.section)
         case let .toggle(_, _, key, title, value, enabled):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: enabled, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { arguments.toggle(key, $0) }, tag: DGSettingItemTag(key: key))
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: enabled, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { arguments.toggle(key, $0) }, activatedWhileDisabled: { arguments.toggleWhileDisabled(key) }, tag: DGSettingItemTag(key: key))
         case let .disclosure(_, _, key, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
         case let .rootRow(_, _, key, title, label, symbol, color):
@@ -135,9 +139,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .action(_, _, key, title):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
         case let .value(_, _, key, title, value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil, tag: DGSettingItemTag(key: key))
-        case let .checkbox(_, _, key, title, checked):
-            return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: title, style: .left, checked: checked, zeroSeparatorInsets: false, sectionId: self.section, action: { arguments.select(key) }, tag: DGSettingItemTag(key: key))
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: { arguments.copyValue(value) }, tag: DGSettingItemTag(key: key))
         case let .info(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .markdown(text), sectionId: self.section)
         case let .input(_, _, key, value, placeholder):
@@ -160,15 +162,15 @@ enum DGListEntry: ItemListNodeEntry {
             return donutgramStickerPreviewItem(context: arguments.context, sectionId: self.section, sticker: sticker, emoji: emoji)
         case let .stickerShape(_, _, shape):
             return DGStickerAppearanceItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, shapePicker: true, size: DGSimpleSettings.shared.stickerSize, shape: shape, updated: { arguments.select($0) })
-        case let .iconAndIsland(_, _, iconMark, islandMark):
-            return donutgramIconAndIslandItem(presentationData: presentationData, sectionId: self.section, iconName: DGSimpleSettings.appMarks[iconMark].iconName, islandMark: islandMark, action: { arguments.open("iconAndIsland") }, tag: DGSettingItemTag(key: "iconAndIsland"))
         case let .iconIslandPreview(_, _, iconMark, islandMark):
             return DGIconIslandPreviewItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, icon: DGSimpleSettings.appMarks[iconMark], island: DGSimpleSettings.appMarks[islandMark])
         }
     }
 }
 
-func dgController(context: AccountContext, page: DGSettingsPage, title: String, focusKey: String?, entries: @escaping () -> [DGListEntry], restartRequiredKeys: Set<String> = [], additionalUpdates: Signal<Void, NoError> = .single(()), toggle: @escaping (String, Bool) -> Void = { _, _ in }, select: @escaping (String) -> Void = { _ in }, menu: @escaping (String) -> [DGMenuOption] = { _ in [] }, textUpdated: @escaping (String, String) -> Void = { _, _ in }, open: @escaping (String) -> ViewController? = { _ in nil }, perform: @escaping (String, ViewController) -> Void = { _, _ in }) -> ViewController {
+/// A page of the settings. `disabledToggleHint` is the notice a tap on a locked switch shows, such as the ghost options
+/// while ghost mode is off.
+func dgController(context: AccountContext, page: DGSettingsPage, title: String, focusKey: String?, entries: @escaping () -> [DGListEntry], restartRequiredKeys: Set<String> = [], disabledToggleHint: String? = nil, additionalUpdates: Signal<Void, NoError> = .single(()), toggle: @escaping (String, Bool) -> Void = { _, _ in }, select: @escaping (String) -> Void = { _ in }, menu: @escaping (String) -> [DGMenuOption] = { _ in [] }, textUpdated: @escaping (String, String) -> Void = { _, _ in }, open: @escaping (String) -> ViewController? = { _ in nil }, perform: @escaping (String, ViewController) -> Void = { _, _ in }) -> ViewController {
     let focusTag = focusKey.map { DGSettingItemTag(key: $0) }
     let initialState = DGListState()
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
@@ -184,6 +186,10 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
     var performImpl: ((String) -> Void)?
     var presentMenuImpl: ((String) -> Void)?
     var presentRestartNoticeImpl: (() -> Void)?
+    var presentNoticeImpl: ((UndoOverlayContent) -> Void)?
+    func currentLanguageCode() -> String {
+        return context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode
+    }
     // Set when a sub-page is pushed: it can change a value this page shows (e.g. the transcription service label).
     var needsRefreshOnAppear = false
     let arguments = DGListArguments(context: context, toggle: { key, value in
@@ -197,7 +203,14 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         } else {
             performImpl?(key)
         }
-    }, openMenu: { key in presentMenuImpl?(key) }, textUpdated: { key, value in textUpdated(key, value) })
+    }, openMenu: { key in presentMenuImpl?(key) }, textUpdated: { key, value in textUpdated(key, value) }, toggleWhileDisabled: { _ in
+        if let disabledToggleHint {
+            presentNoticeImpl?(.info(title: nil, text: dgLocalized(disabledToggleHint, languageCode: currentLanguageCode()), timeout: nil, customUndoText: nil))
+        }
+    }, copyValue: { value in
+        UIPasteboard.general.string = value
+        presentNoticeImpl?(.copy(text: dgLocalized("Скопировано", languageCode: currentLanguageCode())))
+    })
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), additionalUpdates)
     |> map { presentationData, _, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let languageCode = presentationData.strings.primaryComponent.languageCode
@@ -287,11 +300,12 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         }
         controller.presentInGlobalOverlay(contextController, with: nil)
     }
+    // The button closes the app: iOS doesn't start it again, so it says so instead of «restart».
     presentRestartNoticeImpl = { [weak controller] in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         controller?.present(UndoOverlayController(
             presentationData: presentationData,
-            content: .info(title: nil, text: dgLocalized("Необходим перезапуск", languageCode: presentationData.strings.primaryComponent.languageCode), timeout: 5.0, customUndoText: dgLocalized("Перезапустить сейчас", languageCode: presentationData.strings.primaryComponent.languageCode)),
+            content: .info(title: nil, text: dgLocalized("Изменение заработает после перезапуска приложения.", languageCode: presentationData.strings.primaryComponent.languageCode), timeout: 5.0, customUndoText: dgLocalized("Закрыть приложение", languageCode: presentationData.strings.primaryComponent.languageCode)),
             elevatedLayout: false,
             position: .bottom,
             action: { action in
@@ -301,6 +315,10 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
                 return false
             }
         ), in: .current)
+    }
+    presentNoticeImpl = { [weak controller] content in
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        controller?.present(UndoOverlayController(presentationData: presentationData, content: content, elevatedLayout: false, position: .bottom, action: { _ in return false }), in: .current)
     }
     return controller
 }
@@ -312,8 +330,9 @@ private final class DGMenuReferenceContentSource: ContextReferenceContentSource 
         self.sourceView = sourceView
     }
 
+    // The screen the window is on, as in Telegram's storage settings: UIScreen.main is the cover screen of an unfolded iPhone Duo.
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
-        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds, insets: UIEdgeInsets(top: -4.0, left: 0.0, bottom: -4.0, right: 0.0))
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: mainWindowScreenBounds, insets: UIEdgeInsets(top: -4.0, left: 0.0, bottom: -4.0, right: 0.0))
     }
 }
 
@@ -323,63 +342,75 @@ func dgAppVersion() -> String {
 }
 
 /// The root: fifteen sections in four groups, each named after the place in the app where its settings show.
-/// A section's row tells its state where there is one to tell, so the root reads what is on without opening anything.
+/// A section's row tells its state where there is one to tell, so the root reads what is on without opening anything:
+/// «Вкл»/«Выкл» for a feature, a count for a list, a level, an icon or a version as it is, nothing otherwise.
 public func dgSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     let accountId = context.account.peerId.toInt64()
+    let bindings = context.sharedContext.applicationBindings
     return dgController(context: context, page: .root, title: "Настройки Donutgram", focusKey: focusKey, entries: {
-        let notSentByGhost = [s.ghostReadMessages, s.ghostReadStories, s.ghostSendOnline, s.ghostSendTyping].filter { !$0 }.count
-        let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.gifUnlock].filter { $0 }.count
+        // Every guard of the ghost page counts, «Автоматический «офлайн»» included: without it sending shows the account online.
+        let hiddenByGhost = [!s.ghostReadMessages, !s.ghostReadStories, !s.ghostSendOnline, s.ghostAutomaticOffline, !s.ghostSendTyping].filter { $0 }.count
+        let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.saveProtectedStories, s.gifUnlock].filter { $0 }.count
+        let isSaving = s.saveDeletedMessages || s.saveEditHistory || s.saveViewOnceMedia || s.showDisappearedGifts || s.keepBannedChats
         let shadowBanned = s.shadowBannedPeerIds.count
-        let acceleration = ["Выкл", "Быстро", "Ультра"][s.downloadAcceleration]
+        let acceleration = ["", "Быстро", "Ультра"][s.downloadAcceleration]
         var localProfile = s.visualPhoneEnabled || s.localPremium(accountId: accountId)
         localProfile = localProfile || s.visualRatingLevel(accountId: accountId) != nil || !s.visualUsernames(accountId: accountId).isEmpty
         localProfile = localProfile || !s.visualProfileId(accountId: accountId).isEmpty || s.visualLabel(accountId: accountId) != DGVisualLabel.none
+        let appIcon = DGSimpleSettings.appMarks[DGSimpleSettings.appMarkIndex(iconName: bindings.getAlternateIconName())].title
 
         var entries: [DGListEntry] = []
+        if !s.settingsSectionsNoticeDismissed {
+            entries.append(.notice(-1, -1, "Настройки разложены по разделам", "Каждый раздел назван по месту в приложении, где видны его настройки. Ссылки на настройки, скопированные раньше, открывают их на новом месте."))
+        }
         entries.append(.header(0, 0, "ПРИВАТНОСТЬ"))
-        entries.append(.rootRow(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Вкл · \(notSentByGhost)/4" : "Выкл", "eye.slash.fill", 0x5E5CE6))
-        entries.append(.rootRow(2, 0, "saving", "Сохранение", s.saveDeletedMessages ? "Вкл" : "Выкл", "tray.and.arrow.down.fill", 0xFF9F0A))
-        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", "\(bypassed)/3", "lock.open.fill", 0x30B0C7))
-        entries.append(.rootRow(4, 0, "shadowBan", "Теневой бан", shadowBanned == 0 ? "Выкл" : "\(shadowBanned)", "person.crop.circle.badge.xmark", 0xFF453A))
+        entries.append(.rootRow(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Вкл · \(hiddenByGhost) из 5" : "Выкл", "eye.slash.fill", 0x5E5CE6))
+        entries.append(.rootRow(2, 0, "saving", "Удалённые и правки", isSaving ? "Вкл" : "Выкл", "trash.slash.fill", 0xFF9F0A))
+        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 4", "lock.open.fill", 0x00C7BE))
+        entries.append(.rootRow(4, 0, "shadowBan", "Теневой бан", shadowBanned == 0 ? "Нет" : "\(shadowBanned)", "person.crop.circle.fill.badge.xmark", 0xFF453A))
+        entries.append(.rootRow(5, 0, "security", "Подтверждения и статистика", "", "checkmark.shield.fill", 0x8E8E93))
         entries.append(.header(10, 1, "ИНТЕРФЕЙС"))
-        entries.append(.rootRow(11, 1, "mainScreen", "Главный экран", "", "list.bullet", 0x0A84FF))
-        entries.append(.rootRow(12, 1, "messages", "Сообщения", "", "bubble.left.and.bubble.right.fill", 0x30D158))
-        entries.append(.rootRow(13, 1, "stickers", "Стикеры и реакции", "", "face.smiling.fill", 0xFF375F))
-        entries.append(.rootRow(14, 1, "profiles", "Профили", "", "person.crop.circle.fill", 0xBF5AF2))
-        entries.append(.rootRow(15, 1, "iconAndEffects", "Иконка и эффекты", "", "sparkles", 0xF5A623))
+        entries.append(.rootRow(11, 1, "mainScreen", "Список чатов", "", "rectangle.grid.1x2.fill", 0x0A84FF))
+        entries.append(.rootRow(12, 1, "messages", "Сообщения", "", "bubble.left.and.bubble.right.fill", 0x34C759))
+        entries.append(.rootRow(13, 1, "stickers", "Стикеры и реакции", "", "face.smiling.fill", 0xFF2D55))
+        entries.append(.rootRow(14, 1, "profiles", "Профили", "", "person.crop.circle.fill", 0xAF52DE))
+        entries.append(.rootRow(15, 1, "localProfile", "Локальный профиль", localProfile ? "Вкл" : "", "theatermasks.fill", 0x32ADE6))
+        entries.append(.rootRow(16, 1, "iconAndIsland", donutgramIconAndIslandTitle(), appIcon, "app.fill", 0xFFCC02))
         entries.append(.header(20, 2, "МЕДИА И СЕТЬ"))
-        entries.append(.rootRow(21, 2, "media", "Запись и воспроизведение", "", "mic.fill", 0xFF6A3D))
-        entries.append(.rootRow(22, 2, "downloads", "Загрузки и сеть", acceleration, "arrow.down.circle.fill", 0x00A99D))
+        entries.append(.rootRow(21, 2, "media", "Запись и воспроизведение", "", "mic.fill", 0xFF453A))
+        entries.append(.rootRow(22, 2, "downloads", "Загрузки и сеть", acceleration, "arrow.down.circle.fill", 0x34C759))
         entries.append(.header(30, 3, "ПРОЧЕЕ"))
-        entries.append(.rootRow(31, 3, "security", "Безопасность", "", "checkmark.shield.fill", 0x8E8E93))
-        entries.append(.rootRow(32, 3, "adsAndGifts", "Реклама и подарки", "", "gift.fill", 0xFF9F0A))
-        entries.append(.rootRow(33, 3, "localProfile", "Локальный профиль", localProfile ? "Вкл" : "Выкл", "theatermasks.fill", 0x32ADE6))
-        entries.append(.rootRow(34, 3, "about", "О Donutgram", dgAppVersion(), "info.circle.fill", 0xF2478B))
+        entries.append(.rootRow(31, 3, "adsAndGifts", "Реклама и подарки", "", "gift.fill", 0xAF52DE))
+        entries.append(.rootRow(32, 3, "about", "О Donutgram", dgAppVersion(), "info.circle.fill", 0x0A84FF))
         return entries
+    }, select: { key in
+        if key == "dismissSectionsNotice" {
+            s.settingsSectionsNoticeDismissed = true
+        }
     }, open: { key in
-        return dgSectionController(context: context, key: key)
+        return dgRootSectionPage(key).map { dgPageController($0, context: context, focusKey: nil) }
     })
 }
 
-/// The page a root row opens, by the row's key.
-private func dgSectionController(context: AccountContext, key: String) -> ViewController? {
+/// The page a section row of the root opens, by the row's key. A link to a section names this page.
+func dgRootSectionPage(_ key: String) -> DGSettingsPage? {
     switch key {
-    case "ghost": return dgGhostSettingsController(context: context)
-    case "saving": return dgSavingSettingsController(context: context)
-    case "bypass": return dgBypassSettingsController(context: context)
-    case "shadowBan": return dgShadowBanController(context: context)
-    case "mainScreen": return dgMainScreenSettingsController(context: context)
-    case "messages": return dgMessagesSettingsController(context: context)
-    case "stickers": return dgStickersSettingsController(context: context)
-    case "profiles": return dgProfilesSettingsController(context: context)
-    case "iconAndEffects": return dgIconAndEffectsSettingsController(context: context)
-    case "media": return dgMediaSettingsController(context: context)
-    case "downloads": return dgDownloadsSettingsController(context: context)
-    case "security": return dgSecuritySettingsController(context: context)
-    case "adsAndGifts": return dgAdsAndGiftsSettingsController(context: context)
-    case "localProfile": return dgLocalProfileSettingsController(context: context)
-    case "about": return dgAboutController(context: context)
+    case "ghost": return .ghost
+    case "saving": return .saving
+    case "bypass": return .bypass
+    case "shadowBan": return .shadowBan
+    case "security": return .security
+    case "mainScreen": return .mainScreen
+    case "messages": return .messages
+    case "stickers": return .stickers
+    case "profiles": return .profiles
+    case "localProfile": return .localProfile
+    case "iconAndIsland": return .iconAndIsland
+    case "media": return .media
+    case "downloads": return .downloads
+    case "adsAndGifts": return .adsAndGifts
+    case "about": return .about
     default: return nil
     }
 }

@@ -86,7 +86,7 @@ public final class DGSimpleSettings {
     /// The shadow ban list or a chat's «Показать скрытые» changed. Separate from didChangeNotification, which makes presence
     /// send account.updateStatus.
     public static let shadowBanDidChangeNotification = Notification.Name("donutgram.shadowBan.didChange")
-    /// «Полупрозрачные удаленки» changed. Separate from didChangeNotification for the same reason.
+    /// «Полупрозрачные удалённые» changed. Separate from didChangeNotification for the same reason.
     public static let deletedMessagesAppearanceDidChangeNotification = Notification.Name("donutgram.deletedMessages.appearanceDidChange")
 
     public enum TranscriptionBackend: String, CaseIterable {
@@ -157,6 +157,7 @@ public final class DGSimpleSettings {
         static let ghostSendWithoutSound = "donutgram.ghost.sendWithoutSound"
         static let ghostSuggestForStories = "donutgram.ghost.suggestForStories"
         static let sendTelegramStatistics = "donutgram.privacy.sendTelegramStatistics"
+        static let settingsSectionsNoticeDismissed = "donutgram.settings.sectionsNoticeDismissed"
         static let bypassForwardRestrictions = "donutgram.spy.bypassForwardRestrictions"
         static let allowProtectedScreenshots = "donutgram.spy.allowProtectedScreenshots"
         static let visualPhoneEnabled = "donutgram.profile.visualPhoneEnabled"
@@ -462,6 +463,8 @@ public final class DGSimpleSettings {
     public var ghostSuggestForStories: Bool { get { bool(Key.ghostSuggestForStories) } set { setBool(newValue, Key.ghostSuggestForStories) } }
     /// App analytics, service logs and call quality data for Telegram. Off by default.
     public var sendTelegramStatistics: Bool { get { bool(Key.sendTelegramStatistics) } set { setBool(newValue, Key.sendTelegramStatistics) } }
+    /// The card on top of «Настройки Donutgram» that says the settings are now in sections, once it is closed.
+    public var settingsSectionsNoticeDismissed: Bool { get { bool(Key.settingsSectionsNoticeDismissed) } set { setBool(newValue, Key.settingsSectionsNoticeDismissed) } }
     public var bypassForwardRestrictions: Bool { get { bool(Key.bypassForwardRestrictions) } set { setBool(newValue, Key.bypassForwardRestrictions) } }
     /// Content of chats, groups and channels that forbid copying stays visible on screenshots and screen
     /// recordings. Secret chats and media with a timer stay hidden. On until switched off.
@@ -1052,7 +1055,7 @@ public final class DGSimpleSettings {
     public var downloadYouTubeShorts: Bool { get { bool(Key.downloadYouTubeShorts) } set { setBool(newValue, Key.downloadYouTubeShorts) } }
     public var signDownloadedMedia: Bool { get { bool(Key.signDownloadedMedia) } set { setBool(newValue, Key.signDownloadedMedia) } }
     /// Use the device microphone for voice and video recording, even with external inputs connected.
-    /// Disabled by default; the switch is «Встроенный микрофон» in «Чаты» ▸ «Запись».
+    /// Disabled by default; the switch is «Встроенный микрофон» in «Запись и воспроизведение» ▸ «Запись».
     public var forceBuiltInMicrophone: Bool {
         get { bool(Key.forceBuiltInMicrophone) }
         set { setBool(newValue, Key.forceBuiltInMicrophone) }

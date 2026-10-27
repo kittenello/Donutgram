@@ -24,7 +24,7 @@ private let searchBarFont = Font.regular(17.0)
 // How many found messages are shown; the newest come first, so a broader query hides the oldest.
 private let searchResultLimit = 200
 
-/// The search field that replaces the navigation bar while «Сохраненные удаленки» is searched.
+/// The search field that replaces the navigation bar while «Сохранённые удалённые» is searched.
 /// The same glass field as the search of a group's members.
 private final class DGSavedDeletedSearchNavigationContentNode: NavigationBarContentNode, ItemListControllerSearchNavigationContentNode {
     private struct Params: Equatable {
@@ -137,7 +137,7 @@ private final class DGSavedDeletedSearchNavigationContentNode: NavigationBarCont
     }
 
     private func updatePlaceholder() {
-        let placeholder = dgLocalized("Поиск по удаленкам", languageCode: self.strings.primaryComponent.languageCode)
+        let placeholder = dgLocalized("Поиск по удалённым", languageCode: self.strings.primaryComponent.languageCode)
         self.searchBar.placeholderString = NSAttributedString(string: placeholder, font: searchBarFont, textColor: self.theme.rootController.navigationSearchBar.inputPlaceholderTextColor)
     }
 
@@ -232,7 +232,7 @@ private final class DGSavedDeletedSearchNavigationContentNode: NavigationBarCont
     }
 }
 
-/// Search of «Сохраненные удаленки» by message text, across every chat that keeps saved deleted
+/// Search of «Сохранённые удалённые» by message text, across every chat that keeps saved deleted
 /// messages. A found message opens in its chat at that message.
 final class DGSavedDeletedSearchItem: ItemListControllerSearch {
     let context: AccountContext
