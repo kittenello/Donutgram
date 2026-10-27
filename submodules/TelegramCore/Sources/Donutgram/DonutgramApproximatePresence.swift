@@ -17,34 +17,35 @@ func donutgramRecordMessageActivity(transaction: Transaction, accountPeerId: Pee
     guard let startedAt = DGSimpleSettings.shared.approximateLastSeenStartedAt else {
         return
     }
-    let now = Int32(Date().timeIntervalSince1970)
     var timestamps: [PeerId: Int32] = [:]
     for message in messages {
+        // Message dates are server time, never compared with this device's clock: one that runs behind would drop every new message.
         guard case let .Id(id) = message.id, id.namespace == Namespaces.Message.Cloud,
               let authorId = message.authorId, authorId != accountPeerId,
               authorId.namespace == Namespaces.Peer.CloudUser,
               let author = transaction.getPeer(authorId) as? TelegramUser,
               author.botInfo == nil, !author.isDeleted, !author.flags.contains(.isSupport),
-              message.timestamp > startedAt, message.timestamp <= now,
+              message.timestamp > startedAt,
               !message.flags.contains(.WasScheduled) else {
             continue
         }
         if id.peerId != authorId && !donutgramActivityGroup(transaction.getPeer(id.peerId)) {
             continue
         }
+        // Away and greeting messages and a business account's chatbot replies are sent without the person.
         if message.media.contains(where: { $0 is TelegramMediaAction }) || message.attributes.contains(where: {
-            ($0 as? NotificationInfoMessageAttribute)?.flags.contains(.automaticMessage) == true
+            $0 is InlineBusinessBotMessageAttribute || ($0 as? NotificationInfoMessageAttribute)?.flags.contains(.automaticMessage) == true
         }) {
             continue
         }
         timestamps[authorId] = max(timestamps[authorId] ?? 0, message.timestamp)
     }
     for (peerId, timestamp) in timestamps {
-        let previous = transaction.getPeerPresence(peerId: peerId) as? TelegramUserPresence
-        guard timestamp > (previous?.donutgramLastMessageTimestamp ?? 0) else {
+        // Only a presence the server gave is updated: a made-up one would keep a min user's status from being stored (UpdatePeers).
+        guard let previous = transaction.getPeerPresence(peerId: peerId) as? TelegramUserPresence, timestamp > previous.donutgramLastMessageTimestamp else {
             continue
         }
-        let updated = TelegramUserPresence(status: previous?.status ?? .none, lastActivity: previous?.lastActivity ?? 0, donutgramLastMessageTimestamp: timestamp)
+        let updated = TelegramUserPresence(status: previous.status, lastActivity: previous.lastActivity, donutgramLastMessageTimestamp: timestamp)
         transaction.updatePeerPresencesInternal(presences: [peerId: updated], merge: { _, updated in
             return updated
         })

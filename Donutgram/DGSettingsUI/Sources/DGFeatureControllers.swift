@@ -482,8 +482,9 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(13, 1, "chatDate", "Показывать дату создания чата", s.showChatCreationDate, true),
             .toggle(14, 1, "mutualContact", "Показывать взаимный контакт", s.showMutualContact, true),
             .toggle(15, 1, "relativeOnlineTime", "Относительное время онлайна", s.relativeOnlineTime, true),
-            .toggle(16, 1, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
-            .info(17, 1, "Номера скрываются только на экране этого устройства. Кто видит ваш номер, настраивается в «Конфиденциальности» Telegram."),
+            .toggle(16, 1, "approximateLastSeen", "Примерный онлайн", s.approximateLastSeen, true),
+            .toggle(17, 1, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
+            .info(18, 1, "«Примерный онлайн» показывает в шапке чата и профиле вместо «был(а) недавно» время последнего нового сообщения человека в личном чате или общей группе, с отметкой ~. Отметка держится 3 дня, считаются только сообщения после включения. Номера скрываются только на экране этого устройства. Кто видит ваш номер, настраивается в «Конфиденциальности» Telegram."),
             .header(20, 2, "ЗНАЧКИ У ИМЁН"),
             .toggle(21, 2, "premiumStatuses", "Скрыть премиум-статусы", s.hidePremiumStatuses, true),
             .toggle(22, 2, "hideVerification", "Скрыть верификацию", s.hideVerification, true),
@@ -498,6 +499,7 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
         case "chatDate": s.showChatCreationDate = value
         case "mutualContact": s.showMutualContact = value
         case "relativeOnlineTime": s.relativeOnlineTime = value
+        case "approximateLastSeen": s.approximateLastSeen = value
         case "hidePhoneNumber": s.hidePhoneNumber = value
         case "premiumStatuses": s.hidePremiumStatuses = value
         case "hideVerification": s.hideVerification = value

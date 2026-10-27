@@ -51,6 +51,7 @@ struct NotificationInfoMessageAttribute: MessageAttribute {
     }
     var flags: Flags
 }
+struct InlineBusinessBotMessageAttribute: MessageAttribute {}
 struct StoreMessageFlags: OptionSet {
     let rawValue: Int
     static let Incoming = StoreMessageFlags(rawValue: 1)
@@ -142,6 +143,7 @@ func record(_ messages: [StoreMessage]) { donutgramRecordMessageActivity(transac
 
 DGSimpleSettings.shared.approximateLastSeen = true
 let firstActivation = DGSimpleSettings.shared.approximateLastSeenStartedAt!
+transaction.presences[user] = TelegramUserPresence(status: .recently(isHidden: true), lastActivity: now - 50)
 record([message(user, time: firstActivation - 1), message(group, time: firstActivation)])
 check(recorded() == 0, "ignore messages from before activation including the boundary second")
 let oldEvidence = EnginePeer.Presence(status: .recently(isHidden: true), donutgramLastMessageTimestamp: firstActivation - 1)
@@ -149,7 +151,6 @@ check(donutgramApproximateLastSeenTimestamp(oldEvidence, relativeTo: now) == nil
 DGSimpleSettings.shared.defaults.set(now - 120, forKey: "donutgram.spy.approximateLastSeenStartedAt")
 DGSimpleSettings.shared.approximateLastSeen = true
 check(DGSimpleSettings.shared.approximateLastSeenStartedAt == now - 120, "setting an enabled toggle again keeps the activation")
-transaction.presences[user] = TelegramUserPresence(status: .recently(isHidden: true), lastActivity: now - 50)
 record([message(user)])
 check(recorded() == now - 60, "private message")
 record([message(group, time: now - 40), message(supergroup, time: now - 20)])
@@ -158,10 +159,14 @@ record([message(user, time: now - 90)])
 check(recorded() == now - 20, "older history cannot move time backwards")
 record([message(leftGroup, time: now - 1), message(channel, time: now - 1), message(secret, time: now - 1), message(other, time: now - 1)])
 check(recorded() == now - 20, "exclude left groups, broadcasts, secret chats and unrelated private chats")
-record([message(user, time: now + 3600), message(user, time: now - 1, flags: [.WasScheduled]), message(user, time: now - 1, media: [TelegramMediaAction()]), message(user, time: now - 1, attributes: [NotificationInfoMessageAttribute(flags: [.automaticMessage])]), message(user, time: now - 1, namespace: 1)])
-check(recorded() == now - 20, "exclude future, scheduled, service and automatic messages")
+record([message(user, time: now - 1, flags: [.WasScheduled]), message(user, time: now - 1, media: [TelegramMediaAction()]), message(user, time: now - 1, attributes: [NotificationInfoMessageAttribute(flags: [.automaticMessage])]), message(user, time: now - 1, attributes: [InlineBusinessBotMessageAttribute()]), message(user, time: now - 1, namespace: 1)])
+check(recorded() == now - 20, "exclude scheduled, service, automatic and business bot messages")
+transaction.presences[bot] = TelegramUserPresence(status: .recently(isHidden: false), lastActivity: 0)
+transaction.presences[account] = TelegramUserPresence(status: .recently(isHidden: false), lastActivity: 0)
 record([message(group, author: nil), message(group, author: channel), message(group, author: bot), message(group, author: account)])
-check(transaction.presences[bot] == nil && transaction.presences[account] == nil && transaction.presences[channel] == nil, "exclude bots, anonymous senders and self")
+check((transaction.presences[bot] as! TelegramUserPresence).donutgramLastMessageTimestamp == 0 && (transaction.presences[account] as! TelegramUserPresence).donutgramLastMessageTimestamp == 0 && transaction.presences[channel] == nil, "exclude bots, anonymous senders and self")
+record([message(other, author: other)])
+check(transaction.presences[other] == nil, "no presence is made up for a user the server gave none")
 DGSimpleSettings.shared.approximateLastSeen = false
 record([message(user, time: now - 1)])
 check(recorded() == now - 20, "disabled collection")
@@ -177,6 +182,8 @@ check(reopenedSettings.approximateLastSeenStartedAt == nextActivation, "restart 
 DGSimpleSettings.shared.defaults.set(now - 120, forKey: "donutgram.spy.approximateLastSeenStartedAt")
 record([message(user, time: now - 10)])
 check(recorded() == now - 10, "new messages during the tracking period update evidence")
+record([message(user, time: now + 60)])
+check(recorded() == now + 60, "a message dated ahead of this device's clock counts")
 let legacyDefaults = UserDefaults(suiteName: "approximate-presence-migration-\(UUID().uuidString)")!
 legacyDefaults.set(true, forKey: "donutgram.spy.approximateLastSeen")
 let migratedSettings = DGSimpleSettings(defaults: legacyDefaults)
