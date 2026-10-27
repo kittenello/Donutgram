@@ -135,8 +135,18 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
     @objc func handle(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began,
               let controller = self.controller,
-              let target = self.target(at: gesture.location(in: controller.view), in: controller),
-              let url = URL(string: "tg://settings/donutgram/\(self.page.rawValue)/\(target.key)") else {
+              let target = self.target(at: gesture.location(in: controller.view), in: controller) else {
+            return
+        }
+        // A section row of the root links to the section itself, tg://settings/donutgram/<page>: opening the root
+        // only to flash the row is a step short of what the link is copied for.
+        let path: String
+        if self.page == .root, let section = dgRootSectionPage(target.key) {
+            path = section.rawValue
+        } else {
+            path = "\(self.page.rawValue)/\(target.key)"
+        }
+        guard let url = URL(string: "tg://settings/donutgram/\(path)") else {
             return
         }
         // Telegram's sheet, not a UIAlertController: that one follows the iOS appearance instead of the app theme.

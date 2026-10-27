@@ -1038,9 +1038,10 @@ func openResolvedUrlImpl(
             switch section {
             case let .path(path):
                 if let navigationController {
+                    // donutgram/<page>/<row>, or donutgram/<page> for a whole section.
                     let settingPath = path.split(separator: "/").map(String.init)
-                    if settingPath.count == 3, settingPath[0] == "donutgram",
-                       let controller = dgSettingsControllerForLink(context: context, page: settingPath[1], key: settingPath[2]) {
+                    if settingPath.count == 2 || settingPath.count == 3, settingPath[0] == "donutgram",
+                       let controller = dgSettingsControllerForLink(context: context, page: settingPath[1], key: settingPath.count == 3 ? settingPath[2] : "") {
                         navigationController.pushViewController(controller)
                         return
                     }

@@ -194,7 +194,7 @@ private struct DGSavedDeletedState: Equatable {
     var peerIdWithRevealedOptions: EnginePeer.Id?
 }
 
-/// «Сохраненные удаленки» in «Основные»: how many saved deleted messages the account keeps, how much
+/// «Сохранённые удалённые» in «Удалённые и правки»: how many saved deleted messages the account keeps, how much
 /// their files take, deleting them, all at once or one chat at a time, and searching them by text.
 public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let statePromise = ValuePromise(DGSavedDeletedState(), ignoreRepeated: true)
@@ -244,12 +244,12 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
 
     let arguments = DGSavedDeletedArguments(context: context, deleteAll: {
         let languageCode = context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode
-        confirmDelete(dgLocalized("Удалить все сохраненные удаленки?", languageCode: languageCode), dgLocalized("Сообщения, их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.", languageCode: languageCode), nil)
+        confirmDelete(dgLocalized("Удалить все сохранённые удалённые?", languageCode: languageCode), dgLocalized("Сообщения, их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.", languageCode: languageCode), nil)
     }, deleteChat: { peer in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let languageCode = presentationData.strings.primaryComponent.languageCode
         let name = peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
-        confirmDelete(dgLocalized("Удалить сохраненные удаленки?", languageCode: languageCode), dgLocalized("Сохраненные удаленки из «%@», их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: name), peer.id)
+        confirmDelete(dgLocalized("Удалить сохранённые удалённые?", languageCode: languageCode), dgLocalized("Сохранённые удалённые из «%@», их история правок и скачанные файлы будут удалены с этого устройства. Вернуть их будет нельзя.", languageCode: languageCode).replacingOccurrences(of: "%@", with: name), peer.id)
     }, openChat: { peer in
         guard let navigationController = navigationControllerImpl?() else {
             return
@@ -334,7 +334,7 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
         entries.append(.messages(dgLocalized("Сообщения", languageCode: languageCode), usage.map { "\($0.messageCount)" } ?? "…"))
         entries.append(.files(dgLocalized("Файлы", languageCode: languageCode), usage.map { dataSizeString($0.fileSize, formatting: sizeFormatting) } ?? "…"))
         entries.append(.deleteAll(dgLocalized(state.deleting ? "Удаление…" : "Удалить все", languageCode: languageCode), !state.deleting && (usage?.messageCount ?? 0) > 0))
-        entries.append(.deleteInfo(dgLocalized("Сохраненные удаленки хранятся только на этом устройстве. Если выключить «Сохранять удаленки», уже сохраненные останутся.", languageCode: languageCode)))
+        entries.append(.deleteInfo(dgLocalized("Сохранённые удалённые хранятся только на этом устройстве. Если выключить «Сохранять удалённые сообщения», уже сохранённые останутся.", languageCode: languageCode)))
         if !chats.isEmpty {
             entries.append(.chatsHeader(dgLocalized("ЧАТЫ", languageCode: languageCode)))
             for (index, chat) in chats.enumerated() {
@@ -350,7 +350,7 @@ public func dgSavedDeletedMessagesController(context: AccountContext, focusKey: 
             }
         }
 
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized("Сохраненные удаленки", languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized("Сохранённые удалённые", languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, searchItem: searchItem, animateChanges: true)
         return (controllerState, (listState, arguments))
     }
