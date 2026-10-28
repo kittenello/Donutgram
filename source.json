@@ -1,0 +1,38 @@
+{
+  "name": "Donutgram",
+  "identifier": "com.kittenello.donutgram.source",
+  "subtitle": "Сборки Пончика с master",
+  "description": "Каждая сборка master публикуется сюда автоматически.",
+  "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+  "website": "https://github.com/kittenello/Donutgram",
+  "tintColor": "#E8508C",
+  "apps": [
+    {
+      "name": "Donutgram",
+      "bundleIdentifier": "com.kittenello.donutgram",
+      "developerName": "kittenello",
+      "subtitle": "Telegram с пончиком",
+      "localizedDescription": "Неофициальный клиент Telegram на основе Telegram iOS.",
+      "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+      "tintColor": "#E8508C",
+      "category": "social",
+      "versions": [
+        {
+          "version": "13.1.1.36002",
+          "buildVersion": "36002",
+          "date": "2026-10-28T00:28:29Z",
+          "localizedDescription": "feat: add content restriction bypass and anonymous stickers (#121)\n* feat: add content restriction bypass and anonymous stickers\n* feat: add separate regional restriction bypass\n* revert: remove regional restriction bypass\n* feat: preserve sticker pack access for sender\n* feat: hide messages from blocked users\n* refactor: remove new settings descriptions\n* fix: hide blocked peers through the shadow-ban filters, key sticker sets by file\nBlocked peers are kept per account in DGSimpleSettings: the whole list\nonce per launch while «Скрывать сообщения заблокированных» is on, then\nevery block and unblock, from other devices too. The shadow-ban state\nincludes the shown account's blocked peers, so chat list previews, reply\nheaders, in-app notifications, the pinned bar, search, typing and mentions\nfollow it, and «Показать скрытые» reveals them. Bots are never hidden.\nChats no longer request the list each time they open.\nA sticker sent with «Анонимная отправка стикеров» keeps its set by the id\nof the file the server made, in one capped dictionary per account, so a\npublished scheduled message finds it too, and «Посмотреть набор» shows\nfor it.\nThe toggles move to «Обход ограничений», «Стикеры и реакции» and\n«Теневой бан» with footers and English strings; the content bypass asks\nfor a restart.\n---------\nCo-authored-by: kittenello <174290551+kittenello@users.noreply.github.com>\nCo-authored-by: catboysense <331888298+catboysense@users.noreply.github.com>",
+          "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-36002.ipa",
+          "size": 78640658,
+          "minOSVersion": "15.0"
+        }
+      ],
+      "version": "13.1.1.36002",
+      "versionDate": "2026-10-28T00:28:29Z",
+      "versionDescription": "feat: add content restriction bypass and anonymous stickers (#121)\n* feat: add content restriction bypass and anonymous stickers\n* feat: add separate regional restriction bypass\n* revert: remove regional restriction bypass\n* feat: preserve sticker pack access for sender\n* feat: hide messages from blocked users\n* refactor: remove new settings descriptions\n* fix: hide blocked peers through the shadow-ban filters, key sticker sets by file\nBlocked peers are kept per account in DGSimpleSettings: the whole list\nonce per launch while «Скрывать сообщения заблокированных» is on, then\nevery block and unblock, from other devices too. The shadow-ban state\nincludes the shown account's blocked peers, so chat list previews, reply\nheaders, in-app notifications, the pinned bar, search, typing and mentions\nfollow it, and «Показать скрытые» reveals them. Bots are never hidden.\nChats no longer request the list each time they open.\nA sticker sent with «Анонимная отправка стикеров» keeps its set by the id\nof the file the server made, in one capped dictionary per account, so a\npublished scheduled message finds it too, and «Посмотреть набор» shows\nfor it.\nThe toggles move to «Обход ограничений», «Стикеры и реакции» and\n«Теневой бан» with footers and English strings; the content bypass asks\nfor a restart.\n---------\nCo-authored-by: kittenello <174290551+kittenello@users.noreply.github.com>\nCo-authored-by: catboysense <331888298+catboysense@users.noreply.github.com>",
+      "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-36002.ipa",
+      "size": 78640658
+    }
+  ],
+  "news": []
+}
