@@ -249,6 +249,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let animationRenderer: MultiAnimationRenderer
     
     var emojiStatusPackDisposable = MetaDisposable()
+    private let localVerificationDisposable = MetaDisposable()
+    private var requestedLocalVerification: DGLocalVerification = .none
     var emojiStatusFileAndPackTitle = Promise<(TelegramMediaFile, LoadedStickerPack)?>()
     
     var customNavigationContentNode: PeerInfoPanelNodeNavigationContentNode?
@@ -432,6 +434,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     
     deinit {
         self.emojiStatusPackDisposable.dispose()
+        self.localVerificationDisposable.dispose()
     }
     
     override func didLoad() {
@@ -559,6 +562,43 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
     }
 
+    private func localVerificationIcon(peer: EnginePeer) -> Int64? {
+        guard peer.id == self.context.account.peerId, self.isSettings || self.isMyProfile else {
+            return nil
+        }
+        let settings = DGSimpleSettings.shared
+        let verification = settings.localVerification(accountId: peer.id.toInt64())
+        if self.requestedLocalVerification != verification {
+            self.requestedLocalVerification = verification
+            self.localVerificationDisposable.set(nil)
+            if let username = verification.botUsername {
+                let context = self.context
+                self.localVerificationDisposable.set((context.engine.peers.resolvePeerByName(name: username, referrer: nil)
+                |> mapToSignal { result -> Signal<Int64?, NoError> in
+                    guard case let .result(bot?) = result else {
+                        return .complete()
+                    }
+                    guard case let .user(user) = bot, user.botInfo != nil, user.flags.contains(.isVerified) else {
+                        return .single(nil)
+                    }
+                    return context.engine.peers.fetchAndUpdateCachedPeerData(peerId: bot.id)
+                    |> mapToSignal { _ in
+                        return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.CachedData(id: bot.id))
+                        |> map { data in
+                            return (data as? CachedUserData)?.botInfo?.verifierSettings?.iconFileId
+                        }
+                    }
+                }
+                |> deliverOnMainQueue).startStrict(next: { [weak self] fileId in
+                    guard let self, let fileId, self.requestedLocalVerification == verification else { return }
+                    settings.setLocalVerificationIcon(fileId, verification: verification)
+                    self.requestUpdateLayout?(false)
+                }))
+            }
+        }
+        return settings.localVerificationIcon(verification)
+    }
+
     func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, sideInsets: PeerInfoSideInsets, statusBarHeight: CGFloat, navigationHeight: CGFloat, presentedInFormSheet: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
         // iPhone Duo: keep the header out of the side strip; without one every expression below is today's.
         let stripLeft = sideInsets.stripLeft
@@ -680,6 +720,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
         var credibilityIcon: CredibilityIcon = .none
         var verifiedIcon: CredibilityIcon = .none
+        var hasLocalVerification = false
         var statusIcon: CredibilityIcon = .none
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
@@ -714,6 +755,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             if donutgramBadge(peerId: peer.id) != nil {
                 verifiedIcon = .verified
+            }
+            if let fileId = self.localVerificationIcon(peer: peer) {
+                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: fileId), expirationDate: nil))
+                hasLocalVerification = true
             }
         }
         
@@ -1172,7 +1217,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         do {
             self.currentVerifiedIcon = verifiedIcon
-            let teamBadge = peer.flatMap { donutgramBadge(peerId: $0.id) }
+            let teamBadge = hasLocalVerification ? nil : peer.flatMap { donutgramBadge(peerId: $0.id) }
             let teamPeerName = teamBadge == nil ? nil : peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
             self.currentDonutgramTeamPeerName = teamPeerName
             var teamBadgeAction: (() -> Void)?

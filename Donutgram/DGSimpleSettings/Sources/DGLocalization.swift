@@ -27,6 +27,10 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Локальная верификация": "Local Verification",
+    "Скрыть спонсора прокси": "Hide Proxy Sponsor",
+    "Отсчёт перед записью": "Recording Countdown",
+    "Кружок начнёт записываться после 3, 2, 1. Во время отсчёта можно менять зум, камеру и вспышку.": "Recording starts after 3, 2, 1. You can adjust zoom, switch cameras and toggle the flash during the countdown.",
     "Настройки Donutgram": "Donutgram Settings",
     "Настройки сообщений": "Message Settings",
     "Копировать название": "Copy Button Text",

@@ -4,6 +4,7 @@ import TelegramCore
 import TelegramPresentationData
 import MergeLists
 import AccountContext
+import DGSimpleSettings
 
 enum ChatListNodeEntryId: Hashable {
     case Header
@@ -656,6 +657,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
     }
     
     let filteredAdditionalItemEntries = view.additionalItems.filter { item -> Bool in
+        if DGSimpleSettings.shared.hideProxySponsor, case .proxy = item.promoInfo.content {
+            return false
+        }
         return item.item.renderedPeer.peerId != state.hiddenPsaPeerId
     }
     
