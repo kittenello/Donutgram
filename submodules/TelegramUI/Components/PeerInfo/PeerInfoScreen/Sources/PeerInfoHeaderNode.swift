@@ -249,8 +249,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let animationRenderer: MultiAnimationRenderer
     
     var emojiStatusPackDisposable = MetaDisposable()
-    private let localVerificationDisposable = MetaDisposable()
-    private var requestedLocalVerification: DGLocalVerification = .none
     var emojiStatusFileAndPackTitle = Promise<(TelegramMediaFile, LoadedStickerPack)?>()
     
     var customNavigationContentNode: PeerInfoPanelNodeNavigationContentNode?
@@ -434,7 +432,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     
     deinit {
         self.emojiStatusPackDisposable.dispose()
-        self.localVerificationDisposable.dispose()
     }
     
     override func didLoad() {
@@ -569,18 +566,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         let settings = DGSimpleSettings.shared
         let verification = settings.localVerification(accountId: peer.id.toInt64())
-        if self.requestedLocalVerification != verification {
-            self.requestedLocalVerification = verification
-            self.localVerificationDisposable.set(nil)
-            if verification != .none {
-                self.localVerificationDisposable.set((donutgramLoadLocalVerification(context: self.context, verification: verification, expectedBotId: settings.localVerificationDetails(verification)?.botId)
-                |> deliverOnMainQueue).startStrict(next: { [weak self] details in
-                    guard let self, let details, self.requestedLocalVerification == verification else { return }
-                    settings.setLocalVerificationDetails(details, verification: verification)
-                    self.requestUpdateLayout?(false)
-                }))
-            }
-        }
         return DonutgramVerificationDisplay.iconFileId(settings.localVerificationIcon(verification))
     }
 

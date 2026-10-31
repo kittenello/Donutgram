@@ -588,22 +588,14 @@ func infoItems(
         if isMyProfile, user.id == context.account.peerId {
             let settings = DGSimpleSettings.shared
             let verification = settings.localVerification(accountId: user.id.toInt64())
-            if verification != .none && !settings.hideVerification {
+            if let details = settings.localVerificationDetails(verification), !settings.hideVerification {
                 var prefix: NSAttributedString?
                 if let fileId = settings.localVerificationIcon(verification) {
                     let attributedPrefix = NSMutableAttributedString(string: "  ")
                     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil), range: NSMakeRange(0, 1))
                     prefix = attributedPrefix
                 }
-                let text: String
-                if let details = settings.localVerificationDetails(verification), !details.description.isEmpty {
-                    text = details.description
-                } else if verification == .crow {
-                    text = dgLocalized("Локальная верификация по образцу @crow.", languageCode: presentationData.strings.baseLanguageCode)
-                } else {
-                    text = String(format: dgLocalized("Этот аккаунт верифицирован организацией %@.", languageCode: presentationData.strings.baseLanguageCode), verification.title)
-                }
-                items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: ItemVerification, text: text, attributedPrefix: prefix, useAccentLinkColor: false))
+                items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: ItemVerification, text: details.description, attributedPrefix: prefix, useAccentLinkColor: false))
             }
         }
     } else if case let .channel(channel) = data.peer {

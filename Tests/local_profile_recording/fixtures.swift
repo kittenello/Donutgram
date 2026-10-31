@@ -31,13 +31,9 @@ if mode == "write" {
     settings.setLocalVerification(.hold, accountId: 2)
     check(settings.localVerification(accountId: 4) == .none, "verification must not leak to another account")
     settings.setLocalVerification(.crow, accountId: 4)
-    settings.setLocalVerificationDetails(DGLocalVerificationDetails(iconFileId: 123, botId: 456, description: "server description"), verification: .crow)
-    check(settings.localVerificationIcon(.crow) == 123, "profile details supply the icon")
-    for (index, verification) in [DGLocalVerification.major, .hold].enumerated() {
-        settings.setLocalVerificationIcon(Int64.max - Int64(index), verification: verification)
-    }
-    settings.setLocalVerificationIcon(0, verification: .major)
-    check(settings.localVerificationIcon(.major) == Int64.max, "invalid icon cannot replace a cached icon")
+    defaults.set("123", forKey: "donutgram.profile.verificationIcon.major")
+    defaults.set("{\"iconFileId\":123,\"botId\":456,\"description\":\"stale\"}", forKey: "donutgram.profile.verificationDetails.major")
+    check(settings.localVerificationIcon(.major) == 5909078961467431777, "stale lookup caches cannot override the confirmed icon")
 
     let items = [Item(10, .proxy), Item(20, .psa), Item(30, .psa)]
     let state = ListState(hiddenPsaPeerId: 30)
@@ -54,12 +50,23 @@ if mode == "write" {
     check(settings.localVerification(accountId: 1) == .major, "major survives relaunch")
     check(settings.localVerification(accountId: 2) == .hold, "hold survives relaunch")
     check(settings.localVerification(accountId: 3) == .none, "another account stays without a badge")
-    check(settings.localVerification(accountId: 4) == .crow && settings.localVerificationDetails(.crow)?.description == "server description" && settings.localVerificationDetails(.crow)?.botId == 456, "source verification survives relaunch")
-    check(settings.localVerificationIcon(.major) == Int64.max, "full 64-bit icon id survives relaunch")
+    check(settings.localVerification(accountId: 4) == .crow, "local verification survives relaunch")
     settings.setLocalVerification(.none, accountId: 1)
     check(settings.localVerification(accountId: 1) == .none && settings.localVerification(accountId: 2) == .hold, "disabling one account leaves another unchanged")
     defaults.removePersistentDomain(forName: suite)
 }
+
+let expectedVerification: [(DGLocalVerification, Int64, Int64, String)] = [
+    (.hold, 5913729775393840687, 8365813836, "This user was verified by the organization \"Hold\"."),
+    (.major, 5909078961467431777, 7487372978, "This user was verified by the organization \"Major\"."),
+    (.crow, 5800995289124838177, 8217627596, "This account is verified as official by the representatives of Telegram.")
+]
+check(DGLocalVerification.allCases == [.none, .major, .hold, .crow], "only the requested verification choices are available")
+for (selection, iconId, botId, description) in expectedVerification {
+    check(settings.localVerificationDetails(selection) == DGLocalVerificationDetails(iconFileId: iconId, botId: botId, description: description), "confirmed icon, verifier and description are available without a profile lookup")
+    check(settings.localVerificationIcon(selection) == iconId, "the complete 64-bit emoji id is used for rendering")
+}
+check(settings.localVerificationDetails(.none) == nil && settings.localVerificationIcon(.none) == nil, "disabled verification has no icon or description")
 
 private var countdown = RoundVideoRecordingCountdown()
 check(countdown.remaining(at: 100) == nil, "countdown starts inactive")

@@ -239,11 +239,6 @@ public extension TelegramEngine {
             }
         }
 
-        public func findUserById(userId: Int64) -> Signal<EnginePeer?, NoError> {
-            return donutgramSearchUserById(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, userId: userId, scope: .everywhere)
-            |> map { $0?.peer }
-        }
-        
         public func resolvePeerByPhone(phone: String, ageLimit: Int32 = 2 * 60 * 60 * 24) -> Signal<EnginePeer?, NoError> {
             return _internal_resolvePeerByPhone(account: self.account, phone: phone, ageLimit: ageLimit)
             |> mapToSignal { peerId -> Signal<EnginePeer?, NoError> in

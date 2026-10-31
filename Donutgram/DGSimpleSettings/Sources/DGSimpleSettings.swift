@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DGLocalVerificationDetails: Codable, Equatable {
+public struct DGLocalVerificationDetails: Equatable {
     public let iconFileId: Int64
     public let botId: Int64
     public let description: String
@@ -24,35 +24,16 @@ public enum DGLocalVerification: String, CaseIterable {
         }
     }
 
-    public var botUsername: String? {
+    public var details: DGLocalVerificationDetails? {
         switch self {
         case .none: return nil
-        case .major: return "major"
-        case .hold: return "hold"
-        case .crow: return nil
+        case .major:
+            return DGLocalVerificationDetails(iconFileId: 5909078961467431777, botId: 7487372978, description: "This user was verified by the organization \"Major\".")
+        case .hold:
+            return DGLocalVerificationDetails(iconFileId: 5913729775393840687, botId: 8365813836, description: "This user was verified by the organization \"Hold\".")
+        case .crow:
+            return DGLocalVerificationDetails(iconFileId: 5800995289124838177, botId: 8217627596, description: "This account is verified as official by the representatives of Telegram.")
         }
-    }
-
-    public var referenceUsernames: [String] {
-        switch self {
-        case .none: return []
-        case .major: return ["imstoyak"]
-        case .hold: return ["fuhao"]
-        case .crow: return ["crow", "monk"]
-        }
-    }
-
-    public var referenceUserId: Int64? {
-        switch self {
-        case .major: return 5489891396
-        case .hold: return 1272367206
-        case .crow: return 7308887716
-        case .none: return nil
-        }
-    }
-
-    public var verifierBotUserId: Int64? {
-        return self == .hold ? 8365813836 : nil
     }
 }
 
@@ -644,23 +625,11 @@ public final class DGSimpleSettings {
     }
 
     public func localVerificationIcon(_ verification: DGLocalVerification) -> Int64? {
-        return self.localVerificationDetails(verification)?.iconFileId ?? Int64(string("donutgram.profile.verificationIcon.\(verification.rawValue)"))
+        return verification.details?.iconFileId
     }
 
     public func localVerificationDetails(_ verification: DGLocalVerification) -> DGLocalVerificationDetails? {
-        guard let data = string("donutgram.profile.verificationDetails.\(verification.rawValue)").data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(DGLocalVerificationDetails.self, from: data)
-    }
-
-    public func setLocalVerificationDetails(_ details: DGLocalVerificationDetails, verification: DGLocalVerification) {
-        guard verification != .none, details.iconFileId != 0,
-              let data = try? JSONEncoder().encode(details), let value = String(data: data, encoding: .utf8) else { return }
-        setString(value, "donutgram.profile.verificationDetails.\(verification.rawValue)")
-    }
-
-    public func setLocalVerificationIcon(_ fileId: Int64, verification: DGLocalVerification) {
-        guard verification != .none, fileId != 0 else { return }
-        setString(String(fileId), "donutgram.profile.verificationIcon.\(verification.rawValue)")
+        return verification.details
     }
 
     public var hideProxySponsor: Bool { get { bool(Key.hideProxySponsor) } set { setBool(newValue, Key.hideProxySponsor) } }
