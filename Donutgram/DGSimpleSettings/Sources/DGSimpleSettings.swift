@@ -20,7 +20,7 @@ public enum DGLocalVerification: String, CaseIterable {
         case .none: return "Выкл"
         case .major: return "Major"
         case .hold: return "Hold"
-        case .crow: return "Как у @crow"
+        case .crow: return "Developer"
         }
     }
 
