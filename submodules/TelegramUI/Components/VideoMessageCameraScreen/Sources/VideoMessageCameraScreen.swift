@@ -35,6 +35,23 @@ import DGSimpleSettings
 import LottieComponent
 import GlassBackgroundComponent
 
+private struct RoundVideoRecordingCountdown {
+    private var deadline: Double?
+
+    mutating func start(at timestamp: Double) {
+        self.deadline = timestamp + 3.0
+    }
+
+    mutating func cancel() {
+        self.deadline = nil
+    }
+
+    func remaining(at timestamp: Double) -> Int? {
+        guard let deadline = self.deadline else { return nil }
+        return max(0, min(3, Int(ceil(deadline - timestamp))))
+    }
+}
+
 // Donutgram: the round-video zoom control. Collapsed, it is a glass capsule like the camera buttons next to it, with one
 // button per lens; the button of the lens in use shows the live zoom, as in the Camera app. A swipe on it or a pinch turns
 // the same capsule into a dial: the ticks move under a fixed center mark and the value sits above the mark, inside the
@@ -611,10 +628,15 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             
             self.startRecording.connect({ [weak self] _ in
                 if let self, let controller = getController() {
-                    self.startVideoRecording(pressing: !controller.scheduledLock)
-                    controller.scheduledLock = false
-                    if controller.recordingStartTime == nil {
-                        controller.recordingStartTime = CACurrentMediaTime()
+                    if DGSimpleSettings.shared.roundVideoCountdown && controller.node.results.isEmpty {
+                        controller.beginRecordingCountdown { [weak self, weak controller] in
+                            guard let self, let controller else { return }
+                            self.startVideoRecording(pressing: !controller.scheduledLock)
+                            controller.scheduledLock = false
+                        }
+                    } else {
+                        self.startVideoRecording(pressing: !controller.scheduledLock)
+                        controller.scheduledLock = false
                     }
                 }
             })
@@ -754,6 +776,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                 return
             }
             controller.lastActionTimestamp = currentTimestamp
+            controller.recordingStartGeneration += 1
+            let generation = controller.recordingStartGeneration
         
             let initialDuration = controller.node.previewState?.composition.duration.seconds ?? 0.0
             let isFirstRecording = initialDuration.isZero
@@ -766,8 +790,12 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             
             controller.node.withReadyCamera(isFirstTime: !controller.node.cameraIsActive) { [weak self] in
                 Queue.mainQueue().after(0.15) {
-                    guard let self else {
+                    guard let self, let controller = self.getController(), !controller.isDismissed, controller.recordingStartGeneration == generation else {
                         return
+                    }
+                    guard controller.cameraState.recording != .none else { return }
+                    if controller.recordingStartTime == nil {
+                        controller.recordingStartTime = CACurrentMediaTime()
                     }
                     self.resultDisposable.set((camera.startRecording()
                     |> deliverOnMainQueue).startStrict(next: { [weak self] recordingData in
@@ -838,6 +866,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         }
         
         func cancelVideoRecording() {
+            self.getController()?.cancelRecordingCountdown()
             if let initialBrightness = self.initialBrightness {
                 self.initialBrightness = nil
                 self.brightnessArguments = (CACurrentMediaTime(), 0.2, mainWindowScreen.brightness, initialBrightness)
@@ -1224,6 +1253,7 @@ public class VideoMessageCameraScreen: ViewController {
         fileprivate var mainPreviewView: CameraSimplePreviewView
         fileprivate var additionalPreviewView: CameraSimplePreviewView
         private var progressView: RecordingProgressView
+        private let countdownLabel = UILabel()
         private let loadingView: LoadingEffectView
         private let zoomControlsView = RoundVideoZoomControl()
         private var zoomPanGestureRecognizer: UIPanGestureRecognizer?
@@ -1399,6 +1429,16 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.addSubview(self.progressView)
             self.previewContainerContentView.addSubview(self.previewBlurView)
             self.previewContainerContentView.addSubview(self.loadingView)
+            self.countdownLabel.font = Font.with(size: 76.0, design: .round, weight: .bold, traits: .monospacedNumbers)
+            self.countdownLabel.textColor = .white
+            self.countdownLabel.textAlignment = .center
+            self.countdownLabel.layer.shadowColor = UIColor.black.cgColor
+            self.countdownLabel.layer.shadowOpacity = 0.45
+            self.countdownLabel.layer.shadowRadius = 6.0
+            self.countdownLabel.layer.shadowOffset = CGSize(width: 0.0, height: 2.0)
+            self.countdownLabel.isUserInteractionEnabled = false
+            self.countdownLabel.isHidden = true
+            self.previewContainerContentView.addSubview(self.countdownLabel)
             
             self.completion.connect { [weak self] result in
                 if let self {
@@ -1440,6 +1480,12 @@ public class VideoMessageCameraScreen: ViewController {
             |> deliverOnMainQueue).startStandalone(next: { _ in
                 f()
             })
+        }
+
+        func updateRecordingCountdown(_ value: Int?) {
+            self.countdownLabel.text = value.map(String.init)
+            self.countdownLabel.isHidden = value == nil
+            self.countdownLabel.isAccessibilityElement = value != nil
         }
         
         func setupLiveUpload(filePath: String) {
@@ -2258,6 +2304,7 @@ public class VideoMessageCameraScreen: ViewController {
             }
             
             self.progressView.frame = previewBounds
+            self.countdownLabel.frame = previewBounds
             self.progressView.value = CGFloat(self.cameraState.duration / 60.0)
             
             transition.setAlpha(view: self.additionalPreviewView, alpha: self.cameraState.position == .front ? 1.0 : 0.0)
@@ -2540,6 +2587,10 @@ public class VideoMessageCameraScreen: ViewController {
     }
     
     deinit {
+        self.recordingCountdownTimer?.invalidate()
+        if let countdownBackgroundObserver = self.countdownBackgroundObserver {
+            NotificationCenter.default.removeObserver(countdownBackgroundObserver)
+        }
         self.audioSessionDisposable?.dispose()
         if #available(iOS 13.0, *) {
             try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(false)
@@ -2575,6 +2626,13 @@ public class VideoMessageCameraScreen: ViewController {
     override public func loadDisplayNode() {
         self.displayNode = Node(controller: self)
 
+        self.countdownBackgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.isRecordingCountdownPending else { return }
+            self.cancelRecordingCountdown()
+            self.completion(nil, nil, nil, nil)
+            self.requestDismiss(animated: false)
+        }
+
         super.displayNodeDidLoad()
     }
         
@@ -2583,6 +2641,11 @@ public class VideoMessageCameraScreen: ViewController {
     fileprivate var isSendingImmediately = false
     public func sendVideoRecording(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, messageEffect: ChatSendMessageEffect? = nil) {
         guard !self.didSend else {
+            return
+        }
+        if self.isRecordingCountdownPending {
+            self.cancelRecordingCountdown()
+            self.completion(nil, nil, nil, nil)
             return
         }
         
@@ -2818,6 +2881,11 @@ public class VideoMessageCameraScreen: ViewController {
         guard !self.didSend else {
             return false
         }
+        if self.isRecordingCountdownPending || (self.recordingStartTime == nil && self.node.results.isEmpty) {
+            self.cancelRecordingCountdown()
+            self.completion(nil, nil, nil, nil)
+            return false
+        }
         
         self.node.dismissAllTooltips()
         
@@ -2831,6 +2899,45 @@ public class VideoMessageCameraScreen: ViewController {
     }
 
     fileprivate var recordingStartTime: Double?
+    fileprivate var recordingStartGeneration = 0
+    fileprivate var isRecordingCountdownPending = false
+    private var recordingCountdown = RoundVideoRecordingCountdown()
+    private var recordingCountdownTimer: Timer?
+    private var countdownBackgroundObserver: NSObjectProtocol?
+
+    fileprivate func beginRecordingCountdown(start: @escaping () -> Void) {
+        guard !self.isRecordingCountdownPending, !self.isDismissed, !self.didSend else { return }
+        self.isRecordingCountdownPending = true
+        self.recordingStartGeneration += 1
+        let generation = self.recordingStartGeneration
+        self.node.withReadyCamera { [weak self] in
+            guard let self, self.isRecordingCountdownPending, !self.isDismissed, self.recordingStartGeneration == generation else { return }
+            self.recordingCountdown.start(at: CACurrentMediaTime())
+            self.node.updateRecordingCountdown(3)
+            let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+                guard let self, self.isRecordingCountdownPending, !self.isDismissed, self.recordingStartGeneration == generation else { return }
+                guard let remaining = self.recordingCountdown.remaining(at: CACurrentMediaTime()) else { return }
+                if remaining > 0 {
+                    self.node.updateRecordingCountdown(remaining)
+                } else {
+                    self.cancelRecordingCountdown()
+                    start()
+                }
+            }
+            self.recordingCountdownTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+
+    fileprivate func cancelRecordingCountdown() {
+        self.recordingStartGeneration += 1
+        self.isRecordingCountdownPending = false
+        self.recordingCountdown.cancel()
+        self.recordingCountdownTimer?.invalidate()
+        self.recordingCountdownTimer = nil
+        self.node.updateRecordingCountdown(nil)
+    }
+
     fileprivate var scheduledLock = false
     public func lockVideoRecording() {
         guard !self.didSend else {
@@ -2894,11 +3001,12 @@ public class VideoMessageCameraScreen: ViewController {
         })
     }
             
-    private var isDismissed = false
+    fileprivate var isDismissed = false
     fileprivate func requestDismiss(animated: Bool) {
         guard !self.isDismissed else {
             return
         }
+        self.cancelRecordingCountdown()
         
         self.node.dismissAllTooltips()
         

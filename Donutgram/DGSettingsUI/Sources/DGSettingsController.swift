@@ -358,6 +358,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         var localProfile = s.visualPhoneEnabled || s.localPremium(accountId: accountId)
         localProfile = localProfile || s.visualRatingLevel(accountId: accountId) != nil || !s.visualUsernames(accountId: accountId).isEmpty
         localProfile = localProfile || !s.visualProfileId(accountId: accountId).isEmpty || s.visualLabel(accountId: accountId) != DGVisualLabel.none
+        localProfile = localProfile || s.localVerification(accountId: accountId) != .none
         let appIcon = DGSimpleSettings.appMarks[DGSimpleSettings.appMarkIndex(iconName: bindings.getAlternateIconName())].title
 
         var entries: [DGListEntry] = []

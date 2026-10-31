@@ -1995,13 +1995,14 @@ public final class ChatListNode: ListViewImpl {
         }
         |> distinctUntilChanged
         
-        let fullyHideArchive = Signal<Bool, NoError> { subscriber in
+        let localListVisibility = Signal<(Bool, Bool), NoError> { subscriber in
             let observer = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: DGSimpleSettings.shared, queue: nil) { _ in
-                subscriber.putNext(DGSimpleSettings.shared.hideArchive)
+                subscriber.putNext((DGSimpleSettings.shared.hideArchive, DGSimpleSettings.shared.hideProxySponsor))
             }
-            subscriber.putNext(DGSimpleSettings.shared.hideArchive)
+            subscriber.putNext((DGSimpleSettings.shared.hideArchive, DGSimpleSettings.shared.hideProxySponsor))
             return ActionDisposable { NotificationCenter.default.removeObserver(observer) }
-        } |> distinctUntilChanged
+        } |> distinctUntilChanged(isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
+        let fullyHideArchive = localListVisibility |> map { $0.0 }
         let archiveVisibility = combineLatest(hideArchivedFolderByDefault, fullyHideArchive)
 
         let displayArchiveIntro: Signal<Bool, NoError>

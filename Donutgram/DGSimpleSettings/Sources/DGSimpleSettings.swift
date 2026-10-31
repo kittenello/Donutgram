@@ -1,5 +1,27 @@
 import Foundation
 
+public enum DGLocalVerification: String, CaseIterable {
+    case none, major, hold, tonFoundation
+
+    public var title: String {
+        switch self {
+        case .none: return "Выкл"
+        case .major: return "Major"
+        case .hold: return "Hold"
+        case .tonFoundation: return "TON Foundation"
+        }
+    }
+
+    public var botUsername: String? {
+        switch self {
+        case .none: return nil
+        case .major: return "major"
+        case .hold: return "hold"
+        case .tonFoundation: return "tf_verification_bot"
+        }
+    }
+}
+
 /// Local-only decorations for the selected account; they never modify Telegram peer flags.
 public enum DGVisualLabel: String, CaseIterable {
     case none, scam, fake, support, bot
@@ -182,6 +204,7 @@ public final class DGSimpleSettings {
         static let confirmCalls = "donutgram.appearance.confirmCalls"
         static let disableGiftStarsRedirect = "donutgram.appearance.disableGiftStarsRedirect"
         static let disableAds = "donutgram.appearance.disableAds"
+        static let hideProxySponsor = "donutgram.appearance.hideProxySponsor"
         static let hideVerification = "donutgram.appearance.hideVerification"
         static let hidePremiumStatuses = "donutgram.appearance.hidePremiumStatuses"
         static let disableCustomBackgrounds = "donutgram.appearance.disableCustomBackgrounds"
@@ -228,6 +251,7 @@ public final class DGSimpleSettings {
         static let lastRoundVideoCamera = "donutgram.chats.lastRoundVideoCamera"
         static let roundVideoZoomSlider = "donutgram.chats.roundVideoZoomSlider"
         static let staticRoundVideoZoom = "donutgram.chats.staticRoundVideoZoom"
+        static let roundVideoCountdown = "donutgram.chats.roundVideoCountdown"
         static let autoPause = "donutgram.chats.autoPause"
         static let doubleTapSeekSeconds = "donutgram.chats.doubleTapSeekSeconds"
         static let showPollResultsBeforeVoting = "donutgram.chats.showPollResultsBeforeVoting"
@@ -576,6 +600,26 @@ public final class DGSimpleSettings {
     public func setVisualLabel(_ label: DGVisualLabel, accountId: Int64) {
         setString(label.rawValue, accountKey("visualLabel", accountId: accountId))
     }
+
+    public func localVerification(accountId: Int64) -> DGLocalVerification {
+        return DGLocalVerification(rawValue: string(accountKey("localVerification", accountId: accountId))) ?? .none
+    }
+
+    public func setLocalVerification(_ verification: DGLocalVerification, accountId: Int64) {
+        setString(verification.rawValue, accountKey("localVerification", accountId: accountId))
+    }
+
+    public func localVerificationIcon(_ verification: DGLocalVerification) -> Int64? {
+        return Int64(string("donutgram.profile.verificationIcon.\(verification.rawValue)"))
+    }
+
+    public func setLocalVerificationIcon(_ fileId: Int64, verification: DGLocalVerification) {
+        guard verification != .none, fileId != 0 else { return }
+        setString(String(fileId), "donutgram.profile.verificationIcon.\(verification.rawValue)")
+    }
+
+    public var hideProxySponsor: Bool { get { bool(Key.hideProxySponsor) } set { setBool(newValue, Key.hideProxySponsor) } }
+    public var roundVideoCountdown: Bool { get { bool(Key.roundVideoCountdown) } set { setBool(newValue, Key.roundVideoCountdown) } }
 
     /// Until when (server time) the server shows the account online, as it last reported. Nil once it reports
     /// the account offline, an offline packet sent here has been acknowledged, or ghost mode stops hiding online.

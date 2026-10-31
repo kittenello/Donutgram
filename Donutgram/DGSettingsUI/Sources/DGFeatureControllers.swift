@@ -589,7 +589,8 @@ func dgLocalProfileSettingsController(context: AccountContext, focusKey: String?
             .disclosure(3, 0, "visualUsernames", "NFT-юзернеймы", "\(s.visualUsernames(accountId: accountId).count)"),
             .disclosure(4, 0, "visualId", "ID профиля", profileId.isEmpty ? "Выкл" : profileId),
             .menu(5, 0, "visualLabel", "Метка", s.visualLabel(accountId: accountId).title),
-            .info(6, 0, "Меняется только то, что видите вы на этом устройстве. Собеседники видят ваш настоящий профиль."),
+            .menu(6, 0, "localVerification", "Локальная верификация", s.localVerification(accountId: accountId).title),
+            .info(7, 0, "Меняется только то, что видите вы на этом устройстве. Собеседники видят ваш настоящий профиль."),
             .header(10, 1, "PREMIUM"),
             .toggle(11, 1, "localPremium", "Локальный Telegram Premium", premium, true)
         ]
@@ -602,8 +603,15 @@ func dgLocalProfileSettingsController(context: AccountContext, focusKey: String?
     }, select: { key in
         if let value = dgMenuChoice(key, of: "visualLabel") {
             s.setVisualLabel(DGVisualLabel(rawValue: value) ?? DGVisualLabel.none, accountId: accountId)
+        } else if let value = dgMenuChoice(key, of: "localVerification"), let verification = DGLocalVerification(rawValue: value) {
+            s.setLocalVerification(verification, accountId: accountId)
         }
     }, menu: { key in
+        if key == "localVerification" {
+            return DGLocalVerification.allCases.map { verification in
+                DGMenuOption(key: "localVerification:\(verification.rawValue)", title: verification.title, isSelected: s.localVerification(accountId: accountId) == verification)
+            }
+        }
         guard key == "visualLabel" else {
             return []
         }
@@ -747,6 +755,8 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             .menu(1, 0, "camera", "Камера в кружках", DGRoundVideoCameraChoice.current.title),
             .toggle(2, 0, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
             .toggle(3, 0, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
+            .toggle(4, 0, "roundVideoCountdown", "Отсчёт перед записью", s.roundVideoCountdown, true),
+            .info(5, 0, "Кружок начнёт записываться после 3, 2, 1. Во время отсчёта можно менять зум, камеру и вспышку."),
             .header(10, 1, "ЗАПИСЬ"),
             .toggle(11, 1, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
             .info(12, 1, "Голосовые и кружки записываются с микрофона телефона, даже если подключены наушники."),
@@ -800,6 +810,7 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
         switch key {
         case "zoomSlider": s.roundVideoZoomSlider = value
         case "staticZoom": s.staticRoundVideoZoom = value
+        case "roundVideoCountdown": s.roundVideoCountdown = value
         case "builtInMic": s.forceBuiltInMicrophone = value
         case "autoPause": s.autoPause = value
         case "autoPauseVideo": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 1, isOn: value)
@@ -910,6 +921,7 @@ func dgAdsAndGiftsSettingsController(context: AccountContext, focusKey: String? 
             .header(0, 0, "РЕКЛАМА"),
             .toggle(1, 0, "disableAds", "Отключить рекламу", s.disableAds, true),
             .info(2, 0, "Скрывает спонсорские сообщения в каналах и рекламу в поиске."),
+            .toggle(3, 0, "hideProxySponsor", "Скрыть спонсора прокси", s.hideProxySponsor, true),
             .header(10, 1, "ПОДАРКИ"),
             .toggle(11, 1, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true),
             .toggle(12, 1, "hideBirthdayNotifications", "Скрыть уведомления о днях рождения", s.hideBirthdayNotifications, true),
@@ -919,6 +931,7 @@ func dgAdsAndGiftsSettingsController(context: AccountContext, focusKey: String? 
     }, toggle: { key, value in
         switch key {
         case "disableAds": s.disableAds = value
+        case "hideProxySponsor": s.hideProxySponsor = value
         case "hideGiftButton": s.hideGiftButton = value
         case "hideBirthdayNotifications": s.hideBirthdayNotifications = value
         case "disableGiftStarsRedirect": s.disableGiftStarsRedirect = value

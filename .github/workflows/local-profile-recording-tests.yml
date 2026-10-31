@@ -1,0 +1,27 @@
+name: Local profile and recording tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/DGSimpleSettings/**'
+      - 'Donutgram/DGSettingsUI/**'
+      - 'submodules/ChatListUI/Sources/Node/ChatListNode.swift'
+      - 'submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift'
+      - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift'
+      - 'submodules/TelegramUI/Components/VideoMessageCameraScreen/**'
+      - 'Tests/local_profile_recording/**'
+      - '.github/workflows/local-profile-recording-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check local verification, proxy visibility and recording countdown
+        run: python3 Tests/local_profile_recording/run.py
