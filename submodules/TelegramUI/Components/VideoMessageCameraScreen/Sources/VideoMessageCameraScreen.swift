@@ -2902,7 +2902,7 @@ public class VideoMessageCameraScreen: ViewController {
     fileprivate var recordingStartGeneration = 0
     fileprivate var isRecordingCountdownPending = false
     private var recordingCountdown = RoundVideoRecordingCountdown()
-    private var recordingCountdownTimer: Timer?
+    private var recordingCountdownTimer: Foundation.Timer?
     private var countdownBackgroundObserver: NSObjectProtocol?
 
     fileprivate func beginRecordingCountdown(start: @escaping () -> Void) {
@@ -2914,7 +2914,7 @@ public class VideoMessageCameraScreen: ViewController {
             guard let self, self.isRecordingCountdownPending, !self.isDismissed, self.recordingStartGeneration == generation else { return }
             self.recordingCountdown.start(at: CACurrentMediaTime())
             self.node.updateRecordingCountdown(3)
-            let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            let timer = Foundation.Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
                 guard let self, self.isRecordingCountdownPending, !self.isDismissed, self.recordingStartGeneration == generation else { return }
                 guard let remaining = self.recordingCountdown.remaining(at: CACurrentMediaTime()) else { return }
                 if remaining > 0 {
