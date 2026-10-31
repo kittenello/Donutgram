@@ -142,16 +142,11 @@ for (selection, userId, botName, sourceName) in [(DGLocalVerification.major, Int
 }
 
 let fixtures = Fixtures()
-let tonBot = EnginePeer(500)
-fixtures.names["tf_verification_bot"] = tonBot
-let tonUser = EnginePeer(501)
-fixtures.names["alenka_UQ"] = tonUser
-fixtures.cache[tonUser.id] = CachedUserData(verification: PeerVerification(botId: tonBot.id, iconFileId: 502, description: "TON Foundation"))
+let majorBot = EnginePeer(500)
+fixtures.names["major"] = majorBot
 let context = AccountContext(engine: TelegramEngine(fixtures))
-check(donutgramLoadLocalVerification(context: context, verification: .tonFoundation).values[0]?.iconFileId == 502, "ton foundation remains separate from the crow profile")
 let requested = fixtures.requestedNames.count
 check(donutgramLoadLocalVerification(context: context, verification: .none).values[0] == nil && fixtures.requestedNames.count == requested, "disabled verification does not fetch profiles")
-fixtures.cache.removeValue(forKey: tonUser.id)
-fixtures.cache[tonBot.id] = CachedUserData(botInfo: BotInfo(verifierSettings: VerifierSettings(iconFileId: 503, customDescription: "bot description", companyName: "TON")))
-check(donutgramLoadLocalVerification(context: context, verification: .tonFoundation).values[0]?.iconFileId == 503, "available verifier settings remain a fallback")
+fixtures.cache[majorBot.id] = CachedUserData(botInfo: BotInfo(verifierSettings: VerifierSettings(iconFileId: 503, customDescription: "bot description", companyName: "Major")))
+check(donutgramLoadLocalVerification(context: context, verification: .major).values[0]?.iconFileId == 503, "available verifier settings remain a fallback")
 print("local verification source and username change checks passed")

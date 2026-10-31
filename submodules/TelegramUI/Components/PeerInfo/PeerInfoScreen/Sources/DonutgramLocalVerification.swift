@@ -71,20 +71,10 @@ private func localVerificationFromBot(context: AccountContext, verification: DGL
     return localVerificationPeer(context: context, username: username)
     |> mapToSignal { bot -> Signal<DGLocalVerificationDetails?, NoError> in
         guard let bot, expectedBotId == nil || bot.id.id._internalGetInt64Value() == expectedBotId else { return .single(nil) }
-        let source: Signal<DGLocalVerificationDetails?, NoError>
-        if verification.referenceUserId == nil {
-            source = localVerificationSource(context: context, verification: verification, expectedBotId: bot.id.id._internalGetInt64Value())
-        } else {
-            source = .single(nil)
-        }
-        return source
-        |> mapToSignal { details -> Signal<DGLocalVerificationDetails?, NoError> in
-            if let details { return .single(details) }
-            return localVerificationData(context: context, peer: bot)
-            |> map { data in
-                guard let settings = (data as? CachedUserData)?.botInfo?.verifierSettings, settings.iconFileId != 0 else { return nil }
-                return DGLocalVerificationDetails(iconFileId: settings.iconFileId, botId: bot.id.id._internalGetInt64Value(), description: settings.customDescription ?? settings.companyName)
-            }
+        return localVerificationData(context: context, peer: bot)
+        |> map { data in
+            guard let settings = (data as? CachedUserData)?.botInfo?.verifierSettings, settings.iconFileId != 0 else { return nil }
+            return DGLocalVerificationDetails(iconFileId: settings.iconFileId, botId: bot.id.id._internalGetInt64Value(), description: settings.customDescription ?? settings.companyName)
         }
     }
 }
@@ -92,9 +82,6 @@ private func localVerificationFromBot(context: AccountContext, verification: DGL
 func donutgramLoadLocalVerification(context: AccountContext, verification: DGLocalVerification, expectedBotId: Int64? = nil) -> Signal<DGLocalVerificationDetails?, NoError> {
     guard verification != .none else { return .single(nil) }
     let expectedBotId = verification.verifierBotUserId ?? expectedBotId
-    if verification.referenceUserId == nil {
-        return localVerificationFromBot(context: context, verification: verification, expectedBotId: expectedBotId)
-    }
     return localVerificationSource(context: context, verification: verification, expectedBotId: expectedBotId)
     |> mapToSignal { details in
         if let details { return .single(details) }

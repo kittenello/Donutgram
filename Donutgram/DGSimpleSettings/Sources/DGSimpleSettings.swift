@@ -13,14 +13,13 @@ public struct DGLocalVerificationDetails: Codable, Equatable {
 }
 
 public enum DGLocalVerification: String, CaseIterable {
-    case none, major, hold, tonFoundation, crow
+    case none, major, hold, crow
 
     public var title: String {
         switch self {
         case .none: return "Выкл"
         case .major: return "Major"
         case .hold: return "Hold"
-        case .tonFoundation: return "TON Foundation"
         case .crow: return "Как у @crow"
         }
     }
@@ -30,7 +29,6 @@ public enum DGLocalVerification: String, CaseIterable {
         case .none: return nil
         case .major: return "major"
         case .hold: return "hold"
-        case .tonFoundation: return "tf_verification_bot"
         case .crow: return nil
         }
     }
@@ -40,7 +38,6 @@ public enum DGLocalVerification: String, CaseIterable {
         case .none: return []
         case .major: return ["imstoyak"]
         case .hold: return ["fuhao"]
-        case .tonFoundation: return ["alenka_UQ", "tsivarev"]
         case .crow: return ["crow", "monk"]
         }
     }
@@ -50,7 +47,7 @@ public enum DGLocalVerification: String, CaseIterable {
         case .major: return 5489891396
         case .hold: return 1272367206
         case .crow: return 7308887716
-        case .none, .tonFoundation: return nil
+        case .none: return nil
         }
     }
 
