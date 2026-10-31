@@ -1,7 +1,19 @@
 import Foundation
 
+public struct DGLocalVerificationDetails: Codable, Equatable {
+    public let iconFileId: Int64
+    public let botId: Int64
+    public let description: String
+
+    public init(iconFileId: Int64, botId: Int64, description: String) {
+        self.iconFileId = iconFileId
+        self.botId = botId
+        self.description = description
+    }
+}
+
 public enum DGLocalVerification: String, CaseIterable {
-    case none, major, hold, tonFoundation
+    case none, major, hold, tonFoundation, crow
 
     public var title: String {
         switch self {
@@ -9,6 +21,7 @@ public enum DGLocalVerification: String, CaseIterable {
         case .major: return "Major"
         case .hold: return "Hold"
         case .tonFoundation: return "TON Foundation"
+        case .crow: return "Как у @crow"
         }
     }
 
@@ -18,7 +31,31 @@ public enum DGLocalVerification: String, CaseIterable {
         case .major: return "major"
         case .hold: return "hold"
         case .tonFoundation: return "tf_verification_bot"
+        case .crow: return nil
         }
+    }
+
+    public var referenceUsernames: [String] {
+        switch self {
+        case .none: return []
+        case .major: return ["imstoyak"]
+        case .hold: return ["fuhao"]
+        case .tonFoundation: return ["alenka_UQ", "tsivarev"]
+        case .crow: return ["crow", "monk"]
+        }
+    }
+
+    public var referenceUserId: Int64? {
+        switch self {
+        case .major: return 5489891396
+        case .hold: return 1272367206
+        case .crow: return 7308887716
+        case .none, .tonFoundation: return nil
+        }
+    }
+
+    public var verifierBotUserId: Int64? {
+        return self == .hold ? 8365813836 : nil
     }
 }
 
@@ -610,7 +647,18 @@ public final class DGSimpleSettings {
     }
 
     public func localVerificationIcon(_ verification: DGLocalVerification) -> Int64? {
-        return Int64(string("donutgram.profile.verificationIcon.\(verification.rawValue)"))
+        return self.localVerificationDetails(verification)?.iconFileId ?? Int64(string("donutgram.profile.verificationIcon.\(verification.rawValue)"))
+    }
+
+    public func localVerificationDetails(_ verification: DGLocalVerification) -> DGLocalVerificationDetails? {
+        guard let data = string("donutgram.profile.verificationDetails.\(verification.rawValue)").data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(DGLocalVerificationDetails.self, from: data)
+    }
+
+    public func setLocalVerificationDetails(_ details: DGLocalVerificationDetails, verification: DGLocalVerification) {
+        guard verification != .none, details.iconFileId != 0,
+              let data = try? JSONEncoder().encode(details), let value = String(data: data, encoding: .utf8) else { return }
+        setString(value, "donutgram.profile.verificationDetails.\(verification.rawValue)")
     }
 
     public func setLocalVerificationIcon(_ fileId: Int64, verification: DGLocalVerification) {

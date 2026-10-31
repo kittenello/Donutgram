@@ -28,6 +28,9 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 
 private let dgEnglishStrings: [String: String] = [
     "Локальная верификация": "Local Verification",
+    "Как у @crow": "Same as @crow",
+    "Локальная верификация по образцу @crow.": "Local verification matching @crow.",
+    "Этот аккаунт верифицирован организацией %@.": "This account is verified by %@.",
     "Скрыть спонсора прокси": "Hide Proxy Sponsor",
     "Отсчёт перед записью": "Recording Countdown",
     "Кружок начнёт записываться после 3, 2, 1. Во время отсчёта можно менять зум, камеру и вспышку.": "Recording starts after 3, 2, 1. You can adjust zoom, switch cameras and toggle the flash during the countdown.",

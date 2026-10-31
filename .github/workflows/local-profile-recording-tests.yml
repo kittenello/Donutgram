@@ -9,6 +9,8 @@ on:
       - 'submodules/ChatListUI/Sources/Node/ChatListNode.swift'
       - 'submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift'
       - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift'
+      - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/DonutgramLocalVerification.swift'
+      - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift'
       - 'submodules/TelegramUI/Components/VideoMessageCameraScreen/**'
       - 'Tests/local_profile_recording/**'
       - '.github/workflows/local-profile-recording-tests.yml'

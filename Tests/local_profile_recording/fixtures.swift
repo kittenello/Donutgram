@@ -31,6 +31,9 @@ if mode == "write" {
     settings.setLocalVerification(.hold, accountId: 2)
     settings.setLocalVerification(.tonFoundation, accountId: 3)
     check(settings.localVerification(accountId: 4) == .none, "verification must not leak to another account")
+    settings.setLocalVerification(.crow, accountId: 4)
+    settings.setLocalVerificationDetails(DGLocalVerificationDetails(iconFileId: 123, botId: 456, description: "server description"), verification: .crow)
+    check(settings.localVerificationIcon(.crow) == 123, "profile details supply the icon")
     for (index, verification) in [DGLocalVerification.major, .hold, .tonFoundation].enumerated() {
         settings.setLocalVerificationIcon(Int64.max - Int64(index), verification: verification)
     }
@@ -52,6 +55,7 @@ if mode == "write" {
     check(settings.localVerification(accountId: 1) == .major, "major survives relaunch")
     check(settings.localVerification(accountId: 2) == .hold, "hold survives relaunch")
     check(settings.localVerification(accountId: 3) == .tonFoundation, "ton foundation survives relaunch")
+    check(settings.localVerification(accountId: 4) == .crow && settings.localVerificationDetails(.crow)?.description == "server description" && settings.localVerificationDetails(.crow)?.botId == 456, "source verification survives relaunch separately from ton foundation")
     check(settings.localVerificationIcon(.major) == Int64.max, "full 64-bit icon id survives relaunch")
     settings.setLocalVerification(.none, accountId: 1)
     check(settings.localVerification(accountId: 1) == .none && settings.localVerification(accountId: 2) == .hold, "disabling one account leaves another unchanged")

@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CAMERA = "submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift"
 ENTRIES = "submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift"
 HEADER = "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift"
+VERIFICATION = "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/DonutgramLocalVerification.swift"
+PROFILE = "submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift"
 
 
 def read(path):
@@ -45,7 +47,11 @@ def prepare():
     loader = block(header, "private func localVerificationIcon(peer:")
     assert "peer.id == self.context.account.peerId" in loader
     assert "self.isSettings || self.isMyProfile" in loader
-    assert "verifierSettings?.iconFileId" in loader
+    assert "donutgramLoadLocalVerification" in loader
+    assert "DonutgramVerificationDisplay.iconFileId" in loader
+    profile = read(PROFILE)
+    assert "if isMyProfile, user.id == context.account.peerId" in profile
+    assert "settings.localVerificationDetails(verification)" in profile
     assert "hideProxySponsor" in read("submodules/ChatListUI/Sources/Node/ChatListNode.swift")
     entries = read(ENTRIES)
     filtering = block(entries, "let filteredAdditionalItemEntries = view.additionalItems.filter")
@@ -53,6 +59,12 @@ def prepare():
     filtering = filtering.replace("view.additionalItems", "items").replace("DGSimpleSettings.shared", "settings")
     filtering = "func filterItems(_ items: [Item], settings: DGSimpleSettings, state: ListState) -> [Item] {\n" + filtering + "\nreturn filteredAdditionalItemEntries\n}\n"
     return model + "\n" + filtering + Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
+
+
+def verification_harness():
+    source = read(VERIFICATION)
+    source = "\n".join(line for line in source.splitlines() if not line.startswith("import "))
+    return "import Foundation\n" + source + "\n" + Path(__file__).with_name("verification.swift").read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":
@@ -76,5 +88,9 @@ if __name__ == "__main__":
             suite = "donutgram-local-profile-" + uuid.uuid4().hex
             for mode in ["write", "read"]:
                 subprocess.run([str(executable), mode, suite], check=True)
-            for path in [CAMERA, ENTRIES, HEADER, "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift", "Donutgram/DGSettingsUI/Sources/DGSettingsController.swift", "submodules/ChatListUI/Sources/Node/ChatListNode.swift"]:
+            main.write_text(verification_harness(), encoding="utf-8")
+            settings = (ROOT / "Donutgram/DGSimpleSettings/Sources").glob("*.swift")
+            subprocess.run([swift, "-warnings-as-errors", *map(str, settings), str(main), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True)
+            for path in [CAMERA, ENTRIES, HEADER, PROFILE, VERIFICATION, "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift", "Donutgram/DGSettingsUI/Sources/DGSettingsController.swift", "submodules/ChatListUI/Sources/Node/ChatListNode.swift", "submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift"]:
                 subprocess.run([swift, "-frontend", "-parse", str(ROOT / path)], check=True)

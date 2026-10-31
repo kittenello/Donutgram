@@ -538,6 +538,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         case fake
         case scam
         case localText(String)
+        case team(DonutgramBadge)
         case emojiStatus(PeerEmojiStatus)
     }
     
@@ -571,32 +572,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         if self.requestedLocalVerification != verification {
             self.requestedLocalVerification = verification
             self.localVerificationDisposable.set(nil)
-            if let username = verification.botUsername {
-                let context = self.context
-                self.localVerificationDisposable.set((context.engine.peers.resolvePeerByName(name: username, referrer: nil)
-                |> mapToSignal { result -> Signal<Int64?, NoError> in
-                    guard case let .result(bot?) = result else {
-                        return .complete()
-                    }
-                    guard case let .user(user) = bot, user.botInfo != nil, user.flags.contains(.isVerified) else {
-                        return .single(nil)
-                    }
-                    return context.engine.peers.fetchAndUpdateCachedPeerData(peerId: bot.id)
-                    |> mapToSignal { _ in
-                        return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.CachedData(id: bot.id))
-                        |> map { data in
-                            return (data as? CachedUserData)?.botInfo?.verifierSettings?.iconFileId
-                        }
-                    }
-                }
-                |> deliverOnMainQueue).startStrict(next: { [weak self] fileId in
-                    guard let self, let fileId, self.requestedLocalVerification == verification else { return }
-                    settings.setLocalVerificationIcon(fileId, verification: verification)
+            if verification != .none {
+                self.localVerificationDisposable.set((donutgramLoadLocalVerification(context: self.context, verification: verification, expectedBotId: settings.localVerificationDetails(verification)?.botId)
+                |> deliverOnMainQueue).startStrict(next: { [weak self] details in
+                    guard let self, let details, self.requestedLocalVerification == verification else { return }
+                    settings.setLocalVerificationDetails(details, verification: verification)
                     self.requestUpdateLayout?(false)
                 }))
             }
         }
-        return settings.localVerificationIcon(verification)
+        return DonutgramVerificationDisplay.iconFileId(settings.localVerificationIcon(verification))
     }
 
     func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, sideInsets: PeerInfoSideInsets, statusBarHeight: CGFloat, navigationHeight: CGFloat, presentedInFormSheet: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
@@ -759,6 +744,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let fileId = self.localVerificationIcon(peer: peer) {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: fileId), expirationDate: nil))
                 hasLocalVerification = true
+                if let badge = donutgramBadge(peerId: peer.id), !peer.isFake, !peer.isScam, self.donutgramVisualLabel(peer: peer) == nil {
+                    credibilityIcon = .team(badge)
+                }
             }
         }
         
@@ -1056,6 +1044,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             case let .localText(text):
                 emojiRegularStatusContent = .text(color: presentationData.theme.list.itemAccentColor, string: text)
                 emojiExpandedStatusContent = emojiRegularStatusContent
+            case let .team(badge):
+                emojiRegularStatusContent = donutgramBadgeContent(badge, sizeType: .large)
+                emojiExpandedStatusContent = emojiRegularStatusContent
             case let .emojiStatus(emojiStatus):
                 currentEmojiStatus = emojiStatus
                 emojiRegularStatusContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: presentationData.theme.list.mediaPlaceholderColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
@@ -1078,6 +1069,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         }
                         if case .premium = strongSelf.currentCredibilityIcon {
                             strongSelf.displayPremiumIntro?(strongSelf.titleCredibilityIconView, currentEmojiStatus, strongSelf.emojiStatusFileAndPackTitle.get(), false)
+                        } else if case let .team(badge) = strongSelf.currentCredibilityIcon, let name = strongSelf.peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) {
+                            strongSelf.displayDonutgramTeamBadge?(badge, name)
                         }
                     }
                 )),
@@ -1100,6 +1093,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         }
                         if case .premium = strongSelf.currentCredibilityIcon {
                             strongSelf.displayPremiumIntro?(strongSelf.titleExpandedCredibilityIconView, currentEmojiStatus, strongSelf.emojiStatusFileAndPackTitle.get(), true)
+                        } else if case let .team(badge) = strongSelf.currentCredibilityIcon, let name = strongSelf.peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) {
+                            strongSelf.displayDonutgramTeamBadge?(badge, name)
                         }
                     }
                 )),
@@ -2985,7 +2980,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 }
             }
             switch self.currentCredibilityIcon {
-            case .premium:
+            case .premium, .team:
                 let iconFrame = self.titleCredibilityIconView.convert(self.titleCredibilityIconView.bounds, to: self.view)
                 let expandedIconFrame = self.titleExpandedCredibilityIconView.convert(self.titleExpandedCredibilityIconView.bounds, to: self.view)
                 if expandedIconFrame.contains(point) && self.isAvatarExpanded {
