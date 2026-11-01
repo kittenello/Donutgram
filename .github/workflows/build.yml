@@ -40,6 +40,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Check build system and fake provisioning profiles
+        run: python3 -m unittest discover -s build-system/Make/tests -v
+
       - name: Check chat settings behavior and persistence
         shell: bash
         run: |
