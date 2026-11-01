@@ -585,6 +585,19 @@ func infoItems(
                 }
             }
         }
+        if isMyProfile, user.id == context.account.peerId {
+            let settings = DGSimpleSettings.shared
+            let verification = settings.localVerification(accountId: user.id.toInt64())
+            if let details = settings.localVerificationDetails(verification), !settings.hideVerification {
+                var prefix: NSAttributedString?
+                if let fileId = settings.localVerificationIcon(verification) {
+                    let attributedPrefix = NSMutableAttributedString(string: "  ")
+                    attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil), range: NSMakeRange(0, 1))
+                    prefix = attributedPrefix
+                }
+                items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: ItemVerification, text: details.description, attributedPrefix: prefix, useAccentLinkColor: false))
+            }
+        }
     } else if case let .channel(channel) = data.peer {
         let ItemUsername = 1
         let ItemUsernameInfo = 2

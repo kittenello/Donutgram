@@ -116,6 +116,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let titleExpandedVerifiedIconView: ComponentHostView<Empty>
     var titleExpandedVerifiedIconSize: CGSize?
     
+    let titleLocalVerificationIconView: ComponentHostView<Empty>
+    var localVerificationIconSize: CGSize?
+    let titleExpandedLocalVerificationIconView: ComponentHostView<Empty>
+    var titleExpandedLocalVerificationIconSize: CGSize?
+    
     let titleStatusIconView: ComponentHostView<Empty>
     var statusIconSize: CGSize?
     let titleExpandedStatusIconView: ComponentHostView<Empty>
@@ -295,6 +300,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         self.titleExpandedVerifiedIconView = ComponentHostView<Empty>()
         self.titleNode.stateNode(forKey: TitleNodeStateExpanded)?.view.addSubview(self.titleExpandedVerifiedIconView)
+        
+        self.titleLocalVerificationIconView = ComponentHostView<Empty>()
+        self.titleNode.stateNode(forKey: TitleNodeStateRegular)?.view.addSubview(self.titleLocalVerificationIconView)
+        
+        self.titleExpandedLocalVerificationIconView = ComponentHostView<Empty>()
+        self.titleNode.stateNode(forKey: TitleNodeStateExpanded)?.view.addSubview(self.titleExpandedLocalVerificationIconView)
         
         self.titleStatusIconView = ComponentHostView<Empty>()
         self.titleNode.stateNode(forKey: TitleNodeStateRegular)?.view.addSubview(self.titleStatusIconView)
@@ -559,6 +570,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
     }
 
+    private func localVerificationIcon(peer: EnginePeer) -> Int64? {
+        guard peer.id == self.context.account.peerId, self.isSettings || self.isMyProfile else {
+            return nil
+        }
+        let settings = DGSimpleSettings.shared
+        let verification = settings.localVerification(accountId: peer.id.toInt64())
+        return DonutgramVerificationDisplay.iconFileId(settings.localVerificationIcon(verification))
+    }
+
     func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, sideInsets: PeerInfoSideInsets, statusBarHeight: CGFloat, navigationHeight: CGFloat, presentedInFormSheet: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
         // iPhone Duo: keep the header out of the side strip; without one every expression below is today's.
         let stripLeft = sideInsets.stripLeft
@@ -680,6 +700,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
         var credibilityIcon: CredibilityIcon = .none
         var verifiedIcon: CredibilityIcon = .none
+        var localVerificationFileId: Int64?
         var statusIcon: CredibilityIcon = .none
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
@@ -714,6 +735,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             if donutgramBadge(peerId: peer.id) != nil {
                 verifiedIcon = .verified
+            }
+            // The local mark has its own place before the name, so the team badge, the premium star and the labels
+            // stay where they are. A real verification mark would take the same place, so the local one replaces it.
+            localVerificationFileId = self.localVerificationIcon(peer: peer)
+            if localVerificationFileId != nil, case .emojiStatus = verifiedIcon {
+                verifiedIcon = .none
             }
         }
         
@@ -1233,6 +1260,47 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             self.verifiedIconSize = iconSize
             self.titleExpandedVerifiedIconSize = expandedIconSize
+        }
+        
+        do {
+            let regularContent: EmojiStatusComponent.Content
+            let expandedContent: EmojiStatusComponent.Content
+            if let localVerificationFileId {
+                regularContent = .animation(content: .customEmoji(fileId: localVerificationFileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: presentationData.theme.list.mediaPlaceholderColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
+                expandedContent = .animation(content: .customEmoji(fileId: localVerificationFileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: navigationContentsAccentColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
+            } else {
+                regularContent = .none
+                expandedContent = .none
+            }
+            
+            self.localVerificationIconSize = self.titleLocalVerificationIconView.update(
+                transition: ComponentTransition(navigationTransition),
+                component: AnyComponent(EmojiStatusComponent(
+                    context: self.context,
+                    animationCache: self.animationCache,
+                    animationRenderer: self.animationRenderer,
+                    content: regularContent,
+                    isVisibleForAnimations: true,
+                    useSharedAnimation: true,
+                    action: nil
+                )),
+                environment: {},
+                containerSize: CGSize(width: 26.0, height: 26.0)
+            )
+            self.titleExpandedLocalVerificationIconSize = self.titleExpandedLocalVerificationIconView.update(
+                transition: ComponentTransition(navigationTransition),
+                component: AnyComponent(EmojiStatusComponent(
+                    context: self.context,
+                    animationCache: self.animationCache,
+                    animationRenderer: self.animationRenderer,
+                    content: expandedContent,
+                    isVisibleForAnimations: true,
+                    useSharedAnimation: true,
+                    action: nil
+                )),
+                environment: {},
+                containerSize: CGSize(width: 26.0, height: 26.0)
+            )
         }
         
         self.expansionGlassTint = navigationContentsCanBeExpanded ? nil : headerButtonBackgroundColor
@@ -1781,6 +1849,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 nextIconX += 4.0 + verifiedIconSize.width
                 nextExpandedIconX += 4.0 + titleExpandedVerifiedIconSize.width
             }
+        }
+        
+        // Before the name, where a real verification mark goes; that one is not set while the local mark is.
+        if let localVerificationIconSize = self.localVerificationIconSize, let titleExpandedLocalVerificationIconSize = self.titleExpandedLocalVerificationIconSize, localVerificationIconSize.width > 0.0 {
+            titleHorizontalOffset += (localVerificationIconSize.width + 4.0) / 2.0
+            titleExpandedHorizontalOffset += titleExpandedLocalVerificationIconSize.width - 2.0
+            
+            transition.updateFrame(view: self.titleLocalVerificationIconView, frame: CGRect(origin: CGPoint(x: -localVerificationIconSize.width - 4.0, y: floor((titleSize.height - localVerificationIconSize.height) / 2.0)), size: localVerificationIconSize))
+            transition.updateFrame(view: self.titleExpandedLocalVerificationIconView, frame: CGRect(origin: CGPoint(x: -titleExpandedLocalVerificationIconSize.width - 4.0, y: floor((titleExpandedSize.height - titleExpandedLocalVerificationIconSize.height) / 2.0) + 1.0), size: titleExpandedLocalVerificationIconSize))
         }
         
         var titleFrame: CGRect

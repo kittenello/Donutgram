@@ -1,5 +1,42 @@
 import Foundation
 
+public struct DGLocalVerificationDetails: Equatable {
+    public let iconFileId: Int64
+    public let botId: Int64
+    public let description: String
+
+    public init(iconFileId: Int64, botId: Int64, description: String) {
+        self.iconFileId = iconFileId
+        self.botId = botId
+        self.description = description
+    }
+}
+
+public enum DGLocalVerification: String, CaseIterable {
+    case none, major, hold, crow
+
+    public var title: String {
+        switch self {
+        case .none: return "Выкл"
+        case .major: return "Major"
+        case .hold: return "Hold"
+        case .crow: return "Developer"
+        }
+    }
+
+    public var details: DGLocalVerificationDetails? {
+        switch self {
+        case .none: return nil
+        case .major:
+            return DGLocalVerificationDetails(iconFileId: 5909078961467431777, botId: 7487372978, description: "This user was verified by the organization \"Major\".")
+        case .hold:
+            return DGLocalVerificationDetails(iconFileId: 5913729775393840687, botId: 8365813836, description: "This user was verified by the organization \"Hold\".")
+        case .crow:
+            return DGLocalVerificationDetails(iconFileId: 5800995289124838177, botId: 8217627596, description: "This account is verified as official by the representatives of Telegram.")
+        }
+    }
+}
+
 /// Local-only decorations for the selected account; they never modify Telegram peer flags.
 public enum DGVisualLabel: String, CaseIterable {
     case none, scam, fake, support, bot
@@ -182,6 +219,7 @@ public final class DGSimpleSettings {
         static let confirmCalls = "donutgram.appearance.confirmCalls"
         static let disableGiftStarsRedirect = "donutgram.appearance.disableGiftStarsRedirect"
         static let disableAds = "donutgram.appearance.disableAds"
+        static let hideProxySponsor = "donutgram.appearance.hideProxySponsor"
         static let hideVerification = "donutgram.appearance.hideVerification"
         static let hidePremiumStatuses = "donutgram.appearance.hidePremiumStatuses"
         static let disableCustomBackgrounds = "donutgram.appearance.disableCustomBackgrounds"
@@ -228,6 +266,7 @@ public final class DGSimpleSettings {
         static let lastRoundVideoCamera = "donutgram.chats.lastRoundVideoCamera"
         static let roundVideoZoomSlider = "donutgram.chats.roundVideoZoomSlider"
         static let staticRoundVideoZoom = "donutgram.chats.staticRoundVideoZoom"
+        static let roundVideoCountdown = "donutgram.chats.roundVideoCountdown"
         static let autoPause = "donutgram.chats.autoPause"
         static let doubleTapSeekSeconds = "donutgram.chats.doubleTapSeekSeconds"
         static let showPollResultsBeforeVoting = "donutgram.chats.showPollResultsBeforeVoting"
@@ -576,6 +615,25 @@ public final class DGSimpleSettings {
     public func setVisualLabel(_ label: DGVisualLabel, accountId: Int64) {
         setString(label.rawValue, accountKey("visualLabel", accountId: accountId))
     }
+
+    public func localVerification(accountId: Int64) -> DGLocalVerification {
+        return DGLocalVerification(rawValue: string(accountKey("localVerification", accountId: accountId))) ?? .none
+    }
+
+    public func setLocalVerification(_ verification: DGLocalVerification, accountId: Int64) {
+        setString(verification.rawValue, accountKey("localVerification", accountId: accountId))
+    }
+
+    public func localVerificationIcon(_ verification: DGLocalVerification) -> Int64? {
+        return verification.details?.iconFileId
+    }
+
+    public func localVerificationDetails(_ verification: DGLocalVerification) -> DGLocalVerificationDetails? {
+        return verification.details
+    }
+
+    public var hideProxySponsor: Bool { get { bool(Key.hideProxySponsor) } set { setBool(newValue, Key.hideProxySponsor) } }
+    public var roundVideoCountdown: Bool { get { bool(Key.roundVideoCountdown) } set { setBool(newValue, Key.roundVideoCountdown) } }
 
     /// Until when (server time) the server shows the account online, as it last reported. Nil once it reports
     /// the account offline, an offline packet sent here has been acknowledged, or ghost mode stops hiding online.
