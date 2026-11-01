@@ -139,7 +139,8 @@ enum DGListEntry: ItemListNodeEntry {
         case let .disclosure(_, _, key, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
         case let .searchResult(_, _, key, title, path):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: path, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.open(key) })
+            let attributedTitle = NSAttributedString(string: title, font: Font.regular(presentationData.fontSize.itemListBaseFontSize), textColor: presentationData.theme.list.itemPrimaryTextColor)
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, attributedTitle: attributedTitle, label: path, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.open(key) })
         case let .rootRow(_, _, key, title, label, glyph, color):
             let icon = PresentationResourcesSettings.donutgramIcon(glyph, color: UIColor(rgb: color))
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
