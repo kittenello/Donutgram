@@ -153,11 +153,10 @@ enum DGListEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .markdown(text), sectionId: self.section)
         case let .input(_, _, key, value, placeholder):
             if key == "settingsSearch" {
-                let attachment = NSTextAttachment()
-                attachment.image = UIImage(systemName: "magnifyingglass")?.withTintColor(presentationData.theme.list.itemSecondaryTextColor, renderingMode: .alwaysOriginal)
-                attachment.bounds = CGRect(x: 0.0, y: -2.0, width: 17.0, height: 17.0)
-                let title = NSMutableAttributedString(attachment: attachment)
-                title.append(NSAttributedString(string: " "))
+                let title = NSMutableAttributedString(string: "M ")
+                if let icon = UIImage(systemName: "magnifyingglass", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17.0))?.withTintColor(presentationData.theme.list.itemSecondaryTextColor, renderingMode: .alwaysOriginal) {
+                    title.addAttribute(.attachment, value: icon, range: NSRange(location: 0, length: 1))
+                }
                 return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
             }
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
