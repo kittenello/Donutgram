@@ -1099,6 +1099,8 @@ private func dgShownRow(page: DGSettingsPage, key: String) -> String {
         return "autoplayMedia"
     case .downloads where key == "signDownloads" && !s.downloadTikTok && !s.downloadYouTubeShorts:
         return "downloadTikTok"
+    case .iconAndIsland where key == "islandStyle" && s.islandFollowsIcon:
+        return "islandFollowsIcon"
     default:
         return key
     }
