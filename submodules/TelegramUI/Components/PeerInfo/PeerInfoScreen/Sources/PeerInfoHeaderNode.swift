@@ -116,6 +116,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let titleExpandedVerifiedIconView: ComponentHostView<Empty>
     var titleExpandedVerifiedIconSize: CGSize?
     
+    let titleLocalVerificationIconView: ComponentHostView<Empty>
+    var localVerificationIconSize: CGSize?
+    let titleExpandedLocalVerificationIconView: ComponentHostView<Empty>
+    var titleExpandedLocalVerificationIconSize: CGSize?
+    
     let titleStatusIconView: ComponentHostView<Empty>
     var statusIconSize: CGSize?
     let titleExpandedStatusIconView: ComponentHostView<Empty>
@@ -295,6 +300,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         self.titleExpandedVerifiedIconView = ComponentHostView<Empty>()
         self.titleNode.stateNode(forKey: TitleNodeStateExpanded)?.view.addSubview(self.titleExpandedVerifiedIconView)
+        
+        self.titleLocalVerificationIconView = ComponentHostView<Empty>()
+        self.titleNode.stateNode(forKey: TitleNodeStateRegular)?.view.addSubview(self.titleLocalVerificationIconView)
+        
+        self.titleExpandedLocalVerificationIconView = ComponentHostView<Empty>()
+        self.titleNode.stateNode(forKey: TitleNodeStateExpanded)?.view.addSubview(self.titleExpandedLocalVerificationIconView)
         
         self.titleStatusIconView = ComponentHostView<Empty>()
         self.titleNode.stateNode(forKey: TitleNodeStateRegular)?.view.addSubview(self.titleStatusIconView)
@@ -535,7 +546,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         case fake
         case scam
         case localText(String)
-        case team(DonutgramBadge)
         case emojiStatus(PeerEmojiStatus)
     }
     
@@ -690,7 +700,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
         var credibilityIcon: CredibilityIcon = .none
         var verifiedIcon: CredibilityIcon = .none
-        var hasLocalVerification = false
+        var localVerificationFileId: Int64?
         var statusIcon: CredibilityIcon = .none
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
@@ -726,12 +736,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if donutgramBadge(peerId: peer.id) != nil {
                 verifiedIcon = .verified
             }
-            if let fileId = self.localVerificationIcon(peer: peer) {
-                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: fileId), expirationDate: nil))
-                hasLocalVerification = true
-                if let badge = donutgramBadge(peerId: peer.id), !peer.isFake, !peer.isScam, self.donutgramVisualLabel(peer: peer) == nil {
-                    credibilityIcon = .team(badge)
-                }
+            // The local mark has its own place before the name, so the team badge, the premium star and the labels
+            // stay where they are. A real verification mark would take the same place, so the local one replaces it.
+            localVerificationFileId = self.localVerificationIcon(peer: peer)
+            if localVerificationFileId != nil, case .emojiStatus = verifiedIcon {
+                verifiedIcon = .none
             }
         }
         
@@ -1029,9 +1038,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             case let .localText(text):
                 emojiRegularStatusContent = .text(color: presentationData.theme.list.itemAccentColor, string: text)
                 emojiExpandedStatusContent = emojiRegularStatusContent
-            case let .team(badge):
-                emojiRegularStatusContent = donutgramBadgeContent(badge, sizeType: .large)
-                emojiExpandedStatusContent = emojiRegularStatusContent
             case let .emojiStatus(emojiStatus):
                 currentEmojiStatus = emojiStatus
                 emojiRegularStatusContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: presentationData.theme.list.mediaPlaceholderColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
@@ -1054,8 +1060,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         }
                         if case .premium = strongSelf.currentCredibilityIcon {
                             strongSelf.displayPremiumIntro?(strongSelf.titleCredibilityIconView, currentEmojiStatus, strongSelf.emojiStatusFileAndPackTitle.get(), false)
-                        } else if case let .team(badge) = strongSelf.currentCredibilityIcon, let name = strongSelf.peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) {
-                            strongSelf.displayDonutgramTeamBadge?(badge, name)
                         }
                     }
                 )),
@@ -1078,8 +1082,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         }
                         if case .premium = strongSelf.currentCredibilityIcon {
                             strongSelf.displayPremiumIntro?(strongSelf.titleExpandedCredibilityIconView, currentEmojiStatus, strongSelf.emojiStatusFileAndPackTitle.get(), true)
-                        } else if case let .team(badge) = strongSelf.currentCredibilityIcon, let name = strongSelf.peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) {
-                            strongSelf.displayDonutgramTeamBadge?(badge, name)
                         }
                     }
                 )),
@@ -1197,7 +1199,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         do {
             self.currentVerifiedIcon = verifiedIcon
-            let teamBadge = hasLocalVerification ? nil : peer.flatMap { donutgramBadge(peerId: $0.id) }
+            let teamBadge = peer.flatMap { donutgramBadge(peerId: $0.id) }
             let teamPeerName = teamBadge == nil ? nil : peer?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
             self.currentDonutgramTeamPeerName = teamPeerName
             var teamBadgeAction: (() -> Void)?
@@ -1258,6 +1260,47 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             self.verifiedIconSize = iconSize
             self.titleExpandedVerifiedIconSize = expandedIconSize
+        }
+        
+        do {
+            let regularContent: EmojiStatusComponent.Content
+            let expandedContent: EmojiStatusComponent.Content
+            if let localVerificationFileId {
+                regularContent = .animation(content: .customEmoji(fileId: localVerificationFileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: presentationData.theme.list.mediaPlaceholderColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
+                expandedContent = .animation(content: .customEmoji(fileId: localVerificationFileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: navigationContentsAccentColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
+            } else {
+                regularContent = .none
+                expandedContent = .none
+            }
+            
+            self.localVerificationIconSize = self.titleLocalVerificationIconView.update(
+                transition: ComponentTransition(navigationTransition),
+                component: AnyComponent(EmojiStatusComponent(
+                    context: self.context,
+                    animationCache: self.animationCache,
+                    animationRenderer: self.animationRenderer,
+                    content: regularContent,
+                    isVisibleForAnimations: true,
+                    useSharedAnimation: true,
+                    action: nil
+                )),
+                environment: {},
+                containerSize: CGSize(width: 26.0, height: 26.0)
+            )
+            self.titleExpandedLocalVerificationIconSize = self.titleExpandedLocalVerificationIconView.update(
+                transition: ComponentTransition(navigationTransition),
+                component: AnyComponent(EmojiStatusComponent(
+                    context: self.context,
+                    animationCache: self.animationCache,
+                    animationRenderer: self.animationRenderer,
+                    content: expandedContent,
+                    isVisibleForAnimations: true,
+                    useSharedAnimation: true,
+                    action: nil
+                )),
+                environment: {},
+                containerSize: CGSize(width: 26.0, height: 26.0)
+            )
         }
         
         self.expansionGlassTint = navigationContentsCanBeExpanded ? nil : headerButtonBackgroundColor
@@ -1806,6 +1849,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 nextIconX += 4.0 + verifiedIconSize.width
                 nextExpandedIconX += 4.0 + titleExpandedVerifiedIconSize.width
             }
+        }
+        
+        // Before the name, where a real verification mark goes; that one is not set while the local mark is.
+        if let localVerificationIconSize = self.localVerificationIconSize, let titleExpandedLocalVerificationIconSize = self.titleExpandedLocalVerificationIconSize, localVerificationIconSize.width > 0.0 {
+            titleHorizontalOffset += (localVerificationIconSize.width + 4.0) / 2.0
+            titleExpandedHorizontalOffset += titleExpandedLocalVerificationIconSize.width - 2.0
+            
+            transition.updateFrame(view: self.titleLocalVerificationIconView, frame: CGRect(origin: CGPoint(x: -localVerificationIconSize.width - 4.0, y: floor((titleSize.height - localVerificationIconSize.height) / 2.0)), size: localVerificationIconSize))
+            transition.updateFrame(view: self.titleExpandedLocalVerificationIconView, frame: CGRect(origin: CGPoint(x: -titleExpandedLocalVerificationIconSize.width - 4.0, y: floor((titleExpandedSize.height - titleExpandedLocalVerificationIconSize.height) / 2.0) + 1.0), size: titleExpandedLocalVerificationIconSize))
         }
         
         var titleFrame: CGRect
@@ -2965,7 +3017,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 }
             }
             switch self.currentCredibilityIcon {
-            case .premium, .team:
+            case .premium:
                 let iconFrame = self.titleCredibilityIconView.convert(self.titleCredibilityIconView.bounds, to: self.view)
                 let expandedIconFrame = self.titleExpandedCredibilityIconView.convert(self.titleExpandedCredibilityIconView.bounds, to: self.view)
                 if expandedIconFrame.contains(point) && self.isAvatarExpanded {

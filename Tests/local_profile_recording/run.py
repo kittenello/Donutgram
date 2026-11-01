@@ -49,6 +49,10 @@ def prepare():
     assert "settings.localVerificationIcon(verification)" in loader
     assert "context.engine" not in loader
     assert "DonutgramVerificationDisplay.iconFileId" in loader
+    # The local mark has views of its own; the team badge keeps its slot and the premium star its own.
+    assert "self.titleLocalVerificationIconView.update(" in header
+    assert "let teamBadge = peer.flatMap { donutgramBadge(peerId: $0.id) }" in header
+    assert "case team(" not in header and "credibilityIcon = .team" not in header
     profile = read(PROFILE)
     assert "if isMyProfile, user.id == context.account.peerId" in profile
     assert "settings.localVerificationDetails(verification)" in profile
