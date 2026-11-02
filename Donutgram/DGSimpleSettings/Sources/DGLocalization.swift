@@ -193,6 +193,7 @@ private let dgEnglishStrings: [String: String] = [
     "Котик": "Cat",
     "Бахафон": "Bakhafon",
     "Котик-шпион": "Spy Cat",
+    "Утя": "Utya",
     "Скрыть отправку подарка": "Hide Gift Button",
     "Кнопка «В начало чата»": "Jump to Beginning Button",
     "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению.": "Appears in the menu when you press and hold the avatar in a chat, and takes you to the very first message.",
