@@ -154,11 +154,15 @@ enum DGListEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .markdown(text), sectionId: self.section)
         case let .input(_, _, key, value, placeholder):
             if key == "settingsSearch" {
-                let title = NSMutableAttributedString(string: "M ")
-                if let icon = UIImage(systemName: "magnifyingglass", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17.0))?.withTintColor(presentationData.theme.list.itemSecondaryTextColor, renderingMode: .alwaysOriginal) {
-                    title.addAttribute(.attachment, value: icon, range: NSRange(location: 0, length: 1))
+                let title = NSMutableAttributedString(string: "")
+                if let icon = UIImage(systemName: "magnifyingglass", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17.0))?.withRenderingMode(.alwaysTemplate) {
+                    // TextNode tints image attachments with the attributed foreground color.
+                    title.append(NSAttributedString(string: "M", attributes: [
+                        .attachment: icon,
+                        .foregroundColor: presentationData.theme.list.itemSecondaryTextColor
+                    ]))
                 }
-                return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
+                return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
             }
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
         case let .messagePreview(_, _, _, emoji):
@@ -254,7 +258,7 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
             listEntries = entries().map { $0.localized(languageCode: languageCode) }
         }
         if page == .root {
-            listEntries.insert(.input(-3, -2, "settingsSearch", state.searchQuery, dgLocalized("Поиск по функциям", languageCode: languageCode)), at: 0)
+            listEntries.insert(.input(-3, -2, "settingsSearch", state.searchQuery, dgLocalized("Поиск", languageCode: languageCode)), at: 0)
         }
         // Scroll to a linked row by index: on open the list builds nodes only for the visible area plus 500 pt, and a lookup
         // by tag (ensureVisibleItemTag, itemNode(forTag:)) can't reach rows below that. The list applies this to the first state only.
