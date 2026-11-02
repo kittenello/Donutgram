@@ -76,22 +76,27 @@ enum DGListEntry: ItemListNodeEntry {
     case stickerShape(Int32, Int32, Int)
     // «Предпросмотр» on «Иконка и остров»: DGSimpleSettings.appMarks indices of the icon and of the island.
     case iconIslandPreview(Int32, Int32, Int, Int)
+    // The team card on top of «О Donutgram»: its buttons open the rows «channel» and «sourceCode» through the page's `perform`.
+    case aboutTeam(Int32, Int32)
+    // A row of a profile: key, caption and text, the caption under the text. A link opens through the page's `perform`,
+    // other text is copied on tap, like a `.value`.
+    case profileRow(Int32, Int32, String, String, String, Bool)
 
     var section: ItemListSectionId {
         switch self {
-        case let .notice(_, section, _, _), let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .rootRow(_, section, _, _, _, _, _), let .menu(_, section, _, _, _), let .action(_, section, _, _), let .value(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _), let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconIslandPreview(_, section, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
+        case let .notice(_, section, _, _), let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .rootRow(_, section, _, _, _, _, _), let .menu(_, section, _, _, _), let .action(_, section, _, _), let .value(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _), let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconIslandPreview(_, section, _, _), let .aboutTeam(_, section), let .profileRow(_, section, _, _, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
         }
     }
     var stableId: Int32 {
         switch self {
-        case let .notice(id, _, _, _), let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .rootRow(id, _, _, _, _, _, _), let .menu(id, _, _, _, _), let .action(id, _, _, _), let .value(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _), let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconIslandPreview(id, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
+        case let .notice(id, _, _, _), let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .rootRow(id, _, _, _, _, _, _), let .menu(id, _, _, _, _), let .action(id, _, _, _), let .value(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _), let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconIslandPreview(id, _, _, _), let .aboutTeam(id, _), let .profileRow(id, _, _, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
         }
     }
     // The tag the row's node reports: the one item(presentationData:arguments:) gives the item,
     // or the fixed key of the speed slider and chat list preview nodes.
     var tag: ItemListItemTag? {
         switch self {
-        case let .toggle(_, _, key, _, _, _), let .disclosure(_, _, key, _, _), let .rootRow(_, _, key, _, _, _, _), let .menu(_, _, key, _, _), let .action(_, _, key, _), let .value(_, _, key, _, _), let .input(_, _, key, _, _): return DGSettingItemTag(key: key)
+        case let .toggle(_, _, key, _, _, _), let .disclosure(_, _, key, _, _), let .rootRow(_, _, key, _, _, _, _), let .menu(_, _, key, _, _), let .action(_, _, key, _), let .value(_, _, key, _, _), let .input(_, _, key, _, _), let .profileRow(_, _, key, _, _, _): return DGSettingItemTag(key: key)
         case .speedSlider: return DGSettingItemTag(key: "downloadAcceleration")
         case .tabBarPreview: return DGSettingItemTag(key: "tabBarPreview")
         case .chatListPreview: return DGSettingItemTag(key: "chatListPreview")
@@ -115,6 +120,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .value(id, section, key, title, value): return .value(id, section, key, tr(title), value)
         case let .info(id, section, text): return .info(id, section, tr(text))
         case let .input(id, section, key, value, placeholder): return .input(id, section, key, value, tr(placeholder))
+        case let .profileRow(id, section, key, caption, text, isLink): return .profileRow(id, section, key, tr(caption), text, isLink)
         default: return self
         }
     }
@@ -164,6 +170,16 @@ enum DGListEntry: ItemListNodeEntry {
             return DGStickerAppearanceItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, shapePicker: true, size: DGSimpleSettings.shared.stickerSize, shape: shape, updated: { arguments.select($0) })
         case let .iconIslandPreview(_, _, iconMark, islandMark):
             return DGIconIslandPreviewItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, icon: DGSimpleSettings.appMarks[iconMark], island: DGSimpleSettings.appMarks[islandMark])
+        case .aboutTeam:
+            return DGAboutTeamItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, openChannel: { arguments.open("channel") }, openSourceCode: { arguments.open("sourceCode") })
+        case let .profileRow(_, _, key, caption, text, isLink):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: text, titleColor: isLink ? .accent : .primary, label: caption, labelStyle: .detailText, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
+                if isLink {
+                    arguments.open(key)
+                } else {
+                    arguments.copyValue(text)
+                }
+            }, tag: DGSettingItemTag(key: key))
         }
     }
 }
