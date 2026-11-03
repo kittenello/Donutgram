@@ -940,16 +940,35 @@ func dgAdsAndGiftsSettingsController(context: AccountContext, focusKey: String? 
     })
 }
 
-/// The version with the build: a tap copies it, for a bug report.
+/// The page a link row of «О Donutgram» leads to: a tap opens it, a hold copies or shares it.
+func dgAboutLinkUrl(key: String) -> String? {
+    switch key {
+    case "channel": return "https://t.me/donutgram"
+    case "sourceCode": return "https://github.com/kittenello/Donutgram"
+    default: return nil
+    }
+}
+
+/// The team, as a Telegram profile, then the links to the channel and the source code, and the version with the build:
+/// a tap copies it, for a bug report.
 func dgAboutController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? ""
     let version = build.isEmpty ? dgAppVersion() : "\(dgAppVersion()) (\(build))"
     return dgController(context: context, page: .about, title: "О Donutgram", focusKey: focusKey, entries: {
         let result: [DGListEntry] = [
-            .value(1, 0, "version", "Версия", version),
-            .info(2, 0, "Нажмите на версию, чтобы скопировать её, например для сообщения об ошибке.")
+            .aboutTeam(0, 0),
+            .profileRow(1, 1, "channel", "канал", "t.me/donutgram", true),
+            .profileRow(2, 1, "sourceCode", "исходный код", "github.com/kittenello/Donutgram", true),
+            .profileRow(3, 1, "version", "версия", version, false),
+            .info(4, 1, "Нажмите на версию, чтобы скопировать её, например для сообщения об ошибке.")
         ]
         return result
+    }, perform: { key, controller in
+        // The channel opens in Telegram, the repository in the browser Telegram is set to use.
+        guard let url = dgAboutLinkUrl(key: key) else {
+            return
+        }
+        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: context.sharedContext.currentPresentationData.with { $0 }, navigationController: controller.navigationController as? NavigationController, dismissInput: {})
     })
 }
 

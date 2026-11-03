@@ -53,4 +53,6 @@
     <dict><key>CFBundleIconFiles</key><array><string>DgBahafonIpad</string><string>DgBahafonLargeIpad</string></array><key>UIPrerenderedIcon</key><true/></dict>
     <key>DgCatSpy</key>
     <dict><key>CFBundleIconFiles</key><array><string>DgCatSpyIpad</string><string>DgCatSpyLargeIpad</string></array><key>UIPrerenderedIcon</key><true/></dict>
+    <key>DgUtya</key>
+    <dict><key>CFBundleIconFiles</key><array><string>DgUtyaIpad</string><string>DgUtyaLargeIpad</string></array><key>UIPrerenderedIcon</key><true/></dict>
 </dict>
