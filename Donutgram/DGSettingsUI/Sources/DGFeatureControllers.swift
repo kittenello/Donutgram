@@ -940,6 +940,15 @@ func dgAdsAndGiftsSettingsController(context: AccountContext, focusKey: String? 
     })
 }
 
+/// The page a link row of «О Donutgram» leads to: a tap opens it, a hold copies or shares it.
+func dgAboutLinkUrl(key: String) -> String? {
+    switch key {
+    case "channel": return "https://t.me/donutgram"
+    case "sourceCode": return "https://github.com/kittenello/Donutgram"
+    default: return nil
+    }
+}
+
 /// The team, as a Telegram profile, then the links to the channel and the source code, and the version with the build:
 /// a tap copies it, for a bug report.
 func dgAboutController(context: AccountContext, focusKey: String? = nil) -> ViewController {
@@ -956,11 +965,8 @@ func dgAboutController(context: AccountContext, focusKey: String? = nil) -> View
         return result
     }, perform: { key, controller in
         // The channel opens in Telegram, the repository in the browser Telegram is set to use.
-        let url: String
-        switch key {
-        case "channel": url = "https://t.me/donutgram"
-        case "sourceCode": url = "https://github.com/kittenello/Donutgram"
-        default: return
+        guard let url = dgAboutLinkUrl(key: key) else {
+            return
         }
         context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: context.sharedContext.currentPresentationData.with { $0 }, navigationController: controller.navigationController as? NavigationController, dismissInput: {})
     })
