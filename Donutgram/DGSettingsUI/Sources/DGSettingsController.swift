@@ -178,7 +178,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .tabBarPreview(_, _, layout):
             return DGTabBarPreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, sectionId: self.section, layout: layout)
         case .appIcons:
-            return donutgramAppIconItem(context: arguments.context, sectionId: self.section, updated: { arguments.select("refreshAppIcon") })
+            return donutgramAppIconItem(context: arguments.context, sectionId: self.section, tag: DGSettingItemTag(key: "appIcon"), updated: { arguments.select("refreshAppIcon") })
         case let .islandStyles(_, _, value):
             return DGIslandStyleItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, value: value, updated: { arguments.select("islandStyle:\($0)") })
         case let .speedSlider(_, _, value):
@@ -258,14 +258,16 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         UIPasteboard.general.string = value
         presentNoticeImpl?(.copy(text: dgLocalized("Скопировано", languageCode: currentLanguageCode())))
     })
+    let shownSearchQuery = Atomic<String>(value: initialState.searchQuery)
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), additionalUpdates)
     |> map { presentationData, state, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let languageCode = presentationData.strings.primaryComponent.languageCode
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized(title, languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         var listEntries: [DGListEntry]
         if page == .root && !dgSettingsSearchWords(state.searchQuery).isEmpty {
-            listEntries = dgSettingsSearchItems(query: state.searchQuery, hasIsland: DeviceMetrics.deviceHasAppBadge).map { item in
-                return .searchResult(1000 + item.index, 0, "search:" + item.id, dgLocalized(item.title, languageCode: languageCode), item.path(languageCode: languageCode))
+            // Ids by place: the list diffs entries as sorted by id, and the results come by relevance, not in catalog order.
+            listEntries = dgSettingsSearchItems(query: state.searchQuery, hasIsland: DeviceMetrics.deviceHasAppBadge).enumerated().map { place, item in
+                return .searchResult(1000 + Int32(place), 0, "search:" + item.id, dgLocalized(item.title, languageCode: languageCode), item.path(languageCode: languageCode))
             }
             if listEntries.isEmpty {
                 listEntries = [.info(999, 0, dgLocalized("Ничего не найдено", languageCode: languageCode))]
@@ -283,7 +285,9 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         if let focusTag, let index = listEntries.firstIndex(where: { $0.tag?.isEqual(to: focusTag) ?? false }) {
             focusScroll = ListViewScrollToItem(index: index, position: .center(.top), animated: false, curve: .Default(duration: nil), directionHint: .Down)
         }
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: listEntries, style: .blocks, initialScrollToItem: focusScroll, animateChanges: page != .root)
+        // A keystroke swaps the results without animation; the other changes of the root animate, as on the other pages.
+        let searchQueryChanged = shownSearchQuery.swap(state.searchQuery) != state.searchQuery
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: listEntries, style: .blocks, initialScrollToItem: focusScroll, animateChanges: !searchQueryChanged)
         return (controllerState, (listState, arguments))
     }
     let controller = ItemListController(context: context, state: signal)

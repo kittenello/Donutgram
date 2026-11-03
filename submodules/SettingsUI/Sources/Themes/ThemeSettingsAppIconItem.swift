@@ -94,7 +94,7 @@ class ThemeSettingsAppIconItem: ListViewItem, ItemListItem {
     }
 }
 
-public func donutgramAppIconItem(context: AccountContext, sectionId: ItemListSectionId, updated: @escaping () -> Void) -> ListViewItem {
+public func donutgramAppIconItem(context: AccountContext, sectionId: ItemListSectionId, tag: ItemListItemTag? = nil, updated: @escaping () -> Void) -> ListViewItem {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let icons = context.sharedContext.applicationBindings.getAvailableAlternateIcons()
     let currentName: String?
@@ -108,7 +108,7 @@ public func donutgramAppIconItem(context: AccountContext, sectionId: ItemListSec
         context.sharedContext.applicationBindings.requestSetAlternateIconName(icon.isDefault ? nil : icon.name, { _ in
             updated()
         })
-    })
+    }, tag: tag)
 }
 
 /// The app icon as the icon pickers show it (the alternate icon's own image, BlueIcon for the default icon),

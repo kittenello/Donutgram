@@ -8,6 +8,9 @@ struct DGSettingsSearchItem {
     let title: String
     let section: String
     let group: String
+    // The words of the title alone, which rank the result, and of the title, section and group together, which find it,
+    // in Russian and in English.
+    let titleWords: [String]
     let words: [String]
 
     init(index: Int32, page: String, key: String, title: String, section: String, group: String) {
@@ -17,6 +20,7 @@ struct DGSettingsSearchItem {
         self.title = title
         self.section = section
         self.group = group
+        self.titleWords = dgSettingsSearchWords(title + " " + dgLocalized(title, languageCode: "en"))
         let texts = [title, section, group]
         self.words = dgSettingsSearchWords((texts + texts.map { dgLocalized($0, languageCode: "en") }).joined(separator: " "))
     }
@@ -33,27 +37,45 @@ func dgSettingsSearchWords(_ text: String) -> [String] {
         .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
 }
 
+/// The rows a query finds: each word of the query starts a word of the row's title, section or group, in either language.
+/// The sections the query names come first, then the rows it names, then the rows of the sections and groups it names.
 func dgSettingsSearchItems(query: String, hasIsland: Bool) -> [DGSettingsSearchItem] {
     let words = dgSettingsSearchWords(query)
     guard !words.isEmpty else { return [] }
-    return dgSettingsSearchCatalog.compactMap { item in
+    // Only the start of a word: inside words «id» would find every «Hide» and «Video», «фон» every «телефон».
+    func matches(_ itemWords: [String]) -> Bool {
+        return words.allSatisfy { word in itemWords.contains { $0.hasPrefix(word) } }
+    }
+    let found: [DGSettingsSearchItem] = dgSettingsSearchCatalog.compactMap { item in
         var item = item
         if !hasIsland && item.page == "icon-and-island" {
-            if ["islandFollowsIcon", "islandStyle"].contains(item.key) {
+            // Without an island the page is the icon picker alone, so the section is the one result for it.
+            guard item.key.isEmpty else {
                 return nil
             }
-            item = DGSettingsSearchItem(index: item.index, page: item.page, key: item.key, title: "Иконка приложения", section: item.key.isEmpty ? "Настройки Donutgram" : "Иконка приложения", group: "")
+            item = DGSettingsSearchItem(index: item.index, page: item.page, key: item.key, title: "Иконка приложения", section: "Настройки Donutgram", group: "")
         }
-        return words.allSatisfy { word in item.words.contains { $0.contains(word) } } ? item : nil
+        return matches(item.words) ? item : nil
     }
+    let ranked = found.map { item -> (rank: Int, item: DGSettingsSearchItem) in
+        if matches(item.titleWords) {
+            return (item.key.isEmpty ? 0 : 1, item)
+        }
+        return (2, item)
+    }
+    return ranked.sorted { ($0.rank, $0.item.index) < ($1.rank, $1.item.index) }.map { $0.item }
 }
 
 let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
     var result: [DGSettingsSearchItem] = []
-    func add(_ page: String, _ title: String, _ rows: [(String, String, String)]) {
-        result.append(DGSettingsSearchItem(index: Int32(result.count), page: page, key: "", title: title, section: "Настройки Donutgram", group: ""))
+    // A section of the root is found by its name as well. A screen opened from a row of a section (`parent`) is not:
+    // that row already leads to it. Its rows show the way through the section and the screen instead.
+    func add(_ page: String, _ title: String, _ rows: [(String, String, String)], parent: String? = nil) {
+        if parent == nil {
+            result.append(DGSettingsSearchItem(index: Int32(result.count), page: page, key: "", title: title, section: "Настройки Donutgram", group: ""))
+        }
         for (key, rowTitle, group) in rows {
-            result.append(DGSettingsSearchItem(index: Int32(result.count), page: page, key: key, title: rowTitle, section: title, group: group))
+            result.append(DGSettingsSearchItem(index: Int32(result.count), page: page, key: key, title: rowTitle, section: parent ?? title, group: parent == nil ? group : title))
         }
     }
     add("ghost", "Режим призрака", [
@@ -175,19 +197,13 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("localVerification", "Локальная верификация", "ВИДНО ТОЛЬКО ВАМ"),
         ("localPremium", "Локальный Telegram Premium", "PREMIUM")
     ])
-    add("visual-id", "ID профиля", [
-        ("visualId", "Любой текст", "ID ПРОФИЛЯ")
-    ])
+    // «ID профиля» and «NFT-юзернеймы» hold only the field their row names, so the row is their result.
     add("visual-rating", "Рейтинг", [
         ("level", "Уровень", "")
-    ])
-    add("visual-usernames", "NFT-юзернеймы", [
-        ("names", "Имена через запятую", "")
-    ])
+    ], parent: "Локальный профиль")
     add("visual-phone", "Номер телефона", [
-        ("enabled", "Показывать другой номер", "ПОДМЕНА НОМЕРА"),
-        ("number", "Номер телефона", "")
-    ])
+        ("enabled", "Показывать другой номер", "")
+    ], parent: "Локальный профиль")
     add("media", "Запись и воспроизведение", [
         ("camera", "Камера в кружках", "КРУЖКИ"),
         ("zoomSlider", "Слайдер зума", "КРУЖКИ"),
@@ -229,6 +245,8 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("disableGiftStarsRedirect", "Не открывать звёзды после продажи", "ПОДАРКИ")
     ])
     add("about", "О Donutgram", [
+        ("channel", "Канал", ""),
+        ("sourceCode", "Исходный код", ""),
         ("version", "Версия", "")
     ])
     return result

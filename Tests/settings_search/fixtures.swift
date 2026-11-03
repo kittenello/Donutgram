@@ -13,6 +13,13 @@ defer { defaults.removePersistentDomain(forName: suite) }
 
 check(ids("").isEmpty && ids(" \n  ").isEmpty && ids("?!—").isEmpty, "empty queries never return every feature")
 check(ids("zzzxxyy").isEmpty, "unknown query has no results")
+check(ids("id") == ["profiles/profileId", "profiles/dialogIdFormat", "local-profile/visualId"], "words match from their start: «id» is not in «Hide» or «Video»")
+check(ids("фон") == ["messages/customBackgrounds", "stickers/hideStickerReplyBackground"], "«фон» does not find «телефон» or «микрофон»")
+check(dgSettingsSearchItems(query: "сообщения", hasIsland: true).first?.id == "messages/", "the section a query names comes first")
+check(dgSettingsSearchItems(query: "призрак", hasIsland: true).prefix(3).map { $0.id } == ["ghost/", "ghost/enabled", "ghost/stories"], "then the rows it names, then the rows of its section")
+check(dgSettingsSearchItems(query: "номер телефона", hasIsland: true).filter { $0.title == "Номер телефона" }.count == 1, "a screen opened from a row is not a result of its own")
+check(dgSettingsSearchItems(query: "другой номер", hasIsland: true).first?.path(languageCode: "ru") == "Локальный профиль > Номер телефона", "rows of a nested screen show the way through their section")
+check(ids("исходный код") == ["about/sourceCode"] && ids("channel").contains("about/channel"), "the links of «О Donutgram» are searchable")
 check(ids("  СПОНСОРА   прокси ") == ["ads-and-gifts/hideProxySponsor"], "case, whitespace and word order")
 check(ids("proxy sponsor") == ["ads-and-gifts/hideProxySponsor"], "English titles are searchable")
 check(ids("прокси sponsor") == ["ads-and-gifts/hideProxySponsor"], "mixed-language queries")
@@ -27,7 +34,7 @@ check(ids("blocked").contains("shadow-ban/hideBlocked"), "blocked-message switch
 check(ids("уровень").contains("visual-rating/level"), "nested editors are indexed")
 check(ids("остров", hasIsland: false).isEmpty, "unsupported island settings stay hidden")
 check(ids("island", hasIsland: true).contains("icon-and-island/islandStyle"), "island styles are searchable on supported devices")
-check(ids("app icon", hasIsland: false).contains("icon-and-island/appIcon"), "icon picker remains searchable without an island")
+check(ids("app icon", hasIsland: false) == ["icon-and-island/"], "without an island the icon picker is found as its section, once")
 let all = dgSettingsSearchCatalog
 check(Set(all.map { $0.id }).count == all.count, "result routes must be unique")
 check(Set(all.map { $0.index }).count == all.count, "list identities must be unique")
