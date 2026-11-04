@@ -9391,24 +9391,23 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     if let strongSelf = self, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                         strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
                     }
+                    if let self, !isScheduledMessages && shouldDivert {
+                        if let layoutActionOnViewTransitionAction = self.layoutActionOnViewTransitionAction {
+                            self.layoutActionOnViewTransitionAction = nil
+                            self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
+                            layoutActionOnViewTransitionAction()
+                        }
+
+                        if shouldOpenScheduledMessages {
+                            self.openScheduledMessages(force: true, completion: { _ in
+                            })
+                        }
+                    }
                 })
                 
                 donateSendMessageIntent(account: self.context.account, sharedContext: self.context.sharedContext, intentContext: .chat, peerIds: [peerId])
                 
                 self.updateChatPresentationInterfaceState(interactive: true, { $0.updatedShowCommands(false) })
-                
-                if !isScheduledMessages && shouldDivert {
-                    if let layoutActionOnViewTransitionAction = self.layoutActionOnViewTransitionAction {
-                        self.layoutActionOnViewTransitionAction = nil
-                        self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
-                        layoutActionOnViewTransitionAction()
-                    }
-
-                    if shouldOpenScheduledMessages {
-                        self.openScheduledMessages(force: true, completion: { _ in
-                        })
-                    }
-                }
             } else {
                 self.presentScheduleTimePicker(style: media ? .media : .default, dismissByTapOutside: false, completion: { [weak self] result in
                     if let strongSelf = self {

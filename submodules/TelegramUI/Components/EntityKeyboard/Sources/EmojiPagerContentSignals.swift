@@ -11,6 +11,20 @@ import FlatBuffers
 import FlatSerialization
 import DGSimpleSettings
 
+private func donutgramHideTrending(_ keyPath: KeyPath<DGSimpleSettings, Bool>) -> Signal<Bool, NoError> {
+    return Signal { subscriber in
+        let settings = DGSimpleSettings.shared
+        let observer = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: settings, queue: nil) { _ in
+            subscriber.putNext(settings[keyPath: keyPath])
+        }
+        subscriber.putNext(settings[keyPath: keyPath])
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    |> distinctUntilChanged
+}
+
 public extension EmojiPagerContentComponent {    
     private static func hasPremium(context: AccountContext, chatPeerId: EnginePeer.Id?, premiumIfSavedMessages: Bool) -> Signal<Bool, NoError> {
         let hasPremium: Signal<Bool, NoError>
@@ -208,9 +222,10 @@ public extension EmojiPagerContentComponent {
             searchCategories,
             iconStatusEmoji,
             peerSpecificPack,
-            ApplicationSpecificNotice.dismissedTrendingEmojiPacks(accountManager: context.sharedContext.accountManager)
+            ApplicationSpecificNotice.dismissedTrendingEmojiPacks(accountManager: context.sharedContext.accountManager),
+            donutgramHideTrending(\.hideTrendingEmoji)
         )
-        |> map { view, hasPremium, featuredEmojiPacks, availableReactions, searchCategories, iconStatusEmoji, peerSpecificPack, dismissedTrendingEmojiPacks -> EmojiPagerContentComponent in
+        |> map { view, hasPremium, featuredEmojiPacks, availableReactions, searchCategories, iconStatusEmoji, peerSpecificPack, dismissedTrendingEmojiPacks, hideTrendingEmoji -> EmojiPagerContentComponent in
             struct ItemGroup {
                 var supergroupId: AnyHashable
                 var id: AnyHashable
@@ -272,7 +287,7 @@ public extension EmojiPagerContentComponent {
             let dismissedTrendingEmojiPacksSet = Set(dismissedTrendingEmojiPacks ?? [])
             let featuredEmojiPacksSet = Set(featuredEmojiPacks.map(\.info.id.id))
             
-            if dismissedTrendingEmojiPacksSet != featuredEmojiPacksSet && hasTrending && !DGSimpleSettings.shared.hideTrendingEmoji {
+            if dismissedTrendingEmojiPacksSet != featuredEmojiPacksSet && hasTrending && !hideTrendingEmoji {
                 for featuredEmojiPack in featuredEmojiPacks {
                     if installedCollectionIds.contains(featuredEmojiPack.info.id) {
                         continue
@@ -1423,7 +1438,7 @@ public extension EmojiPagerContentComponent {
                 }
                 
                 // Donutgram: «Скрыть популярные эмодзи» drops the trending packs from every emoji panel.
-                if !isStandalone && !DGSimpleSettings.shared.hideTrendingEmoji {
+                if !isStandalone && !hideTrendingEmoji {
                     for featuredEmojiPack in featuredEmojiPacks {
                         if installedCollectionIds.contains(featuredEmojiPack.info.id) {
                             continue
@@ -1732,9 +1747,10 @@ public extension EmojiPagerContentComponent {
             context.engine.data.get(TelegramEngine.EngineData.Item.ItemCache.Item(collectionId: Namespaces.CachedItemCollection.featuredStickersConfiguration, id: ValueBoxKey(length: 0))),
             ApplicationSpecificNotice.dismissedTrendingStickerPacks(accountManager: context.sharedContext.accountManager),
             peerSpecificPack,
-            searchCategories
+            searchCategories,
+            donutgramHideTrending(\.hideTrendingStickers)
         )
-        |> map { view, hasPremium, featuredStickerPacks, featuredStickersConfiguration, dismissedTrendingStickerPacks, peerSpecificPack, searchCategories -> EmojiPagerContentComponent in
+        |> map { view, hasPremium, featuredStickerPacks, featuredStickersConfiguration, dismissedTrendingStickerPacks, peerSpecificPack, searchCategories, hideTrendingStickers -> EmojiPagerContentComponent in
             let hasPremium = forceHasPremium || hasPremium
             struct ItemGroup {
                 var supergroupId: AnyHashable
@@ -1770,7 +1786,7 @@ public extension EmojiPagerContentComponent {
             let dismissedTrendingStickerPacksSet = Set(dismissedTrendingStickerPacks ?? [])
             let featuredStickerPacksSet = Set(featuredStickerPacks.map(\.info.id.id))
             
-            if !DGSimpleSettings.shared.onlyAddedStickers && !DGSimpleSettings.shared.hideTrendingStickers && dismissedTrendingStickerPacksSet != featuredStickerPacksSet {
+            if !DGSimpleSettings.shared.onlyAddedStickers && !hideTrendingStickers && dismissedTrendingStickerPacksSet != featuredStickerPacksSet {
                 let featuredStickersConfiguration = featuredStickersConfiguration?.get(FeaturedStickersConfiguration.self)
                 for featuredStickerPack in featuredStickerPacks {
                     if installedCollectionIds.contains(featuredStickerPack.info.id) {
@@ -2065,7 +2081,7 @@ public extension EmojiPagerContentComponent {
                 }
             }
             
-            for featuredStickerPack in (DGSimpleSettings.shared.hideTrendingStickers ? [] : featuredStickerPacks) {
+            for featuredStickerPack in (hideTrendingStickers ? [] : featuredStickerPacks) {
                 if installedCollectionIds.contains(featuredStickerPack.info.id) {
                     continue
                 }
