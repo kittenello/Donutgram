@@ -579,7 +579,7 @@ func _internal_getWalletTransactions(
         limit: limit
     ))
     |> mapError { error -> WalletGetTransactionsError in
-        let description = error.errorDescription
+        let description = error.errorDescription ?? ""
         let isErrorName = !description.isEmpty && description.utf8.allSatisfy { ($0 >= 65 && $0 <= 90) || ($0 >= 48 && $0 <= 57) || $0 == 95 }
         Logger.shared.log("WalletContext", "event=wallet_transactions_rpc_failed code=\(error.errorCode) reason=\(isErrorName ? String(description.prefix(128)) : "unclassified")")
         return .generic
