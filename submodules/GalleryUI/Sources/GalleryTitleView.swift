@@ -138,7 +138,7 @@ public final class GalleryTitleView: UIView, NavigationBarTitleView {
         if let content {
             if let message = content.message {
                 authorNameText = stringForFullAuthorName(message: message, strings: self.presentationData.strings, nameDisplayOrder: self.presentationData.nameDisplayOrder, accountPeerId: self.context.account.peerId).first ?? ""
-                dateText = humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: message.timestamp).string
+                dateText = message.timestamp == 0 ? nil : humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: message.timestamp).string
             } else {
                 authorNameText = content.authorTitle
                 dateText = content.dateTitle
