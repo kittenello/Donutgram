@@ -2448,7 +2448,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if let _ = sourceView?.asyncdisplaykit_node as? ChatEmptyNodeStickerContentNode {
                 shouldAnimateMessageTransition = true
             }
-            if donutgramCanSendStickerAsMedia(peer: strongSelf.presentationInterfaceState.renderedPeer?.peer, file: fileReference.media) {
+            if !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState), donutgramCanSendStickerAsMedia(peer: strongSelf.presentationInterfaceState.renderedPeer?.peer, file: fileReference.media) {
                 shouldAnimateMessageTransition = false
             }
             
@@ -9368,21 +9368,23 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     self.commitPurposefulAction()
                 }
                 
-                let _ = (donutgramPrepareStickerMedia(context: self.context, peer: self.presentationInterfaceState.renderedPeer?.peer, messages: messages)
+                let context = self.context
+                let outgoingMessages = self.transformEnqueueMessages(messages, postpone: postpone)
+                let stickerMediaPeer = canBypassRestrictions(chatPresentationInterfaceState: self.presentationInterfaceState) ? nil : self.presentationInterfaceState.renderedPeer?.peer
+                let _ = (donutgramPrepareStickerMedia(context: context, peer: stickerMediaPeer, messages: outgoingMessages)
                 |> deliverOnMainQueue
                 |> mapToSignal { [weak self] prepared -> Signal<[MessageId?], NoError> in
-                    guard let self else {
-                        return .complete()
-                    }
                     guard let prepared else {
-                        self.present(textAlertController(context: self.context, title: nil, text: dgLocalized("Не удалось преобразовать стикер. Попробуйте ещё раз.", languageCode: self.presentationData.strings.baseLanguageCode), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        if let self {
+                            self.present(textAlertController(context: context, title: nil, text: dgLocalized("Не удалось преобразовать стикер. Попробуйте ещё раз.", languageCode: self.presentationData.strings.baseLanguageCode), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        }
                         return .complete()
                     }
-                    return enqueueMessages(account: self.context.account, peerId: peerId, messages: self.transformEnqueueMessages(prepared, postpone: postpone))
+                    return enqueueMessages(account: context.account, peerId: peerId, messages: prepared)
                 }
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-                    if isGhostScheduledSend, let self {
-                        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: self.context.account.peerId.toInt64())
+                    if isGhostScheduledSend {
+                        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: context.account.peerId.toInt64())
                     }
                     if let strongSelf = self, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                         strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
