@@ -27,6 +27,10 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Поиск": "Search",
+    "Ничего не найдено": "No Results",
+    "Стиль острова": "Island Style",
+    "Исходный код": "Source Code",
     "Локальная верификация": "Local Verification",
     "Скрыть спонсора прокси": "Hide Proxy Sponsor",
     "Отсчёт перед записью": "Recording Countdown",

@@ -150,7 +150,7 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
         case let .hideBlocked(value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: dgLocalized("Скрывать сообщения заблокированных", languageCode: languageCode), value: value, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setHideBlocked(value)
-            })
+            }, tag: DGSettingItemTag(key: "hideBlocked"))
         case let .hideBlockedInfo(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .add(theme):
@@ -319,6 +319,19 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if let focusKey {
+        // As on the other pages (dgController): the first transaction shows the row a link or a search result names, once.
+        let focusTag = DGSettingItemTag(key: focusKey)
+        var focusHandled = false
+        controller.afterTransactionCompleted = { [weak controller] in
+            guard !focusHandled, let controller else { return }
+            focusHandled = true
+            if let node = controller.itemNode(forTag: focusTag) {
+                controller.ensureItemNodeVisible(node, animated: false)
+                (node as? ItemListItemNode)?.displayHighlight()
+            }
+        }
+    }
     pushControllerImpl = { [weak controller] pushed in
         (controller?.navigationController as? NavigationController)?.pushViewController(pushed)
     }

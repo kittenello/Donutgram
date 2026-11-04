@@ -45,7 +45,8 @@ final class DGIslandStyleItem: ListViewItem, ItemListItem {
     }
 }
 
-private final class DGIslandStyleItemNode: ListViewItemNode {
+private final class DGIslandStyleItemNode: ListViewItemNode, ItemListItemNode {
+    var tag: ItemListItemTag? { DGSettingItemTag(key: "islandStyle") }
     // A grid of three cards per row, one per DGSimpleSettings.appMarks island: a 52 pt card, its caption below,
     // 14 pt between rows.
     private static let columns = 3
@@ -105,6 +106,11 @@ private final class DGIslandStyleItemNode: ListViewItemNode {
             self.captions.append(caption)
         }
         self.updateControls()
+    }
+
+    func displayHighlight() {
+        guard let item else { return }
+        dgDisplayHighlight(in: self.containerView, theme: item.theme)
     }
 
     func asyncLayout() -> (_ item: DGIslandStyleItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {

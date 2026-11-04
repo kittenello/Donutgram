@@ -14,7 +14,10 @@ import ContextUI
 import AppBundle
 import DGSimpleSettings
 
-struct DGListState: Equatable { var revision: Int = 0 }
+struct DGListState: Equatable {
+    var revision: Int = 0
+    var searchQuery: String = ""
+}
 
 /// One choice in the menu of a `.menu` row. Picking it passes the key to the page's `select`, as a checkbox does.
 struct DGMenuOption {
@@ -50,6 +53,7 @@ enum DGListEntry: ItemListNodeEntry {
     case header(Int32, Int32, String)
     case toggle(Int32, Int32, String, String, Bool, Bool)
     case disclosure(Int32, Int32, String, String, String)
+    case searchResult(Int32, Int32, String, String, String)
     // A section of the root: key, title and state, then Telegram's settings glyph (`Item List/Icons/<name>`) drawn in white
     // on the icon's RGB color. Only the root has icons: rows inside the sections have none, as in Telegram's own settings.
     case rootRow(Int32, Int32, String, String, String, String, UInt32)
@@ -84,12 +88,12 @@ enum DGListEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case let .notice(_, section, _, _), let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .rootRow(_, section, _, _, _, _, _), let .menu(_, section, _, _, _), let .action(_, section, _, _), let .value(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _), let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconIslandPreview(_, section, _, _), let .aboutTeam(_, section), let .profileRow(_, section, _, _, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
+        case let .notice(_, section, _, _), let .header(_, section, _), let .toggle(_, section, _, _, _, _), let .disclosure(_, section, _, _, _), let .searchResult(_, section, _, _, _), let .rootRow(_, section, _, _, _, _, _), let .menu(_, section, _, _, _), let .action(_, section, _, _), let .value(_, section, _, _, _), let .info(_, section, _), let .input(_, section, _, _, _), let .messagePreview(_, section, _, _), let .chatListPreview(_, section, _, _, _, _, _), let .tabBarPreview(_, section, _), let .appIcons(_, section, _), let .islandStyles(_, section, _), let .speedSlider(_, section, _), let .iconIslandPreview(_, section, _, _), let .aboutTeam(_, section), let .profileRow(_, section, _, _, _, _), let .stickerSizeSlider(_, section, _), let .stickerPreview(_, section, _, _, _, _, _, _, _, _), let .stickerShape(_, section, _): return section
         }
     }
     var stableId: Int32 {
         switch self {
-        case let .notice(id, _, _, _), let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .rootRow(id, _, _, _, _, _, _), let .menu(id, _, _, _, _), let .action(id, _, _, _), let .value(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _), let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconIslandPreview(id, _, _, _), let .aboutTeam(id, _), let .profileRow(id, _, _, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
+        case let .notice(id, _, _, _), let .header(id, _, _), let .toggle(id, _, _, _, _, _), let .disclosure(id, _, _, _, _), let .searchResult(id, _, _, _, _), let .rootRow(id, _, _, _, _, _, _), let .menu(id, _, _, _, _), let .action(id, _, _, _), let .value(id, _, _, _, _), let .info(id, _, _), let .input(id, _, _, _, _), let .messagePreview(id, _, _, _), let .chatListPreview(id, _, _, _, _, _, _), let .tabBarPreview(id, _, _), let .appIcons(id, _, _), let .islandStyles(id, _, _), let .speedSlider(id, _, _), let .iconIslandPreview(id, _, _, _), let .aboutTeam(id, _), let .profileRow(id, _, _, _, _, _), let .stickerSizeSlider(id, _, _), let .stickerPreview(id, _, _, _, _, _, _, _, _, _), let .stickerShape(id, _, _): return id
         }
     }
     // The tag the row's node reports: the one item(presentationData:arguments:) gives the item,
@@ -97,6 +101,8 @@ enum DGListEntry: ItemListNodeEntry {
     var tag: ItemListItemTag? {
         switch self {
         case let .toggle(_, _, key, _, _, _), let .disclosure(_, _, key, _, _), let .rootRow(_, _, key, _, _, _, _), let .menu(_, _, key, _, _), let .action(_, _, key, _), let .value(_, _, key, _, _), let .input(_, _, key, _, _), let .profileRow(_, _, key, _, _, _): return DGSettingItemTag(key: key)
+        case .appIcons: return DGSettingItemTag(key: "appIcon")
+        case .islandStyles: return DGSettingItemTag(key: "islandStyle")
         case .speedSlider: return DGSettingItemTag(key: "downloadAcceleration")
         case .tabBarPreview: return DGSettingItemTag(key: "tabBarPreview")
         case .chatListPreview: return DGSettingItemTag(key: "chatListPreview")
@@ -114,6 +120,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .header(id, section, title): return .header(id, section, tr(title))
         case let .toggle(id, section, key, title, value, enabled): return .toggle(id, section, key, tr(title), value, enabled)
         case let .disclosure(id, section, key, title, label): return .disclosure(id, section, key, tr(title), tr(label))
+        case let .searchResult(id, section, key, title, path): return .searchResult(id, section, key, title, path)
         case let .rootRow(id, section, key, title, label, glyph, color): return .rootRow(id, section, key, tr(title), tr(label), glyph, color)
         case let .menu(id, section, key, title, label): return .menu(id, section, key, tr(title), tr(label))
         case let .action(id, section, key, title): return .action(id, section, key, tr(title))
@@ -137,6 +144,9 @@ enum DGListEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: enabled, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { arguments.toggle(key, $0) }, activatedWhileDisabled: { arguments.toggleWhileDisabled(key) }, tag: DGSettingItemTag(key: key))
         case let .disclosure(_, _, key, title, label):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
+        case let .searchResult(_, _, key, title, path):
+            let attributedTitle = NSAttributedString(string: title, font: Font.regular(presentationData.fontSize.itemListBaseFontSize), textColor: presentationData.theme.list.itemPrimaryTextColor)
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, attributedTitle: attributedTitle, label: path, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.open(key) })
         case let .rootRow(_, _, key, title, label, glyph, color):
             let icon = PresentationResourcesSettings.donutgramIcon(glyph, color: UIColor(rgb: color))
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
@@ -149,6 +159,17 @@ enum DGListEntry: ItemListNodeEntry {
         case let .info(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .markdown(text), sectionId: self.section)
         case let .input(_, _, key, value, placeholder):
+            if key == "settingsSearch" {
+                let title = NSMutableAttributedString(string: "")
+                if let icon = UIImage(systemName: "magnifyingglass", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17.0))?.withRenderingMode(.alwaysTemplate) {
+                    // TextNode tints image attachments with the attributed foreground color.
+                    title.append(NSAttributedString(string: "M", attributes: [
+                        .attachment: icon,
+                        .foregroundColor: presentationData.theme.list.itemSecondaryTextColor
+                    ]))
+                }
+                return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
+            }
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
         case let .messagePreview(_, _, _, emoji):
             return donutgramMessagePreviewItem(context: arguments.context, sectionId: self.section, emoji: emoji)
@@ -157,7 +178,7 @@ enum DGListEntry: ItemListNodeEntry {
         case let .tabBarPreview(_, _, layout):
             return DGTabBarPreviewItem(context: arguments.context, theme: presentationData.theme, strings: presentationData.strings, sectionId: self.section, layout: layout)
         case .appIcons:
-            return donutgramAppIconItem(context: arguments.context, sectionId: self.section, updated: { arguments.select("refreshAppIcon") })
+            return donutgramAppIconItem(context: arguments.context, sectionId: self.section, tag: DGSettingItemTag(key: "appIcon"), updated: { arguments.select("refreshAppIcon") })
         case let .islandStyles(_, _, value):
             return DGIslandStyleItem(theme: presentationData.theme, languageCode: languageCode, sectionId: self.section, value: value, updated: { arguments.select("islandStyle:\($0)") })
         case let .speedSlider(_, _, value):
@@ -219,7 +240,17 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         } else {
             performImpl?(key)
         }
-    }, openMenu: { key in presentMenuImpl?(key) }, textUpdated: { key, value in textUpdated(key, value) }, toggleWhileDisabled: { _ in
+    }, openMenu: { key in presentMenuImpl?(key) }, textUpdated: { key, value in
+        if page == .root && key == "settingsSearch" {
+            statePromise.set(stateValue.modify { state in
+                var state = state
+                state.searchQuery = value
+                return state
+            })
+        } else {
+            textUpdated(key, value)
+        }
+    }, toggleWhileDisabled: { _ in
         if let disabledToggleHint {
             presentNoticeImpl?(.info(title: nil, text: dgLocalized(disabledToggleHint, languageCode: currentLanguageCode()), timeout: nil, customUndoText: nil))
         }
@@ -227,11 +258,26 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         UIPasteboard.general.string = value
         presentNoticeImpl?(.copy(text: dgLocalized("Скопировано", languageCode: currentLanguageCode())))
     })
+    let shownSearchQuery = Atomic<String>(value: initialState.searchQuery)
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get(), additionalUpdates)
-    |> map { presentationData, _, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, state, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let languageCode = presentationData.strings.primaryComponent.languageCode
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized(title, languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listEntries = entries().map { $0.localized(languageCode: languageCode) }
+        var listEntries: [DGListEntry]
+        if page == .root && !dgSettingsSearchWords(state.searchQuery).isEmpty {
+            // Ids by place: the list diffs entries as sorted by id, and the results come by relevance, not in catalog order.
+            listEntries = dgSettingsSearchItems(query: state.searchQuery, hasIsland: DeviceMetrics.deviceHasAppBadge).enumerated().map { place, item in
+                return .searchResult(1000 + Int32(place), 0, "search:" + item.id, dgLocalized(item.title, languageCode: languageCode), item.path(languageCode: languageCode))
+            }
+            if listEntries.isEmpty {
+                listEntries = [.info(999, 0, dgLocalized("Ничего не найдено", languageCode: languageCode))]
+            }
+        } else {
+            listEntries = entries().map { $0.localized(languageCode: languageCode) }
+        }
+        if page == .root {
+            listEntries.insert(.input(-3, -2, "settingsSearch", state.searchQuery, dgLocalized("Поиск", languageCode: languageCode)), at: 0)
+        }
         // Scroll to a linked row by index: on open the list builds nodes only for the visible area plus 500 pt, and a lookup
         // by tag (ensureVisibleItemTag, itemNode(forTag:)) can't reach rows below that. The list applies this to the first state only.
         // .Down: with .Up, ListView snaps the gap a centered bottom row leaves under the list to the top, scrolling the row away.
@@ -239,7 +285,9 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
         if let focusTag, let index = listEntries.firstIndex(where: { $0.tag?.isEqual(to: focusTag) ?? false }) {
             focusScroll = ListViewScrollToItem(index: index, position: .center(.top), animated: false, curve: .Default(duration: nil), directionHint: .Down)
         }
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: listEntries, style: .blocks, initialScrollToItem: focusScroll, animateChanges: true)
+        // A keystroke swaps the results without animation; the other changes of the root animate, as on the other pages.
+        let searchQueryChanged = shownSearchQuery.swap(state.searchQuery) != state.searchQuery
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: listEntries, style: .blocks, initialScrollToItem: focusScroll, animateChanges: !searchQueryChanged)
         return (controllerState, (listState, arguments))
     }
     let controller = ItemListController(context: context, state: signal)
@@ -274,7 +322,10 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
             }
         }
     }
-    pushControllerImpl = { [weak controller] pushed in (controller?.navigationController as? NavigationController)?.pushViewController(pushed) }
+    pushControllerImpl = { [weak controller] pushed in
+        controller?.view.endEditing(true)
+        (controller?.navigationController as? NavigationController)?.pushViewController(pushed)
+    }
     performImpl = { [weak controller] key in
         if let controller { perform(key, controller) }
     }
@@ -406,7 +457,14 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
             s.settingsSectionsNoticeDismissed = true
         }
     }, open: { key in
+        if key.hasPrefix("search:"), let item = dgSettingsSearchCatalog.first(where: { "search:" + $0.id == key }) {
+            return dgSettingsControllerForLink(context: context, page: item.page, key: item.key)
+        }
         return dgRootSectionPage(key).map { dgPageController($0, context: context, focusKey: nil) }
+    }, perform: { key, controller in
+        if key == "dismissSearchKeyboard" {
+            controller.view.endEditing(true)
+        }
     })
 }
 

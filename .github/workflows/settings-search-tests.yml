@@ -1,0 +1,23 @@
+name: Settings search tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/DGSettingsUI/**'
+      - 'Donutgram/DGSimpleSettings/**'
+      - 'Tests/settings_search/**'
+      - '.github/workflows/settings-search-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check feature search and navigation
+        run: python3 Tests/settings_search/run.py
