@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift'
+      - 'submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoCompactHeaderLayout.swift'
       - 'Tests/profile_header_layout/**'
       - '.github/workflows/profile-header-layout-tests.yml'
   workflow_dispatch:

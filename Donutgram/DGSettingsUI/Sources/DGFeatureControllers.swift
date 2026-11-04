@@ -514,7 +514,10 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
             .header(30, 3, "ЗНАЧКИ У ИМЁН"),
             .toggle(31, 3, "premiumStatuses", "Скрыть премиум-статусы", s.hidePremiumStatuses, true),
             .toggle(32, 3, "hideVerification", "Скрыть верификацию", s.hideVerification, true),
-            .info(33, 3, "Без галочек официальные аккаунты и подделки выглядят одинаково. Telegram никогда не просит код входа в сообщениях.")
+            .info(33, 3, "Без галочек официальные аккаунты и подделки выглядят одинаково. Telegram никогда не просит код входа в сообщениях."),
+            .header(40, 4, "МУЗЫКА И БАЛАНС"),
+            .toggle(41, 4, "compactProfileMusicAndBalance", "Компактные музыка и баланс", s.compactProfileMusicAndBalance, true),
+            .info(42, 4, "Песня и баланс показаны рядом под статусом: исполнитель и название слева, баланс справа. Если есть только одна плашка, она по центру.")
         ])
         return result
     }, restartRequiredKeys: ["premiumStatuses", "hideVerification"], toggle: { key, value in
@@ -527,6 +530,7 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
         case "relativeOnlineTime": s.relativeOnlineTime = value
         case "approximateLastSeen": s.approximateLastSeen = value
         case "hidePhoneNumber": s.hidePhoneNumber = value
+        case "compactProfileMusicAndBalance": s.compactProfileMusicAndBalance = value
         case "premiumStatuses": s.hidePremiumStatuses = value
         case "hideVerification": s.hideVerification = value
         default: break

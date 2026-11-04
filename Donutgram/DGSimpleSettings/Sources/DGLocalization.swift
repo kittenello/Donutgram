@@ -27,6 +27,9 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "МУЗЫКА И БАЛАНС": "MUSIC AND BALANCE",
+    "Компактные музыка и баланс": "Compact Music and Balance",
+    "Песня и баланс показаны рядом под статусом: исполнитель и название слева, баланс справа. Если есть только одна плашка, она по центру.": "Music and balance appear side by side below the status: artist and title on the left, balance on the right. A single pill is centered.",
     "Скрывать черновик пустого ответа": "Hide Empty Reply Drafts",
     "Если выбран ответ, но текст не введён, в списке чатов видно последнее сообщение вместо «Черновик». Выбранный ответ сохраняется.": "When a reply is selected without any text, the chat list shows the last message instead of Draft. The selected reply is kept.",
     "Обход блокировки стикеров": "Bypass Sticker Restrictions",

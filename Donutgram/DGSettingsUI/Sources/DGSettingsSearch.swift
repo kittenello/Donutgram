@@ -184,6 +184,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("chatDate", "Показывать дату создания чата", "ИНФОРМАЦИЯ"),
         ("mutualContact", "Показывать взаимный контакт", "ИНФОРМАЦИЯ"),
         ("hidePhoneNumber", "Скрыть номер телефона", "ИНФОРМАЦИЯ"),
+        ("compactProfileMusicAndBalance", "Компактные музыка и баланс", "МУЗЫКА И БАЛАНС"),
         ("relativeOnlineTime", "Относительное время онлайна", "ВРЕМЯ В СЕТИ"),
         ("approximateLastSeen", "Примерный онлайн", "ВРЕМЯ В СЕТИ"),
         ("premiumStatuses", "Скрыть премиум-статусы", "ЗНАЧКИ У ИМЁН"),

@@ -38,6 +38,8 @@ if mode == "write" {
     }
     settings.hidePaidReactions = true
     check(!settings.hideEmptyReplyDrafts, "hiding empty reply drafts is opt-in")
+    check(!settings.compactProfileMusicAndBalance, "compact music and balance is opt-in")
+    settings.compactProfileMusicAndBalance = true
     settings.hideEmptyReplyDrafts = true
     check(!settings.stickerUnlock && !settings.hideTrendingStickers && !settings.hideTrendingEmoji && !settings.hideAIFeatures && !settings.hidePhoneNumberInChatTitle && !settings.disableProfileMusicAutoplay, "new media preferences preserve the default behavior")
     check(settings.gifScrubber, "GIFs get a scrubber until it is switched off")
@@ -97,6 +99,7 @@ if mode == "write" {
     print("settings behavior checks passed")
 } else if mode == "read" {
     check(settings.hideEmptyReplyDrafts, "hiding empty reply drafts survives a process restart")
+    check(settings.compactProfileMusicAndBalance, "compact music and balance survives a process restart")
     check(settings.stickerUnlock && settings.hideTrendingStickers && settings.hideTrendingEmoji && settings.hideAIFeatures && settings.hidePhoneNumberInChatTitle && settings.disableProfileMusicAutoplay, "media preferences survive a process restart")
     check(!settings.gifScrubber, "a switched-off GIF scrubber stays off after a process restart")
     check(settings.anonymousStickerPackData(accountId: 1001, fileId: 5001) == Data([1, 2, 3]), "sticker pack data survives process restart")
