@@ -4905,6 +4905,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
 
     func openAICompose() {
+        guard !DGSimpleSettings.shared.hideAIFeatures else {
+            return
+        }
         Task { @MainActor [weak self] in
             guard let self else {
                 return

@@ -3163,7 +3163,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 }
                 playlistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
             } else {
-                self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(.play))
+                self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(DGSimpleSettings.shared.disableProfileMusicAutoplay ? .pause : .play))
             }
             
             Queue.mainQueue().after(0.1) {

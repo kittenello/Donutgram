@@ -38,6 +38,7 @@ public enum ChatTitleContent: Equatable {
         public var cachedData: EngineCachedPeerData?
         // «Примерный онлайн» when the data was made: the setting's toggle gives unequal data, so an open chat redraws its status.
         public var approximateLastSeen: Bool
+        public var hidePhoneNumberInChatTitle: Bool
 
         public init(peerId: EnginePeer.Id, peer: EngineRawPeer?, isContact: Bool, isSavedMessages: Bool, notificationSettings: TelegramPeerNotificationSettings?, peerPresences: [EnginePeer.Id: EngineRawPeerPresence], cachedData: EngineCachedPeerData?) {
             self.peerId = peerId
@@ -48,6 +49,7 @@ public enum ChatTitleContent: Equatable {
             self.peerPresences = peerPresences
             self.cachedData = cachedData
             self.approximateLastSeen = DGSimpleSettings.shared.approximateLastSeen
+            self.hidePhoneNumberInChatTitle = DGSimpleSettings.shared.hidePhoneNumberInChatTitle
         }
         
         public init(peerView: EngineRawPeerView) {
@@ -88,6 +90,9 @@ public enum ChatTitleContent: Equatable {
                 return false
             }
             if lhs.approximateLastSeen != rhs.approximateLastSeen {
+                return false
+            }
+            if lhs.hidePhoneNumberInChatTitle != rhs.hidePhoneNumberInChatTitle {
                 return false
             }
             return true
@@ -305,7 +310,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                 } else if peerView.peerId.isAnonymousSavedMessages {
                                     segments = [.text(0, NSAttributedString(string: self.strings.ChatList_AuthorHidden, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                 } else {
-                                    if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
+                                    if !peerView.hidePhoneNumberInChatTitle, !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                         segments = [.text(0, NSAttributedString(string: formatPhoneNumber(context: self.context, number: phone), font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                     } else {
                                         segments = [.text(0, NSAttributedString(string: EnginePeer(peer).displayTitle(strings: self.strings, displayOrder: self.nameDisplayOrder), font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]

@@ -1941,7 +1941,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 needsShareButton = true
             }
             
-            if let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
+            if !DGSimpleSettings.shared.hideAIFeatures, let _ = item.message.attributes.first(where: { $0 is SummarizationMessageAttribute }) {
                 needsSummarizeButton = true
             }
             
@@ -2576,7 +2576,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         let translateToLanguage = item.associatedData.translateToLanguage
         var isSummarized = false
-        if item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
+        if !DGSimpleSettings.shared.hideAIFeatures && item.controllerInteraction.summarizedMessageIds.contains(item.message.id) {
             for attribute in item.message.attributes {
                 if let attribute = attribute as? SummarizationMessageAttribute, attribute.summaryForLang(translateToLanguage) != nil {
                     initialDisplayHeader = true

@@ -1,0 +1,27 @@
+name: Chat media tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/**'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramStickerMedia.swift'
+      - 'submodules/TelegramUI/**'
+      - 'submodules/GalleryUI/Sources/Items/UniversalVideoGalleryItem.swift'
+      - 'Tests/sticker_media/**'
+      - '.github/workflows/chat-media-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check sticker photo and video permissions
+        run: python3 Tests/sticker_media/run.py

@@ -231,6 +231,10 @@ func inputTextPanelStateForChatPresentationInterfaceState(_ chatPresentationInte
                     }
                 }
                 
+                if donutgramCanSendStickerAsMedia(peer: chatPresentationInterfaceState.renderedPeer?.peer) {
+                    stickersEnabled = true
+                }
+
                 if let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isMonoForum, let mainChannel = chatPresentationInterfaceState.renderedPeer?.chatOrMonoforumMainPeer as? TelegramChannel, (!mainChannel.hasPermission(.manageDirect) || chatPresentationInterfaceState.chatLocation.threadId != nil) {
                     if chatPresentationInterfaceState.interfaceState.postSuggestionState == nil {
                         accessoryItems.append(.suggestPost)

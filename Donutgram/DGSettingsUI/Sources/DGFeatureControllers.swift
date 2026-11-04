@@ -189,6 +189,9 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
             .header(20, 2, "GIF"),
             .toggle(21, 2, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true),
             .info(22, 2, "Где админы запретили GIF, но разрешили видео, GIF уйдёт видео без звука. Админы это увидят."),
+            .header(23, 4, "СТИКЕРЫ"),
+            .toggle(24, 4, "stickerUnlock", "Обход блокировки стикеров", s.stickerUnlock, true),
+            .info(25, 4, "Если стикеры запрещены, обычные отправляются картинками, анимированные — видео. Отправка фото или видео должна быть разрешена в чате."),
             .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
             .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
             .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram.")
@@ -200,6 +203,7 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
         case "protectedScreenshots": s.allowProtectedScreenshots = value
         case "saveProtectedStories": s.saveProtectedStories = value
         case "gifUnlock": s.gifUnlock = value
+        case "stickerUnlock": s.stickerUnlock = value
         case "bypassContentRestrictions": s.bypassContentRestrictions = value
         default: break
         }
@@ -345,6 +349,8 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(24, 2, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
             .toggle(25, 2, "hideBotAutomation", "Скрыть плашку чат-бота", s.hideBotAutomation, true),
             .toggle(26, 2, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
+            .toggle(27, 2, "hideAIFeatures", "Скрыть функции ИИ", s.hideAIFeatures, true),
+            .toggle(28, 2, "hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", s.hidePhoneNumberInChatTitle, true),
             .header(30, 3, "ОТПРАВКА"),
             .toggle(31, 3, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
             .info(32, 3, "Ваши сообщения со ссылками уходят без превью — у получателей его тоже не будет."),
@@ -375,6 +381,8 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
         case "greetingSticker": s.hideGreetingSticker = value
         case "pollResultsBeforeVoting": s.showPollResultsBeforeVoting = value
         case "hideBotAutomation": s.hideBotAutomation = value
+        case "hideAIFeatures": s.hideAIFeatures = value
+        case "hidePhoneNumberInChatTitle": s.hidePhoneNumberInChatTitle = value
         case "forwardDate": s.showForwardDate = value
         case "channelForwardCount": s.showChannelForwardCount = value
         case "wideChannelPosts": s.wideChannelPosts = value
@@ -431,9 +439,11 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
             .header(20, 2, "ПАНЕЛЬ СТИКЕРОВ"),
             .toggle(21, 2, "onlyAdded", "Показывать только добавленные стикеры", s.onlyAddedStickers, true),
             .toggle(22, 2, "recent", "Недавние стикеры без лимита", s.infiniteRecentStickers, true),
-            .header(23, 4, "ОТПРАВКА"),
-            .toggle(24, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
-            .info(25, 4, "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно."),
+            .toggle(23, 2, "hideTrendingStickers", "Скрыть популярные стикеры", s.hideTrendingStickers, true),
+            .toggle(24, 2, "hideTrendingEmoji", "Скрыть популярные эмодзи", s.hideTrendingEmoji, true),
+            .header(25, 4, "ОТПРАВКА"),
+            .toggle(26, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
+            .info(27, 4, "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно."),
             .header(30, 3, "РЕАКЦИИ"),
             .toggle(31, 3, "reactionsInChannels", "Скрыть реакции в каналах", hiddenReactions & 1 != 0, true),
             .toggle(32, 3, "reactionsInGroups", "Скрыть реакции в группах", hiddenReactions & 2 != 0, true),
@@ -451,6 +461,8 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
         case "hideStickerReplyBackground": s.hideStickerReplyBackground = value
         case "onlyAdded": s.onlyAddedStickers = value
         case "recent": s.infiniteRecentStickers = value
+        case "hideTrendingStickers": s.hideTrendingStickers = value
+        case "hideTrendingEmoji": s.hideTrendingEmoji = value
         case "anonymousStickerSending": s.anonymousStickerSending = value
         case "reactionsInChannels": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 1, isOn: value)
         case "reactionsInGroups": s.hiddenReactions = dgUpdatedMask(s.hiddenReactions, bit: 2, isOn: value)
@@ -795,7 +807,10 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             .info(54, 5, "Когда голосовое или кружок закончится, следующее не включится само."),
             .header(60, 6, "ГОЛОС В ТЕКСТ"),
             .menu(61, 6, "transcription", "Сервис расшифровки", dgTranscriptionBackendTitle(s.transcriptionBackend)),
-            .info(62, 6, dgTranscriptionBackendInfo(s.transcriptionBackend))
+            .info(62, 6, dgTranscriptionBackendInfo(s.transcriptionBackend)),
+            .header(70, 7, "МУЗЫКА В ПРОФИЛЕ"),
+            .toggle(71, 7, "disableProfileMusicAutoplay", "Не включать музыку автоматически", s.disableProfileMusicAutoplay, true),
+            .info(72, 7, "Плейлист закреплённой музыки открывается без запуска трека. Воспроизведение можно включить вручную.")
         ])
         return result
     }, toggle: { key, value in
@@ -812,6 +827,7 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
         case "staticZoom": s.staticRoundVideoZoom = value
         case "roundVideoCountdown": s.roundVideoCountdown = value
         case "builtInMic": s.forceBuiltInMicrophone = value
+        case "disableProfileMusicAutoplay": s.disableProfileMusicAutoplay = value
         case "autoPause": s.autoPause = value
         case "autoPauseVideo": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 1, isOn: value)
         case "autoPauseVoice": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 2, isOn: value)

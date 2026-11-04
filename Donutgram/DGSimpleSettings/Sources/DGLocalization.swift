@@ -27,6 +27,16 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Обход блокировки стикеров": "Bypass Sticker Restrictions",
+    "Если стикеры запрещены, обычные отправляются картинками, анимированные — видео. Отправка фото или видео должна быть разрешена в чате.": "When stickers are restricted, static stickers are sent as photos and animated stickers as videos. The chat must allow sending the corresponding media type.",
+    "Не удалось преобразовать стикер. Попробуйте ещё раз.": "Could not convert the sticker. Please try again.",
+    "Скрыть популярные стикеры": "Hide Trending Stickers",
+    "Скрыть популярные эмодзи": "Hide Trending Emoji",
+    "Скрыть функции ИИ": "Hide AI Features",
+    "Скрыть номер в заголовке чата": "Hide Phone Number in Chat Title",
+    "МУЗЫКА В ПРОФИЛЕ": "PROFILE MUSIC",
+    "Не включать музыку автоматически": "Disable Music Autoplay",
+    "Плейлист закреплённой музыки открывается без запуска трека. Воспроизведение можно включить вручную.": "The pinned music playlist opens without starting a track. You can start playback manually.",
     "Поиск": "Search",
     "Ничего не найдено": "No Results",
     "Стиль острова": "Island Style",

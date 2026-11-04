@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import LottieSettings
 import UniformTypeIdentifiers
 import UIKit
@@ -328,7 +329,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private let hapticFeedback = HapticFeedback()
     
-    public var isAIEnabled: Bool = false
+    private var aiAvailable: Bool = false
+    public var isAIEnabled: Bool {
+        get { self.aiAvailable && !DGSimpleSettings.shared.hideAIFeatures }
+        set { self.aiAvailable = newValue }
+    }
     
     public var inputTextState: ChatTextInputState {
         if let richTextInputNode = self.richTextInputNode {

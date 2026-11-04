@@ -1524,7 +1524,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 videoNode.removeFromSupernode()
             }
             
-            if isAnimated || disablePlayerControls {
+            if disablePlayerControls {
                 self.footerContentNode.scrubberView = nil
             }
             

@@ -2422,10 +2422,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             
             if let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, peer.hasBannedPermission(.banSendStickers) != nil {
-                if !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState) {
+                if !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState) && !donutgramCanSendStickerAsMedia(peer: peer, file: fileReference.media) {
                     strongSelf.interfaceInteraction?.openBoostToUnrestrict()
                     return false
                 }
+            }
+            if let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramGroup, peer.hasBannedPermission(.banSendStickers), !donutgramCanSendStickerAsMedia(peer: peer, file: fileReference.media) {
+                strongSelf.interfaceInteraction?.displayRestrictedInfo(.stickers, .tooltip)
+                return false
             }
             
             var attributes: [MessageAttribute] = []
@@ -2443,6 +2447,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             var shouldAnimateMessageTransition = strongSelf.chatDisplayNode.shouldAnimateMessageTransition
             if let _ = sourceView?.asyncdisplaykit_node as? ChatEmptyNodeStickerContentNode {
                 shouldAnimateMessageTransition = true
+            }
+            if donutgramCanSendStickerAsMedia(peer: strongSelf.presentationInterfaceState.renderedPeer?.peer, file: fileReference.media) {
+                shouldAnimateMessageTransition = false
             }
             
             strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak strongSelf] postpone in
@@ -7075,6 +7082,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.donutgramChannelSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             if self.isNodeLoaded {
+                if DGSimpleSettings.shared.hideAIFeatures {
+                    self.controllerInteraction?.summarizedMessageIds.removeAll()
+                }
                 if DGSimpleSettings.shared.hideBirthdayNotifications {
                     self.birthdayTooltipController?.dismiss()
                 }
@@ -9358,7 +9368,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     self.commitPurposefulAction()
                 }
                 
-                let _ = (enqueueMessages(account: self.context.account, peerId: peerId, messages: self.transformEnqueueMessages(messages, postpone: postpone))
+                let _ = (donutgramPrepareStickerMedia(context: self.context, peer: self.presentationInterfaceState.renderedPeer?.peer, messages: messages)
+                |> deliverOnMainQueue
+                |> mapToSignal { [weak self] prepared -> Signal<[MessageId?], NoError> in
+                    guard let self else {
+                        return .complete()
+                    }
+                    guard let prepared else {
+                        self.present(textAlertController(context: self.context, title: nil, text: dgLocalized("Не удалось преобразовать стикер. Попробуйте ещё раз.", languageCode: self.presentationData.strings.baseLanguageCode), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        return .complete()
+                    }
+                    return enqueueMessages(account: self.context.account, peerId: peerId, messages: self.transformEnqueueMessages(prepared, postpone: postpone))
+                }
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
                     if isGhostScheduledSend, let self {
                         DGSimpleSettings.shared.requestGhostOffline(accountPeerId: self.context.account.peerId.toInt64())
