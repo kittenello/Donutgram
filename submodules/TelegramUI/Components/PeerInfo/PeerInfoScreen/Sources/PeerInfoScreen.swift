@@ -5721,7 +5721,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                              
                 let sectionWidth = layout.size.width - insets.left - insets.right
                 if isFirstSection && sectionItems.first is PeerInfoScreenHeaderItem && !self.state.isEditing {
-                    if self.data?.peer?.profileColor == nil && !self.headerNode.hasBottomStrip {
+                    if self.data?.peer?.profileColor == nil && !self.headerNode.hasMusicAlongBottomEdge {
                         contentHeight -= 16.0
                     }
                 }

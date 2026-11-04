@@ -3788,14 +3788,16 @@ private final class WalletScreenComponent: Component {
                 ]
 
                 var emptyTransactionsOriginY = contentHeight + 36.0
-                if historyContent != .intro {
+                // A history confirmed empty keeps the wallet's introduction and terms, as before a wallet is set up;
+                // loading and failures show a status instead, so the introduction never stands for a history that did not load.
+                let showsIntroduction = historyContent == .intro || historyContent == .empty
+                if !showsIntroduction {
                     let title: String
                     switch historyContent {
                     case .loading: title = "Загрузка истории операций…"
                     case .walletFailed: title = "Не удалось загрузить кошелёк"
                     case .historyFailed: title = "Не удалось загрузить историю операций"
-                    case .empty: title = "История операций пока пуста"
-                    case .intro, .items: title = ""
+                    case .intro, .empty, .items: title = ""
                     }
                     let languageCode = environment.strings.baseLanguageCode
                     emptyItems = [AnyComponentWithIdentity(id: "historyStatus", component: AnyComponent(MultilineTextComponent(
@@ -3815,11 +3817,15 @@ private final class WalletScreenComponent: Component {
                     }
                     if historyContent == .loading {
                         self.historyLoadingIndicator.color = textColor
+                        let indicatorFrame = CGRect(x: floor((availableSize.width - 20.0) * 0.5), y: emptyTransactionsOriginY, width: 20.0, height: 20.0)
                         if self.historyLoadingIndicator.superview == nil {
+                            // A newly shown indicator appears in place instead of sliding in from the corner.
+                            self.historyLoadingIndicator.frame = indicatorFrame
                             self.scrollView.addSubview(self.historyLoadingIndicator)
+                        } else {
+                            contentLayoutTransition.setFrame(view: self.historyLoadingIndicator, frame: indicatorFrame)
                         }
                         self.historyLoadingIndicator.startAnimating()
-                        transition.setFrame(view: self.historyLoadingIndicator, frame: CGRect(x: floor((availableSize.width - 20.0) * 0.5), y: emptyTransactionsOriginY, width: 20.0, height: 20.0))
                         emptyTransactionsOriginY += 36.0
                     }
                 }
@@ -3856,7 +3862,7 @@ private final class WalletScreenComponent: Component {
                 }
                 contentHeight = emptyTransactionsOriginY + emptyTransactionsInfoSize.height
 
-                if historyContent == .intro {
+                if showsIntroduction {
                     let url = environment.strings.Wallet_TermsText_URL
                     self.emptyTransactionsFooter.parentState = state
                     let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(

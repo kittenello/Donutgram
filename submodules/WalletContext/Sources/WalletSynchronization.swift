@@ -5,11 +5,10 @@ import TelegramCore
 extension WalletContextImpl {
     func retryHistory() {
         self.logger.log("event=wallet_history_retry")
-        let transactions = self.currentState.transactions
         self.replaceState(
             phase: self.currentState.phase,
             balance: self.currentState.balance,
-            transactions: TransactionsState(items: transactions.items, offset: transactions.offset, canLoadMore: transactions.canLoadMore, isLoadingMore: transactions.isLoadingMore, error: nil, hasLoaded: transactions.hasLoaded),
+            transactions: self.currentState.transactions.withError(nil),
             pendingTransfers: self.currentState.pendingTransfers,
             activeOperation: self.currentState.activeOperation
         )

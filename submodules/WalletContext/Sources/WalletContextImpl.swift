@@ -607,11 +607,10 @@ actor WalletContextImpl {
                self.latestWalletStateRevision == walletStateRevision,
                self.activationGeneration == generation,
                case .restoring = self.currentState.phase {
-                let transactions = self.currentState.transactions
                 self.replaceState(
                     phase: self.currentState.phase,
                     balance: self.currentState.balance,
-                    transactions: TransactionsState(items: transactions.items, offset: transactions.offset, canLoadMore: transactions.canLoadMore, isLoadingMore: transactions.isLoadingMore, error: .network, hasLoaded: transactions.hasLoaded),
+                    transactions: self.currentState.transactions.withError(.network),
                     pendingTransfers: self.currentState.pendingTransfers,
                     activeOperation: self.currentState.activeOperation
                 )
@@ -786,11 +785,13 @@ actor WalletContextImpl {
                 self.transactionHistory.reset()
                 self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)
             }
+            // A failed state request leaves its error in the history (`.network` while restoring): the state has arrived
+            // now, and the history reloads once the wallet activates.
             self.replaceState(
                 phase: .restoring,
                 balance: .value(serverBalance, updatedAt: currentWalletTimestamp()),
                 transactions: isSameCachedIdentity
-                    ? self.currentState.transactions
+                    ? self.currentState.transactions.withError(nil)
                     : TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
                 collectibles: isSameCachedIdentity ? self.currentState.collectibles : .empty,
                 pendingTransfers: isSameCachedIdentity ? self.currentState.pendingTransfers : [],
@@ -1727,4 +1728,12 @@ func walletEngineBalance(_ nanograms: String) -> Int64? {
 @available(macOS 10.15, *)
 func walletEngineAcceptsSubmission(_ phase: SendPhase) -> Bool {
     phase == .submitted || phase == .submissionUnknown || phase == .confirmed
+}
+
+@available(macOS 10.15, *)
+extension WalletContext.TransactionsState {
+    /// The same history with `error` in place of its current one.
+    func withError(_ error: WalletContext.SynchronizationError?) -> WalletContext.TransactionsState {
+        return WalletContext.TransactionsState(items: self.items, offset: self.offset, canLoadMore: self.canLoadMore, isLoadingMore: self.isLoadingMore, error: error, hasLoaded: self.hasLoaded)
+    }
 }

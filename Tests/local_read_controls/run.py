@@ -33,7 +33,9 @@ def prepare():
     entries = source("submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift")
     assert "groupItems.removeAll { $0.id == .archive }" in entries
     node = source("submodules/ChatListUI/Sources/Node/ChatListNode.swift")
-    assert "combineLatest(hideArchivedFolderByDefault, fullyHideArchive)" in node
+    # «Скрыть архив» rides the chat list's local switches, next to the empty-reply one.
+    assert "combineLatest(hideArchivedFolderByDefault, localListVisibility)" in node
+    assert "let (fullyHideArchive, _, hideEmptyReplyDrafts) = localListVisibility" in node
     input_context = source("submodules/TelegramUI/Sources/ChatInterfaceInputContexts.swift")
     assert "if !DGSimpleSettings.shared.hideGiftButton, isTextEmpty, showPremiumGift" in input_context
     settings_items = source("submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift")

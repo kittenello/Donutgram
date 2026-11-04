@@ -8,6 +8,7 @@ on:
       - 'submodules/TelegramCore/Sources/Donutgram/DonutgramStickerMedia.swift'
       - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift'
       - 'submodules/ChatListUI/**'
       - 'submodules/WalletContext/**'
       - 'submodules/PasscodeCore/**'

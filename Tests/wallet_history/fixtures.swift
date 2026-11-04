@@ -34,6 +34,8 @@ verify(.empty, expected: .intro)
 verify(.empty, failed: true, expected: .historyFailed)
 verify(.failed, expected: .walletFailed)
 precondition(history() != history(loaded: true), "the first successful empty response must trigger a UI update")
+precondition(history(loaded: true, failed: true).withError(nil) == history(loaded: true), "a recovered wallet drops the stale error and keeps what loaded")
+precondition(history(loaded: true).withError(.network) == history(loaded: true, failed: true), "a failed state request keeps what loaded")
 print("wallet history loading, failure, empty response and cache checks passed")
 
 enum PasscodeError: Error { case unavailable }

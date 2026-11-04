@@ -207,6 +207,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var hasBottomStrip: Bool {
         return self.music != nil
     }
+    /// Whether the music strip runs along the header's bottom edge: the compact layout puts the song next to the balance.
+    var hasMusicAlongBottomEdge: Bool {
+        return self.music != nil && !self.compactMusicAndBalance
+    }
 
     /// The track the music strip shows for `peer` and `screenData` (`peerInfoProfileMusic`): none on Settings and on the
     /// account's own peer opened as a profile.
@@ -2702,7 +2706,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 self.walletBalance = componentView
                 return componentView
             }()
-            let formattedBalance = formatTonAmountText(currentWalletBalance, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: compactMusicAndBalance ? 3 : 2)
+            let formattedBalance = formatTonAmountText(currentWalletBalance, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: 2)
             let decimalSeparator = presentationData.dateTimeFormat.decimalSeparator
             let isOverlay = self.isAvatarExpanded || hasBackground
             let primaryColor = isOverlay ? UIColor.white : presentationData.theme.list.itemPrimaryTextColor
@@ -2860,7 +2864,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 musicString.append(NSAttributedString(string: compactMusicAndBalance ? artist : (track ?? ""), font: Font.semibold(12.0), textColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
                 let artistSeparatorIndex = musicString.length
                 musicString.append(NSAttributedString(string: compactMusicAndBalance ? " - \(track ?? "")" : " \(artist)", font: Font.regular(12.0), textColor: stripSecondaryColor))
-                musicString.addAttribute(.kern, value: CGFloat(2.0), range: NSRange(location: artistSeparatorIndex, length: 1))
+                if !compactMusicAndBalance {
+                    // The wider space sets the artist apart; in the compact pill « - » does, and a wider space before it
+                    // would leave the dash off-centre.
+                    musicString.addAttribute(.kern, value: CGFloat(2.0), range: NSRange(location: artistSeparatorIndex, length: 1))
+                }
 
                 let musicSize = music.update(
                     transition: .immediate,

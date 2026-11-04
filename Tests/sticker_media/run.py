@@ -26,7 +26,7 @@ fixture = pathlib.Path(__file__).with_name("fixtures.swift").read_text(encoding=
 sync = (root / "submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift").read_text(encoding="utf-8")
 chat_list = (root / "submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift").read_text(encoding="utf-8")
 entries = (root / "submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift").read_text(encoding="utf-8")
-draft_checks = "\nextension DraftInputState {\n" + block(sync, "public var isEmptyReply:").replace("public ", "") + "\n}\n"
+draft_checks = "\nextension DraftInputState {\n" + block(sync, "public var isEmptyReply:").replace("public ", "") + "\n" + block(sync, "func chatListTimestamp(") + "\n}\n"
 draft_checks += "enum EngineChatList {\n" + block(chat_list, "public struct Draft:").replace("public ", "") + "\n}\n"
 draft_checks += block(entries, "private func chatListDraftState(") + "\n"
 draft_checks += pathlib.Path(__file__).with_name("draft_fixtures.swift").read_text(encoding="utf-8")
@@ -36,6 +36,11 @@ assert location.count("isEmptyReply: opaqueState.synchronizeableInputState?.isEm
 assert "isEmptyReply: opaqueState.synchronizeableInputState?.isEmptyReply ?? false" in chat_list
 assert entries.count("hideEmptyReplies: hideEmptyReplyDrafts)") == 2
 assert "DGSimpleSettings.shared.hideEmptyReplyDrafts" in node and "$0.2 == $1.2" in node
+# A hidden empty reply leaves its chat in place: both ways a draft gets stored skip its time.
+peers = (root / "submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift").read_text(encoding="utf-8")
+hidden_reply_time = "overrideChatTimestamp = inputState.chatListTimestamp(hidingEmptyReplies: DGSimpleSettings.shared.hideEmptyReplyDrafts)"
+assert hidden_reply_time in block(sync, "func _internal_updateChatInputState(")
+assert hidden_reply_time in block(peers, "public func setOpaqueChatInterfaceState(")
 if args.source_only:
     print("empty reply integration checks passed; Swift behavior was not executed")
     raise SystemExit(0)

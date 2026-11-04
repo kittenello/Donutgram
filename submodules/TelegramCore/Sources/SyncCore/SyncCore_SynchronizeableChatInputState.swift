@@ -1,5 +1,6 @@
 import Foundation
 import Postbox
+import DGSimpleSettings
 
 public struct SynchronizeableChatInputState: Codable, Equatable {
     public struct SuggestedPost: Codable, Equatable {
@@ -34,6 +35,15 @@ public struct SynchronizeableChatInputState: Codable, Equatable {
             return self.replySubject != nil && text.isEmpty && entities.isEmpty && self.messageEffectId == nil && self.suggestedPost == nil
         }
         return false
+    }
+
+    /// The time the draft moves its chat up the chat list to. Donutgram: a bare reply that «Скрывать черновик пустого
+    /// ответа» hides leaves the chat where its last message puts it, as if there were no draft.
+    func chatListTimestamp(hidingEmptyReplies: Bool) -> Int32? {
+        if hidingEmptyReplies && self.isEmptyReply {
+            return nil
+        }
+        return self.timestamp
     }
 
     /// Derived flat-text view of `content` (old-client / cloud fallback).
@@ -209,7 +219,7 @@ func _internal_updateChatInputState(transaction: Transaction, peerId: PeerId, th
     
     var overrideChatTimestamp: Int32?
     if let inputState = inputState {
-        overrideChatTimestamp = inputState.timestamp
+        overrideChatTimestamp = inputState.chatListTimestamp(hidingEmptyReplies: DGSimpleSettings.shared.hideEmptyReplyDrafts)
     }
     
     if let mediaDraftState = previousState?.mediaDraftState {

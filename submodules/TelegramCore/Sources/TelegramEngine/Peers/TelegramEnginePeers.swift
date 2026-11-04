@@ -2,6 +2,7 @@ import Foundation
 import SwiftSignalKit
 import Postbox
 internal import TelegramApi
+import DGSimpleSettings
 
 public enum AddressNameValidationStatus: Equatable {
     case checking
@@ -1191,7 +1192,7 @@ public extension TelegramEngine {
                 
                 var overrideChatTimestamp: Int32?
                 if let inputState = state.synchronizeableInputState {
-                    overrideChatTimestamp = inputState.timestamp
+                    overrideChatTimestamp = inputState.chatListTimestamp(hidingEmptyReplies: DGSimpleSettings.shared.hideEmptyReplyDrafts)
                 }
                 
                 if let mediaDraftState = state.mediaDraftState {
