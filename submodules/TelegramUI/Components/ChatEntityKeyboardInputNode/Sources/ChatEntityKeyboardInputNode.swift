@@ -2030,7 +2030,8 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
                 displayBottomPanel: true,
                 isExpanded: isExpanded && !self.isEmojiSearchActive,
                 clipContentToTopPanel: self.clipContentToTopPanel,
-                useExternalSearchContainer: self.useExternalSearchContainer
+                useExternalSearchContainer: self.useExternalSearchContainer,
+                hideTrendingStickers: DGSimpleSettings.shared.hideTrendingStickers
             )),
             environment: {},
             containerSize: CGSize(width: width, height: expandedHeight)

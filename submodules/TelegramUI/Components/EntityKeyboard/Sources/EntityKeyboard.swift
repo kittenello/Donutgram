@@ -126,6 +126,7 @@ public final class EntityKeyboardComponent: Component {
     public let hidePanels: Bool
     public let customTintColor: UIColor?
     public let alwaysShowsTopPanel: Bool
+    public let hideTrendingStickers: Bool
     
     public init(
         theme: PresentationTheme,
@@ -162,7 +163,8 @@ public final class EntityKeyboardComponent: Component {
         useExternalSearchContainer: Bool,
         hidePanels: Bool = false,
         customTintColor: UIColor? = nil,
-        alwaysShowsTopPanel: Bool = false
+        alwaysShowsTopPanel: Bool = false,
+        hideTrendingStickers: Bool = false
     ) {
         self.theme = theme
         self.strings = strings
@@ -199,9 +201,13 @@ public final class EntityKeyboardComponent: Component {
         self.hidePanels = hidePanels
         self.customTintColor = customTintColor
         self.alwaysShowsTopPanel = alwaysShowsTopPanel
+        self.hideTrendingStickers = hideTrendingStickers
     }
     
     public static func ==(lhs: EntityKeyboardComponent, rhs: EntityKeyboardComponent) -> Bool {
+        if lhs.hideTrendingStickers != rhs.hideTrendingStickers {
+            return false
+        }
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -445,7 +451,7 @@ public final class EntityKeyboardComponent: Component {
             if let stickerContent = component.stickerContent {
                 var topStickerItems: [EntityKeyboardTopPanelComponent.Item] = []
                 
-                if let _ = stickerContent.inputInteractionHolder.inputInteraction?.openFeatured {
+                if !component.hideTrendingStickers, let _ = stickerContent.inputInteractionHolder.inputInteraction?.openFeatured {
                     topStickerItems.append(EntityKeyboardTopPanelComponent.Item(
                         id: "featuredTop",
                         isReorderable: false,
