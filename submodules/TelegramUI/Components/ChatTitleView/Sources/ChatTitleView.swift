@@ -124,6 +124,22 @@ public enum ChatTitleContent: Equatable {
     case peer(peerView: PeerData, customTitle: String?, customSubtitle: String?, onlineMemberCount: (total: Int32?, recent: Int32?), isScheduledMessages: Bool, isMuted: Bool?, customMessageCount: Int?, hidePeerStatus: Bool, isEnabled: Bool)
     case replyThread(type: ReplyThreadType, count: Int)
     case custom(title: [TitleTextItem], subtitle: String?, isEnabled: Bool)
+
+    /// Donutgram: the peer data keeps «Скрыть номер в заголовке чата» and «Примерный онлайн» from when it was made.
+    /// An open chat passes its title through here on every interface update, so a toggle shows without reopening it.
+    public func withCurrentDonutgramSettings() -> ChatTitleContent {
+        guard case let .peer(peerView, customTitle, customSubtitle, onlineMemberCount, isScheduledMessages, isMuted, customMessageCount, hidePeerStatus, isEnabled) = self else {
+            return self
+        }
+        let settings = DGSimpleSettings.shared
+        if peerView.hidePhoneNumberInChatTitle == settings.hidePhoneNumberInChatTitle && peerView.approximateLastSeen == settings.approximateLastSeen {
+            return self
+        }
+        var updatedPeerView = peerView
+        updatedPeerView.hidePhoneNumberInChatTitle = settings.hidePhoneNumberInChatTitle
+        updatedPeerView.approximateLastSeen = settings.approximateLastSeen
+        return .peer(peerView: updatedPeerView, customTitle: customTitle, customSubtitle: customSubtitle, onlineMemberCount: onlineMemberCount, isScheduledMessages: isScheduledMessages, isMuted: isMuted, customMessageCount: customMessageCount, hidePeerStatus: hidePeerStatus, isEnabled: isEnabled)
+    }
     
     public static func ==(lhs: ChatTitleContent, rhs: ChatTitleContent) -> Bool {
         switch lhs {

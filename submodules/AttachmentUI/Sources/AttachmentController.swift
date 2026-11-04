@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -786,6 +787,9 @@ public class AttachmentController: ViewController, MinimizableController {
                 }
             }
             self.panel.invokeAICompose = { [weak self] in
+                guard !DGSimpleSettings.shared.hideAIFeatures else {
+                    return
+                }
                 Task { @MainActor in
                     guard let self, let controller = self.controller, let mediaPickerContext = self.mediaPickerContext else {
                         return

@@ -441,9 +441,10 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(22, 2, "recent", "Недавние стикеры без лимита", s.infiniteRecentStickers, true),
             .toggle(23, 2, "hideTrendingStickers", "Скрыть популярные стикеры", s.hideTrendingStickers, true),
             .toggle(24, 2, "hideTrendingEmoji", "Скрыть популярные эмодзи", s.hideTrendingEmoji, true),
-            .header(25, 4, "ОТПРАВКА"),
-            .toggle(26, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
-            .info(27, 4, "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно."),
+            .info(25, 2, "«Скрыть популярные» убирает популярные наборы и кнопку «Популярные» из всех панелей, кроме поиска. «Только добавленные» прячет набор группы и строку новых популярных."),
+            .header(26, 4, "ОТПРАВКА"),
+            .toggle(27, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
+            .info(28, 4, "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно."),
             .header(30, 3, "РЕАКЦИИ"),
             .toggle(31, 3, "reactionsInChannels", "Скрыть реакции в каналах", hiddenReactions & 1 != 0, true),
             .toggle(32, 3, "reactionsInGroups", "Скрыть реакции в группах", hiddenReactions & 2 != 0, true),
@@ -780,6 +781,9 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             .header(30, 3, "ВИДЕО"),
             .menu(31, 3, "doubleTapSeek", "Перемотка", seek),
             .info(32, 3, "Двойное нажатие на видео: слева — назад, справа — вперёд на выбранное время."),
+            .header(35, 8, "GIF"),
+            .toggle(36, 8, "gifScrubber", "Перемотка GIF", s.gifScrubber, true),
+            .info(37, 8, "В просмотрщике у GIF есть ползунок, как у видео."),
             .header(40, 4, "АВТОПАУЗА"),
             .toggle(41, 4, "autoPause", "Пауза при сворачивании", s.autoPause, true)
         ]
@@ -828,6 +832,7 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
         case "roundVideoCountdown": s.roundVideoCountdown = value
         case "builtInMic": s.forceBuiltInMicrophone = value
         case "disableProfileMusicAutoplay": s.disableProfileMusicAutoplay = value
+        case "gifScrubber": s.gifScrubber = value
         case "autoPause": s.autoPause = value
         case "autoPauseVideo": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 1, isOn: value)
         case "autoPauseVoice": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 2, isOn: value)

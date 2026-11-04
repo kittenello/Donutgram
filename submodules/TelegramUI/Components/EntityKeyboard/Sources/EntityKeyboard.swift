@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -451,7 +452,8 @@ public final class EntityKeyboardComponent: Component {
             if let stickerContent = component.stickerContent {
                 var topStickerItems: [EntityKeyboardTopPanelComponent.Item] = []
                 
-                if !component.hideTrendingStickers, let _ = stickerContent.inputInteractionHolder.inputInteraction?.openFeatured {
+                // Donutgram: the chat keyboard passes the switch so a toggle redraws it; other sticker panels read it here.
+                if !component.hideTrendingStickers && !DGSimpleSettings.shared.hideTrendingStickers, let _ = stickerContent.inputInteractionHolder.inputInteraction?.openFeatured {
                     topStickerItems.append(EntityKeyboardTopPanelComponent.Item(
                         id: "featuredTop",
                         isReorderable: false,

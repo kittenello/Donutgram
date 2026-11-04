@@ -219,6 +219,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("pauseMusicVoiceRecording", "При записи голосовых", "ПАУЗА МУЗЫКИ"),
         ("pauseMusicVoicePlayback", "При прослушивании голосовых", "ПАУЗА МУЗЫКИ"),
         ("doubleTapSeek", "Перемотка", "ВИДЕО"),
+        ("gifScrubber", "Перемотка GIF", "GIF"),
         ("disableProfileMusicAutoplay", "Не включать музыку автоматически", "МУЗЫКА В ПРОФИЛЕ"),
         ("autoPause", "Пауза при сворачивании", "АВТОПАУЗА"),
         ("autoPauseVideo", "Видео", "АВТОПАУЗА"),

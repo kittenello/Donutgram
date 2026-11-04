@@ -199,7 +199,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarGlassPillTit
             strings: strings,
             dateTimeFormat: dateTimeFormat,
             nameDisplayOrder: nameDisplayOrder,
-            content: content
+            content: content.withCurrentDonutgramSettings()
         )
         let isUpdated = self.contentData != contentData
         self.contentData = contentData

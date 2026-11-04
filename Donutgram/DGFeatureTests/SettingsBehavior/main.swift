@@ -38,6 +38,8 @@ if mode == "write" {
     }
     settings.hidePaidReactions = true
     check(!settings.stickerUnlock && !settings.hideTrendingStickers && !settings.hideTrendingEmoji && !settings.hideAIFeatures && !settings.hidePhoneNumberInChatTitle && !settings.disableProfileMusicAutoplay, "new media preferences preserve the default behavior")
+    check(settings.gifScrubber, "GIFs get a scrubber until it is switched off")
+    settings.gifScrubber = false
     settings.stickerUnlock = true
     settings.hideTrendingStickers = true
     settings.hideTrendingEmoji = true
@@ -93,6 +95,7 @@ if mode == "write" {
     print("settings behavior checks passed")
 } else if mode == "read" {
     check(settings.stickerUnlock && settings.hideTrendingStickers && settings.hideTrendingEmoji && settings.hideAIFeatures && settings.hidePhoneNumberInChatTitle && settings.disableProfileMusicAutoplay, "media preferences survive a process restart")
+    check(!settings.gifScrubber, "a switched-off GIF scrubber stays off after a process restart")
     check(settings.anonymousStickerPackData(accountId: 1001, fileId: 5001) == Data([1, 2, 3]), "sticker pack data survives process restart")
     check(settings.anonymousStickerPackData(accountId: 1003, fileId: Int64(DGSimpleSettings.anonymousStickerPackLimit) + 1) == Data([6]), "the newest sticker packs survive process restart")
     check(settings.hideBlockedMessages, "hiding blocked peers must survive process restart")

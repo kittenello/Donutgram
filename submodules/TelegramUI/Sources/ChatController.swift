@@ -658,6 +658,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var lastPostedScheduledMessagesToastTimestamp: Double = 0.0
     private var donutgramChannelSettingsObserver: NSObjectProtocol?
+    /// Donutgram: a sticker is being turned into a photo or a video for a chat that bans stickers.
+    var donutgramIsConvertingSticker = false
     var postedScheduledMessagesEventsDisposable: Disposable?
     
     var globalControlPanelsContext: GlobalControlPanelsContext?
@@ -2413,6 +2415,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return false
             }
+            // Donutgram: while a sticker is converted for a chat that bans stickers, a second tap must not send another one.
+            if strongSelf.donutgramIsConvertingSticker {
+                return false
+            }
             
             if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                 if let sourceView, let sourceRect {
@@ -2448,7 +2454,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if let _ = sourceView?.asyncdisplaykit_node as? ChatEmptyNodeStickerContentNode {
                 shouldAnimateMessageTransition = true
             }
-            if !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState), donutgramCanSendStickerAsMedia(peer: strongSelf.presentationInterfaceState.renderedPeer?.peer, file: fileReference.media) {
+            // Donutgram: a sticker that goes out as a photo or a video has no sticker to fly into the chat. Its send
+            // action (clearing the reply) waits for the converted message by correlation id instead of the next update.
+            let sendsStickerAsMedia = !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState) && donutgramCanSendStickerAsMedia(peer: strongSelf.presentationInterfaceState.renderedPeer?.peer, file: fileReference.media)
+            if sendsStickerAsMedia {
                 shouldAnimateMessageTransition = false
             }
             
@@ -2531,7 +2540,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 return current
                             })
                         }
-                    }, shouldAnimateMessageTransition ? correlationId : nil)
+                    }, shouldAnimateMessageTransition || sendsStickerAsMedia ? correlationId : nil)
                     
                     addToTransitionNodeIfNeeded()
                     let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)
@@ -2560,7 +2569,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 return current
                             })
                         }
-                    }, shouldAnimateMessageTransition ? correlationId : nil)
+                    }, shouldAnimateMessageTransition || sendsStickerAsMedia ? correlationId : nil)
                     
                     strongSelf.presentScheduleTimePicker(completion: { [weak self] result in
                         if let strongSelf = self {
@@ -2630,7 +2639,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                     return current
                                 })
                             }
-                        }, shouldAnimateMessageTransition ? correlationId : nil)
+                        }, shouldAnimateMessageTransition || sendsStickerAsMedia ? correlationId : nil)
 
                         addToTransitionNodeIfNeeded()
 
@@ -9370,16 +9379,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 let context = self.context
                 let outgoingMessages = self.transformEnqueueMessages(messages, postpone: postpone)
-                let stickerMediaPeer = canBypassRestrictions(chatPresentationInterfaceState: self.presentationInterfaceState) ? nil : self.presentationInterfaceState.renderedPeer?.peer
-                let _ = (donutgramPrepareStickerMedia(context: context, peer: stickerMediaPeer, messages: outgoingMessages)
-                |> deliverOnMainQueue
-                |> mapToSignal { [weak self] prepared -> Signal<[MessageId?], NoError> in
-                    guard let prepared else {
-                        if let self {
-                            self.present(textAlertController(context: context, title: nil, text: dgLocalized("Не удалось преобразовать стикер. Попробуйте ещё раз.", languageCode: self.presentationData.strings.baseLanguageCode), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-                        }
-                        return .complete()
-                    }
+                // Donutgram: stickers for a chat that bans them go out as photos or videos; other messages pass at once.
+                let _ = (self.donutgramMessagesWithStickerMedia(outgoingMessages)
+                |> mapToSignal { prepared -> Signal<[MessageId?], NoError> in
                     return enqueueMessages(account: context.account, peerId: peerId, messages: prepared)
                 }
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in

@@ -272,7 +272,7 @@ public extension EmojiPagerContentComponent {
             let dismissedTrendingEmojiPacksSet = Set(dismissedTrendingEmojiPacks ?? [])
             let featuredEmojiPacksSet = Set(featuredEmojiPacks.map(\.info.id.id))
             
-            if dismissedTrendingEmojiPacksSet != featuredEmojiPacksSet && hasTrending {
+            if dismissedTrendingEmojiPacksSet != featuredEmojiPacksSet && hasTrending && !DGSimpleSettings.shared.hideTrendingEmoji {
                 for featuredEmojiPack in featuredEmojiPacks {
                     if installedCollectionIds.contains(featuredEmojiPack.info.id) {
                         continue
@@ -1422,7 +1422,8 @@ public extension EmojiPagerContentComponent {
                     }
                 }
                 
-                if !isStandalone {
+                // Donutgram: «Скрыть популярные эмодзи» drops the trending packs from every emoji panel.
+                if !isStandalone && !DGSimpleSettings.shared.hideTrendingEmoji {
                     for featuredEmojiPack in featuredEmojiPacks {
                         if installedCollectionIds.contains(featuredEmojiPack.info.id) {
                             continue
@@ -1769,7 +1770,7 @@ public extension EmojiPagerContentComponent {
             let dismissedTrendingStickerPacksSet = Set(dismissedTrendingStickerPacks ?? [])
             let featuredStickerPacksSet = Set(featuredStickerPacks.map(\.info.id.id))
             
-            if !DGSimpleSettings.shared.onlyAddedStickers && dismissedTrendingStickerPacksSet != featuredStickerPacksSet {
+            if !DGSimpleSettings.shared.onlyAddedStickers && !DGSimpleSettings.shared.hideTrendingStickers && dismissedTrendingStickerPacksSet != featuredStickerPacksSet {
                 let featuredStickersConfiguration = featuredStickersConfiguration?.get(FeaturedStickersConfiguration.self)
                 for featuredStickerPack in featuredStickerPacks {
                     if installedCollectionIds.contains(featuredStickerPack.info.id) {
@@ -2064,7 +2065,7 @@ public extension EmojiPagerContentComponent {
                 }
             }
             
-            for featuredStickerPack in featuredStickerPacks {
+            for featuredStickerPack in (DGSimpleSettings.shared.hideTrendingStickers ? [] : featuredStickerPacks) {
                 if installedCollectionIds.contains(featuredStickerPack.info.id) {
                     continue
                 }

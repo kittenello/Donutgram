@@ -52,16 +52,35 @@ let webm = TelegramMediaFile(video: true)
 let document = TelegramMediaFile(sticker: false)
 check(!donutgramCanSendStickerAsMedia(peer: TelegramGroup(.banSendStickers)), "disabled by default")
 testSettings.stickerUnlock = true
-for mask in 0 ..< 32 {
-    let flags = TelegramChatBannedRightsFlags(rawValue: mask)
-    let peers: [Peer] = [TelegramChannel(flags), TelegramGroup(flags)]
+
+/// What a chat lets through, written out by hand instead of with the policy's own formula.
+struct Scenario {
+    let name: String
+    let banned: TelegramChatBannedRightsFlags
+    /// The sticker panel opens.
+    let panel: Bool
+    let staticSticker: Bool
+    let animatedSticker: Bool
+}
+
+let scenarios: [Scenario] = [
+    Scenario(name: "stickers allowed", banned: [], panel: false, staticSticker: false, animatedSticker: false),
+    Scenario(name: "photos banned, stickers allowed", banned: [.banSendPhotos], panel: false, staticSticker: false, animatedSticker: false),
+    Scenario(name: "only stickers banned", banned: [.banSendStickers], panel: true, staticSticker: true, animatedSticker: true),
+    Scenario(name: "stickers and photos banned", banned: [.banSendStickers, .banSendPhotos], panel: true, staticSticker: false, animatedSticker: true),
+    Scenario(name: "stickers and videos banned", banned: [.banSendStickers, .banSendVideos], panel: true, staticSticker: true, animatedSticker: false),
+    Scenario(name: "stickers, photos and videos banned", banned: [.banSendStickers, .banSendPhotos, .banSendVideos], panel: false, staticSticker: false, animatedSticker: false),
+    Scenario(name: "all media banned", banned: [.banSendStickers, .banSendMedia], panel: false, staticSticker: false, animatedSticker: false),
+    Scenario(name: "removed from the chat", banned: [.banSendStickers, .banReadMessages], panel: false, staticSticker: false, animatedSticker: false)
+]
+for scenario in scenarios {
+    let peers: [Peer] = [TelegramChannel(scenario.banned), TelegramGroup(scenario.banned)]
     for peer in peers {
-        let canUseMedia = mask & 1 != 0 && mask & 24 == 0
-        check(donutgramCanSendStickerAsMedia(peer: peer) == (canUseMedia && mask & 6 != 6), "keyboard permissions: \(mask)")
-        check(donutgramCanSendStickerAsMedia(peer: peer, file: photo) == (canUseMedia && mask & 2 == 0), "photo permissions: \(mask)")
-        check(donutgramCanSendStickerAsMedia(peer: peer, file: lottie) == (canUseMedia && mask & 4 == 0), "lottie permissions: \(mask)")
-        check(donutgramCanSendStickerAsMedia(peer: peer, file: webm) == (canUseMedia && mask & 4 == 0), "webm permissions: \(mask)")
-        check(!donutgramCanSendStickerAsMedia(peer: peer, file: document), "documents stay documents")
+        check(donutgramCanSendStickerAsMedia(peer: peer) == scenario.panel, "sticker panel: \(scenario.name)")
+        check(donutgramCanSendStickerAsMedia(peer: peer, file: photo) == scenario.staticSticker, "static sticker: \(scenario.name)")
+        check(donutgramCanSendStickerAsMedia(peer: peer, file: lottie) == scenario.animatedSticker, "lottie sticker: \(scenario.name)")
+        check(donutgramCanSendStickerAsMedia(peer: peer, file: webm) == scenario.animatedSticker, "webm sticker: \(scenario.name)")
+        check(!donutgramCanSendStickerAsMedia(peer: peer, file: document), "documents stay documents: \(scenario.name)")
     }
 }
 check(!donutgramCanSendStickerAsMedia(peer: nil), "unknown peers remain restricted")

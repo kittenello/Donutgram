@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory(prefix="donutgram-sticker-media-") as temporary
     settings = sorted((root / "Donutgram/DGSimpleSettings/Sources").glob("*.swift"))
     subprocess.run([swift, "-warnings-as-errors", *map(str, settings), str(main), "-o", str(executable)], check=True)
     subprocess.run([str(executable)], check=True)
-    changed = subprocess.check_output(["git", "diff", "--name-only", "origin/master...HEAD", "--", "*.swift"], cwd=root, text=True)
+    # A Swift file the change deletes has nothing to parse.
+    changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "origin/master...HEAD", "--", "*.swift"], cwd=root, text=True)
     for path in changed.splitlines():
         subprocess.run([swift, "-frontend", "-parse", str(root / path)], check=True)

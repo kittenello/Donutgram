@@ -1524,7 +1524,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 videoNode.removeFromSupernode()
             }
             
-            if disablePlayerControls {
+            // Donutgram: «Перемотка GIF» keeps the scrubber for GIFs, which upstream hides.
+            if disablePlayerControls || (isAnimated && !DGSimpleSettings.shared.gifScrubber) {
                 self.footerContentNode.scrubberView = nil
             }
             

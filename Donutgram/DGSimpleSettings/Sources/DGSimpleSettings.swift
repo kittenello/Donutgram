@@ -248,6 +248,7 @@ public final class DGSimpleSettings {
         static let hideAIFeatures = "donutgram.chats.hideAIFeatures"
         static let hidePhoneNumberInChatTitle = "donutgram.chats.hidePhoneNumberInTitle"
         static let disableProfileMusicAutoplay = "donutgram.media.disableProfileMusicAutoplay"
+        static let gifScrubber = "donutgram.media.gifScrubber"
         static let hideBirthdayNotifications = "donutgram.appearance.hideBirthdayNotifications"
         static let hideViaBot = "donutgram.chats.hideViaBot"
         static let hideBotAutomation = "donutgram.chats.hideBotAutomation"
@@ -1229,6 +1230,11 @@ public final class DGSimpleSettings {
     public var hideAIFeatures: Bool { get { bool(Key.hideAIFeatures) } set { setBool(newValue, Key.hideAIFeatures) } }
     public var hidePhoneNumberInChatTitle: Bool { get { bool(Key.hidePhoneNumberInChatTitle) } set { setBool(newValue, Key.hidePhoneNumberInChatTitle) } }
     public var disableProfileMusicAutoplay: Bool { get { bool(Key.disableProfileMusicAutoplay) } set { setBool(newValue, Key.disableProfileMusicAutoplay) } }
+    /// «Перемотка GIF», on by default: the media viewer gives GIFs a scrubber, as videos have.
+    public var gifScrubber: Bool {
+        get { self.defaults.object(forKey: Key.gifScrubber) == nil ? true : bool(Key.gifScrubber) }
+        set { setBool(newValue, Key.gifScrubber) }
+    }
     public var hideBirthdayNotifications: Bool { get { bool(Key.hideBirthdayNotifications) } set { setBool(newValue, Key.hideBirthdayNotifications) } }
     public var hideViaBot: Bool { get { bool(Key.hideViaBot) } set { setBool(newValue, Key.hideViaBot) } }
     public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }

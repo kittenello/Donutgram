@@ -28,6 +28,8 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
     
     private var accountInUseDisposable: Disposable?
     
+    var donutgramDismissed: (() -> Void)?
+
     init(
         context: AccountContext,
         chatLocation: ChatLocation,
@@ -61,6 +63,8 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
     
     deinit {
         self.accountInUseDisposable?.dispose()
+        // A screen removed without `dismiss` still reports that it closed.
+        self.donutgramDismissed?()
     }
     
     override public func loadDisplayNode() {
@@ -259,6 +263,9 @@ final class OverlayAudioPlayerControllerImpl: ViewController, OverlayAudioPlayer
     }
     
     override public func dismiss(completion: (() -> Void)? = nil) {
+        let donutgramDismissed = self.donutgramDismissed
+        self.donutgramDismissed = nil
+        donutgramDismissed?()
         self.controllerNode.animateOut(completion: { [weak self] in
             if let _ = self?.navigationController {
                 self?.dismiss(animated: false, completion: nil)

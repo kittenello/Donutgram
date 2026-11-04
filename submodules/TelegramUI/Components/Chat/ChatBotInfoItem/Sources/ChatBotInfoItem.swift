@@ -575,7 +575,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
             id: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Local, id: 0),
             globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0,
             flags: [], tags: [], globalTags: [], localTags: [], customTags: [],
-            forwardInfo: nil, author: nil, text: "", attributes: [], media: [media],
+            forwardInfo: nil, author: item.peer, text: "", attributes: [], media: [media],
             peers: [:], associatedMessages: [:], associatedMessageIds: [],
             associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]
         )

@@ -7,9 +7,14 @@ import TelegramCore
 import AccountContext
 import AnimationCache
 import EmojiTextAttachmentView
+import OverlayStatusController
+import PresentationDataUtils
+import ChatPresentationInterfaceState
+import DGSimpleSettings
 
 private let donutgramStickerExportQueue = DispatchQueue(label: "donutgram.sticker-export", qos: .userInitiated)
 
+/// The frame on white: a photo and an H.264 video have no alpha channel.
 private func donutgramStickerFrameImage(_ frame: AnimationCacheItemFrame) -> UIImage? {
     guard case let .rgba(data, width, height, bytesPerRow) = frame.format,
         width > 0, height > 0, bytesPerRow >= width * 4, data.count >= height * bytesPerRow,
@@ -24,11 +29,13 @@ private func donutgramStickerFrameImage(_ frame: AnimationCacheItemFrame) -> UII
     guard let image = context.generateImage()?.cgImage else {
         return nil
     }
-    return generateImage(CGSize(width: width, height: height), opaque: true, scale: 1.0, rotatedContext: { size, context in
+    // `contextGenerator` draws in Core Graphics coordinates, where `draw` keeps the frame upright. The y axis of
+    // `rotatedContext` is flipped, so the same `draw` there sends the sticker upside down.
+    return generateImage(CGSize(width: width, height: height), contextGenerator: { size, context in
         context.setFillColor(UIColor.white.cgColor)
         context.fill(CGRect(origin: .zero, size: size))
         context.draw(image, in: CGRect(origin: .zero, size: size))
-    })
+    }, opaque: true, scale: 1.0)
 }
 
 private func donutgramStickerVideo(context: AccountContext, item: AnimationCacheItem, size: CGSize) -> Signal<AnyMediaReference?, NoError> {
@@ -204,35 +211,162 @@ private func donutgramStickerMedia(context: AccountContext, peerId: EnginePeer.I
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
 }
 
-func donutgramPrepareStickerMedia(context: AccountContext, peer: EngineRawPeer?, messages: [EnqueueMessage]) -> Signal<[EnqueueMessage]?, NoError> {
-    guard let peer, donutgramCanSendStickerAsMedia(peer: peer), messages.contains(where: { message in
-        if case let .message(_, _, _, reference, _, _, _, _, _, _) = message, let file = reference?.media as? TelegramMediaFile {
-            return file.isSticker
+private func donutgramStickerFile(_ message: EnqueueMessage) -> FileMediaReference? {
+    if case let .message(_, _, _, reference?, _, _, _, _, _, _) = message, let fileReference = reference.concrete(TelegramMediaFile.self), fileReference.media.isSticker {
+        return fileReference
+    }
+    return nil
+}
+
+/// Whether `messages` hold a sticker that `peer` takes only as a photo or a video.
+func donutgramStickerMessagesNeedMedia(peer: EngineRawPeer?, messages: [EnqueueMessage]) -> Bool {
+    guard let peer, donutgramCanSendStickerAsMedia(peer: peer) else {
+        return false
+    }
+    return messages.contains(where: { donutgramStickerFile($0) != nil })
+}
+
+enum DonutgramStickerMediaResult {
+    /// The messages to enqueue, and the stickers that went out as photos or videos.
+    case ready(messages: [EnqueueMessage], convertedStickers: [FileMediaReference])
+    /// The chat bans what a sticker would become: photos for a static one, videos for an animated one.
+    case notAllowed
+    case failed
+}
+
+func donutgramPrepareStickerMedia(context: AccountContext, peer: EngineRawPeer, messages: [EnqueueMessage]) -> Signal<DonutgramStickerMediaResult, NoError> {
+    if messages.contains(where: { message in
+        if let file = donutgramStickerFile(message) {
+            return !donutgramCanSendStickerAsMedia(peer: peer, file: file.media)
         }
         return false
-    }) else {
-        return .single(messages)
+    }) {
+        return .single(.notAllowed)
     }
-    return combineLatest(messages.map { message -> Signal<EnqueueMessage?, NoError> in
-        guard case let .message(text, attributes, inlineStickers, reference?, threadId, replyId, storyId, groupingKey, correlationId, _) = message,
-            let fileReference = reference.concrete(TelegramMediaFile.self), fileReference.media.isSticker else {
-            return .single(message)
-        }
-        let file = fileReference.media
-        guard donutgramCanSendStickerAsMedia(peer: peer, file: file) else {
-            return .single(nil)
+    return combineLatest(messages.map { message -> Signal<DonutgramPreparedStickerMessage?, NoError> in
+        guard case let .message(text, attributes, inlineStickers, _, threadId, replyId, storyId, groupingKey, correlationId, bubbleUp) = message, let fileReference = donutgramStickerFile(message) else {
+            return .single(DonutgramPreparedStickerMessage(message: message, convertedSticker: nil))
         }
         return donutgramStickerMedia(context: context, peerId: peer.id, file: fileReference)
-        |> map { converted -> EnqueueMessage? in
+        |> map { converted -> DonutgramPreparedStickerMessage? in
             guard let converted else {
                 return nil
             }
-            let attributes = attributes.filter { !($0 is OutgoingChatContextResultMessageAttribute) && !($0 is InlineBotMessageAttribute) && !($0 is EmojiSearchQueryMessageAttribute) }
-            return .message(text: text, attributes: attributes, inlineStickers: inlineStickers, mediaReference: converted, threadId: threadId, replyToMessageId: replyId, replyToStoryId: storyId, localGroupingKey: groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
+            // The emoji-search query belongs to a sticker; the pack still moves up, as after a usual sticker.
+            let attributes = attributes.filter { !($0 is EmojiSearchQueryMessageAttribute) }
+            let convertedMessage: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: inlineStickers, mediaReference: converted, threadId: threadId, replyToMessageId: replyId, replyToStoryId: storyId, localGroupingKey: groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUp)
+            return DonutgramPreparedStickerMessage(message: convertedMessage, convertedSticker: fileReference)
         }
     })
-    |> map { results -> [EnqueueMessage]? in
-        let messages = results.compactMap { $0 }
-        return messages.count == results.count ? messages : nil
+    |> map { results -> DonutgramStickerMediaResult in
+        var messages: [EnqueueMessage] = []
+        var convertedStickers: [FileMediaReference] = []
+        for result in results {
+            guard let result else {
+                return .failed
+            }
+            messages.append(result.message)
+            if let convertedSticker = result.convertedSticker {
+                convertedStickers.append(convertedSticker)
+            }
+        }
+        return .ready(messages: messages, convertedStickers: convertedStickers)
+    }
+}
+
+private struct DonutgramPreparedStickerMessage {
+    let message: EnqueueMessage
+    /// The sticker this message carries as a photo or a video instead.
+    let convertedSticker: FileMediaReference?
+}
+
+extension ChatControllerImpl {
+    /// Donutgram (`stickerUnlock`): a sticker for a chat that bans stickers goes out as a photo or a video; other
+    /// messages pass at once. While a sticker converts, a progress overlay covers the chat, so a second tap cannot
+    /// send it twice and no later message overtakes it. Tapping the overlay cancels the send.
+    func donutgramMessagesWithStickerMedia(_ messages: [EnqueueMessage]) -> Signal<[EnqueueMessage], NoError> {
+        let chatPeer = canBypassRestrictions(chatPresentationInterfaceState: self.presentationInterfaceState) ? nil : self.presentationInterfaceState.renderedPeer?.peer
+        guard let peer = chatPeer, donutgramStickerMessagesNeedMedia(peer: peer, messages: messages) else {
+            return .single(messages)
+        }
+        let context = self.context
+        let presentationData = self.presentationData
+        let correlationIds = Set(messages.compactMap { message -> Int64? in
+            if case let .message(_, _, _, _, _, _, _, _, correlationId, _) = message {
+                return correlationId
+            }
+            return nil
+        })
+        return Signal<[EnqueueMessage], NoError> { [weak self] subscriber in
+            self?.donutgramIsConvertingSticker = true
+            var cancelImpl: (() -> Void)?
+            let progressDisposable = (Signal<Never, NoError> { [weak self] _ in
+                let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
+                    cancelImpl?()
+                }))
+                self?.present(controller, in: .window(.root))
+                return ActionDisposable { [weak controller] in
+                    Queue.mainQueue().async {
+                        controller?.dismiss()
+                    }
+                }
+            }
+            |> runOn(Queue.mainQueue())
+            |> delay(0.15, queue: Queue.mainQueue())).startStrict()
+            let conversionDisposable = MetaDisposable()
+            let isFinished = Atomic<Bool>(value: false)
+            let finish: () -> Void = { [weak self] in
+                if isFinished.swap(true) {
+                    return
+                }
+                progressDisposable.dispose()
+                self?.donutgramIsConvertingSticker = false
+            }
+            cancelImpl = { [weak self] in
+                conversionDisposable.dispose()
+                finish()
+                self?.donutgramDropPendingSendAction(correlationIds: correlationIds)
+                subscriber.putCompletion()
+            }
+            conversionDisposable.set((donutgramPrepareStickerMedia(context: context, peer: peer, messages: messages)
+            |> deliverOnMainQueue).startStrict(next: { [weak self] result in
+                finish()
+                switch result {
+                case let .ready(prepared, convertedStickers):
+                    // A sent sticker reaches «Недавние» from the sent message; a photo or a video does not, so it is added here.
+                    for file in convertedStickers where file.media.fileId.namespace == Namespaces.Media.CloudFile {
+                        context.engine.stickers.addRecentlyUsedSticker(fileReference: file)
+                    }
+                    subscriber.putNext(prepared)
+                case .notAllowed:
+                    if let self {
+                        self.donutgramDropPendingSendAction(correlationIds: correlationIds)
+                        self.interfaceInteraction?.displayRestrictedInfo(.stickers, .alert)
+                    }
+                case .failed:
+                    if let self {
+                        self.donutgramDropPendingSendAction(correlationIds: correlationIds)
+                        self.present(textAlertController(context: context, title: nil, text: dgLocalized("Не удалось преобразовать стикер. Попробуйте ещё раз.", languageCode: presentationData.strings.baseLanguageCode), actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    }
+                }
+                subscriber.putCompletion()
+            }))
+            return ActionDisposable {
+                conversionDisposable.dispose()
+                Queue.mainQueue().async {
+                    finish()
+                }
+            }
+        }
+        |> runOn(Queue.mainQueue())
+    }
+
+    /// The send action that waits for these messages (clearing the reply, collapsing the input) never fires when the
+    /// sticker is not sent, so it is dropped and the reply stays for another try.
+    private func donutgramDropPendingSendAction(correlationIds: Set<Int64>) {
+        if let (_, pendingCorrelationId) = self.chatDisplayNode.historyNode.layoutActionOnViewTransition, let correlationId = pendingCorrelationId, correlationIds.contains(correlationId) {
+            self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
+            self.layoutActionOnViewTransitionAction = nil
+        }
     }
 }

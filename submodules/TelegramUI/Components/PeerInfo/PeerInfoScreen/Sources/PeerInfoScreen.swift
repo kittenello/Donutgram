@@ -3157,13 +3157,17 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             let canReorder = peerId == self.context.account.peerId
             var playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
             
+            // Donutgram: «Не включать музыку автоматически» opens the list on a paused player.
+            let pausesProfileMusic: Bool
             if let (account, stateOrLoading, _) = accountStateAndType, self.context.account.peerId == account.peerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
                 if let itemId = state.item.id as? PeerMessagesMediaPlaylistItemId {
                     initialId = itemId.messageId.id
                 }
                 playlistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
+                pausesProfileMusic = false
             } else {
-                self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(DGSimpleSettings.shared.disableProfileMusicAutoplay ? .pause : .play))
+                pausesProfileMusic = DGSimpleSettings.shared.disableProfileMusicAutoplay
+                self.context.sharedContext.mediaManager.setPlaylist((self.context, PeerMessagesMediaPlaylist(context: self.context, location: playlistLocation, chatLocationContextHolder: nil)), type: .music, control: .playback(pausesProfileMusic ? .pause : .play))
             }
             
             Queue.mainQueue().after(0.1) {
@@ -3176,6 +3180,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     playlistLocation: playlistLocation,
                     parentNavigationController: self.controller?.navigationController as? NavigationController
                 )
+                if pausesProfileMusic {
+                    // Closed without playing anything: the paused player goes too, so no music bar is left behind.
+                    musicController.donutgramDismissed = donutgramStopUnplayedProfileMusic(context: self.context, peerId: peerId)
+                }
                 musicController.navigationPresentation = .flatModal
                 self.controller?.push(musicController)
             }
