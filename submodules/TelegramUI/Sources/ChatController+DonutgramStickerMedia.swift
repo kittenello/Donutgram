@@ -185,7 +185,7 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
             subscriber.putCompletion()
         })
         let dataDisposable = (context.engine.resources.data(resource: EngineMediaResource(file.media.resource))
-        |> filter { $0.complete }
+        |> filter { $0.isComplete }
         |> take(1)
         |> deliverOn(Queue.concurrentDefaultQueue())
         |> map { resourceData -> AnyMediaReference? in
