@@ -27,6 +27,10 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Загрузка истории операций…": "Loading transaction history…",
+    "Не удалось загрузить кошелёк": "Could not load the wallet",
+    "Не удалось загрузить историю операций": "Could not load transaction history",
+    "История операций пока пуста": "No transactions yet",
     "МУЗЫКА И БАЛАНС": "MUSIC AND BALANCE",
     "Компактные музыка и баланс": "Compact Music and Balance",
     "Песня и баланс показаны рядом под статусом: исполнитель и название слева, баланс справа. Если есть только одна плашка, она по центру.": "Music and balance appear side by side below the status: artist and title on the left, balance on the right. A single pill is centered.",

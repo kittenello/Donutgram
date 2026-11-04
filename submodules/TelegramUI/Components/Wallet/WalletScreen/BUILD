@@ -12,6 +12,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGSimpleSettings:DGSimpleSettings",
+        "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/LottieBinding",
         "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/AsyncDisplayKit",

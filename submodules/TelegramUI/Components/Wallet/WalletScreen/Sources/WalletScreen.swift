@@ -35,6 +35,8 @@ import UndoUI
 import WalletAuthorizationUI
 import PasscodeCore
 import Markdown
+import DGSimpleSettings
+import PlainButtonComponent
 
 private let walletSectionOverscan: CGFloat = 100.0
 private let walletTransactionItemHeight: CGFloat = 79.0
@@ -782,6 +784,7 @@ private final class WalletScreenComponent: Component {
         private let collectiblesFooter = ComponentView<Empty>()
         private lazy var giftStickers = WalletGiftStickerCoordinator(host: self, scrollView: self.scrollView, grid: self.collectiblesSection)
         private let emptyTransactionsInfo = ComponentView<Empty>()
+        private let historyLoadingIndicator = UIActivityIndicatorView(style: .medium)
         private let emptyTransactionsFooter = ComponentView<Empty>()
         private let accountProtectionIcon = renderSettingsIcon(
             name: "Item List/Icons/Warning",
@@ -3302,6 +3305,11 @@ private final class WalletScreenComponent: Component {
                 self.selectedSection = .transactions
             }
             let hasEmptyTransactions = self.selectedSection == .transactions && transactions.isEmpty
+            let historyContent = WalletHistoryContentState.resolve(state: self.walletState, hasVisibleTransactions: !transactions.isEmpty)
+            if self.selectedSection != .transactions || historyContent != .loading {
+                self.historyLoadingIndicator.stopAnimating()
+                self.historyLoadingIndicator.removeFromSuperview()
+            }
 
             let headerLayout = self.updateHeader(
                 component: component,
@@ -3740,7 +3748,7 @@ private final class WalletScreenComponent: Component {
                 let titleColor = environment.theme.actionSheet.primaryTextColor
                 let textColor = environment.theme.actionSheet.secondaryTextColor
                 let accentColor = environment.theme.list.itemAccentColor
-                let emptyItems: [AnyComponentWithIdentity<Empty>] = [
+                var emptyItems: [AnyComponentWithIdentity<Empty>] = [
                     AnyComponentWithIdentity(
                         id: "instantTransfers",
                         component: AnyComponent(InfoParagraphComponent(
@@ -3779,7 +3787,42 @@ private final class WalletScreenComponent: Component {
                     )
                 ]
 
-                let emptyTransactionsOriginY = contentHeight + 36.0
+                var emptyTransactionsOriginY = contentHeight + 36.0
+                if historyContent != .intro {
+                    let title: String
+                    switch historyContent {
+                    case .loading: title = "Загрузка истории операций…"
+                    case .walletFailed: title = "Не удалось загрузить кошелёк"
+                    case .historyFailed: title = "Не удалось загрузить историю операций"
+                    case .empty: title = "История операций пока пуста"
+                    case .intro, .items: title = ""
+                    }
+                    let languageCode = environment.strings.baseLanguageCode
+                    emptyItems = [AnyComponentWithIdentity(id: "historyStatus", component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(string: dgLocalized(title, languageCode: languageCode), font: Font.regular(16.0), textColor: textColor)),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 0
+                    )))]
+                    if historyContent == .walletFailed || historyContent == .historyFailed {
+                        emptyItems.append(AnyComponentWithIdentity(id: "retry", component: AnyComponent(PlainButtonComponent(
+                            content: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Wallet_Retry, font: Font.semibold(17.0), textColor: accentColor)), horizontalAlignment: .center, maximumNumberOfLines: 1)),
+                            minSize: CGSize(width: cardWidth - 64.0, height: 44.0),
+                            contentInsets: UIEdgeInsets(top: 12.0, left: 0.0, bottom: 0.0, right: 0.0),
+                            action: { [weak self] in
+                                self?.component?.walletContext.retryHistory()
+                            }
+                        ))))
+                    }
+                    if historyContent == .loading {
+                        self.historyLoadingIndicator.color = textColor
+                        if self.historyLoadingIndicator.superview == nil {
+                            self.scrollView.addSubview(self.historyLoadingIndicator)
+                        }
+                        self.historyLoadingIndicator.startAnimating()
+                        transition.setFrame(view: self.historyLoadingIndicator, frame: CGRect(x: floor((availableSize.width - 20.0) * 0.5), y: emptyTransactionsOriginY, width: 20.0, height: 20.0))
+                        emptyTransactionsOriginY += 36.0
+                    }
+                }
                 self.emptyTransactionsInfo.parentState = state
                 let emptyTransactionsInfoSize = self.emptyTransactionsInfo.update(
                     transition: transition,
@@ -3813,65 +3856,69 @@ private final class WalletScreenComponent: Component {
                 }
                 contentHeight = emptyTransactionsOriginY + emptyTransactionsInfoSize.height
 
-                let url = environment.strings.Wallet_TermsText_URL
-                self.emptyTransactionsFooter.parentState = state
-                let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(
-                    transition: transition,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .markdown(text: environment.strings.Wallet_TermsText, attributes: MarkdownAttributes(
-                            body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: textColor),
-                            bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: textColor),
-                            link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: accentColor),
-                            linkAttribute: { contents in
-                                return (TelegramTextAttributes.URL, contents)
+                if historyContent == .intro {
+                    let url = environment.strings.Wallet_TermsText_URL
+                    self.emptyTransactionsFooter.parentState = state
+                    let emptyTransactionsFooterSize = self.emptyTransactionsFooter.update(
+                        transition: transition,
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .markdown(text: environment.strings.Wallet_TermsText, attributes: MarkdownAttributes(
+                                body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: textColor),
+                                bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: textColor),
+                                link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: accentColor),
+                                linkAttribute: { contents in
+                                    return (TelegramTextAttributes.URL, contents)
+                                }
+                            )),
+                            horizontalAlignment: .center,
+                            maximumNumberOfLines: 0,
+                            highlightColor: accentColor.withAlphaComponent(0.2),
+                            highlightAction: { attributes in
+                                if attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] != nil {
+                                    return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
+                                } else {
+                                    return nil
+                                }
+                            },
+                            tapAction: { [weak self] _, _ in
+                                self?.openTerms(url: url)
                             }
                         )),
-                        horizontalAlignment: .center,
-                        maximumNumberOfLines: 0,
-                        highlightColor: accentColor.withAlphaComponent(0.2),
-                        highlightAction: { attributes in
-                            if attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] != nil {
-                                return NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)
-                            } else {
-                                return nil
-                            }
-                        },
-                        tapAction: { [weak self] _, _ in
-                            self?.openTerms(url: url)
-                        }
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: cardWidth, height: 10000.0)
-                )
-                let emptyTransactionsFooterOriginY = max(
-                    contentHeight + 24.0,
-                    availableSize.height - environment.safeInsets.bottom - emptyTransactionsFooterSize.height - 16.0
-                )
-                if let emptyTransactionsFooterView = self.emptyTransactionsFooter.view {
-                    var wasVisible = true
-                    if emptyTransactionsFooterView.superview == nil {
-                        wasVisible = false
-                        self.scrollView.addSubview(emptyTransactionsFooterView)
-                    }
-                    if !transition.animation.isImmediate && !wasVisible {
-                        transition.animateAlpha(view: emptyTransactionsFooterView, from: 0.0, to: 1.0)
-                    } else {
-                        transition.setAlpha(view: emptyTransactionsFooterView, alpha: 1.0)
-                    }
-
-                    let layoutTransition: ComponentTransition = wasVisible ? contentLayoutTransition : .immediate
-                    layoutTransition.setFrame(
-                        view: emptyTransactionsFooterView,
-                        frame: CGRect(
-                            origin: CGPoint(
-                                x: floor(environment.safeInsets.left + (availableSize.width - environment.safeInsets.left - environment.safeInsets.right - emptyTransactionsFooterSize.width) * 0.5),
-                                y: emptyTransactionsFooterOriginY
-                            ),
-                            size: emptyTransactionsFooterSize
-                        )
+                        environment: {},
+                        containerSize: CGSize(width: cardWidth, height: 10000.0)
                     )
+                    let emptyTransactionsFooterOriginY = max(
+                        contentHeight + 24.0,
+                        availableSize.height - environment.safeInsets.bottom - emptyTransactionsFooterSize.height - 16.0
+                    )
+                    if let emptyTransactionsFooterView = self.emptyTransactionsFooter.view {
+                        var wasVisible = true
+                        if emptyTransactionsFooterView.superview == nil {
+                            wasVisible = false
+                            self.scrollView.addSubview(emptyTransactionsFooterView)
+                        }
+                        if !transition.animation.isImmediate && !wasVisible {
+                            transition.animateAlpha(view: emptyTransactionsFooterView, from: 0.0, to: 1.0)
+                        } else {
+                            transition.setAlpha(view: emptyTransactionsFooterView, alpha: 1.0)
+                        }
+
+                        let layoutTransition: ComponentTransition = wasVisible ? contentLayoutTransition : .immediate
+                        layoutTransition.setFrame(
+                            view: emptyTransactionsFooterView,
+                            frame: CGRect(
+                                origin: CGPoint(
+                                    x: floor(environment.safeInsets.left + (availableSize.width - environment.safeInsets.left - environment.safeInsets.right - emptyTransactionsFooterSize.width) * 0.5),
+                                    y: emptyTransactionsFooterOriginY
+                                ),
+                                size: emptyTransactionsFooterSize
+                            )
+                        )
+                    }
+                    contentHeight = emptyTransactionsFooterOriginY + emptyTransactionsFooterSize.height
+                } else {
+                    self.hideEmptyTransactionsFooter(transition: transition)
                 }
-                contentHeight = emptyTransactionsFooterOriginY + emptyTransactionsFooterSize.height
                 
                 transition.setBackgroundColor(view: self, color: environment.theme.list.plainBackgroundColor)
             }

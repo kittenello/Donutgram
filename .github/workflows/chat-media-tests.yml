@@ -9,9 +9,12 @@ on:
       - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
       - 'submodules/ChatListUI/**'
+      - 'submodules/WalletContext/**'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Wallet/Wallet.swift'
       - 'submodules/TelegramUI/**'
       - 'submodules/GalleryUI/Sources/Items/UniversalVideoGalleryItem.swift'
       - 'Tests/sticker_media/**'
+      - 'Tests/wallet_history/**'
       - '.github/workflows/chat-media-tests.yml'
   workflow_dispatch:
 
@@ -28,3 +31,5 @@ jobs:
           fetch-depth: 0
       - name: Check sticker permissions and empty reply drafts
         run: python3 Tests/sticker_media/run.py
+      - name: Check wallet history loading and failures
+        run: python3 Tests/wallet_history/run.py

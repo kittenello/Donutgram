@@ -2360,7 +2360,8 @@ extension WalletContextImpl {
                 offset: transactions.offset,
                 canLoadMore: transactions.canLoadMore,
                 isLoadingMore: isLoadingMore,
-                error: error
+                error: error,
+                hasLoaded: transactions.hasLoaded
             ),
             pendingTransfers: self.currentState.pendingTransfers,
             activeOperation: self.currentState.activeOperation

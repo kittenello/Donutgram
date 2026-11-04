@@ -424,7 +424,8 @@ actor WalletContextImpl {
                 offset: cachedTransactions.count,
                 canLoadMore: false,
                 isLoadingMore: false,
-                error: nil
+                error: nil,
+                hasLoaded: !cachedTransactions.isEmpty
             ),
             collectibles: CollectiblesState(
                 items: Array(storedState.collectibles.prefix(walletTransactionFetchLimit)),
@@ -597,6 +598,20 @@ actor WalletContextImpl {
                     balance: .stale(previous: self.currentState.balance.currentValue, error: .network,
                         lastSuccessfulAt: self.balanceLastSuccessfulAt),
                     transactions: self.currentState.transactions,
+                    pendingTransfers: self.currentState.pendingTransfers,
+                    activeOperation: self.currentState.activeOperation
+                )
+            }
+            if !self.isShutdown,
+               self.serverStateMutationRevision == revision,
+               self.latestWalletStateRevision == walletStateRevision,
+               self.activationGeneration == generation,
+               case .restoring = self.currentState.phase {
+                let transactions = self.currentState.transactions
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: TransactionsState(items: transactions.items, offset: transactions.offset, canLoadMore: transactions.canLoadMore, isLoadingMore: transactions.isLoadingMore, error: .network, hasLoaded: transactions.hasLoaded),
                     pendingTransfers: self.currentState.pendingTransfers,
                     activeOperation: self.currentState.activeOperation
                 )
@@ -1197,7 +1212,8 @@ actor WalletContextImpl {
                     transaction.transactionHash.flatMap { presentationIds[$0] } ?? transaction.presentationId)
             },
             offset: transactions.offset, canLoadMore: transactions.canLoadMore,
-            isLoadingMore: transactions.isLoadingMore, error: transactions.error
+            isLoadingMore: transactions.isLoadingMore, error: transactions.error,
+            hasLoaded: transactions.hasLoaded
         )
         let walletAddress: String?
         if case let .ready(_, _, _, address, _, _)? = self.serverWalletState {

@@ -1153,7 +1153,8 @@ struct WalletStreamingPresentationOverlay {
                 offset: state.transactions.offset,
                 canLoadMore: state.transactions.canLoadMore,
                 isLoadingMore: state.transactions.isLoadingMore,
-                error: state.transactions.error
+                error: state.transactions.error,
+                hasLoaded: state.transactions.hasLoaded
             )
         }
         return WalletContext.State(
