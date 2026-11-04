@@ -605,7 +605,14 @@ struct ChatListContactPeer {
     }
 }
 
-func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, fullyHideArchive: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
+private func chatListDraftState(_ draft: EngineChatList.Draft?, hideEmptyReplies: Bool) -> ChatListItemContent.DraftState? {
+    guard let draft, !hideEmptyReplies || !draft.isEmptyReply else {
+        return nil
+    }
+    return ChatListItemContent.DraftState(draft: draft)
+}
+
+func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, fullyHideArchive: Bool, hideEmptyReplyDrafts: Bool, displayArchiveIntro: Bool, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
     var groupItems = view.groupItems
     if isMainTab && state.archiveStoryState != nil && groupItems.isEmpty {
         groupItems.append(EngineChatList.GroupItem(
@@ -702,10 +709,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
             updatedCombinedReadState = nil
         }
 
-        var draftState: ChatListItemContent.DraftState?
-        if let draft = entry.draft {
-            draftState = ChatListItemContent.DraftState(draft: draft)
-        }
+        let draftState = chatListDraftState(entry.draft, hideEmptyReplies: hideEmptyReplyDrafts)
                 
         var hasActiveRevealControls = false
         if let peerId {
@@ -877,7 +881,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     case let .psa(type, message):
                         promoInfo = .psa(type: type, message: message)
                     }
-                    let draftState = item.item.draft.flatMap(ChatListItemContent.DraftState.init)
+                    let draftState = chatListDraftState(item.item.draft, hideEmptyReplies: hideEmptyReplyDrafts)
                     
                     let peerId = index.messageIndex.id.peerId
                     let isSelected = state.selectedPeerIds.contains(peerId)

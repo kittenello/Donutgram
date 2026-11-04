@@ -194,7 +194,10 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
             .info(25, 4, "Если стикеры запрещены, обычные отправляются картинками, анимированные — видео. Отправка фото или видео должна быть разрешена в чате."),
             .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
             .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
-            .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram.")
+            .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram."),
+            .header(40, 5, "КОММЕНТАРИИ"),
+            .toggle(41, 5, "commentsWithoutJoining", "Писать в комментарии без вступления", s.commentsWithoutJoining, true),
+            .info(42, 5, "Открывает поле ввода в комментариях без проверки вступления в группу. Если вступление требует сервер Telegram, отправить комментарий не получится.")
         ]
         return result
     }, restartRequiredKeys: ["bypassContentRestrictions"], toggle: { key, value in
@@ -204,6 +207,7 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
         case "saveProtectedStories": s.saveProtectedStories = value
         case "gifUnlock": s.gifUnlock = value
         case "stickerUnlock": s.stickerUnlock = value
+        case "commentsWithoutJoining": s.commentsWithoutJoining = value
         case "bypassContentRestrictions": s.bypassContentRestrictions = value
         default: break
         }
@@ -234,6 +238,8 @@ func dgMainScreenSettingsController(context: AccountContext, focusKey: String? =
             .toggle(15, 1, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
             .toggle(16, 1, "avatarGlow", "Свечение аватарок", s.avatarGlow, true),
             .info(17, 1, "Индикатор онлайна — точка «в сети» у аватарок в списке чатов и в группах."),
+            .toggle(18, 1, "hideEmptyReplyDrafts", "Скрывать черновик пустого ответа", s.hideEmptyReplyDrafts, true),
+            .info(19, 1, "Если выбран ответ, но текст не введён, в списке чатов видно последнее сообщение вместо «Черновик». Выбранный ответ сохраняется."),
             .header(20, 2, "ВКЛАДКИ"),
             .tabBarPreview(21, 2, s.tabBarLayout),
             .toggle(22, 2, "hideTabBar", "Скрыть панель вкладок", s.hideTabBar, true),
@@ -252,6 +258,7 @@ func dgMainScreenSettingsController(context: AccountContext, focusKey: String? =
         case "hideSearch": s.chatListHideSearch = value
         case "foldersAtBottom": s.chatListFoldersAtBottom = value
         case "hideArchive": s.hideArchive = value
+        case "hideEmptyReplyDrafts": s.hideEmptyReplyDrafts = value
         case "hideStories": s.hideStories = value
         case "disableStoryCameraSwipe": s.disableStoryCameraSwipe = value
         case "onlineIndicator": s.showOnlineIndicator = value

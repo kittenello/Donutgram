@@ -109,6 +109,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("saveProtectedStories", "Сохранять защищённые истории", "ЗАЩИЩЁННОЕ СОДЕРЖИМОЕ"),
         ("gifUnlock", "Обход блокировок GIF", "GIF"),
         ("stickerUnlock", "Обход блокировки стикеров", "СТИКЕРЫ"),
+        ("commentsWithoutJoining", "Писать в комментарии без вступления", "КОММЕНТАРИИ"),
         ("bypassContentRestrictions", "Обход ограничений контента", "ОГРАНИЧЕННЫЙ КОНТЕНТ")
     ])
     add("shadow-ban", "Теневой бан", [
@@ -123,6 +124,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideSearch", "Скрыть строку поиска", "ЗАГОЛОВОК"),
         ("foldersAtBottom", "Папки внизу", "СПИСОК"),
         ("hideArchive", "Скрыть архив из списка чатов", "СПИСОК"),
+        ("hideEmptyReplyDrafts", "Скрывать черновик пустого ответа", "СПИСОК"),
         ("hideStories", "Скрыть истории", "СПИСОК"),
         ("disableStoryCameraSwipe", "Отключить камеру по свайпу", "СПИСОК"),
         ("onlineIndicator", "Показывать индикатор онлайна", "СПИСОК"),

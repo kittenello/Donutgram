@@ -269,7 +269,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 isMember = true
             case .left:
                 if case let .replyThread(message) = chatPresentationInterfaceState.chatLocation {
-                    if !message.isForumPost && !channel.flags.contains(.joinToSend) {
+                    if !message.isForumPost && (!channel.flags.contains(.joinToSend) || DGSimpleSettings.shared.commentsWithoutJoining) {
                         isMember = true
                     }
                 }

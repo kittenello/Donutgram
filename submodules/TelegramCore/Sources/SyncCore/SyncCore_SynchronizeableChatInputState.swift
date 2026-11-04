@@ -29,6 +29,13 @@ public struct SynchronizeableChatInputState: Codable, Equatable {
     public let messageEffectId: Int64?
     public let suggestedPost: SuggestedPost?
 
+    public var isEmptyReply: Bool {
+        if case let .textEntities(text, entities) = self.content {
+            return self.replySubject != nil && text.isEmpty && entities.isEmpty && self.messageEffectId == nil && self.suggestedPost == nil
+        }
+        return false
+    }
+
     /// Derived flat-text view of `content` (old-client / cloud fallback).
     public var text: String {
         switch self.content {

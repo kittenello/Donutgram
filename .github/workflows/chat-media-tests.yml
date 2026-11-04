@@ -6,6 +6,9 @@ on:
     paths:
       - 'Donutgram/**'
       - 'submodules/TelegramCore/Sources/Donutgram/DonutgramStickerMedia.swift'
+      - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
+      - 'submodules/ChatListUI/**'
       - 'submodules/TelegramUI/**'
       - 'submodules/GalleryUI/Sources/Items/UniversalVideoGalleryItem.swift'
       - 'Tests/sticker_media/**'
@@ -23,5 +26,5 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Check sticker photo and video permissions
+      - name: Check sticker permissions and empty reply drafts
         run: python3 Tests/sticker_media/run.py

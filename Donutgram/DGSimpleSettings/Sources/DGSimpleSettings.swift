@@ -181,6 +181,8 @@ public final class DGSimpleSettings {
         static let anonymousStickerSending = "donutgram.chats.anonymousStickerSending"
         static let gifUnlock = "donutgram.general.gifUnlock"
         static let stickerUnlock = "donutgram.general.stickerUnlock"
+        static let commentsWithoutJoining = "donutgram.general.commentsWithoutJoining"
+        static let hideEmptyReplyDrafts = "donutgram.chats.hideEmptyReplyDrafts"
         static let keepBannedChats = "donutgram.general.keepBannedChats"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
@@ -1224,6 +1226,8 @@ public final class DGSimpleSettings {
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
     public var stickerUnlock: Bool { get { bool(Key.stickerUnlock) } set { setBool(newValue, Key.stickerUnlock) } }
+    public var commentsWithoutJoining: Bool { get { bool(Key.commentsWithoutJoining) } set { setBool(newValue, Key.commentsWithoutJoining) } }
+    public var hideEmptyReplyDrafts: Bool { get { bool(Key.hideEmptyReplyDrafts) } set { setBool(newValue, Key.hideEmptyReplyDrafts) } }
     public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
     public var hideTrendingStickers: Bool { get { bool(Key.hideTrendingStickers) } set { setBool(newValue, Key.hideTrendingStickers) } }
     public var hideTrendingEmoji: Bool { get { bool(Key.hideTrendingEmoji) } set { setBool(newValue, Key.hideTrendingEmoji) } }

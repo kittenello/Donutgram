@@ -37,6 +37,9 @@ if mode == "write" {
         check(settings.shouldShowBotAutomation() == !hidden, "the bot automation panel follows its own switch")
     }
     settings.hidePaidReactions = true
+    check(!settings.commentsWithoutJoining && !settings.hideEmptyReplyDrafts, "comment and empty reply switches are opt-in")
+    settings.commentsWithoutJoining = true
+    settings.hideEmptyReplyDrafts = true
     check(!settings.stickerUnlock && !settings.hideTrendingStickers && !settings.hideTrendingEmoji && !settings.hideAIFeatures && !settings.hidePhoneNumberInChatTitle && !settings.disableProfileMusicAutoplay, "new media preferences preserve the default behavior")
     check(settings.gifScrubber, "GIFs get a scrubber until it is switched off")
     settings.gifScrubber = false
@@ -94,6 +97,7 @@ if mode == "write" {
     defaults.synchronize()
     print("settings behavior checks passed")
 } else if mode == "read" {
+    check(settings.commentsWithoutJoining && settings.hideEmptyReplyDrafts, "comment and empty reply switches survive a process restart")
     check(settings.stickerUnlock && settings.hideTrendingStickers && settings.hideTrendingEmoji && settings.hideAIFeatures && settings.hidePhoneNumberInChatTitle && settings.disableProfileMusicAutoplay, "media preferences survive a process restart")
     check(!settings.gifScrubber, "a switched-off GIF scrubber stays off after a process restart")
     check(settings.anonymousStickerPackData(accountId: 1001, fileId: 5001) == Data([1, 2, 3]), "sticker pack data survives process restart")
