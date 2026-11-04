@@ -676,7 +676,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         if let translationState = chatPresentationInterfaceState.translationState, translationState.isEnabled {
                             translateToLang = translationState.toLang
                         }
-                        if controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
+                        if !DGSimpleSettings.shared.hideAIFeatures, controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
                             storeMessageTextInPasteboard(summary.text, entities: summary.entities)
                         } else if let translateToLang, let translation = message.attributes.first(where: { ($0 as? TranslationMessageAttribute)?.toLang == translateToLang }) as? TranslationMessageAttribute, !translation.text.isEmpty {
                             storeMessageTextInPasteboard(translation.text, entities: translation.entities)
@@ -1401,7 +1401,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                                         if let translationState = chatPresentationInterfaceState.translationState, translationState.isEnabled {
                                             translateToLang = translationState.toLang
                                         }
-                                        if controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
+                                        if !DGSimpleSettings.shared.hideAIFeatures, controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
                                             storeMessageTextInPasteboard(summary.text, entities: summary.entities)
                                         } else if let translateToLang, let translation = message.attributes.first(where: { ($0 as? TranslationMessageAttribute)?.toLang == translateToLang }) as? TranslationMessageAttribute, !translation.text.isEmpty {
                                             storeMessageTextInPasteboard(translation.text, entities: translation.entities)
@@ -1499,7 +1499,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         if let translationState = chatPresentationInterfaceState.translationState, translationState.isEnabled {
                             translateToLang = translationState.toLang
                         }
-                        if controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
+                        if !DGSimpleSettings.shared.hideAIFeatures, controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
                             text = summary.text
                         } else if let translateToLang, let translation = message.attributes.first(where: { ($0 as? TranslationMessageAttribute)?.toLang == translateToLang }) as? TranslationMessageAttribute, !translation.text.isEmpty {
                             text = translation.text
@@ -2469,7 +2469,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                             if let translationState = chatPresentationInterfaceState.translationState, translationState.isEnabled {
                                 translateToLang = translationState.toLang
                             }
-                            if controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
+                            if !DGSimpleSettings.shared.hideAIFeatures, controllerInteraction.summarizedMessageIds.contains(message.id), let attribute = message.attributes.first(where: { $0 is SummarizationMessageAttribute }) as? SummarizationMessageAttribute, let summary = attribute.summaryForLang(translateToLang) {
                                 storeMessageTextInPasteboard(summary.text, entities: summary.entities)
                             } else if let translateToLang, let translation = message.attributes.first(where: { ($0 as? TranslationMessageAttribute)?.toLang == translateToLang }) as? TranslationMessageAttribute, !translation.text.isEmpty {
                                 storeMessageTextInPasteboard(translation.text, entities: translation.entities)
