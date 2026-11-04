@@ -160,14 +160,7 @@ enum DGListEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .markdown(text), sectionId: self.section)
         case let .input(_, _, key, value, placeholder):
             if key == "settingsSearch" {
-                let title = NSMutableAttributedString(string: "")
-                if let icon = UIImage(systemName: "magnifyingglass", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17.0))?.withRenderingMode(.alwaysTemplate) {
-                    // TextNode tints image attachments with the attributed foreground color.
-                    title.append(NSAttributedString(string: "M", attributes: [
-                        .attachment: icon,
-                        .foregroundColor: presentationData.theme.list.itemSecondaryTextColor
-                    ]))
-                }
+                let title = dgSettingsSearchIcon(font: Font.regular(presentationData.fontSize.itemListBaseFontSize), color: presentationData.theme.list.itemSecondaryTextColor)
                 return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
             }
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})

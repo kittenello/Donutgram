@@ -11,6 +11,7 @@ import OverlayStatusController
 import PresentationDataUtils
 import ChatPresentationInterfaceState
 import DGSimpleSettings
+import WebPBinding
 
 private let donutgramStickerExportQueue = DispatchQueue(label: "donutgram.sticker-export", qos: .userInitiated)
 
@@ -177,10 +178,55 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
     }
 }
 
+private func donutgramStaticStickerMedia(context: AccountContext, peerId: EnginePeer.Id, file: FileMediaReference, size: CGSize) -> Signal<AnyMediaReference?, NoError> {
+    return Signal { subscriber in
+        let fetchDisposable = context.engine.resources.fetch(reference: file.abstract.resourceReference(file.media.resource), userLocation: .peer(peerId), userContentType: .sticker).start(error: { _ in
+            subscriber.putNext(nil)
+            subscriber.putCompletion()
+        })
+        let dataDisposable = (context.engine.resources.data(resource: EngineMediaResource(file.media.resource))
+        |> filter { $0.complete }
+        |> take(1)
+        |> deliverOn(Queue.concurrentDefaultQueue())
+        |> map { resourceData -> AnyMediaReference? in
+            guard let sourceData = try? Data(contentsOf: URL(fileURLWithPath: resourceData.path)),
+                let sourceImage = WebP.convert(fromWebP: sourceData) ?? UIImage(data: sourceData),
+                let cgImage = sourceImage.cgImage,
+                let image = generateImage(size, contextGenerator: { size, context in
+                    context.setFillColor(UIColor.white.cgColor)
+                    context.fill(CGRect(origin: .zero, size: size))
+                    context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+                }, opaque: true, scale: 1.0),
+                let data = image.jpegData(compressionQuality: 0.95) else {
+                return nil
+            }
+            let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+            context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data)
+            let imageMedia = TelegramMediaImage(
+                imageId: EngineMedia.Id(namespace: Namespaces.Media.LocalImage, id: resource.fileId),
+                representations: [TelegramMediaImageRepresentation(dimensions: PixelDimensions(size), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false)],
+                immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: []
+            )
+            return .standalone(media: imageMedia)
+        }).start(next: { media in
+            subscriber.putNext(media)
+            subscriber.putCompletion()
+        })
+        return ActionDisposable {
+            fetchDisposable.dispose()
+            dataDisposable.dispose()
+        }
+    }
+    |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
+}
+
 private func donutgramStickerMedia(context: AccountContext, peerId: EnginePeer.Id, file: FileMediaReference) -> Signal<AnyMediaReference?, NoError> {
     let sourceSize = file.media.dimensions?.cgSize ?? CGSize(width: 512.0, height: 512.0)
     let dimensions = (sourceSize.width > 0 && sourceSize.height > 0 ? sourceSize : CGSize(width: 512.0, height: 512.0)).aspectFitted(CGSize(width: 512.0, height: 512.0))
     let size = CGSize(width: CGFloat(max(2, Int(dimensions.width) / 2 * 2)), height: CGFloat(max(2, Int(dimensions.height) / 2 * 2)))
+    if !file.media.isAnimatedSticker && !file.media.isVideoSticker {
+        return donutgramStaticStickerMedia(context: context, peerId: peerId, file: file, size: size)
+    }
     let fetch = animationCacheFetchFile(context: context, userLocation: .peer(peerId), userContentType: .sticker, resource: file.abstract.resourceReference(file.media.resource), type: AnimationCacheAnimationType(file: file.media), keyframeOnly: false, customColor: nil)
     return context.animationCache.get(sourceId: file.media.resource.id.stringRepresentation, size: size, fetch: fetch)
     |> filter { $0.isFinal }
@@ -190,23 +236,7 @@ private func donutgramStickerMedia(context: AccountContext, peerId: EnginePeer.I
         guard let item = result.item, item.numFrames > 0, item.numFrames <= 1800 else {
             return .single(nil)
         }
-        if file.media.isAnimatedSticker || file.media.isVideoSticker {
-            return donutgramStickerVideo(context: context, item: item, size: size)
-        }
-        item.reset()
-        guard let frame = item.advance(advance: .frames(1), requestedFormat: .rgba)?.frame,
-            let image = donutgramStickerFrameImage(frame),
-            let data = image.jpegData(compressionQuality: 0.95) else {
-            return .single(nil)
-        }
-        let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
-        context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data)
-        let imageMedia = TelegramMediaImage(
-            imageId: EngineMedia.Id(namespace: Namespaces.Media.LocalImage, id: resource.fileId),
-            representations: [TelegramMediaImageRepresentation(dimensions: PixelDimensions(size), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false)],
-            immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: []
-        )
-        return .single(.standalone(media: imageMedia))
+        return donutgramStickerVideo(context: context, item: item, size: size)
     }
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
 }

@@ -311,7 +311,6 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
             let peer = peers[peerId]
             entries.append(.peer(Int32(index), peer ?? dgUnknownShadowBanPeer(peerId, languageCode: languageCode), dgShadowBanSubtitle(peer, peerId: peerId, languageCode: languageCode), peer != nil, ItemListPeerItemEditing(editable: true, editing: state.editing, revealed: peerId == state.peerIdWithRevealedOptions)))
         }
-        entries.append(.info(dgLocalized("Сообщения этих людей скрыты в группах, комментариях и каналах только на этом устройстве. Они об этом не узнают. Личные чаты не меняются.", languageCode: languageCode)))
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(dgLocalized("Теневой бан", languageCode: languageCode)), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)

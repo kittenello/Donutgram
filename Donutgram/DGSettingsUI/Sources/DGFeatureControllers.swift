@@ -32,26 +32,21 @@ func dgGhostSettingsController(context: AccountContext, focusKey: String? = nil)
         let silent = silentTitles[min(max(s.ghostSendWithoutSound, 0), 2)]
         return [
             .toggle(1, 0, "enabled", "Режим призрака", isOn, true),
-            .info(2, 0, "Скрывает выбранное ниже только в Donutgram на этом устройстве. Другие ваши устройства, например Telegram Desktop, по-прежнему показывают вас в сети и отправляют прочтения."),
             .header(10, 1, "ЧТО СКРЫВАТЬ"),
             .toggle(11, 1, "messages", "Скрывать прочтение сообщений", isOn && !s.ghostReadMessages, isOn),
             .toggle(12, 1, "storyViews", "Скрывать просмотр историй", isOn && !s.ghostReadStories, isOn),
             .toggle(13, 1, "online", "Скрывать «в сети»", isOn && !s.ghostSendOnline, isOn),
             .toggle(14, 1, "offline", "Автоматический «офлайн»", isOn && s.ghostAutomaticOffline, isOn),
             .toggle(15, 1, "typing", "Скрывать «печатает»", isOn && !s.ghostSendTyping, isOn),
-            .info(16, 1, isOn ? "Отправка сообщения ненадолго показывает вас в сети — автоматический «офлайн» сразу это скрывает. При каждом включении режима все пункты включаются заново." : "Включите режим призрака, чтобы выбрать, что скрывать."),
             .header(20, 2, "ПОВЕДЕНИЕ"),
             .toggle(21, 2, "readOnAction", "Читать чат при отправке", isOn && s.ghostReadOnAction, isOn),
             .toggle(22, 2, "scheduled", "Отправлять как отложенные", isOn && s.ghostUseScheduledMessages, isOn),
-            .info(23, 2, "«Читать чат при отправке»: ваш ответ отмечает чат прочитанным, и собеседник это увидит. «Отправлять как отложенные»: сообщение уходит через 12 секунд, и отправка не показывает вас в сети."),
             .header(30, 3, "ДРУГОЕ"),
             .menu(31, 3, "silent", "Отправлять без звука", silent),
             .toggle(32, 3, "stories", "Предлагать призрака для историй", s.ghostSuggestForStories, true),
-            .info(33, 3, "«Всегда» отправляет без звука и без режима призрака. Пока режим выключен, перед просмотром истории Donutgram спросит, смотреть ли её незаметно."),
             .header(40, 4, "ЧТЕНИЕ"),
             .action(41, 4, "readAll", "Прочитать все на сервере"),
             .action(42, 4, "readAllLocal", "Прочитать все локально"),
-            .info(43, 4, "На сервере — собеседники увидят, что вы прочитали их сообщения. Локально — счётчики пропадут только на этом устройстве, отметки о прочтении не уйдут.")
         ]
     }, disabledToggleHint: "Сначала включите режим призрака", toggle: { key, value in
         switch key {
@@ -126,7 +121,6 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
         var result: [DGListEntry] = [
             .header(0, 0, "ХРАНИЛИЩЕ"),
             .disclosure(1, 0, "savedDeleted", "Сохранённые удалённые", ""),
-            .info(2, 0, "Сохранённое хранится только на этом устройстве и остаётся, даже если выключить сохранение."),
             .header(10, 1, "СООБЩЕНИЯ"),
             .toggle(11, 1, "saveDeleted", "Сохранять удалённые сообщения", s.saveDeletedMessages, true)
         ]
@@ -141,15 +135,11 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
         if s.saveDeletedMessages || s.saveEditHistory {
             result.append(.toggle(15, 1, "saveBots", "Сохранять в чатах с ботами", s.saveInBotChats, true))
         }
-        if s.saveDeletedMessages {
-            result.append(.info(16, 1, "Свои удалённые — ваши сообщения, которые удалили на другом устройстве или удалил собеседник."))
-        }
         result.append(contentsOf: [
             .header(20, 2, "ДРУГОЕ"),
             .toggle(21, 2, "saveOnce", "Сохранять одноразовые медиа", s.saveViewOnceMedia, true),
             .toggle(22, 2, "disappearedGifts", "Видеть удалённые подарки", s.showDisappearedGifts, true),
             .toggle(23, 2, "keepBannedChats", "Оставлять чаты после бана", s.keepBannedChats, true),
-            .info(24, 2, "После бана чат остаётся в списке с прежней историей, только на этом устройстве. Писать в него нельзя.")
         ])
         return result
     }, toggle: { key, value in
@@ -181,20 +171,15 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
         let result: [DGListEntry] = [
             .header(0, 0, "ПЕРЕСЫЛКА"),
             .toggle(1, 0, "bypassForward", "Пересылка из защищённых чатов", s.bypassForwardRestrictions, true),
-            .info(2, 0, "Сообщения из чатов с запретом копирования можно пересылать, копировать и сохранять. Пересланное уходит копией от вашего имени, без «Переслано от»."),
             .header(10, 1, "ЗАЩИЩЁННОЕ СОДЕРЖИМОЕ"),
             .toggle(11, 1, "protectedScreenshots", "Скриншоты в защищённых чатах", s.allowProtectedScreenshots, true),
             .toggle(12, 1, "saveProtectedStories", "Сохранять защищённые истории", s.saveProtectedStories, true),
-            .info(13, 1, "Чаты, каналы и истории с запретом копирования видны на скриншотах, а такие истории можно сохранить. Секретные чаты и медиа с таймером на снимках по-прежнему скрыты."),
             .header(20, 2, "GIF"),
             .toggle(21, 2, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true),
-            .info(22, 2, "Где админы запретили GIF, но разрешили видео, GIF уйдёт видео без звука. Админы это увидят."),
             .header(23, 4, "СТИКЕРЫ"),
             .toggle(24, 4, "stickerUnlock", "Обход блокировки стикеров", s.stickerUnlock, true),
-            .info(25, 4, "Если стикеры запрещены, обычные отправляются картинками, анимированные — видео. Отправка фото или видео должна быть разрешена в чате."),
             .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
             .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
-            .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram.")
         ]
         return result
     }, restartRequiredKeys: ["bypassContentRestrictions"], toggle: { key, value in
@@ -233,16 +218,13 @@ func dgMainScreenSettingsController(context: AccountContext, focusKey: String? =
             .toggle(14, 1, "disableStoryCameraSwipe", "Отключить камеру по свайпу", s.disableStoryCameraSwipe, true),
             .toggle(15, 1, "onlineIndicator", "Показывать индикатор онлайна", s.showOnlineIndicator, true),
             .toggle(16, 1, "avatarGlow", "Свечение аватарок", s.avatarGlow, true),
-            .info(17, 1, "Индикатор онлайна — точка «в сети» у аватарок в списке чатов и в группах."),
             .toggle(18, 1, "hideEmptyReplyDrafts", "Скрывать черновик пустого ответа", s.hideEmptyReplyDrafts, true),
-            .info(19, 1, "Если выбран ответ, но текст не введён, в списке чатов видно последнее сообщение вместо «Черновик». Выбранный ответ сохраняется."),
             .header(20, 2, "ВКЛАДКИ"),
             .tabBarPreview(21, 2, s.tabBarLayout),
             .toggle(22, 2, "hideTabBar", "Скрыть панель вкладок", s.hideTabBar, true),
             .toggle(23, 2, "contacts", "Вкладка «Контакты»", s.showContactsTab, true),
             .toggle(24, 2, "calls", "Вкладка «Звонки»", s.showCallsTab, true),
             .toggle(25, 2, "wideTabBar", "Широкая панель вкладок", s.wideTabBar, true),
-            .info(26, 2, "Вкладка «Звонки» видна, только если она включена и в настройках звонков Telegram.")
         ]
         return result
     }, restartRequiredKeys: ["hideStories"], toggle: { key, value in
@@ -344,7 +326,6 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(9, 0, "forwardDate", "Дата оригинала в пересланных", s.showForwardDate, true),
             .header(10, 1, "УПОМИНАНИЯ"),
             .toggle(11, 1, "removePings", "Упоминания как обычные сообщения", s.removePings, true),
-            .info(12, 1, "В группах и каналах упоминания и ответы не пробиваются через выключенный звук, а значок @ не показывается."),
             .header(20, 2, "СОДЕРЖИМОЕ"),
             .toggle(21, 2, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
             .toggle(22, 2, "hideServiceMessages", "Скрыть служебные сообщения", s.hideServiceMessages, true),
@@ -356,15 +337,12 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(28, 2, "hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", s.hidePhoneNumberInChatTitle, true),
             .header(30, 3, "ОТПРАВКА"),
             .toggle(31, 3, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
-            .info(32, 3, "Ваши сообщения со ссылками уходят без превью — у получателей его тоже не будет."),
             .header(40, 4, "КАНАЛЫ"),
             .toggle(41, 4, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
             .toggle(42, 4, "channelForwardCount", "Счётчик пересылок у постов", s.showChannelForwardCount, true),
             .menu(43, 4, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .info(44, 4, "«Обсудить» открывает группу обсуждения канала. В каналах без обсуждения кнопка скрыта."),
             .header(50, 5, "МЕНЮ АВАТАРКИ"),
             .toggle(51, 5, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true),
-            .info(52, 5, "Появляется в меню, если зажать аватарку в чате, и переносит к самому первому сообщению.")
         ]
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
@@ -436,7 +414,6 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(6, 0, "hideStickerReplyColors", "Ответ без цвета", s.hideStickerReplyColors, true),
             .toggle(7, 0, "hideStickerReplyEmoji", "Ответ без эмодзи", s.hideStickerReplyEmoji, true),
             .toggle(8, 0, "hideStickerReplyBackground", "Ответ без фона", s.hideStickerReplyBackground, true),
-            .info(9, 0, "«Ответ без…» меняет цитату, которую стикер-ответ показывает над собой."),
             .header(10, 1, "ФОРМА СТИКЕРОВ"),
             .stickerShape(11, 1, s.stickerShape),
             .header(20, 2, "ПАНЕЛЬ СТИКЕРОВ"),
@@ -444,10 +421,8 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(22, 2, "recent", "Недавние стикеры без лимита", s.infiniteRecentStickers, true),
             .toggle(23, 2, "hideTrendingStickers", "Скрыть популярные стикеры", s.hideTrendingStickers, true),
             .toggle(24, 2, "hideTrendingEmoji", "Скрыть популярные эмодзи", s.hideTrendingEmoji, true),
-            .info(25, 2, "«Скрыть популярные» убирает популярные наборы и кнопку «Популярные» из всех панелей, кроме поиска. «Только добавленные» прячет набор группы и строку новых популярных."),
             .header(26, 4, "ОТПРАВКА"),
             .toggle(27, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
-            .info(28, 4, "Стикер уходит новым файлом без ссылки на набор, и собеседник не узнает, откуда он. У вас набор открывается по нажатию, но только на этом устройстве. В секретных чатах стикеры уходят как обычно."),
             .header(30, 3, "РЕАКЦИИ"),
             .toggle(31, 3, "reactionsInChannels", "Скрыть реакции в каналах", hiddenReactions & 1 != 0, true),
             .toggle(32, 3, "reactionsInGroups", "Скрыть реакции в группах", hiddenReactions & 2 != 0, true),
@@ -496,7 +471,6 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
         if s.showProfileId {
             result.append(contentsOf: [
                 .menu(2, 0, "dialogIdFormat", "Формат ID", s.dialogIdFormat == .botApi ? "Bot API" : "Telegram API"),
-                .info(3, 0, "Telegram API — число как есть. Bot API — как его видят боты: у групп со знаком минус, у каналов и супергрупп с префиксом -100.")
             ])
         }
         result.append(contentsOf: [
@@ -506,18 +480,14 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(13, 1, "chatDate", "Показывать дату создания чата", s.showChatCreationDate, true),
             .toggle(14, 1, "mutualContact", "Показывать взаимный контакт", s.showMutualContact, true),
             .toggle(16, 1, "hidePhoneNumber", "Скрыть номер телефона", s.hidePhoneNumber, true),
-            .info(17, 1, "Номера скрываются только на экране этого устройства. Кто видит ваш номер, настраивается в «Конфиденциальности» Telegram."),
             .header(20, 2, "ВРЕМЯ В СЕТИ"),
             .toggle(21, 2, "relativeOnlineTime", "Относительное время онлайна", s.relativeOnlineTime, true),
             .toggle(22, 2, "approximateLastSeen", "Примерный онлайн", s.approximateLastSeen, true),
-            .info(23, 2, "«Примерный онлайн» показывает вместо «был(а) недавно» время последнего нового сообщения человека в личном чате или общей группе, с отметкой ~. Отметка держится 3 дня, считаются только сообщения после включения."),
             .header(30, 3, "ЗНАЧКИ У ИМЁН"),
             .toggle(31, 3, "premiumStatuses", "Скрыть премиум-статусы", s.hidePremiumStatuses, true),
             .toggle(32, 3, "hideVerification", "Скрыть верификацию", s.hideVerification, true),
-            .info(33, 3, "Без галочек официальные аккаунты и подделки выглядят одинаково. Telegram никогда не просит код входа в сообщениях."),
             .header(40, 4, "МУЗЫКА И БАЛАНС"),
             .toggle(41, 4, "compactProfileMusicAndBalance", "Компактные музыка и баланс", s.compactProfileMusicAndBalance, true),
-            .info(42, 4, "Песня и баланс показаны рядом под статусом: исполнитель и название слева, баланс справа. Если есть только одна плашка, она по центру.")
         ])
         return result
     }, restartRequiredKeys: ["premiumStatuses", "hideVerification"], toggle: { key, value in
@@ -569,7 +539,7 @@ public func dgIconAndIslandController(context: AccountContext, focusKey: String?
             if !s.islandFollowsIcon {
                 // The islands join the switch's block: turning it off shows them right under the finger, next to the
                 // preview, instead of below the six rows of icons.
-                entries.append(contentsOf: [.islandStyles(11, 1, s.islandStyle), .info(12, 1, "Иконка и остров выбираются отдельно.")])
+                entries.append(contentsOf: [.islandStyles(11, 1, s.islandStyle)])
             }
         }
         entries.append(contentsOf: [.header(20, 2, "ИКОНКА"), .appIcons(21, 2, DGSimpleSettings.appMarkIndex(iconName: iconName))])
@@ -602,7 +572,7 @@ func dgLocalProfileSettingsController(context: AccountContext, focusKey: String?
         let rating = s.visualRatingLevel(accountId: accountId).map { String($0) } ?? "Выкл"
         let profileId = s.visualProfileId(accountId: accountId)
         let premium = s.localPremium(accountId: accountId)
-        var result: [DGListEntry] = [
+        let result: [DGListEntry] = [
             .header(0, 0, "ВИДНО ТОЛЬКО ВАМ"),
             .disclosure(1, 0, "visualPhone", "Номер телефона", phone),
             .disclosure(2, 0, "visualRating", "Рейтинг", rating),
@@ -610,13 +580,9 @@ func dgLocalProfileSettingsController(context: AccountContext, focusKey: String?
             .disclosure(4, 0, "visualId", "ID профиля", profileId.isEmpty ? "Выкл" : profileId),
             .menu(5, 0, "visualLabel", "Метка", s.visualLabel(accountId: accountId).title),
             .menu(6, 0, "localVerification", "Локальная верификация", s.localVerification(accountId: accountId).title),
-            .info(7, 0, "Меняется только то, что видите вы на этом устройстве. Собеседники видят ваш настоящий профиль."),
             .header(10, 1, "PREMIUM"),
             .toggle(11, 1, "localPremium", "Локальный Telegram Premium", premium, true)
         ]
-        if premium {
-            result.append(.info(12, 1, "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей."))
-        }
         return result
     }, restartRequiredKeys: ["localPremium"], toggle: { key, value in
         if key == "localPremium" { s.setLocalPremium(value, accountId: accountId) }
@@ -653,7 +619,7 @@ private func dgVisualIdController(context: AccountContext, focusKey: String? = n
     let settings = DGSimpleSettings.shared
     let accountId = context.account.peerId.toInt64()
     return dgController(context: context, page: .visualId, title: "ID профиля", focusKey: focusKey, entries: {
-        [.header(0, 0, "ID ПРОФИЛЯ"), .input(1, 0, "visualId", settings.visualProfileId(accountId: accountId), "Любой текст"), .info(2, 0, "Меняется только ID в вашем профиле на этом устройстве. Пустое поле возвращает настоящий ID. Нажатие на ID копирует настоящий номер Telegram.")]
+        [.header(0, 0, "ID ПРОФИЛЯ"), .input(1, 0, "visualId", settings.visualProfileId(accountId: accountId), "Любой текст")]
     }, textUpdated: { key, value in
         if key == "visualId" { settings.setVisualProfileId(value, accountId: accountId) }
     })
@@ -663,7 +629,7 @@ private func dgVisualRatingController(context: AccountContext, focusKey: String?
     let settings = DGSimpleSettings.shared
     let accountId = context.account.peerId.toInt64()
     return dgController(context: context, page: .visualRating, title: "Рейтинг", focusKey: focusKey, entries: {
-        [.header(0, 0, "УРОВЕНЬ"), .input(1, 0, "level", settings.visualRatingLevel(accountId: accountId).map { String($0) } ?? "", "1–100"), .info(2, 0, "Укажите уровень от 1 до 100. Значок и его узор выбираются тем же компонентом, что и в Telegram. Пустое поле возвращает реальный рейтинг. Изменение видно только в Donutgram на этом устройстве.")]
+        [.header(0, 0, "УРОВЕНЬ"), .input(1, 0, "level", settings.visualRatingLevel(accountId: accountId).map { String($0) } ?? "", "1–100")]
     }, textUpdated: { key, value in
         if key == "level" { settings.setVisualRatingLevel(Int(value), accountId: accountId) }
     })
@@ -673,7 +639,7 @@ private func dgVisualUsernamesController(context: AccountContext, focusKey: Stri
     let settings = DGSimpleSettings.shared
     let accountId = context.account.peerId.toInt64()
     return dgController(context: context, page: .visualUsernames, title: "NFT-юзернеймы", focusKey: focusKey, entries: {
-        [.header(0, 0, "ИМЕНА ЧЕРЕЗ ЗАПЯТУЮ"), .input(1, 0, "names", settings.visualUsernames(accountId: accountId).map { "@\($0.name)" }.joined(separator: ", "), "@username, @username2"), .info(2, 0, "Имена добавляются только локально. Активность и порядок меняются в редакторе имён. Карточка Telegram покажет дату добавления и условную цену от 9 TON. Реальные ссылки, владельцы и данные Telegram не меняются.")]
+        [.header(0, 0, "ИМЕНА ЧЕРЕЗ ЗАПЯТУЮ"), .input(1, 0, "names", settings.visualUsernames(accountId: accountId).map { "@\($0.name)" }.joined(separator: ", "), "@username, @username2")]
     }, textUpdated: { key, value in
         if key == "names" { settings.updateVisualUsernames(value, accountId: accountId) }
     })
@@ -682,7 +648,7 @@ private func dgVisualUsernamesController(context: AccountContext, focusKey: Stri
 private func dgVisualPhoneController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
     return dgController(context: context, page: .visualPhone, title: "Номер телефона", focusKey: focusKey, entries: {
-        [.header(0, 0, "ПОДМЕНА НОМЕРА"), .toggle(1, 0, "enabled", "Показывать другой номер", s.visualPhoneEnabled, true), .input(2, 0, "number", s.visualPhoneNumber, "+888 0156 2794"), .info(3, 0, "Меняется только отображение номера в вашем профиле на этом устройстве. Реальный номер Telegram и данные аккаунта остаются прежними.")]
+        [.header(0, 0, "ПОДМЕНА НОМЕРА"), .toggle(1, 0, "enabled", "Показывать другой номер", s.visualPhoneEnabled, true), .input(2, 0, "number", s.visualPhoneNumber, "+888 0156 2794")]
     }, toggle: { key, value in
         if key == "enabled" { s.visualPhoneEnabled = value }
     }, textUpdated: { key, value in
@@ -776,21 +742,16 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             .toggle(2, 0, "zoomSlider", "Слайдер зума", s.roundVideoZoomSlider, true),
             .toggle(3, 0, "staticZoom", "Оставлять зум после щипка", s.staticRoundVideoZoom, true),
             .toggle(4, 0, "roundVideoCountdown", "Отсчёт перед записью", s.roundVideoCountdown, true),
-            .info(5, 0, "Кружок начнёт записываться после 3, 2, 1. Во время отсчёта можно менять зум, камеру и вспышку."),
             .header(10, 1, "ЗАПИСЬ"),
             .toggle(11, 1, "builtInMic", "Встроенный микрофон", s.forceBuiltInMicrophone, true),
-            .info(12, 1, "Голосовые и кружки записываются с микрофона телефона, даже если подключены наушники."),
             .header(20, 2, "ПАУЗА МУЗЫКИ"),
             .toggle(21, 2, "pauseMusicRoundVideos", "При записи кружков", !exceptions.contains(.roundVideos), true),
             .toggle(22, 2, "pauseMusicVoiceRecording", "При записи голосовых", !exceptions.contains(.voiceRecording), true),
             .toggle(23, 2, "pauseMusicVoicePlayback", "При прослушивании голосовых", !exceptions.contains(.voicePlayback), true),
-            .info(24, 2, "Если выключить, музыка продолжит играть. При записи голосовых она встаёт на паузу, только если в «Данных и памяти» Telegram включена и «Пауза музыки при записи»."),
             .header(30, 3, "ВИДЕО"),
             .menu(31, 3, "doubleTapSeek", "Перемотка", seek),
-            .info(32, 3, "Двойное нажатие на видео: слева — назад, справа — вперёд на выбранное время."),
             .header(35, 8, "GIF"),
             .toggle(36, 8, "gifScrubber", "Перемотка GIF", s.gifScrubber, true),
-            .info(37, 8, "В просмотрщике у GIF есть ползунок, как у видео."),
             .header(40, 4, "АВТОПАУЗА"),
             .toggle(41, 4, "autoPause", "Пауза при сворачивании", s.autoPause, true)
         ]
@@ -803,7 +764,6 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             ])
         }
         result.append(contentsOf: [
-            .info(45, 4, "Ставит на паузу, когда вы сворачиваете приложение или блокируете экран."),
             .header(50, 5, "ПОСЛЕ ПРОСЛУШИВАНИЯ"),
             .toggle(51, 5, "autoplayMedia", "Не включать следующее", s.disableMediaAutoplay, true)
         ])
@@ -815,13 +775,10 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             ])
         }
         result.append(contentsOf: [
-            .info(54, 5, "Когда голосовое или кружок закончится, следующее не включится само."),
             .header(60, 6, "ГОЛОС В ТЕКСТ"),
             .menu(61, 6, "transcription", "Сервис расшифровки", dgTranscriptionBackendTitle(s.transcriptionBackend)),
-            .info(62, 6, dgTranscriptionBackendInfo(s.transcriptionBackend)),
             .header(70, 7, "МУЗЫКА В ПРОФИЛЕ"),
             .toggle(71, 7, "disableProfileMusicAutoplay", "Не включать музыку автоматически", s.disableProfileMusicAutoplay, true),
-            .info(72, 7, "Плейлист закреплённой музыки открывается без запуска трека. Воспроизведение можно включить вручную.")
         ])
         return result
     }, toggle: { key, value in
@@ -891,11 +848,9 @@ func dgDownloadsSettingsController(context: AccountContext, focusKey: String? = 
             result.append(.toggle(3, 0, "signDownloads", "Подпись «Скачано с …»", s.signDownloadedMedia, true))
         }
         result.append(contentsOf: [
-            .info(4, 0, "Отправьте ссылку на TikTok или Shorts — Donutgram скачает ролик и отправит его вместо ссылки. Если скачать не выйдет, уйдёт ссылка. Если TikTok не отдаёт видео или фото, они запрашиваются через сторонний сервис tikwm.com: он видит ссылку на пост и ваш IP-адрес."),
             .header(10, 1, "УСКОРЕНИЕ ЗАГРУЗКИ"),
             .speedSlider(11, 1, s.downloadAcceleration),
             .toggle(12, 1, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true),
-            .info(13, 1, "Ультра использует больше одновременных соединений. На медленном интернете это может мешать загрузке файлов и просмотру видео.")
         ])
         return result
     }, toggle: { key, value in
@@ -924,7 +879,6 @@ func dgSecuritySettingsController(context: AccountContext, focusKey: String? = n
             .toggle(2, 0, "confirmReactionsInUnjoinedChats", "Реакции без вступления", s.confirmReactionsInUnjoinedChats, true),
             .toggle(3, 0, "confirmTelegramLinks", "Переход по ссылкам Telegram", s.confirmTelegramLinks, true),
             .toggle(4, 0, "confirmChatPreviewEntry", "Вход из предпросмотра", s.confirmChatPreviewEntry, true),
-            .info(5, 0, "Перед каждым из этих действий Donutgram попросит подтверждение."),
             .header(10, 1, "СТАТИСТИКА"),
             .toggle(11, 1, "telegramStatistics", "Отправлять в Telegram", s.sendTelegramStatistics, true),
             .info(12, 1, "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.")
@@ -948,7 +902,6 @@ func dgAdsAndGiftsSettingsController(context: AccountContext, focusKey: String? 
         let result: [DGListEntry] = [
             .header(0, 0, "РЕКЛАМА"),
             .toggle(1, 0, "disableAds", "Отключить рекламу", s.disableAds, true),
-            .info(2, 0, "Скрывает спонсорские сообщения в каналах и рекламу в поиске."),
             .toggle(3, 0, "hideProxySponsor", "Скрыть спонсора прокси", s.hideProxySponsor, true),
             .header(10, 1, "ПОДАРКИ"),
             .toggle(11, 1, "hideGiftButton", "Скрыть отправку подарка", s.hideGiftButton, true),
@@ -988,7 +941,6 @@ func dgAboutController(context: AccountContext, focusKey: String? = nil) -> View
             .profileRow(1, 1, "channel", "канал", "t.me/donutgram", true),
             .profileRow(2, 1, "sourceCode", "исходный код", "github.com/kittenello/Donutgram", true),
             .profileRow(3, 1, "version", "версия", version, false),
-            .info(4, 1, "Нажмите на версию, чтобы скопировать её, например для сообщения об ошибке.")
         ]
         return result
     }, perform: { key, controller in
