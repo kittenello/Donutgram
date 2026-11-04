@@ -35,3 +35,37 @@ verify(.empty, failed: true, expected: .historyFailed)
 verify(.failed, expected: .walletFailed)
 precondition(history() != history(loaded: true), "the first successful empty response must trigger a UI update")
 print("wallet history loading, failure, empty response and cache checks passed")
+
+enum PasscodeError: Error { case unavailable }
+
+final class PasscodeEnvironment {
+    static let shared = PasscodeEnvironment()
+    var usesDefaultKeychainAccessGroup = false
+    var privateGroup: String?
+    var resolutionCount = 0
+
+    func privateAccessGroup() throws -> String {
+        self.resolutionCount += 1
+        guard let privateGroup else { throw PasscodeError.unavailable }
+        return privateGroup
+    }
+}
+
+let keychainEnvironment = PasscodeEnvironment.shared
+keychainEnvironment.usesDefaultKeychainAccessGroup = true
+let defaultKeychainGroup = try WalletVault.keychainAccessGroup()
+precondition(defaultKeychainGroup == nil, "a sideloaded wallet must use the app's default keychain group")
+precondition(keychainEnvironment.resolutionCount == 0, "the unavailable explicit group must not be resolved")
+keychainEnvironment.usesDefaultKeychainAccessGroup = false
+keychainEnvironment.privateGroup = "TEAM.org.telegram.test"
+let explicitKeychainGroup = try WalletVault.keychainAccessGroup()
+precondition(explicitKeychainGroup == keychainEnvironment.privateGroup, "regular builds keep their existing private group")
+keychainEnvironment.privateGroup = nil
+do {
+    _ = try WalletVault.keychainAccessGroup()
+    preconditionFailure("a missing private group must remain an error for regular builds")
+} catch PasscodeError.unavailable {
+} catch {
+    preconditionFailure("unexpected keychain group resolution error")
+}
+print("wallet keychain group selection checks passed")

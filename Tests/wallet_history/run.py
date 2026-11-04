@@ -34,6 +34,13 @@ assert 'if historyContent == .intro {' in screen
 fixture = Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
 state = block(models, "struct TransactionsState:").replace("public ", "")
 source = fixture.replace("struct TransactionsState {}", state) + "\n" + presentation
+security = (ROOT / "submodules/WalletContext/Sources/WalletSecurity.swift").read_text(encoding="utf-8")
+group = block(security, "static func keychainAccessGroup()")
+group = group[:group.index("#if os(macOS)")] + group.split("#else", 1)[1].replace("#endif", "")
+source += "\nenum WalletVault {\n" + group + "\n}\n"
+passcode = (ROOT / "submodules/PasscodeCore/Sources/Passcode.swift").read_text(encoding="utf-8")
+assert "public var usesDefaultKeychainAccessGroup: Bool" in passcode
+assert "keychain_status=" in (ROOT / "submodules/WalletContext/Sources/WalletLogger.swift").read_text(encoding="utf-8")
 if args.source_only:
     print("wallet history state integration checks passed; Swift behavior was not executed")
     raise SystemExit(0)

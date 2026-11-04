@@ -10,6 +10,7 @@ on:
       - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
       - 'submodules/ChatListUI/**'
       - 'submodules/WalletContext/**'
+      - 'submodules/PasscodeCore/**'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Wallet/Wallet.swift'
       - 'submodules/TelegramUI/**'
       - 'submodules/GalleryUI/Sources/Items/UniversalVideoGalleryItem.swift'

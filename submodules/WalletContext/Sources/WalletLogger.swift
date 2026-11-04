@@ -32,6 +32,13 @@ private func walletContextErrorFields(_ error: Error) -> String {
     if let kind = walletContextErrorKind(error) {
         result += " error_kind=\(kind)"
     }
+    if let error = error as? WalletEngineStorageError, case let .keychainStatus(status) = error {
+        result += " keychain_status=\(status)"
+    } else if let error = error as? PasscodeError, case let .keychain(status) = error {
+        result += " keychain_status=\(status)"
+    } else if let error = error as? WalletContext.WalletError, case let .storage(.keychainStatus(status)) = error {
+        result += " keychain_status=\(status)"
+    }
     return result
 }
 

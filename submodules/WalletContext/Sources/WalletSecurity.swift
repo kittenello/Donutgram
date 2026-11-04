@@ -70,6 +70,9 @@ enum WalletVault {
         #if os(macOS)
         return nil
         #else
+        if PasscodeEnvironment.shared.usesDefaultKeychainAccessGroup {
+            return nil
+        }
         return try PasscodeEnvironment.shared.privateAccessGroup()
         #endif
     }
