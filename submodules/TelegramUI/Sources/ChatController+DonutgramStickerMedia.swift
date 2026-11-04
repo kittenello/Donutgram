@@ -35,7 +35,7 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
     return Signal { subscriber in
         let temporary = EngineTempBox.shared.tempFile(fileName: "sticker-video.mp4")
         guard let writer = try? AVAssetWriter(outputURL: URL(fileURLWithPath: temporary.path), fileType: .mp4) else {
-            temporary.dispose()
+            EngineTempBox.shared.dispose(temporary)
             subscriber.putNext(nil)
             subscriber.putCompletion()
             return EmptyDisposable
@@ -55,14 +55,14 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
         ])
         guard writer.canAdd(input) else {
-            temporary.dispose()
+            EngineTempBox.shared.dispose(temporary)
             subscriber.putNext(nil)
             subscriber.putCompletion()
             return EmptyDisposable
         }
         writer.add(input)
         guard writer.startWriting() else {
-            temporary.dispose()
+            EngineTempBox.shared.dispose(temporary)
             subscriber.putNext(nil)
             subscriber.putCompletion()
             return EmptyDisposable
@@ -114,7 +114,7 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
                 guard appended, duration <= 60.0 else {
                     finished = true
                     writer.cancelWriting()
-                    temporary.dispose()
+                    EngineTempBox.shared.dispose(temporary)
                     subscriber.putNext(nil)
                     subscriber.putCompletion()
                     return
@@ -129,7 +129,7 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
                 writer.endSession(atSourceTime: CMTime(seconds: duration, preferredTimescale: 60_000))
                 input.markAsFinished()
                 writer.finishWriting {
-                    defer { temporary.dispose() }
+                    defer { EngineTempBox.shared.dispose(temporary) }
                     guard !cancelled.with({ $0 }), writer.status == .completed,
                         let data = try? Data(contentsOf: URL(fileURLWithPath: temporary.path)) else {
                         subscriber.putNext(nil)
@@ -164,7 +164,7 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
                 if writer.status == .writing {
                     writer.cancelWriting()
                 }
-                temporary.dispose()
+                EngineTempBox.shared.dispose(temporary)
             }
         }
     }
