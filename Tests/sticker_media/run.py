@@ -32,14 +32,12 @@ draft_checks += block(entries, "private func chatListDraftState(") + "\n"
 draft_checks += pathlib.Path(__file__).with_name("draft_fixtures.swift").read_text(encoding="utf-8")
 location = (root / "submodules/ChatListUI/Sources/Node/ChatListNodeLocation.swift").read_text(encoding="utf-8")
 node = (root / "submodules/ChatListUI/Sources/Node/ChatListNode.swift").read_text(encoding="utf-8")
-panels = (root / "submodules/TelegramUI/Sources/ChatInterfaceStateInputPanels.swift").read_text(encoding="utf-8")
 assert location.count("isEmptyReply: opaqueState.synchronizeableInputState?.isEmptyReply ?? false") == 3
 assert "isEmptyReply: opaqueState.synchronizeableInputState?.isEmptyReply ?? false" in chat_list
 assert entries.count("hideEmptyReplies: hideEmptyReplyDrafts)") == 2
 assert "DGSimpleSettings.shared.hideEmptyReplyDrafts" in node and "$0.2 == $1.2" in node
-assert "!message.isForumPost && (!channel.flags.contains(.joinToSend) || DGSimpleSettings.shared.commentsWithoutJoining)" in panels
 if args.source_only:
-    print("comment and empty reply integration checks passed; Swift behavior was not executed")
+    print("empty reply integration checks passed; Swift behavior was not executed")
     raise SystemExit(0)
 swift = shutil.which("swiftc")
 if not swift:

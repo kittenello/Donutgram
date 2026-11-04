@@ -194,10 +194,7 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
             .info(25, 4, "Если стикеры запрещены, обычные отправляются картинками, анимированные — видео. Отправка фото или видео должна быть разрешена в чате."),
             .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
             .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
-            .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram."),
-            .header(40, 5, "КОММЕНТАРИИ"),
-            .toggle(41, 5, "commentsWithoutJoining", "Писать в комментарии без вступления", s.commentsWithoutJoining, true),
-            .info(42, 5, "Открывает поле ввода в комментариях без проверки вступления в группу. Если вступление требует сервер Telegram, отправить комментарий не получится.")
+            .info(32, 3, "Каналы, боты и сообщения, которые Telegram закрывает для iOS, открываются как обычно. Содержимое 18+ по-прежнему зависит от настройки Telegram.")
         ]
         return result
     }, restartRequiredKeys: ["bypassContentRestrictions"], toggle: { key, value in
@@ -207,7 +204,6 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
         case "saveProtectedStories": s.saveProtectedStories = value
         case "gifUnlock": s.gifUnlock = value
         case "stickerUnlock": s.stickerUnlock = value
-        case "commentsWithoutJoining": s.commentsWithoutJoining = value
         case "bypassContentRestrictions": s.bypassContentRestrictions = value
         default: break
         }

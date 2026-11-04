@@ -27,9 +27,6 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
-    "КОММЕНТАРИИ": "COMMENTS",
-    "Писать в комментарии без вступления": "Comment Without Joining",
-    "Открывает поле ввода в комментариях без проверки вступления в группу. Если вступление требует сервер Telegram, отправить комментарий не получится.": "Opens the comment input without checking group membership. If the Telegram server requires joining, the comment cannot be sent.",
     "Скрывать черновик пустого ответа": "Hide Empty Reply Drafts",
     "Если выбран ответ, но текст не введён, в списке чатов видно последнее сообщение вместо «Черновик». Выбранный ответ сохраняется.": "When a reply is selected without any text, the chat list shows the last message instead of Draft. The selected reply is kept.",
     "Обход блокировки стикеров": "Bypass Sticker Restrictions",

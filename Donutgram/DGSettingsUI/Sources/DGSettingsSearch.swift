@@ -109,7 +109,6 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("saveProtectedStories", "Сохранять защищённые истории", "ЗАЩИЩЁННОЕ СОДЕРЖИМОЕ"),
         ("gifUnlock", "Обход блокировок GIF", "GIF"),
         ("stickerUnlock", "Обход блокировки стикеров", "СТИКЕРЫ"),
-        ("commentsWithoutJoining", "Писать в комментарии без вступления", "КОММЕНТАРИИ"),
         ("bypassContentRestrictions", "Обход ограничений контента", "ОГРАНИЧЕННЫЙ КОНТЕНТ")
     ])
     add("shadow-ban", "Теневой бан", [
