@@ -242,7 +242,7 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
         }
         |> castError(FetchResourceError.self)
     }
-    |> catch { _ -> Signal<AnyMediaReference?, NoError> in
+    |> `catch` { _ -> Signal<AnyMediaReference?, NoError> in
         return .single(nil)
     }
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
