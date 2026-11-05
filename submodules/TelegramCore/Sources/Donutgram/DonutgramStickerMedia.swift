@@ -21,7 +21,6 @@ public func donutgramCanSendStickerAsMedia(peer: Peer?, file: TelegramMediaFile?
         guard file.isSticker else {
             return false
         }
-        return !isBanned(file.isAnimatedSticker || file.isVideoSticker ? .banSendVideos : .banSendPhotos)
     }
-    return !isBanned(.banSendPhotos) || !isBanned(.banSendVideos)
+    return !isBanned(.banSendVideos)
 }

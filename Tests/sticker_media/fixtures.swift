@@ -67,8 +67,8 @@ let scenarios: [Scenario] = [
     Scenario(name: "stickers allowed", banned: [], panel: false, staticSticker: false, animatedSticker: false),
     Scenario(name: "photos banned, stickers allowed", banned: [.banSendPhotos], panel: false, staticSticker: false, animatedSticker: false),
     Scenario(name: "only stickers banned", banned: [.banSendStickers], panel: true, staticSticker: true, animatedSticker: true),
-    Scenario(name: "stickers and photos banned", banned: [.banSendStickers, .banSendPhotos], panel: true, staticSticker: false, animatedSticker: true),
-    Scenario(name: "stickers and videos banned", banned: [.banSendStickers, .banSendVideos], panel: true, staticSticker: true, animatedSticker: false),
+    Scenario(name: "stickers and photos banned", banned: [.banSendStickers, .banSendPhotos], panel: true, staticSticker: true, animatedSticker: true),
+    Scenario(name: "stickers and videos banned", banned: [.banSendStickers, .banSendVideos], panel: false, staticSticker: false, animatedSticker: false),
     Scenario(name: "stickers, photos and videos banned", banned: [.banSendStickers, .banSendPhotos, .banSendVideos], panel: false, staticSticker: false, animatedSticker: false),
     Scenario(name: "all media banned", banned: [.banSendStickers, .banSendMedia], panel: false, staticSticker: false, animatedSticker: false),
     Scenario(name: "removed from the chat", banned: [.banSendStickers, .banReadMessages], panel: false, staticSticker: false, animatedSticker: false)
@@ -134,4 +134,3 @@ func checkStickerMediaProgress() {
 }
 checkStickerMediaProgress()
 print("sticker conversion progress lifecycle checks passed")
-

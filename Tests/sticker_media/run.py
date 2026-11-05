@@ -57,8 +57,15 @@ with tempfile.TemporaryDirectory(prefix="donutgram-sticker-media-") as temporary
     settings = sorted((root / "Donutgram/DGSimpleSettings/Sources").glob("*.swift"))
     subprocess.run([swift, "-warnings-as-errors", *map(str, settings), str(main), "-o", str(executable)], check=True)
     subprocess.run([str(executable)], check=True)
+    video_main = temporary / "video" / "main.swift"
+    video_main.parent.mkdir()
+    video_fixture = pathlib.Path(__file__).with_name("video_fixture.swift").read_text(encoding="utf-8")
+    writer = block(conversion, "private func donutgramStickerVideo(")
+    video_main.write_text(video_fixture.replace("// PRODUCTION WRITER", writer), encoding="utf-8")
+    video_executable = temporary / "video" / "checks"
+    subprocess.run([swift, "-warnings-as-errors", str(video_main), "-o", str(video_executable)], check=True)
+    subprocess.run([str(video_executable)], check=True)
     # A Swift file the change deletes has nothing to parse.
     changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "origin/master...HEAD", "--", "*.swift"], cwd=root, text=True)
     for path in changed.splitlines():
         subprocess.run([swift, "-frontend", "-parse", str(root / path)], check=True)
-

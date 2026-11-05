@@ -47,7 +47,7 @@ private final class DonutgramStickerMediaProgress {
     }
 }
 
-/// The frame on white: a photo and an H.264 video have no alpha channel.
+/// The frame on white: an H.264 video has no alpha channel.
 private func donutgramStickerFrameImage(_ frame: AnimationCacheItemFrame) -> UIImage? {
     guard case let .rgba(data, width, height, bytesPerRow) = frame.format,
         width > 0, height > 0, bytesPerRow >= width * 4, data.count >= height * bytesPerRow,
@@ -71,7 +71,7 @@ private func donutgramStickerFrameImage(_ frame: AnimationCacheItemFrame) -> UII
     }, opaque: true, scale: 1.0)
 }
 
-private func donutgramStickerVideo(context: AccountContext, item: AnimationCacheItem, size: CGSize) -> Signal<AnyMediaReference?, NoError> {
+private func donutgramStickerVideo(context: AccountContext, size: CGSize, frameCount: Int, nextFrame: @escaping () -> (image: UIImage, duration: Double)?) -> Signal<AnyMediaReference?, NoError> {
     return Signal { subscriber in
         let temporary = EngineTempBox.shared.tempFile(fileName: "sticker-video.mp4")
         guard let writer = try? AVAssetWriter(outputURL: URL(fileURLWithPath: temporary.path), fileType: .mp4) else {
@@ -113,21 +113,19 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
         var duration = 0.0
         var finished = false
         var thumbnail: Data?
-        item.reset()
         input.requestMediaDataWhenReady(on: donutgramStickerExportQueue) {
             guard !finished, !cancelled.with({ $0 }) else {
                 return
             }
-            while input.isReadyForMoreMediaData && index < item.numFrames {
+            while input.isReadyForMoreMediaData && index < frameCount {
                 let appended = autoreleasepool { () -> Bool in
-                    guard let frame = item.advance(advance: .frames(1), requestedFormat: .rgba)?.frame,
-                        let image = donutgramStickerFrameImage(frame),
-                        let cgImage = image.cgImage,
+                    guard let frame = nextFrame(),
+                        let cgImage = frame.image.cgImage,
                         let pool = adaptor.pixelBufferPool else {
                         return false
                     }
                     if thumbnail == nil {
-                        thumbnail = image.jpegData(compressionQuality: 0.7)
+                        thumbnail = frame.image.jpegData(compressionQuality: 0.7)
                     }
                     var optionalBuffer: CVPixelBuffer?
                     guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &optionalBuffer) == kCVReturnSuccess, let buffer = optionalBuffer else {
@@ -164,7 +162,7 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
                     return
                 }
             }
-            if index == item.numFrames {
+            if index == frameCount {
                 finished = true
                 writer.endSession(atSourceTime: CMTime(seconds: duration, preferredTimescale: 60_000))
                 input.markAsFinished()
@@ -226,7 +224,7 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
         |> filter { $0.isComplete }
         |> take(1)
         |> deliverOn(Queue.concurrentDefaultQueue())
-        |> map { resourceData -> AnyMediaReference? in
+        |> mapToSignal { resourceData -> Signal<AnyMediaReference?, NoError> in
             guard let sourceData = try? Data(contentsOf: URL(fileURLWithPath: resourceData.path)),
                 let sourceImage = WebP.convert(fromWebP: sourceData) ?? UIImage(data: sourceData),
                 let cgImage = sourceImage.cgImage,
@@ -234,18 +232,13 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
                     context.setFillColor(UIColor.white.cgColor)
                     context.fill(CGRect(origin: .zero, size: size))
                     context.draw(cgImage, in: CGRect(origin: .zero, size: size))
-                }, opaque: true, scale: 1.0),
-                let data = image.jpegData(compressionQuality: 0.95) else {
-                return nil
+                }, opaque: true, scale: 1.0) else {
+                return .single(nil)
             }
-            let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
-            context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data)
-            let imageMedia = TelegramMediaImage(
-                imageId: EngineMedia.Id(namespace: Namespaces.Media.LocalImage, id: resource.fileId),
-                representations: [TelegramMediaImageRepresentation(dimensions: PixelDimensions(size), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false)],
-                immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: []
-            )
-            return .standalone(media: imageMedia)
+            // Two identical samples, each held for half a second: a one-second silent MP4.
+            return donutgramStickerVideo(context: context, size: size, frameCount: 2, nextFrame: {
+                return (image, 0.5)
+            })
         }
     }
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
@@ -267,7 +260,14 @@ private func donutgramStickerMedia(context: AccountContext, peerId: EnginePeer.I
         guard let item = result.item, item.numFrames > 0, item.numFrames <= 1800 else {
             return .single(nil)
         }
-        return donutgramStickerVideo(context: context, item: item, size: size)
+        item.reset()
+        return donutgramStickerVideo(context: context, size: size, frameCount: item.numFrames, nextFrame: {
+            guard let frame = item.advance(advance: .frames(1), requestedFormat: .rgba)?.frame,
+                let image = donutgramStickerFrameImage(frame) else {
+                return nil
+            }
+            return (image, frame.duration)
+        })
     }
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
 }
@@ -279,7 +279,7 @@ private func donutgramStickerFile(_ message: EnqueueMessage) -> FileMediaReferen
     return nil
 }
 
-/// Whether `messages` hold a sticker that `peer` takes only as a photo or a video.
+/// Whether `messages` hold a sticker that `peer` takes only as a video.
 func donutgramStickerMessagesNeedMedia(peer: EngineRawPeer?, messages: [EnqueueMessage]) -> Bool {
     guard let peer, donutgramCanSendStickerAsMedia(peer: peer) else {
         return false
@@ -288,9 +288,9 @@ func donutgramStickerMessagesNeedMedia(peer: EngineRawPeer?, messages: [EnqueueM
 }
 
 enum DonutgramStickerMediaResult {
-    /// The messages to enqueue, and the stickers that went out as photos or videos.
+    /// The messages to enqueue, and the stickers that went out as videos.
     case ready(messages: [EnqueueMessage], convertedStickers: [FileMediaReference])
-    /// The chat bans what a sticker would become: photos for a static one, videos for an animated one.
+    /// The chat bans videos, including the one-second video made from a static sticker.
     case notAllowed
     case failed
 }
@@ -337,12 +337,12 @@ func donutgramPrepareStickerMedia(context: AccountContext, peer: EngineRawPeer, 
 
 private struct DonutgramPreparedStickerMessage {
     let message: EnqueueMessage
-    /// The sticker this message carries as a photo or a video instead.
+    /// The sticker this message carries as a video instead.
     let convertedSticker: FileMediaReference?
 }
 
 extension ChatControllerImpl {
-    /// Donutgram (`stickerUnlock`): a sticker for a chat that bans stickers goes out as a photo or a video; other
+    /// Donutgram (`stickerUnlock`): a sticker for a chat that bans stickers goes out as a video; other
     /// messages pass at once. While a sticker converts, a progress overlay covers the chat, so a second tap cannot
     /// send it twice and no later message overtakes it. Tapping the overlay cancels the send.
     func donutgramMessagesWithStickerMedia(_ messages: [EnqueueMessage]) -> Signal<[EnqueueMessage], NoError> {
@@ -438,4 +438,3 @@ extension ChatControllerImpl {
         }
     }
 }
-
