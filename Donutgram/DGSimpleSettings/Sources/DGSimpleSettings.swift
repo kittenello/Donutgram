@@ -232,6 +232,7 @@ public final class DGSimpleSettings {
         static let chatListHideStatus = "donutgram.chats.appearance.hideStatus"
         static let chatListHideEmojiStatus = "donutgram.chats.appearance.hideEmojiStatus"
         static let chatListCenteredTitle = "donutgram.chats.appearance.centeredTitle"
+        static let neutralComposeButton = "donutgram.chats.appearance.neutralComposeButton"
         static let chatListHideSearch = "donutgram.chats.appearance.hideSearch"
         static let chatListFoldersAtBottom = "donutgram.chats.appearance.foldersAtBottom"
         static let chatListTitleMode = "donutgram.chats.appearance.titleMode"
@@ -795,6 +796,7 @@ public final class DGSimpleSettings {
     /// No emoji status or Premium star next to the chat list title.
     public var chatListHideEmojiStatus: Bool { get { bool(Key.chatListHideEmojiStatus) } set { setBool(newValue, Key.chatListHideEmojiStatus) } }
     public var chatListCenteredTitle: Bool { get { bool(Key.chatListCenteredTitle) } set { setBool(newValue, Key.chatListCenteredTitle) } }
+    public var neutralComposeButton: Bool { get { bool(Key.neutralComposeButton) } set { setBool(newValue, Key.neutralComposeButton) } }
     public var chatListHideSearch: Bool { get { bool(Key.chatListHideSearch) } set { setBool(newValue, Key.chatListHideSearch) } }
     public var chatListFoldersAtBottom: Bool { get { bool(Key.chatListFoldersAtBottom) } set { setBool(newValue, Key.chatListFoldersAtBottom) } }
     public var chatListTitleMode: ChatListTitleMode {

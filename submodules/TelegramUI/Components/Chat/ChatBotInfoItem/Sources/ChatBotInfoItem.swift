@@ -581,7 +581,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
             stableId: 0, stableVersion: 0,
             id: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Local, id: 0),
             globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0,
-            flags: [], tags: [], globalTags: [], localTags: [], customTags: [],
+            flags: [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [],
             forwardInfo: nil, author: item.peer, text: "", attributes: [DonutgramBotInfoMediaMessageAttribute()], media: [media],
             peers: item.peer.map { [peerId: $0] } ?? [:], associatedMessages: [:], associatedMessageIds: [],
             associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]

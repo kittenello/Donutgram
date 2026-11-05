@@ -32,6 +32,13 @@ draft_checks = "\nextension DraftInputState {\n" + block(sync, "public var isEmp
 draft_checks += "enum EngineChatList {\n" + block(chat_list, "public struct Draft:").replace("public ", "") + "\n}\n"
 draft_checks += block(entries, "private func chatListDraftState(") + "\n"
 draft_checks += pathlib.Path(__file__).with_name("draft_fixtures.swift").read_text(encoding="utf-8")
+draft_refresh = (root / "submodules/TelegramCore/Sources/Donutgram/DonutgramEmptyReplyDrafts.swift").read_text(encoding="utf-8")
+draft_checks += "\n" + block(draft_refresh, "func donutgramRefreshEmptyReplyDraftTimestamps(")
+draft_checks += "\n" + pathlib.Path(__file__).with_name("stored_draft_fixtures.swift").read_text(encoding="utf-8")
+account = (root / "submodules/TelegramCore/Sources/Account/Account.swift").read_text(encoding="utf-8")
+assert "managedDonutgramEmptyReplyDrafts(postbox: self.postbox).start()" in account
+bot_card = (root / "submodules/TelegramUI/Components/Chat/ChatBotInfoItem/Sources/ChatBotInfoItem.swift").read_text(encoding="utf-8")
+assert "flags: [.Incoming]" in block(bot_card, "private func openMedia()")
 location = (root / "submodules/ChatListUI/Sources/Node/ChatListNodeLocation.swift").read_text(encoding="utf-8")
 node = (root / "submodules/ChatListUI/Sources/Node/ChatListNode.swift").read_text(encoding="utf-8")
 assert location.count("isEmptyReply: opaqueState.synchronizeableInputState?.isEmptyReply ?? false") == 3

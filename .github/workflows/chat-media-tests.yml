@@ -6,6 +6,11 @@ on:
     paths:
       - 'Donutgram/**'
       - 'submodules/TelegramCore/Sources/Donutgram/DonutgramStickerMedia.swift'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramEmptyReplyDrafts.swift'
+      - 'submodules/TelegramCore/Sources/Account/Account.swift'
+      - 'submodules/Postbox/Sources/PeerChatInterfaceStateTable.swift'
+      - 'submodules/Postbox/Sources/PeerChatThreadInterfaceStateTable.swift'
+      - 'submodules/Postbox/Sources/Postbox.swift'
       - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift'

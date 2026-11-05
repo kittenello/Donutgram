@@ -1514,6 +1514,7 @@ public class Account {
         self.managedOperationsDisposable.add((donutgramRemoveOrphanedMessageRevisions(postbox: self.postbox) |> delay(10.0, queue: Queue.concurrentDefaultQueue())).start())
         // Donutgram: the blocked peers «Скрывать сообщения заблокированных» hides.
         self.managedOperationsDisposable.add(managedDonutgramBlockedPeers(postbox: self.postbox, network: self.network, accountPeerId: peerId).start())
+        self.managedOperationsDisposable.add(managedDonutgramEmptyReplyDrafts(postbox: self.postbox).start())
         self.managedOperationsDisposable.add(managedAutoexpireStoryOperations(network: self.network, postbox: self.postbox).start())
         self.managedOperationsDisposable.add(managedPeerTimestampAttributeOperations(network: self.network, postbox: self.postbox).start())
         self.managedOperationsDisposable.add(managedPendingWalletTransferMessages(postbox: self.postbox).start())

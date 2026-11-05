@@ -121,6 +121,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideEmojiStatus", "Скрыть эмодзи-статус", "ЗАГОЛОВОК"),
         ("hideStatus", "Скрыть статус соединения", "ЗАГОЛОВОК"),
         ("hideSearch", "Скрыть строку поиска", "ЗАГОЛОВОК"),
+        ("neutralComposeButton", "Обычный цвет кнопки нового сообщения", "ЗАГОЛОВОК"),
         ("foldersAtBottom", "Папки внизу", "СПИСОК"),
         ("hideArchive", "Скрыть архив из списка чатов", "СПИСОК"),
         ("hideEmptyReplyDrafts", "Скрывать черновик пустого ответа", "СПИСОК"),

@@ -2191,6 +2191,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.avatarListNode.containerNode.view.mask = nil
         }
         
+        self.avatarListNode.listContainerNode.photoTitleBottomInset = self.isAvatarExpanded ? max(40.0, expandedAvatarHeight - (titleFrame.minY + titleOffset + apparentTitleLockOffset + contentOffset * 0.5) + 16.0) : 40.0
         self.avatarListNode.listContainerNode.update(size: expandedAvatarListSize, peer: peer, isExpanded: self.isAvatarExpanded, transition: transition)
         if self.avatarListNode.listContainerNode.isCollapsing && !self.ignoreCollapse {
             self.avatarListNode.avatarContainerNode.canAttachVideo = false

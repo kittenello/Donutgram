@@ -26,6 +26,15 @@ final class PeerChatInterfaceStateTable: Table {
             return nil
         }
     }
+
+    func getAllPeerIds() -> [PeerId] {
+        var peerIds = Set(self.states.keys)
+        self.valueBox.scan(self.table, keys: { key in
+            peerIds.insert(PeerId(key.getInt64(0)))
+            return true
+        })
+        return Array(peerIds)
+    }
     
     func set(_ peerId: PeerId, state: StoredPeerChatInterfaceState?) -> (updated: Bool, updatedEmbeddedState: Bool) {
         let currentState = self.get(peerId)

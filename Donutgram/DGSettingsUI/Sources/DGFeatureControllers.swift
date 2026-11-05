@@ -139,7 +139,8 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
             .header(20, 2, "ДРУГОЕ"),
             .toggle(21, 2, "saveOnce", "Сохранять одноразовые медиа", s.saveViewOnceMedia, true),
             .toggle(22, 2, "disappearedGifts", "Видеть удалённые подарки", s.showDisappearedGifts, true),
-            .toggle(23, 2, "keepBannedChats", "Оставлять чаты после бана", s.keepBannedChats, true),
+            .info(23, 2, "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден."),
+            .toggle(24, 2, "keepBannedChats", "Оставлять чаты после бана", s.keepBannedChats, true),
         ])
         return result
     }, toggle: { key, value in
@@ -176,10 +177,13 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
             .toggle(12, 1, "saveProtectedStories", "Сохранять защищённые истории", s.saveProtectedStories, true),
             .header(20, 2, "GIF"),
             .toggle(21, 2, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true),
+            .info(22, 2, "Отправляет GIF как видео без звука. Обход не сработает, если в чате запрещена отправка видео."),
             .header(23, 4, "СТИКЕРЫ"),
             .toggle(24, 4, "stickerUnlock", "Обход блокировки стикеров", s.stickerUnlock, true),
+            .info(25, 4, "Отправляет стикеры как видео без звука. Обход не сработает, если в чате запрещена отправка видео."),
             .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
             .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
+            .info(32, 3, "Открывает чаты и каналы, недоступные из-за ограничений именно на iPhone."),
         ]
         return result
     }, restartRequiredKeys: ["bypassContentRestrictions"], toggle: { key, value in
@@ -211,6 +215,7 @@ func dgMainScreenSettingsController(context: AccountContext, focusKey: String? =
             .toggle(5, 0, "hideEmojiStatus", "Скрыть эмодзи-статус", s.chatListHideEmojiStatus, true),
             .toggle(6, 0, "hideStatus", "Скрыть статус соединения", s.chatListHideStatus, true),
             .toggle(7, 0, "hideSearch", "Скрыть строку поиска", s.chatListHideSearch, true),
+            .toggle(8, 0, "neutralComposeButton", "Обычный цвет кнопки нового сообщения", s.neutralComposeButton, true),
             .header(10, 1, "СПИСОК"),
             .toggle(11, 1, "foldersAtBottom", "Папки внизу", s.chatListFoldersAtBottom, true),
             .toggle(12, 1, "hideArchive", "Скрыть архив из списка чатов", s.hideArchive, true),
@@ -234,6 +239,7 @@ func dgMainScreenSettingsController(context: AccountContext, focusKey: String? =
         case "hideEmojiStatus": s.chatListHideEmojiStatus = value
         case "hideStatus": s.chatListHideStatus = value
         case "hideSearch": s.chatListHideSearch = value
+        case "neutralComposeButton": s.neutralComposeButton = value
         case "foldersAtBottom": s.chatListFoldersAtBottom = value
         case "hideArchive": s.hideArchive = value
         case "hideEmptyReplyDrafts": s.hideEmptyReplyDrafts = value

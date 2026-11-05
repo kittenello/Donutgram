@@ -38,6 +38,8 @@ if mode == "write" {
     }
     settings.hidePaidReactions = true
     check(!settings.hideEmptyReplyDrafts, "hiding empty reply drafts is opt-in")
+    check(!settings.neutralComposeButton, "the compose button keeps its accent color by default")
+    settings.neutralComposeButton = true
     check(!settings.compactProfileMusicAndBalance, "compact music and balance is opt-in")
     settings.compactProfileMusicAndBalance = true
     settings.hideEmptyReplyDrafts = true
@@ -99,6 +101,7 @@ if mode == "write" {
     print("settings behavior checks passed")
 } else if mode == "read" {
     check(settings.hideEmptyReplyDrafts, "hiding empty reply drafts survives a process restart")
+    check(settings.neutralComposeButton, "the compose button color survives a process restart")
     check(settings.compactProfileMusicAndBalance, "compact music and balance survives a process restart")
     check(settings.stickerUnlock && settings.hideTrendingStickers && settings.hideTrendingEmoji && settings.hideAIFeatures && settings.hidePhoneNumberInChatTitle && settings.disableProfileMusicAutoplay, "media preferences survive a process restart")
     check(!settings.gifScrubber, "a switched-off GIF scrubber stays off after a process restart")
