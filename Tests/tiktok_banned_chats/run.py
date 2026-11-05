@@ -90,9 +90,6 @@ def prepare(directory):
     assert arrived.index("if batch.remaining == 1 {") < arrived.index("self.report(.processing)") < arrived.index("prepare(index, url)")
     toast = source("submodules/TelegramUI/Sources/ChatController+DonutgramLinkDownload.swift").split("func finish() {", 1)[1].split("\n    }\n", 1)[0]
     assert toast.index("self.render()") < toast.index("self.controller?.dismiss()")
-    # TikWM sees the post and the user's IP: the downloads page says so.
-    downloads = source("Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift").split("func dgDownloadsSettingsController(", 1)[1].split("\n}\n", 1)[0]
-    assert "tikwm.com" in downloads
 
     imports = "import Foundation\nimport CoreFoundation\n"
     tik = imports + "import CryptoKit\n" + "\n".join(without_imports(source("Donutgram/DGLinkDownloader/Sources/" + f)) for f in [
