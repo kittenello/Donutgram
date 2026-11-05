@@ -23,6 +23,8 @@ policy = (root / "submodules/TelegramCore/Sources/Donutgram/DonutgramStickerMedi
 policy = policy.replace("import Postbox\n", "").replace("import DGSimpleSettings\n", "")
 policy = policy.replace("public func ", "func ").replace("DGSimpleSettings.shared", "testSettings")
 fixture = pathlib.Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
+conversion = (root / "submodules/TelegramUI/Sources/ChatController+DonutgramStickerMedia.swift").read_text(encoding="utf-8")
+progress = block(conversion, "private final class DonutgramStickerMediaProgress")
 sync = (root / "submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift").read_text(encoding="utf-8")
 chat_list = (root / "submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift").read_text(encoding="utf-8")
 entries = (root / "submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift").read_text(encoding="utf-8")
@@ -50,7 +52,7 @@ if not swift:
 with tempfile.TemporaryDirectory(prefix="donutgram-sticker-media-") as temporary:
     temporary = pathlib.Path(temporary)
     main = temporary / "main.swift"
-    main.write_text(policy + "\n" + fixture + draft_checks, encoding="utf-8")
+    main.write_text(policy + "\n" + progress + "\n" + fixture + draft_checks, encoding="utf-8")
     executable = temporary / "checks"
     settings = sorted((root / "Donutgram/DGSimpleSettings/Sources").glob("*.swift"))
     subprocess.run([swift, "-warnings-as-errors", *map(str, settings), str(main), "-o", str(executable)], check=True)
@@ -59,3 +61,4 @@ with tempfile.TemporaryDirectory(prefix="donutgram-sticker-media-") as temporary
     changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "origin/master...HEAD", "--", "*.swift"], cwd=root, text=True)
     for path in changed.splitlines():
         subprocess.run([swift, "-frontend", "-parse", str(root / path)], check=True)
+

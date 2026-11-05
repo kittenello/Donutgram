@@ -87,3 +87,51 @@ check(!donutgramCanSendStickerAsMedia(peer: nil), "unknown peers remain restrict
 testSettings.stickerUnlock = false
 check(!donutgramCanSendStickerAsMedia(peer: TelegramChannel(.banSendStickers), file: webm), "disabling restores normal sending")
 print("sticker media permission checks passed")
+
+
+// Model the overlay's contract: dismissing before presentation finishes has no effect.
+final class ViewController {
+    var hasAppeared = false
+    var dismissCount = 0
+    var dismissedBeforeAppearance = false
+
+    func dismiss() {
+        if self.hasAppeared {
+            self.dismissCount += 1
+        } else {
+            self.dismissedBeforeAppearance = true
+        }
+    }
+}
+
+func checkStickerMediaProgress() {
+    for finishBeforePresentation in [false, true] {
+        let progress = DonutgramStickerMediaProgress()
+        let overlay = ViewController()
+        var completePresentation: (() -> Void)?
+        progress.show(overlay, present: { _, completion in
+            completePresentation = completion
+        })
+        if finishBeforePresentation {
+            progress.finish()
+            check(overlay.dismissCount == 0, "wait for a pending presentation before dismissing")
+        }
+        overlay.hasAppeared = true
+        completePresentation?()
+        if !finishBeforePresentation {
+            progress.finish()
+        }
+        progress.finish()
+        check(overlay.dismissCount == 1, "success, failure or cancellation dismisses the overlay exactly once")
+        check(!overlay.dismissedBeforeAppearance, "never dismiss an overlay before it appears")
+    }
+
+    let fast = DonutgramStickerMediaProgress()
+    fast.finish()
+    var presented = false
+    fast.show(ViewController(), present: { _, _ in presented = true })
+    check(!presented, "a cached static sticker that finishes before the delay shows no late spinner")
+}
+checkStickerMediaProgress()
+print("sticker conversion progress lifecycle checks passed")
+

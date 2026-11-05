@@ -15,6 +15,38 @@ import WebPBinding
 
 private let donutgramStickerExportQueue = DispatchQueue(label: "donutgram.sticker-export", qos: .userInitiated)
 
+/// Main-queue state: a fast conversion can finish while the overlay is still being presented.
+private final class DonutgramStickerMediaProgress {
+    private(set) var isFinished = false
+    private var controller: ViewController?
+    private var isPresented = false
+
+    func show(_ controller: ViewController, present: (ViewController, @escaping () -> Void) -> Void) {
+        guard !self.isFinished else {
+            return
+        }
+        self.controller = controller
+        present(controller, {
+            self.isPresented = true
+            if self.isFinished {
+                self.dismiss()
+            }
+        })
+    }
+
+    func finish() {
+        self.isFinished = true
+        if self.isPresented {
+            self.dismiss()
+        }
+    }
+
+    private func dismiss() {
+        self.controller?.dismiss()
+        self.controller = nil
+    }
+}
+
 /// The frame on white: a photo and an H.264 video have no alpha channel.
 private func donutgramStickerFrameImage(_ frame: AnimationCacheItemFrame) -> UIImage? {
     guard case let .rgba(data, width, height, bytesPerRow) = frame.format,
@@ -179,12 +211,11 @@ private func donutgramStickerVideo(context: AccountContext, item: AnimationCache
 }
 
 private func donutgramStaticStickerMedia(context: AccountContext, peerId: EnginePeer.Id, file: FileMediaReference, size: CGSize) -> Signal<AnyMediaReference?, NoError> {
-    return Signal { subscriber in
-        let fetchDisposable = context.engine.resources.fetch(reference: file.abstract.resourceReference(file.media.resource), userLocation: .peer(peerId), userContentType: .sticker).start(error: { _ in
-            subscriber.putNext(nil)
-            subscriber.putCompletion()
-        })
-        let dataDisposable = (context.engine.resources.data(resource: EngineMediaResource(file.media.resource))
+    // Fetch completion (including an already cached file) starts the read. Errors and cancellation stay in the
+    // same signal as conversion instead of a separate subscription that can leave the reader waiting.
+    return context.engine.resources.fetch(reference: file.abstract.resourceReference(file.media.resource), userLocation: .peer(peerId), userContentType: .sticker, reportResultStatus: true)
+    |> mapToSignal { _ -> Signal<AnyMediaReference?, FetchResourceError> in
+        return context.engine.resources.data(resource: EngineMediaResource(file.media.resource))
         |> filter { $0.isComplete }
         |> take(1)
         |> deliverOn(Queue.concurrentDefaultQueue())
@@ -208,14 +239,11 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
                 immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: []
             )
             return .standalone(media: imageMedia)
-        }).start(next: { media in
-            subscriber.putNext(media)
-            subscriber.putCompletion()
-        })
-        return ActionDisposable {
-            fetchDisposable.dispose()
-            dataDisposable.dispose()
         }
+        |> castError(FetchResourceError.self)
+    }
+    |> catch { _ -> Signal<AnyMediaReference?, NoError> in
+        return .single(nil)
     }
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
 }
@@ -330,14 +358,20 @@ extension ChatControllerImpl {
         return Signal<[EnqueueMessage], NoError> { [weak self] subscriber in
             self?.donutgramIsConvertingSticker = true
             var cancelImpl: (() -> Void)?
+            let progress = DonutgramStickerMediaProgress()
             let progressDisposable = (Signal<Never, NoError> { [weak self] _ in
+                guard !progress.isFinished else {
+                    return EmptyDisposable
+                }
                 let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
                     cancelImpl?()
                 }))
-                self?.present(controller, in: .window(.root))
-                return ActionDisposable { [weak controller] in
+                progress.show(controller, present: { [weak self] controller, completion in
+                    self?.present(controller, in: .window(.root), completion: completion)
+                })
+                return ActionDisposable {
                     Queue.mainQueue().async {
-                        controller?.dismiss()
+                        progress.finish()
                     }
                 }
             }
@@ -349,6 +383,7 @@ extension ChatControllerImpl {
                 if isFinished.swap(true) {
                     return
                 }
+                progress.finish()
                 progressDisposable.dispose()
                 self?.donutgramIsConvertingSticker = false
             }
@@ -400,3 +435,4 @@ extension ChatControllerImpl {
         }
     }
 }
+
