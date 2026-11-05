@@ -9,6 +9,8 @@ on:
       - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
       - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift'
+      - 'submodules/TelegramCore/Sources/State/ApplyUpdateMessage.swift'
+      - 'submodules/PhotoResources/**'
       - 'submodules/ChatListUI/**'
       - 'submodules/WalletContext/**'
       - 'submodules/PasscodeCore/**'
@@ -17,6 +19,7 @@ on:
       - 'submodules/GalleryUI/Sources/Items/UniversalVideoGalleryItem.swift'
       - 'Tests/sticker_media/**'
       - 'Tests/wallet_history/**'
+      - 'Tests/avatar_share/**'
       - '.github/workflows/chat-media-tests.yml'
   workflow_dispatch:
 
@@ -35,3 +38,6 @@ jobs:
         run: python3 Tests/sticker_media/run.py
       - name: Check wallet history loading and failures
         run: python3 Tests/wallet_history/run.py
+      - name: Check shared avatar cache and complete JPEG decoding
+        run: python3 Tests/avatar_share/run.py
+

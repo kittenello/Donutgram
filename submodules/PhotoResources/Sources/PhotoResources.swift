@@ -55,6 +55,13 @@ public func representationFetchRangeForDisplayAtSize(representation: TelegramMed
     return nil
 }
 
+private func completePhotoResourceData(_ data: MediaResourceData) -> Data? {
+    guard data.complete else {
+        return nil
+    }
+    return try? Data(contentsOf: URL(fileURLWithPath: data.path), options: .mappedIfSafe)
+}
+
 public func chatMessagePhotoDatas(postbox: Postbox, userLocation: MediaResourceUserLocation, customUserContentType: MediaResourceUserContentType? = nil, photoReference: ImageMediaReference, fullRepresentationSize: CGSize = CGSize(width: 1280.0, height: 1280.0), autoFetchFullSize: Bool = false, tryAdditionalRepresentations: Bool = false, synchronousLoad: Bool = false, useMiniThumbnailIfAvailable: Bool = false, forceThumbnail: Bool = false, automaticFetch: Bool = true) -> Signal<Tuple4<Data?, Data?, ChatMessagePhotoQuality, Bool>, NoError> {
     return chatMessagePhotoDatas(mediaBox: postbox.mediaBox, userLocation: userLocation, customUserContentType: customUserContentType, photoReference: photoReference, fullRepresentationSize: fullRepresentationSize, autoFetchFullSize: autoFetchFullSize, tryAdditionalRepresentations: tryAdditionalRepresentations, synchronousLoad: synchronousLoad, useMiniThumbnailIfAvailable: useMiniThumbnailIfAvailable, forceThumbnail: forceThumbnail, automaticFetch: automaticFetch)
 }
@@ -91,7 +98,7 @@ func chatMessagePhotoDatas(mediaBox: MediaBox, userLocation: MediaResourceUserLo
             sources.insert(.miniThumbnail(data: miniThumbnail), at: 0)
         }
         
-        return Signal { subscriber in
+        let progressiveData = Signal<Tuple4<Data?, Data?, ChatMessagePhotoQuality, Bool>, NoError> { subscriber in
             let signals: [Signal<(SizeSource, Data?), NoError>] = sources.map { source -> Signal<(SizeSource, Data?), NoError> in
                 switch source {
                 case let .miniThumbnail(data):
@@ -145,6 +152,17 @@ func chatMessagePhotoDatas(mediaBox: MediaBox, userLocation: MediaResourceUserLo
                 dataDisposable.dispose()
                 fetchDisposable?.dispose()
             }
+        }
+
+        // A complete cached JPEG must be decoded whole. Locally sent/re-uploaded photos may still have their
+        // original encoding, so applying the server's progressive byte ranges can cut off the bottom of the image.
+        return mediaBox.resourceData(progressiveRepresentation.resource, option: .complete(waitUntilFetchStatus: false), attemptSynchronously: synchronousLoad)
+        |> take(1)
+        |> mapToSignal { data -> Signal<Tuple4<Data?, Data?, ChatMessagePhotoQuality, Bool>, NoError> in
+            if let completeData = completePhotoResourceData(data) {
+                return .single(Tuple4(nil, completeData, .full, true))
+            }
+            return progressiveData
         }
     }
     
@@ -3356,3 +3374,4 @@ public func solidColorImage(_ color: UIColor) -> Signal<(TransformImageArguments
         return context
     })
 }
+
