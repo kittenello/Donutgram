@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
@@ -84,6 +85,16 @@ enum PeerInfoMember: Equatable {
         }
     }
     
+    /// Preserve the raw rank for editing; normalize only the label of a known administrator.
+    var donutgramDisplayRank: String? {
+        switch self.role {
+        case .creator, .admin:
+            return DGSimpleSettings.shared.visibleAdminTitle(self.rank)
+        case .member:
+            return self.rank
+        }
+    }
+
     var storyStats: EnginePeerStoryStats? {
         switch self {
         case let .channelMember(_, value):

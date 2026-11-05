@@ -151,6 +151,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("customBackgrounds", "Отключить кастомные фоны", "СОДЕРЖИМОЕ"),
         ("hideAIFeatures", "Скрыть функции ИИ", "СОДЕРЖИМОЕ"),
         ("hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", "СОДЕРЖИМОЕ"),
+        ("showInvisibleAdmins", "Показывать невидимых админов", "СОДЕРЖИМОЕ"),
         ("removeLinkPreviews", "Отправлять без превью ссылок", "ОТПРАВКА"),
         ("wideChannelPosts", "Широкие посты в каналах", "КАНАЛЫ"),
         ("channelForwardCount", "Счётчик пересылок у постов", "КАНАЛЫ"),

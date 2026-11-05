@@ -135,6 +135,7 @@ private let dgEnglishStrings: [String: String] = [
     "Показывать только добавленные стикеры": "Show Only Added Stickers",
     "Скрыть платные реакции": "Hide Paid Reactions",
     "Скрыть «Via Bot» в сообщении": "Hide Via Bot in Messages",
+    "Показывать невидимых админов": "Show Hidden Admin Badges",
     "Вы точно хотите перейти в этот чат?": "Do you want to open this chat?",
     "Вы точно хотите поставить реакцию в чате, в который еще не вступили?": "Do you want to react in a chat you haven't joined?",
     "Голосовые": "Voice Messages",

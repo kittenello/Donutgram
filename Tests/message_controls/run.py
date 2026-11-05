@@ -58,7 +58,8 @@ def prepare():
     # Only the Donutgram previews update their bubbles in place; the stock theme screens are unchanged.
     assert preview.count("updatesMessagesInPlace: true") == 2 and "synchronousLoads: item.updatesMessagesInPlace" in preview
     history = read("submodules/TelegramUI/Sources/ChatHistoryListNode.swift")
-    assert "includeAllMessages: stickerRepliesChanged" in history and "|| premiumReplyEmojiChanged)" in history
+    refresh = next(line for line in history.splitlines() if "self.updateLoadedMessageItems(includeChannelPosts:" in line)
+    assert "includeAllMessages: stickerRepliesChanged" in refresh and "premiumReplyEmojiChanged" in refresh and "showInvisibleAdminsChanged" in refresh
     contact = read("submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift")
     assert "if !DGSimpleSettings.shared.hidePremiumReplyEmoji, let contactPeer" in contact
     bg = read("submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/Sources/MessageInlineBlockBackgroundView.swift")
@@ -70,7 +71,9 @@ def prepare():
         .replace("// PRODUCTION_REUSE", block(preview, "func canReuseNode("))
         .replace("// PRODUCTION_BACKGROUND_CONDITION", predicate)
         .replace("// PRODUCTION_REPLY_COLORS", colors)
-        .replace("// PRODUCTION_ARCHIVE_LAYOUT", archive))
+        .replace("// PRODUCTION_ARCHIVE_LAYOUT", archive)
+        .replace("// PRODUCTION_ADMIN_DISPLAY_RANK", block(read("submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoMembers.swift"), "var donutgramDisplayRank:"))
+        .replace("// PRODUCTION_ADMIN_RANK_EQUALITY", block(read("submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/Panes/PeerInfoMembersPane.swift"), "static func ==(lhs: PeerMembersListEntry").replace("PeerMembersListEntry", "FixtureRankEntry")))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

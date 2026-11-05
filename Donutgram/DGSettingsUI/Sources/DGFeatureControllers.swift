@@ -335,6 +335,7 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(26, 2, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
             .toggle(27, 2, "hideAIFeatures", "Скрыть функции ИИ", s.hideAIFeatures, true),
             .toggle(28, 2, "hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", s.hidePhoneNumberInChatTitle, true),
+            .toggle(29, 2, "showInvisibleAdmins", "Показывать невидимых админов", s.showInvisibleAdmins, true),
             .header(30, 3, "ОТПРАВКА"),
             .toggle(31, 3, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
             .header(40, 4, "КАНАЛЫ"),
@@ -358,6 +359,7 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
         case "removePings": s.removePings = value
         case "removeLinkPreviews": s.removeLinkPreviews = value
         case "hideViaBot": s.hideViaBot = value
+        case "showInvisibleAdmins": s.showInvisibleAdmins = value
         case "hideServiceMessages": s.hideServiceMessages = value
         case "greetingSticker": s.hideGreetingSticker = value
         case "pollResultsBeforeVoting": s.showPollResultsBeforeVoting = value
@@ -1046,7 +1048,7 @@ private func dgMovedRowLocation(key: String) -> (DGSettingsPage, String) {
         return (.mainScreen, "chatListPreview")
     case "glow":
         return (.mainScreen, "avatarGlow")
-    case "tails", "seconds", "editedIcon", "customBackgrounds", "replies", "hidePremiumReplyEmoji", "mentionComma", "mentionAvatars", "removePings", "removeLinkPreviews", "hideViaBot", "hideServiceMessages", "greetingSticker", "pollResultsBeforeVoting", "hideBotAutomation", "forwardDate", "channelForwardCount", "wideChannelPosts", "channelBottomButton", "jumpToStart":
+    case "showInvisibleAdmins", "tails", "seconds", "editedIcon", "customBackgrounds", "replies", "hidePremiumReplyEmoji", "mentionComma", "mentionAvatars", "removePings", "removeLinkPreviews", "hideViaBot", "hideServiceMessages", "greetingSticker", "pollResultsBeforeVoting", "hideBotAutomation", "forwardDate", "channelForwardCount", "wideChannelPosts", "channelBottomButton", "jumpToStart":
         return (.messages, key)
     case "stickerSize", "stickerShape", "hideStickerTime", "hideStickerChecks", "hideStickerReplyColors", "hideStickerReplyEmoji", "hideStickerReplyBackground", "onlyAdded", "recent", "hidePaidReactions":
         return (.stickers, key)
