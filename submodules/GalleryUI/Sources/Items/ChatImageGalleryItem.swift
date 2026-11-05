@@ -159,7 +159,7 @@ class ChatImageGalleryItem: GalleryItem {
         node.setMessage(self.message, mediaSubject: self.mediaSubject, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret, location: self.location)
         if let (media, _) = selectedMediaAndMediaImageForMessage(message: self.message, mediaSubject: self.mediaSubject) {
             if let image = media as? TelegramMediaImage {
-                node.setImage(userLocation: .peer(self.message.id.peerId), imageReference: .message(message: MessageReference(self.message), media: image))
+                node.setImage(userLocation: .peer(self.message.id.peerId), imageReference: donutgramIsBotInfoMediaMessage(self.message) ? .standalone(media: image) : .message(message: MessageReference(self.message), media: image))
             } else if let file = media as? TelegramMediaFile, file.mimeType.hasPrefix("image/") {
                 node.setFile(context: self.context, userLocation: .peer(self.message.id.peerId), fileReference: .message(message: MessageReference(self.message), media: file))
             }
@@ -475,7 +475,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
         }
         
-        self._titleContent.set(.single(GalleryTitleView.Content(message: EngineMessage(message), title: title, action: message.adAttribute == nil ? { [weak self] in
+        self._titleContent.set(.single(GalleryTitleView.Content(message: EngineMessage(message), title: title, action: message.adAttribute == nil && !donutgramIsBotInfoMediaMessage(message) ? { [weak self] in
             guard let self else {
                 return
             }
@@ -722,23 +722,26 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             }
             var items: [ContextMenuItem] = []
             if let message = self.message {
-                items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
-                    if let self, let peer, let navigationController = self.baseNavigationController() {
-                        self.beginCustomDismiss(.simpleAnimation)
+                if !donutgramIsBotInfoMediaMessage(message) {
+                    items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
+                        if let self, let peer, let navigationController = self.baseNavigationController() {
+                            self.beginCustomDismiss(.simpleAnimation)
                         
-                        var innerSubject: EngineMessageReplyInnerSubject?
-                        if let mediaSubject = self.mediaSubject, case let .pollOption(opaqueIdentifier) = mediaSubject {
-                            innerSubject = .pollOption(opaqueIdentifier)
-                        }
-                        context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil, subject: innerSubject), timecode: nil, setupReply: false)))
+                            var innerSubject: EngineMessageReplyInnerSubject?
+                            if let mediaSubject = self.mediaSubject, case let .pollOption(opaqueIdentifier) = mediaSubject {
+                                innerSubject = .pollOption(opaqueIdentifier)
+                            }
+                            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil, subject: innerSubject), timecode: nil, setupReply: false)))
                         
-                        Queue.mainQueue().after(0.3) {
-                            self.completeCustomDismiss(false)
+                            Queue.mainQueue().after(0.3) {
+                                self.completeCustomDismiss(false)
+                            }
                         }
-                    }
-                    f(.default)
-                })))
+                        f(.default)
+                    })))
                 
+                }
+
                 if !message.isCopyProtected() && !self.peerIsCopyProtected && message.paidContent == nil, let media = self.contextAndMedia?.1 {
                     items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Gallery_CreateSticker, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Sticker"), color: theme.actionSheet.primaryTextColor) }, action: { [weak self] _, f in
                         f(.default)
@@ -799,7 +802,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
                 }
             }
             
-            if let peer, let message = self.message, canSendMessagesToPeer(peer) {
+            if let peer, let message = self.message, !donutgramIsBotInfoMediaMessage(message), canSendMessagesToPeer(peer) {
                 items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.Conversation_ContextMenuReply, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
                     if let self, let navigationController = self.baseNavigationController() {
                         self.beginCustomDismiss(.simpleAnimation)
@@ -1243,7 +1246,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     }
     
     private func canDelete() -> Bool {
-        guard let message = self.message else {
+        guard let message = self.message, !donutgramIsBotInfoMediaMessage(message) else {
             return false
         }
         var canDelete = false

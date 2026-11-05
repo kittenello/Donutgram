@@ -332,7 +332,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
                 imageSize.height += 4.0
             }
             var displayCover = false
-            if imageSize.width == 0.0, let _ = item.peer {
+            if imageSize.width == 0.0, item.managedByBot != nil, let _ = item.peer {
                 displayCover = true
                 imageDimensions = CGSize(width: 100.0, height: 50.0).aspectFitted(CGSize(width: textSize.width + horizontalContentInset * 2.0 - imageInset * 2.0, height: CGFloat.greatestFiniteMagnitude))
                 imageSize = imageDimensions
@@ -563,7 +563,14 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
         }
         let media: EngineMedia
         if let video = item.video {
-            media = EngineMedia(video)
+            // Bot descriptions are often silent looping MP4s marked as GIFs. In the gallery they use the full
+            // video player (speed, playback controls and the media menu), while the card still loops its original.
+            media = EngineMedia(video.withUpdatedAttributes(video.attributes.filter { attribute in
+                if case .Animated = attribute {
+                    return false
+                }
+                return true
+            }))
         } else if let photo = item.photo {
             media = EngineMedia(photo)
         } else {
@@ -575,8 +582,8 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
             id: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Local, id: 0),
             globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0,
             flags: [], tags: [], globalTags: [], localTags: [], customTags: [],
-            forwardInfo: nil, author: item.peer, text: "", attributes: [], media: [media],
-            peers: [:], associatedMessages: [:], associatedMessageIds: [],
+            forwardInfo: nil, author: item.peer, text: "", attributes: [DonutgramBotInfoMediaMessageAttribute()], media: [media],
+            peers: item.peer.map { [peerId: $0] } ?? [:], associatedMessages: [:], associatedMessageIds: [],
             associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]
         )
         let controller = item.context.sharedContext.makeGalleryController(context: item.context, source: .standaloneMessage(message._asMessage(), nil), streamSingleVideo: true, isPreview: false)

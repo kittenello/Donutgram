@@ -2099,7 +2099,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         if case let .message(message, _) = item.contentInfo {
-            self._titleContent.set(.single(GalleryTitleView.Content(message: EngineMessage(message), title: title, action: message.adAttribute == nil ? { [weak self] in
+            self._titleContent.set(.single(GalleryTitleView.Content(message: EngineMessage(message), title: title, action: message.adAttribute == nil && !donutgramIsBotInfoMediaMessage(message) ? { [weak self] in
                 guard let self else {
                     return
                 }
@@ -2412,7 +2412,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         guard let item = self.item else {
             return
         }
-        guard let contentInfo = item.contentInfo, case let .message(message, _) = contentInfo else {
+        guard let contentInfo = item.contentInfo, case let .message(message, _) = contentInfo, !donutgramIsBotInfoMediaMessage(message) else {
             return
         }
         
@@ -3300,7 +3300,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         let timestamp = self.playerStatusValue?.timestamp ?? 0.0
         // Prefer a file that is already on disk: the original, then the best downloaded HLS quality. Otherwise
         // fetch the quality being played rather than the original, which can be many times larger.
-        var candidates: [FileMediaReference] = [.message(message: MessageReference(message), media: file)]
+        var candidates: [FileMediaReference] = [donutgramIsBotInfoMediaMessage(message) ? .standalone(media: file) : .message(message: MessageReference(message), media: file)]
         var fallback = candidates[0]
         if let content = self.item?.content as? HLSVideoContent, let qualitySet = HLSQualitySet(baseFile: content.fileReference, codecConfiguration: HLSCodecConfiguration(context: self.context)) {
             let qualities = qualitySet.qualityFiles.sorted(by: { $0.key > $1.key })
@@ -3340,7 +3340,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     }
 
     private func canDelete() -> Bool {
-        guard let (message, _, _) = self.contentInfo() else {
+        guard let (message, _, _) = self.contentInfo(), !donutgramIsBotInfoMediaMessage(message) else {
             return false
         }
         var canDelete = false
@@ -3862,7 +3862,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                             
                             switch self.fetchStatus {
                             case .Local:
-                                let _ = (SaveToCameraRoll.saveToCameraRoll(context: self.context, userLocation: .peer(message.id.peerId), mediaReference: .message(message: MessageReference(message), media: file))
+                                let _ = (SaveToCameraRoll.saveToCameraRoll(context: self.context, userLocation: .peer(message.id.peerId), mediaReference: donutgramIsBotInfoMediaMessage(message) ? .standalone(media: file) : .message(message: MessageReference(message), media: file))
                                 |> deliverOnMainQueue).start(completed: { [weak self] in
                                     guard let self else {
                                         return
@@ -3896,7 +3896,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 if !items.isEmpty {
                     items.append(.separator)
                 }
-                if let (message, _, _) = strongSelf.contentInfo() {
+                if let (message, _, _) = strongSelf.contentInfo(), !donutgramIsBotInfoMediaMessage(message) {
                     let context = strongSelf.context
                     items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
                         guard let strongSelf = self, let peer = peer else {
@@ -3970,7 +3970,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     }
                 }
                 
-                if let peer, let (message, _, _) = strongSelf.contentInfo(), canSendMessagesToPeer(peer) {
+                if let peer, let (message, _, _) = strongSelf.contentInfo(), !donutgramIsBotInfoMediaMessage(message), canSendMessagesToPeer(peer) {
                     items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Conversation_ContextMenuReply, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Reply"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
                         if let self, let navigationController = self.baseNavigationController() {
                             self.beginCustomDismiss(.simpleAnimation)
