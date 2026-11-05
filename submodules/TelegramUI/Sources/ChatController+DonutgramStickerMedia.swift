@@ -214,7 +214,14 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
     // Fetch completion (including an already cached file) starts the read. Errors and cancellation stay in the
     // same signal as conversion instead of a separate subscription that can leave the reader waiting.
     return context.engine.resources.fetch(reference: file.abstract.resourceReference(file.media.resource), userLocation: .peer(peerId), userContentType: .sticker, reportResultStatus: true)
-    |> mapToSignal { _ -> Signal<AnyMediaReference?, FetchResourceError> in
+    |> map { _ in true }
+    |> `catch` { _ -> Signal<Bool, NoError> in
+        return .single(false)
+    }
+    |> mapToSignal { fetched -> Signal<AnyMediaReference?, NoError> in
+        guard fetched else {
+            return .single(nil)
+        }
         return context.engine.resources.data(resource: EngineMediaResource(file.media.resource))
         |> filter { $0.isComplete }
         |> take(1)
@@ -240,10 +247,6 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
             )
             return .standalone(media: imageMedia)
         }
-        |> castError(FetchResourceError.self)
-    }
-    |> `catch` { _ -> Signal<AnyMediaReference?, NoError> in
-        return .single(nil)
     }
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
 }
