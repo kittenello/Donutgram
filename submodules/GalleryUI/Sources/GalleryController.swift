@@ -1048,7 +1048,11 @@ public class GalleryController: ViewController, StandalonePresentableController,
                                         
                                         if isFirstTime {
                                             isFirstTime = false
-                                            if item is UniversalVideoGalleryItem {
+                                            if donutgramIsBotInfoMediaMessage(entry.entry.message) {
+                                                // Standalone bot media has no chat transition to initialize visibility.
+                                                // Use the setter so the header, footer hit testing and item controls agree.
+                                                strongSelf.galleryNode.setControlsHidden(false, animated: false)
+                                            } else if item is UniversalVideoGalleryItem {
                                             } else {
                                                 strongSelf.galleryNode.areControlsHidden = false
                                             }
@@ -1702,6 +1706,10 @@ public class GalleryController: ViewController, StandalonePresentableController,
             }) {
                 if isCentral {
                     centralItemIndex = items.count
+                    if donutgramIsBotInfoMediaMessage(entry.entry.message) {
+                        // The initial message can already be loaded when the gallery view is created.
+                        self.galleryNode.setControlsHidden(false, animated: false)
+                    }
                 }
                 items.append(item)
             }

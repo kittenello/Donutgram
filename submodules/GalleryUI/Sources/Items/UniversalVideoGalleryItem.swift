@@ -3374,7 +3374,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
 
     private var playOnDismiss = false
     private func openMoreMenu(sourceView: UIView, gesture: ContextGesture?, adMessage: Message?, isSettings: Bool, actionsOnTop: Bool = false) {
-        guard let controller = self.baseNavigationController()?.topViewController as? ViewController else {
+        // A bot description opens a standalone gallery without a base navigation controller.
+        guard let controller = (self.baseNavigationController()?.topViewController as? ViewController) ?? self.galleryController() else {
             return
         }
                 

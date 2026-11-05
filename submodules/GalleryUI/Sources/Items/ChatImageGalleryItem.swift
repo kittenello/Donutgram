@@ -841,7 +841,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         } else {
             items = self.contextMenuMainItems()
         }
-        guard let controller = self.baseNavigationController()?.topViewController as? ViewController else {
+        guard let controller = (self.baseNavigationController()?.topViewController as? ViewController) ?? self.galleryController() else {
             return
         }
         
