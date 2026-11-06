@@ -125,7 +125,7 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
         var labelColor = presentationData.theme.list.itemSecondaryTextColor
         var labelBackground = false
         let label: String?
-        if let rank = item.member.donutgramDisplayRank {
+        if let rank = item.member.rank {
             label = rank
         } else {
             switch item.member.role {

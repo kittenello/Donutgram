@@ -27,7 +27,6 @@ private enum DGSettingDescription {
 
     static let byKey: [String: String] = [
         "removePings": "Когда вас упомянут, отдельной отметки и уведомления об упоминании не будет.",
-        "showInvisibleAdmins": "Если у администратора невидимый префикс, вместо него покажется «админ».",
         "anonymousStickerSending": "Отправляет стикер без привязки к набору. Собеседник не сможет открыть набор по этому стикеру.",
         "hideVerification": "Скрывает значки верификации Hold, Major и других сервисов.",
         "downloadTikTok": downloads,

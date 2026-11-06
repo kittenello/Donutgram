@@ -1,19 +1,5 @@
 import Foundation
 
-struct FixtureRankedMember: Equatable {
-    enum Role: Equatable { case creator, admin, member }
-    let role: Role
-    let rank: String?
-    // PRODUCTION_ADMIN_DISPLAY_RANK
-}
-
-final class FixtureRankTheme {}
-enum FixtureRankEntry: Equatable {
-    case addMember(FixtureRankTheme, String)
-    case member(FixtureRankTheme, Int, FixtureRankedMember, String?)
-    // PRODUCTION_ADMIN_RANK_EQUALITY
-}
-
 func check(_ condition: @autoclosure () -> Bool, _ message: String) {
     precondition(condition(), message)
 }
@@ -100,45 +86,6 @@ let defaults = UserDefaults(suiteName: suite)!
 let settings = DGSimpleSettings(defaults: defaults)
 if mode == "write" {
     defaults.removePersistentDomain(forName: suite)
-    check(!settings.showInvisibleAdmins, "hidden admin badges are opt-in")
-    let invisibleTitles = [
-        "", " ", "\t\n", "\u{00a0}", "\u{200b}", "\u{200c}\u{200d}", "\u{2060}",
-        "\u{202a}\u{202c}", "\u{feff}", "\u{034f}", "\u{115f}", "\u{1160}",
-        "\u{3164}", "\u{ffa0}", "\u{2800}", "\u{1d159}", "\u{fffc}", " \u{200b}\u{2800}\u{3164}\n"
-    ]
-    let visibleTitles = ["админ", "модератор", "🛡️", "👩‍💻", " \u{200b}Главный\u{200d} ", "а\u{0301}"]
-    for title in invisibleTitles + visibleTitles {
-        check(settings.visibleAdminTitle(title) == title, "disabled leaves every custom title unchanged")
-    }
-    settings.showInvisibleAdmins = true
-    check(settings.visibleAdminTitle(nil) == nil, "no rank keeps the standard role label")
-    for title in invisibleTitles {
-        check(settings.visibleAdminTitle(title) == nil, "invisible-only titles fall back to the localized role")
-    }
-    for title in visibleTitles {
-        check(settings.visibleAdminTitle(title) == title, "readable and emoji titles stay byte-for-byte unchanged")
-    }
-    do {
-        let original = DGSimpleSettings.shared.showInvisibleAdmins
-        defer { DGSimpleSettings.shared.showInvisibleAdmins = original }
-        let theme = FixtureRankTheme()
-        let admin = FixtureRankedMember(role: .admin, rank: "\u{200b}")
-        DGSimpleSettings.shared.showInvisibleAdmins = false
-        let before = FixtureRankEntry.member(theme, 0, admin, admin.donutgramDisplayRank)
-        DGSimpleSettings.shared.showInvisibleAdmins = true
-        let after = FixtureRankEntry.member(theme, 0, admin, admin.donutgramDisplayRank)
-        check(before != after, "an unchanged member row updates immediately when the visible title changes")
-        for role in [FixtureRankedMember.Role.admin, .creator] {
-            let member = FixtureRankedMember(role: role, rank: "\u{200b}")
-            check(member.donutgramDisplayRank == nil, "known admins and owners use the normal role badge")
-            check(member.rank == "\u{200b}", "displaying a badge never rewrites the server title")
-        }
-        let regular = FixtureRankedMember(role: .member, rank: "\u{200b}")
-        check(regular.donutgramDisplayRank == regular.rank, "an ordinary member is never marked as admin")
-        DGSimpleSettings.shared.showInvisibleAdmins = false
-        check(before == FixtureRankEntry.member(theme, 0, admin, admin.donutgramDisplayRank), "switching off restores the original member row")
-        check(FixtureRankedMember(role: .admin, rank: "\u{200b}").donutgramDisplayRank == "\u{200b}", "switching off restores the original badge")
-    }
     check(settings.stickerReplyOptions == 7 && !settings.hidePremiumReplyEmoji, "new controls must preserve defaults")
     for options in 0 ... 7 {
         settings.stickerReplyOptions = options
@@ -237,8 +184,6 @@ if mode == "write" {
     settings.showForwardDate = true
     defaults.synchronize()
 } else {
-    check(settings.showInvisibleAdmins, "admin badge preference survives a process restart")
-    check(settings.visibleAdminTitle("\u{200b}\u{2800}") == nil, "the persisted preference restores the visible badge")
     check(settings.stickerReplyOptions == 4, "individual sticker settings survive process restart")
     check(settings.hideStickerReplyColors && settings.hideStickerReplyEmoji && !settings.hideStickerReplyBackground, "hide switches restore correctly")
     check(settings.hidePremiumReplyEmoji, "premium decoration setting survives process restart")

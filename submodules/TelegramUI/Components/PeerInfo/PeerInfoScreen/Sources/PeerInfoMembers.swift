@@ -1,5 +1,4 @@
 import Foundation
-import DGSimpleSettings
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
@@ -85,16 +84,6 @@ enum PeerInfoMember: Equatable {
         }
     }
     
-    /// Preserve the raw rank for editing; normalize only the label of a known administrator.
-    var donutgramDisplayRank: String? {
-        switch self.role {
-        case .creator, .admin:
-            return DGSimpleSettings.shared.visibleAdminTitle(self.rank)
-        case .member:
-            return self.rank
-        }
-    }
-
     var storyStats: EnginePeerStoryStats? {
         switch self {
         case let .channelMember(_, value):
@@ -150,7 +139,6 @@ private final class PeerInfoMembersContextImpl {
     
     private var canAddMembers = false
     private var members: [PeerInfoMember] = []
-    private var administrators: [EnginePeer.Id: ChannelParticipant] = [:]
     private var dataState: PeerInfoMembersDataState = .loading(isInitial: true)
     private var removingMemberIds: [EnginePeer.Id: Disposable] = [:]
     private var membersHidden: Bool?
@@ -162,7 +150,6 @@ private final class PeerInfoMembersContextImpl {
         return self.stateValue.get()
     }
     private let disposable = MetaDisposable()
-    private let administratorsDisposable = MetaDisposable()
     private let peerDisposable = MetaDisposable()
     private var channelMembersControl: PeerChannelMemberCategoryControl?
     
@@ -200,30 +187,6 @@ private final class PeerInfoMembersContextImpl {
             })
             self.disposable.set(disposable)
             self.channelMembersControl = control
-
-            let (administratorsDisposable, _) = context.peerChannelMemberCategoriesContextsManager.admins(engine: context.engine, accountPeerId: context.account.peerId, peerId: peerId, updated: { [weak self] state in
-                guard case .ready = state.loadingState else {
-                    return
-                }
-                queue.async {
-                    guard let self else {
-                        return
-                    }
-                    let administrators = state.list.reduce(into: [EnginePeer.Id: ChannelParticipant]()) { result, item in
-                        switch item.participant {
-                        case .creator, .member(_, _, .some, _, _, _):
-                            result[item.peer.id] = item.participant
-                        default:
-                            break
-                        }
-                    }
-                    if self.administrators != administrators {
-                        self.administrators = administrators
-                        self.pushState()
-                    }
-                }
-            })
-            self.administratorsDisposable.set(administratorsDisposable)
             
             self.peerDisposable.set((context.account.postbox.peerView(id: peerId)
             |> deliverOn(self.queue)).startStrict(next: { [weak self] view in
@@ -322,7 +285,6 @@ private final class PeerInfoMembersContextImpl {
     
     deinit {
         self.disposable.dispose()
-        self.administratorsDisposable.dispose()
         self.peerDisposable.dispose()
         for (_, disposable) in self.removingMemberIds {
             disposable.dispose()
@@ -330,16 +292,13 @@ private final class PeerInfoMembersContextImpl {
     }
     
     private func pushState() {
-        let members = self.members.compactMap { member -> PeerInfoMember? in
-            guard self.removingMemberIds[member.id] == nil else {
-                return nil
-            }
-            if case let .channelMember(participant, storyStats) = member, let administrator = self.administrators[member.id] {
-                return .channelMember(participant: RenderedChannelParticipant(participant: administrator, peer: participant.peer, peers: participant.peers, presences: participant.presences), storyStats: storyStats)
-            }
-            return member
+        if self.removingMemberIds.isEmpty {
+            self.stateValue.set(.single(PeerInfoMembersState(canAddMembers: self.canAddMembers, members: self.members, dataState: self.dataState)))
+        } else {
+            self.stateValue.set(.single(PeerInfoMembersState(canAddMembers: self.canAddMembers, members: self.members.filter { member in
+                return self.removingMemberIds[member.id] == nil
+            }, dataState: self.dataState)))
         }
-        self.stateValue.set(.single(PeerInfoMembersState(canAddMembers: self.canAddMembers, members: members, dataState: self.dataState)))
     }
     
     func loadMore() {

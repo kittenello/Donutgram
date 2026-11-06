@@ -2826,14 +2826,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         let string: String
                         switch authorRank {
                         case let .creator(rank):
-                            if let rank = DGSimpleSettings.shared.visibleAdminTitle(rank), !rank.isEmpty {
+                            if let rank, !rank.isEmpty {
                                 string = rank
                             } else {
                                 string = item.presentationData.strings.Conversation_Owner
                             }
                             rankBadgeColor = UIColor(rgb: 0x956ac8)
                         case let .admin(rank):
-                            if let rank = DGSimpleSettings.shared.visibleAdminTitle(rank), !rank.isEmpty {
+                            if let rank, !rank.isEmpty {
                                 string = rank
                             } else {
                                 string = item.presentationData.strings.Conversation_Admin
