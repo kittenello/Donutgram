@@ -253,9 +253,10 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
             let bounds = sourceView.bounds
             let inset = min(62.0, bounds.width * 0.25)
             let anchorX = sourceView.effectiveUserInterfaceLayoutDirection == .rightToLeft ? bounds.maxX - inset : bounds.minX + inset
-            popover.sourceRect = CGRect(x: anchorX, y: bounds.minY, width: 1.0, height: bounds.height)
+            popover.sourceRect = CGRect(x: anchorX, y: bounds.minY, width: 1.0, height: bounds.height).insetBy(dx: 0.0, dy: -4.0)
             popover.permittedArrowDirections = [.up, .down]
-            popover.backgroundColor = presentationData.theme.actionSheet.opaqueItemBackgroundColor
+            let theme = presentationData.theme
+            popover.backgroundColor = theme.actionSheet.opaqueItemBackgroundColor.mixedWith(theme.contextMenu.primaryColor, alpha: 0.12)
         }
     }
 
@@ -332,6 +333,13 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
             verticalFittingPriority: .fittingSizeLevel
         )
         self.preferredContentSize = CGSize(width: width, height: ceil(fittedSize.height))
+        if let popover = self.popoverPresentationController, let sourceView = self.sourceView, let window = sourceView.window {
+            let anchor = sourceView.convert(popover.sourceRect, to: window)
+            let bottom = window.safeAreaLayoutGuide.layoutFrame.maxY - popover.popoverLayoutMargins.bottom
+            if bottom - anchor.maxY >= self.preferredContentSize.height + 24.0 {
+                popover.permittedArrowDirections = .up
+            }
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
