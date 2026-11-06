@@ -1,0 +1,38 @@
+{
+  "name": "Donutgram",
+  "identifier": "com.kittenello.donutgram.source",
+  "subtitle": "Сборки Пончика с master",
+  "description": "Каждая сборка master публикуется сюда автоматически.",
+  "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+  "website": "https://github.com/kittenello/Donutgram",
+  "tintColor": "#E8508C",
+  "apps": [
+    {
+      "name": "Donutgram",
+      "bundleIdentifier": "com.kittenello.donutgram",
+      "developerName": "kittenello",
+      "subtitle": "Telegram с пончиком",
+      "localizedDescription": "Неофициальный клиент Telegram на основе Telegram iOS.",
+      "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+      "tintColor": "#E8508C",
+      "category": "social",
+      "versions": [
+        {
+          "version": "13.1.2.36068",
+          "buildVersion": "36068",
+          "date": "2026-11-06T12:13:10Z",
+          "localizedDescription": "feat: медиа, компактный профиль и исправления кошелька (#126)",
+          "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-36068.ipa",
+          "size": 79768138,
+          "minOSVersion": "15.0"
+        }
+      ],
+      "version": "13.1.2.36068",
+      "versionDate": "2026-11-06T12:13:10Z",
+      "versionDescription": "feat: медиа, компактный профиль и исправления кошелька (#126)",
+      "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-36068.ipa",
+      "size": 79768138
+    }
+  ],
+  "news": []
+}
