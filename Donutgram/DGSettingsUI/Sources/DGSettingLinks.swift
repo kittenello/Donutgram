@@ -22,34 +22,29 @@ struct DGSettingItemTag: ItemListItemTag {
     }
 }
 
-enum DGSettingDescription {
-    static let mentions = "Когда вас упомянут, отдельной отметки и уведомления об упоминании не будет."
-    static let invisibleAdmins = "Если у администратора невидимый префикс, вместо него покажется «админ»."
-    static let anonymousStickers = "Отправляет стикер без привязки к набору. Собеседник не сможет открыть набор по этому стикеру."
-    static let verification = "Скрывает значки верификации Hold, Major и других сервисов."
-    static let downloads = "Когда вы отправляете ссылку на TikTok или YouTube Shorts, Donutgram скачивает ролик и отправляет его собеседнику вместо ссылки."
-    static let gifUnlock = "Отправляет GIF как видео без звука. Обход не сработает, если в чате запрещена отправка видео."
-    static let stickerUnlock = "Отправляет стикеры как видео без звука. Обход не сработает, если в чате запрещена отправка видео."
-    static let bypassContentRestrictions = "Открывает чаты и каналы, недоступные из-за ограничений именно на iPhone."
-    static let disappearedGifts = "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден."
-    static let telegramStatistics = "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда."
+private enum DGSettingDescription {
+    private static let downloads = "Когда вы отправляете ссылку на TikTok или YouTube Shorts, Donutgram скачивает ролик и отправляет его собеседнику вместо ссылки."
 
     static let byKey: [String: String] = [
-        "removePings": mentions,
-        "showInvisibleAdmins": invisibleAdmins,
-        "anonymousStickerSending": anonymousStickers,
-        "hideVerification": verification,
+        "removePings": "Когда вас упомянут, отдельной отметки и уведомления об упоминании не будет.",
+        "showInvisibleAdmins": "Если у администратора невидимый префикс, вместо него покажется «админ».",
+        "anonymousStickerSending": "Отправляет стикер без привязки к набору. Собеседник не сможет открыть набор по этому стикеру.",
+        "hideVerification": "Скрывает значки верификации Hold, Major и других сервисов.",
         "downloadTikTok": downloads,
         "downloadShorts": downloads,
         "hideViaBot": "Скрывает подпись «через бота» над сообщениями.",
         "hideAIFeatures": "Скрывает кнопки функций ИИ в редакторах сообщений и подписей.",
         "removeLinkPreviews": "Отправляет ссылки без карточек предпросмотра.",
         "neutralComposeButton": "Использует обычный цвет для кнопки нового сообщения в списке чатов.",
-        "gifUnlock": gifUnlock,
-        "stickerUnlock": stickerUnlock,
-        "bypassContentRestrictions": bypassContentRestrictions,
-        "disappearedGifts": disappearedGifts,
-        "telegramStatistics": telegramStatistics
+        "gifUnlock": "Отправляет GIF как видео без звука. Обход не сработает, если в чате запрещена отправка видео.",
+        "stickerUnlock": "Отправляет стикеры как видео без звука. Обход не сработает, если в чате запрещена отправка видео.",
+        "bypassContentRestrictions": "Открывает чаты и каналы, недоступные из-за ограничений именно на iPhone.",
+        "disappearedGifts": "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.",
+        "telegramStatistics": "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.",
+        "hideBlocked": "Сообщения тех, кого вы заблокировали, скрыты в группах и комментариях, как в теневом бане. Боты не скрываются: остановленный бот тоже числится заблокированным.",
+        "pollResultsBeforeVoting": "Если в опросе можно отменить голос, вы увидите, сколько человек выбрали каждый вариант, ещё до своего голоса.",
+        "hideServiceMessages": "Скрывает служебные сообщения о вступлении в группу, выходе из неё и других событиях.",
+        "keepBannedChats": "Если вас забанили в чате, он останется в списке и вы сможете читать его историю. Новые сообщения появляться не будут."
     ]
 }
 
@@ -130,6 +125,12 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
         self.context = context
         self.controller = controller
         self.page = page
+    }
+
+    func install() {
+        let gesture = UILongPressGestureRecognizer(target: self, action: #selector(DGSettingsLongPressHandler.handle(_:)))
+        gesture.delegate = self
+        self.controller?.view.addGestureRecognizer(gesture)
     }
 
     private func target(at point: CGPoint, in controller: ItemListController) -> (tag: DGSettingItemTag, view: UIView)? {

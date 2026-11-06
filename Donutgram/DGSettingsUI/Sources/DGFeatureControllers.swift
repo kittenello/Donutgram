@@ -139,9 +139,7 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
             .header(20, 2, "ДРУГОЕ"),
             .toggle(21, 2, "saveOnce", "Сохранять одноразовые медиа", s.saveViewOnceMedia, true),
             .toggle(22, 2, "keepBannedChats", "Оставлять чаты после бана", s.keepBannedChats, true),
-            // The note under the gifts switch closes the block: a row after it would sit right on the text.
             .toggle(23, 2, "disappearedGifts", "Видеть удалённые подарки", s.showDisappearedGifts, true),
-            .info(24, 2, DGSettingDescription.disappearedGifts),
         ])
         return result
     }, toggle: { key, value in
@@ -178,13 +176,10 @@ func dgBypassSettingsController(context: AccountContext, focusKey: String? = nil
             .toggle(12, 1, "saveProtectedStories", "Сохранять защищённые истории", s.saveProtectedStories, true),
             .header(20, 2, "GIF"),
             .toggle(21, 2, "gifUnlock", "Обход блокировок GIF", s.gifUnlock, true),
-            .info(22, 2, DGSettingDescription.gifUnlock),
             .header(23, 4, "СТИКЕРЫ"),
             .toggle(24, 4, "stickerUnlock", "Обход блокировки стикеров", s.stickerUnlock, true),
-            .info(25, 4, DGSettingDescription.stickerUnlock),
             .header(30, 3, "ОГРАНИЧЕННЫЙ КОНТЕНТ"),
             .toggle(31, 3, "bypassContentRestrictions", "Обход ограничений контента", s.bypassContentRestrictions, true),
-            .info(32, 3, DGSettingDescription.bypassContentRestrictions),
         ]
         return result
     }, restartRequiredKeys: ["bypassContentRestrictions"], toggle: { key, value in
@@ -333,20 +328,18 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(9, 0, "forwardDate", "Дата оригинала в пересланных", s.showForwardDate, true),
             .header(10, 1, "УПОМИНАНИЯ"),
             .toggle(11, 1, "removePings", "Упоминания как обычные сообщения", s.removePings, true),
-            .info(12, 1, DGSettingDescription.mentions),
             .header(20, 2, "СОДЕРЖИМОЕ"),
             .toggle(21, 2, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
             .toggle(22, 2, "hideServiceMessages", "Скрыть служебные сообщения", s.hideServiceMessages, true),
             .toggle(23, 2, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
             .toggle(24, 2, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
-            .toggle(25, 2, "hideBotAutomation", "Скрыть плашку чат-бота", s.hideBotAutomation, true),
+            .toggle(25, 2, "hideBotAutomation", "Скрыть плашку автоматизации", s.hideBotAutomation, true),
             .toggle(26, 2, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
             .toggle(27, 2, "hideAIFeatures", "Скрыть функции ИИ", s.hideAIFeatures, true),
             .toggle(28, 2, "hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", s.hidePhoneNumberInChatTitle, true),
             .toggle(29, 2, "showInvisibleAdmins", "Показывать невидимых админов", s.showInvisibleAdmins, true),
-            .info(30, 2, DGSettingDescription.invisibleAdmins),
-            .header(31, 3, "ОТПРАВКА"),
-            .toggle(32, 3, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
+            .header(30, 3, "ОТПРАВКА"),
+            .toggle(31, 3, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
             .header(40, 4, "КАНАЛЫ"),
             .toggle(41, 4, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
             .toggle(42, 4, "channelForwardCount", "Счётчик пересылок у постов", s.showChannelForwardCount, true),
@@ -434,7 +427,6 @@ func dgStickersSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(24, 2, "hideTrendingEmoji", "Скрыть популярные эмодзи", s.hideTrendingEmoji, true),
             .header(26, 4, "ОТПРАВКА"),
             .toggle(27, 4, "anonymousStickerSending", "Анонимная отправка стикеров", s.anonymousStickerSending, true),
-            .info(28, 4, DGSettingDescription.anonymousStickers),
             .header(30, 3, "РЕАКЦИИ"),
             .toggle(31, 3, "reactionsInChannels", "Скрыть реакции в каналах", hiddenReactions & 1 != 0, true),
             .toggle(32, 3, "reactionsInGroups", "Скрыть реакции в группах", hiddenReactions & 2 != 0, true),
@@ -498,7 +490,6 @@ func dgProfilesSettingsController(context: AccountContext, focusKey: String? = n
             .header(30, 3, "ЗНАЧКИ У ИМЁН"),
             .toggle(31, 3, "premiumStatuses", "Скрыть премиум-статусы", s.hidePremiumStatuses, true),
             .toggle(32, 3, "hideVerification", "Скрыть верификацию", s.hideVerification, true),
-            .info(33, 3, DGSettingDescription.verification),
             .header(40, 4, "МУЗЫКА И БАЛАНС"),
             .toggle(41, 4, "compactProfileMusicAndBalance", "Компактные музыка и баланс", s.compactProfileMusicAndBalance, true),
         ])
@@ -861,7 +852,6 @@ func dgDownloadsSettingsController(context: AccountContext, focusKey: String? = 
             result.append(.toggle(3, 0, "signDownloads", "Подпись «Скачано с …»", s.signDownloadedMedia, true))
         }
         result.append(contentsOf: [
-            .info(4, 0, DGSettingDescription.downloads),
             .header(10, 1, "УСКОРЕНИЕ ЗАГРУЗКИ"),
             .speedSlider(11, 1, s.downloadAcceleration),
             .toggle(12, 1, "accelerateUpload", "Ускорение отправки", s.accelerateUpload, true),
@@ -894,8 +884,7 @@ func dgSecuritySettingsController(context: AccountContext, focusKey: String? = n
             .toggle(3, 0, "confirmTelegramLinks", "Переход по ссылкам Telegram", s.confirmTelegramLinks, true),
             .toggle(4, 0, "confirmChatPreviewEntry", "Вход из предпросмотра", s.confirmChatPreviewEntry, true),
             .header(10, 1, "СТАТИСТИКА"),
-            .toggle(11, 1, "telegramStatistics", "Отправлять в Telegram", s.sendTelegramStatistics, true),
-            .info(12, 1, DGSettingDescription.telegramStatistics)
+            .toggle(11, 1, "telegramStatistics", "Отправлять в Telegram", s.sendTelegramStatistics, true)
         ]
         return result
     }, toggle: { key, value in

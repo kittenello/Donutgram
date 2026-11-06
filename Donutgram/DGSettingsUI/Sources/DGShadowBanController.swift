@@ -55,24 +55,20 @@ private enum DGShadowBanSection: Int32 {
 
 private enum DGShadowBanEntryId: Hashable {
     case hideBlocked
-    case hideBlockedInfo
     case add
     case peer(EnginePeer.Id)
-    case info
 }
 
 private enum DGShadowBanEntry: ItemListNodeEntry {
     // «Скрывать сообщения заблокированных», a block of its own above the list.
     case hideBlocked(Bool)
-    case hideBlockedInfo(String)
     case add(PresentationTheme)
     // The peer, its subtitle and whether it is known to this account (an unknown one can't be opened).
     case peer(Int32, EnginePeer, String, Bool, ItemListPeerItemEditing)
-    case info(String)
 
     var section: ItemListSectionId {
         switch self {
-        case .hideBlocked, .hideBlockedInfo:
+        case .hideBlocked:
             return DGShadowBanSection.blocked.rawValue
         default:
             return DGShadowBanSection.peers.rawValue
@@ -83,14 +79,10 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
         switch self {
         case .hideBlocked:
             return .hideBlocked
-        case .hideBlockedInfo:
-            return .hideBlockedInfo
         case .add:
             return .add
         case let .peer(_, peer, _, _, _):
             return .peer(peer.id)
-        case .info:
-            return .info
         }
     }
 
@@ -98,14 +90,10 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
         switch self {
         case .hideBlocked:
             return -2
-        case .hideBlockedInfo:
-            return -1
         case .add:
             return 0
         case let .peer(index, _, _, _, _):
             return 1 + index
-        case .info:
-            return Int32.max
         }
     }
 
@@ -116,11 +104,6 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
                 return true
             }
             return false
-        case let .hideBlockedInfo(lhsText):
-            if case let .hideBlockedInfo(rhsText) = rhs, lhsText == rhsText {
-                return true
-            }
-            return false
         case let .add(lhsTheme):
             if case let .add(rhsTheme) = rhs, lhsTheme === rhsTheme {
                 return true
@@ -128,11 +111,6 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
             return false
         case let .peer(lhsIndex, lhsPeer, lhsText, lhsKnown, lhsEditing):
             if case let .peer(rhsIndex, rhsPeer, rhsText, rhsKnown, rhsEditing) = rhs, lhsIndex == rhsIndex, lhsPeer == rhsPeer, lhsText == rhsText, lhsKnown == rhsKnown, lhsEditing == rhsEditing {
-                return true
-            }
-            return false
-        case let .info(lhsText):
-            if case let .info(rhsText) = rhs, lhsText == rhsText {
                 return true
             }
             return false
@@ -151,8 +129,6 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: dgLocalized("Скрывать сообщения заблокированных", languageCode: languageCode), value: value, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setHideBlocked(value)
             }, tag: DGSettingItemTag(key: "hideBlocked"))
-        case let .hideBlockedInfo(text):
-            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .add(theme):
             return ItemListPeerActionItem(presentationData: presentationData, systemStyle: .glass, icon: PresentationResourcesItemList.addPersonIcon(theme), title: dgLocalized("Добавить", languageCode: languageCode), sectionId: self.section, height: .generic, editing: false, action: {
                 arguments.addPeer()
@@ -168,8 +144,6 @@ private enum DGShadowBanEntry: ItemListNodeEntry {
             }, removePeer: { peerId in
                 arguments.removePeer(peerId)
             })
-        case let .info(text):
-            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
 }
@@ -304,7 +278,6 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
 
         var entries: [DGShadowBanEntry] = [
             .hideBlocked(state.hideBlocked),
-            .hideBlockedInfo(dgLocalized("Сообщения тех, кого вы заблокировали, скрыты в группах и комментариях, как в теневом бане. Боты не скрываются: остановленный бот тоже числится заблокированным.", languageCode: languageCode)),
             .add(presentationData.theme)
         ]
         for (index, peerId) in orderedPeerIds.enumerated() {
@@ -318,6 +291,12 @@ public func dgShadowBanController(context: AccountContext, focusKey: String? = n
     }
 
     let controller = ItemListController(context: context, state: signal)
+    let longPressHandler = DGSettingsLongPressHandler(context: context, controller: controller, page: .shadowBan)
+    controller.didAppear = { firstTime in
+        if firstTime {
+            longPressHandler.install()
+        }
+    }
     if let focusKey {
         // As on the other pages (dgController): the first transaction shows the row a link or a search result names, once.
         let focusTag = DGSettingItemTag(key: focusKey)

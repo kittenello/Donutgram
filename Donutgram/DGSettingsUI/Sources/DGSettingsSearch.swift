@@ -148,7 +148,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideServiceMessages", "Скрыть служебные сообщения", "СОДЕРЖИМОЕ"),
         ("greetingSticker", "Скрыть приветственный стикер", "СОДЕРЖИМОЕ"),
         ("pollResultsBeforeVoting", "Итоги до голосования", "СОДЕРЖИМОЕ"),
-        ("hideBotAutomation", "Скрыть плашку чат-бота", "СОДЕРЖИМОЕ"),
+        ("hideBotAutomation", "Скрыть плашку автоматизации", "СОДЕРЖИМОЕ"),
         ("customBackgrounds", "Отключить кастомные фоны", "СОДЕРЖИМОЕ"),
         ("hideAIFeatures", "Скрыть функции ИИ", "СОДЕРЖИМОЕ"),
         ("hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", "СОДЕРЖИМОЕ"),

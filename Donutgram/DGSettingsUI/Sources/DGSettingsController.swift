@@ -289,13 +289,9 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
     controller.alwaysSynchronous = true
     // Re-read the entries on return from a sub-page, but not on other re-appearances (tab switches, dismissed modals):
     // that would overwrite a text field the user is still editing with its stored value.
-    controller.didAppear = { [weak controller] firstTime in
+    controller.didAppear = { firstTime in
         if firstTime {
-            let gesture = UILongPressGestureRecognizer(target: longPressHandler, action: #selector(DGSettingsLongPressHandler.handle(_:)))
-            // Keep the default cancelsTouchesInView: when the menu opens, the list gets touchesCancelled
-            // and does not open the row on release, as with its own scroll pan.
-            gesture.delegate = longPressHandler
-            controller?.view.addGestureRecognizer(gesture)
+            longPressHandler.install()
         }
         if !firstTime && needsRefreshOnAppear {
             needsRefreshOnAppear = false
