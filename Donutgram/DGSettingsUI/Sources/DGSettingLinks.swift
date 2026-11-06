@@ -120,6 +120,7 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
     let context: AccountContext
     weak var controller: ItemListController?
     let page: DGSettingsPage
+    private weak var highlightedMenu: DGSettingMenuController?
 
     init(context: AccountContext, controller: ItemListController, page: DGSettingsPage) {
         self.context = context
@@ -171,6 +172,14 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
     }
 
     @objc func handle(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .ended, .cancelled, .failed:
+            self.highlightedMenu?.clearHighlight()
+            self.highlightedMenu = nil
+            return
+        default:
+            break
+        }
         guard gesture.state == .began,
               let controller = self.controller,
               let target = self.target(at: gesture.location(in: controller.view), in: controller) else {
@@ -215,6 +224,7 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
         )
         controller.view.endEditing(true)
         menu.loadViewIfNeeded()
+        self.highlightedMenu = menu
         controller.present(menu, animated: true)
     }
 }
@@ -326,7 +336,7 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if let sourceView = self.sourceView {
+        if !self.highlight.isHidden, let sourceView = self.sourceView {
             self.highlight.frame = sourceView.bounds.insetBy(dx: 16.0, dy: 1.0)
             self.highlight.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             self.highlight.isUserInteractionEnabled = false
@@ -338,6 +348,11 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        self.clearHighlight()
+    }
+
+    func clearHighlight() {
+        self.highlight.isHidden = true
         self.highlight.removeFromSuperview()
     }
 

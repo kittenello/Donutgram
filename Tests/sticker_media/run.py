@@ -25,6 +25,10 @@ policy = policy.replace("public func ", "func ").replace("DGSimpleSettings.share
 fixture = pathlib.Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
 conversion = (root / "submodules/TelegramUI/Sources/ChatController+DonutgramStickerMedia.swift").read_text(encoding="utf-8")
 progress = block(conversion, "private final class DonutgramStickerMediaProgress")
+assert "donutgramStickerSignalQueue = Queue(queue: donutgramStickerExportQueue)" in conversion
+for converter in ("donutgramStaticStickerMedia", "donutgramStickerMedia"):
+    assert "|> deliverOn(donutgramStickerSignalQueue)" in block(conversion, f"private func {converter}(")
+assert "present(controller, in: .current, completion: completion)" in block(conversion, "func donutgramMessagesWithStickerMedia(")
 sync = (root / "submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift").read_text(encoding="utf-8")
 chat_list = (root / "submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift").read_text(encoding="utf-8")
 entries = (root / "submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift").read_text(encoding="utf-8")
@@ -57,7 +61,7 @@ hidden_reply_time = "overrideChatTimestamp = inputState.chatListTimestamp(hiding
 assert hidden_reply_time in block(sync, "func _internal_updateChatInputState(")
 assert hidden_reply_time in block(peers, "public func setOpaqueChatInterfaceState(")
 if args.source_only:
-    print("empty reply integration checks passed; Swift behavior was not executed")
+    print("sticker media and empty reply integration checks passed; Swift behavior was not executed")
     raise SystemExit(0)
 swift = shutil.which("swiftc")
 if not swift:

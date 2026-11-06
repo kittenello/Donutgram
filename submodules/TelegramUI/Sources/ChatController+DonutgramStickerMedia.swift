@@ -13,6 +13,7 @@ import DGSimpleSettings
 import WebPBinding
 
 private let donutgramStickerExportQueue = DispatchQueue(label: "donutgram.sticker-export", qos: .userInitiated)
+private let donutgramStickerSignalQueue = Queue(queue: donutgramStickerExportQueue)
 
 /// Main-queue state: a fast conversion can finish while the overlay is still being presented.
 private final class DonutgramStickerMediaProgress {
@@ -233,7 +234,7 @@ private func donutgramStaticStickerMedia(context: AccountContext, peerId: Engine
     }
     return data
     |> take(1)
-    |> deliverOn(Queue.concurrentDefaultQueue())
+    |> deliverOn(donutgramStickerSignalQueue)
     |> mapToSignal { resourceData -> Signal<AnyMediaReference?, NoError> in
         guard let resourceData,
             let sourceData = try? Data(contentsOf: URL(fileURLWithPath: resourceData.path)),
@@ -266,7 +267,7 @@ private func donutgramStickerMedia(context: AccountContext, peerId: EnginePeer.I
     return context.animationCache.get(sourceId: file.media.resource.id.stringRepresentation, size: size, fetch: fetch)
     |> filter { $0.isFinal }
     |> take(1)
-    |> deliverOn(Queue.concurrentDefaultQueue())
+    |> deliverOn(donutgramStickerSignalQueue)
     |> mapToSignal { result -> Signal<AnyMediaReference?, NoError> in
         guard let item = result.item, item.numFrames > 0, item.numFrames <= 1800 else {
             return .single(nil)
@@ -387,7 +388,7 @@ extension ChatControllerImpl {
                     dismissOnOutsideTap: false
                 )
                 progress.show(controller, present: { [weak self] controller, completion in
-                    self?.present(controller, in: .window(.root), completion: completion)
+                    self?.present(controller, in: .current, completion: completion)
                 })
                 return ActionDisposable {
                     Queue.mainQueue().async {
