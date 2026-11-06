@@ -37,6 +37,12 @@ draft_checks += "\n" + block(draft_refresh, "func donutgramRefreshEmptyReplyDraf
 draft_checks += "\n" + pathlib.Path(__file__).with_name("stored_draft_fixtures.swift").read_text(encoding="utf-8")
 account = (root / "submodules/TelegramCore/Sources/Account/Account.swift").read_text(encoding="utf-8")
 assert "managedDonutgramEmptyReplyDrafts(postbox: self.postbox).start()" in account
+# The chat states table has integer keys: a blob scan hands back their decimal text, not peer ids.
+state_table = (root / "submodules/Postbox/Sources/PeerChatInterfaceStateTable.swift").read_text(encoding="utf-8")
+assert "self.valueBox.scanInt64(self.table, keys:" in block(state_table, "func getAllPeerIds()")
+# A launch with the switch unchanged skips the scan; a flip re-sorts the drafts, then records the value.
+managed = block(draft_refresh, "func managedDonutgramEmptyReplyDrafts(")
+assert managed.index("getPreferencesEntry(key: donutgramEmptyReplyDraftsPreferencesKey)") < managed.index("donutgramRefreshEmptyReplyDraftTimestamps(") < managed.index("setPreferencesEntry(key: donutgramEmptyReplyDraftsPreferencesKey")
 bot_card = (root / "submodules/TelegramUI/Components/Chat/ChatBotInfoItem/Sources/ChatBotInfoItem.swift").read_text(encoding="utf-8")
 assert "flags: [.Incoming]" in block(bot_card, "private func openMedia()")
 location = (root / "submodules/ChatListUI/Sources/Node/ChatListNodeLocation.swift").read_text(encoding="utf-8")

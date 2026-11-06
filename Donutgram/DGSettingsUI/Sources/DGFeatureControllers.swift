@@ -138,9 +138,10 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
         result.append(contentsOf: [
             .header(20, 2, "ДРУГОЕ"),
             .toggle(21, 2, "saveOnce", "Сохранять одноразовые медиа", s.saveViewOnceMedia, true),
-            .toggle(22, 2, "disappearedGifts", "Видеть удалённые подарки", s.showDisappearedGifts, true),
-            .info(23, 2, "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден."),
-            .toggle(24, 2, "keepBannedChats", "Оставлять чаты после бана", s.keepBannedChats, true),
+            .toggle(22, 2, "keepBannedChats", "Оставлять чаты после бана", s.keepBannedChats, true),
+            // The note under the gifts switch closes the block: a row after it would sit right on the text.
+            .toggle(23, 2, "disappearedGifts", "Видеть удалённые подарки", s.showDisappearedGifts, true),
+            .info(24, 2, "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден."),
         ])
         return result
     }, toggle: { key, value in

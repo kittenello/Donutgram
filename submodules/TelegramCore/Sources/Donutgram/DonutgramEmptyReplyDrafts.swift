@@ -3,6 +3,22 @@ import Postbox
 import SwiftSignalKit
 import DGSimpleSettings
 
+/// Donutgram-only: between TelegramCore's preference ids (`PreferencesKeyValues`, counting up from 0) and the
+/// application-specific ones (`applicationSpecificPreferencesKey`, 1000 and up).
+private let donutgramEmptyReplyDraftsPreferencesKey: ValueBoxKey = {
+    let key = ValueBoxKey(length: 4)
+    key.setInt32(0, value: 500)
+    return key
+}()
+
+/// The «Скрывать черновик пустого ответа» value this account's saved drafts were last re-sorted for.
+private struct DonutgramEmptyReplyDraftsState: Codable {
+    let hidingEmptyReplies: Bool
+}
+
+/// Keeps saved bare replies where «Скрывать черновик пустого ответа» puts them in the chat list: at once when the
+/// switch flips, and at launch when the drafts were last re-sorted for the other value (or never: drafts saved
+/// before this pass).
 func managedDonutgramEmptyReplyDrafts(postbox: Postbox) -> Signal<Void, NoError> {
     return (Signal<Bool, NoError> { subscriber in
         let settings = DGSimpleSettings.shared
@@ -17,7 +33,13 @@ func managedDonutgramEmptyReplyDrafts(postbox: Postbox) -> Signal<Void, NoError>
     |> distinctUntilChanged)
     |> mapToSignal { hidden in
         return postbox.transaction { transaction -> Void in
+            // Every draft saved since the last pass already used its value: a launch with the switch unchanged has
+            // nothing to re-sort and does not read every saved chat state.
+            if transaction.getPreferencesEntry(key: donutgramEmptyReplyDraftsPreferencesKey)?.get(DonutgramEmptyReplyDraftsState.self)?.hidingEmptyReplies == hidden {
+                return
+            }
             donutgramRefreshEmptyReplyDraftTimestamps(transaction: transaction, hidingEmptyReplies: hidden)
+            transaction.setPreferencesEntry(key: donutgramEmptyReplyDraftsPreferencesKey, value: PreferencesEntry(DonutgramEmptyReplyDraftsState(hidingEmptyReplies: hidden)))
         }
     }
 }

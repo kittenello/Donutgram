@@ -29,8 +29,9 @@ final class PeerChatInterfaceStateTable: Table {
 
     func getAllPeerIds() -> [PeerId] {
         var peerIds = Set(self.states.keys)
-        self.valueBox.scan(self.table, keys: { key in
-            peerIds.insert(PeerId(key.getInt64(0)))
+        // The keys are SQLite integers: `scan(_:keys:)` would hand back their decimal text as a blob.
+        self.valueBox.scanInt64(self.table, keys: { key in
+            peerIds.insert(PeerId(key))
             return true
         })
         return Array(peerIds)

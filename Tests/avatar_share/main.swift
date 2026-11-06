@@ -59,7 +59,7 @@ final class MediaBox {
     }
 }
 final class Postbox { let mediaBox = MediaBox() }
-struct MediaResourceData { let path: String; let complete: Bool }
+struct MediaResourceData { let path: String; let size: Int64; let complete: Bool }
 
 // PRODUCTION_HELPERS
 
@@ -116,13 +116,15 @@ let jpeg = encoded as Data
 let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
 try jpeg.write(to: path)
 defer { try? FileManager.default.removeItem(at: path) }
-let serverProgressiveSize = jpeg.count / 2
-check(serverProgressiveSize < jpeg.count, "the new server encoding can advertise a different scan size")
-guard let complete = completePhotoResourceData(MediaResourceData(path: path.path, complete: true)) else { fatalError("expected cached photo") }
-check(complete == jpeg && complete.count > serverProgressiveSize, "cached complete photos use the entire JPEG, never an advertised progressive prefix")
+let serverProgressiveSize = Int64(jpeg.count / 2)
+let cachedSize = Int64(jpeg.count)
+check(serverProgressiveSize < cachedSize, "the new server encoding can advertise a different scan size")
+guard let complete = completePhotoResourceData(MediaResourceData(path: path.path, size: cachedSize, complete: true), progressiveSize: serverProgressiveSize) else { fatalError("expected cached photo") }
+check(complete == jpeg && Int64(complete.count) > serverProgressiveSize, "a cached photo of another encoding uses the entire JPEG, never an advertised progressive prefix")
 let source = CGImageSourceCreateWithData(complete as CFData, nil)!
 check(CGImageSourceGetStatus(source) == .statusComplete, "the complete JPEG retains its end marker")
 check(CGImageSourceCreateImageAtIndex(source, 0, nil)?.height == 128, "the bottom of the image can be decoded")
-check(completePhotoResourceData(MediaResourceData(path: path.path, complete: false)) == nil, "a partially downloaded photo keeps the progressive-loading path")
-check(completePhotoResourceData(MediaResourceData(path: path.path + ".missing", complete: true)) == nil, "a missing cache file falls back to progressive loading")
+check(completePhotoResourceData(MediaResourceData(path: path.path, size: cachedSize, complete: true), progressiveSize: cachedSize) == nil, "the server's own encoding keeps the progressive path and its small-preview prefixes")
+check(completePhotoResourceData(MediaResourceData(path: path.path, size: 0, complete: false), progressiveSize: serverProgressiveSize) == nil, "a partially downloaded photo keeps the progressive-loading path")
+check(completePhotoResourceData(MediaResourceData(path: path.path + ".missing", size: cachedSize, complete: true), progressiveSize: serverProgressiveSize) == nil, "a missing cache file falls back to progressive loading")
 print("avatar share cache migration and complete JPEG decoding checks passed")

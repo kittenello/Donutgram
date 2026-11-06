@@ -55,8 +55,11 @@ public func representationFetchRangeForDisplayAtSize(representation: TelegramMed
     return nil
 }
 
-private func completePhotoResourceData(_ data: MediaResourceData) -> Data? {
-    guard data.complete else {
+/// The whole cached file when it is not the server's progressive encoding (its size is not the last scan's): a locally
+/// sent photo, or an older re-uploaded copy moved under the server's id, which the server's scan offsets would cut off.
+/// A file of the server's size keeps the progressive path, which reads only what a small preview needs.
+private func completePhotoResourceData(_ data: MediaResourceData, progressiveSize: Int64) -> Data? {
+    guard data.complete, data.size != progressiveSize else {
         return nil
     }
     return try? Data(contentsOf: URL(fileURLWithPath: data.path), options: .mappedIfSafe)
@@ -154,12 +157,12 @@ func chatMessagePhotoDatas(mediaBox: MediaBox, userLocation: MediaResourceUserLo
             }
         }
 
-        // A complete cached JPEG must be decoded whole. Locally sent/re-uploaded photos may still have their
-        // original encoding, so applying the server's progressive byte ranges can cut off the bottom of the image.
+        // A complete cached JPEG of another encoding (locally sent or re-uploaded) is decoded whole: the server's
+        // progressive byte ranges would cut off the bottom of the image.
         return mediaBox.resourceData(progressiveRepresentation.resource, option: .complete(waitUntilFetchStatus: false), attemptSynchronously: synchronousLoad)
         |> take(1)
         |> mapToSignal { data -> Signal<Tuple4<Data?, Data?, ChatMessagePhotoQuality, Bool>, NoError> in
-            if let completeData = completePhotoResourceData(data) {
+            if let completeData = completePhotoResourceData(data, progressiveSize: Int64(progressiveRepresentation.progressiveSizes.last!)) {
                 return .single(Tuple4(nil, completeData, .full, true))
             }
             return progressiveData
