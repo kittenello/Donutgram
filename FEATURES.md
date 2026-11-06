@@ -1,0 +1,85 @@
+- hide message read receipts, story views, online status, and typing indicators.
+- automatically go offline and optionally get a ghost mode prompt when opening a story.
+- optionally mark a chat as read when sending a message.
+- send silently or use scheduled delivery.
+- mark everything read locally to clear counters on this device, or mark everything read on the server, including archived chats.
+- keep deleted messages and available media, with separate controls for your own messages and bot chats.
+- mark deleted messages, display them with reduced opacity, and browse them on a dedicated screen.
+- search saved deleted messages across chats and jump to a result.
+- view message edit history and reply to a saved deleted message with a quote.
+- keep view-once media, including voice and round video messages.
+- keep previously loaded chat history available to read after a ban.
+- keep a local history of previously seen gifts that were hidden, sold, or removed.
+- forward from protected chats, take screenshots in protected chats, and save protected stories.
+- send gifs as silent videos in chats that allow video but restrict gifs.
+- send stickers as videos in chats that allow video but restrict stickers. static stickers become one-second mp4 clips, and animated stickers retain their motion. conversion can be cancelled.
+- open chats and channels affected by ios-specific content restrictions.
+- locally hide people, bots, and channels from a message or profile menu.
+- filter messages in groups, channels, and comments, along with related previews, notifications, mentions, and search results.
+- manage the list in settings and temporarily reveal hidden messages in a chat.
+- separately hide messages from blocked users.
+- use chats, donutgram, your username, or your display name as the title and optionally center it.
+- hide the search bar, connection status, emoji status, archive, or story feed.
+- move folders to the bottom and set local folder colors and tags.
+- hide or widen the tab bar, with separate controls for the contacts and calls tabs.
+- show online indicators, avatar glow, snowfall, and a neutral compose button color.
+- disable the swipe gesture that opens the story camera.
+- hide reply-only drafts in the chat list while keeping the selected reply.
+- remove bubble tails, show seconds in timestamps, and replace the edited label with an icon.
+- disable colored replies and custom chat backgrounds or hide premium emoji in replies.
+- show avatars in mentions, insert a comma after a mention, and treat mentions as ordinary messages.
+- show the original date of forwarded messages and send links without preview cards.
+- hide via bot labels, automation banners, service messages, greeting stickers, ai controls, and phone numbers in chat titles.
+- view poll results before voting when the poll lets you retract a vote.
+- widen channel posts, show forward counts, and choose whether the bottom channel button opens discussion, controls sound, or stays hidden.
+- jump to the beginning of a chat from the avatar menu.
+- select your own messages or those of a chosen author in a chat or topic, within the selection limit.
+- copy bot button text and callback data.
+- adjust sticker size and corner rounding, and hide timestamps or delivery checks.
+- separately remove colors, emoji, and backgrounds from sticker replies.
+- show only added stickers, expand recent stickers, and hide trending sticker and emoji packs independently.
+- send stickers without revealing the pack to recipients while retaining pack access on the sender’s side.
+- hide reactions separately in channels, groups, and private chats, hide paid reactions, and adjust reaction glow.
+- show and copy profile ids in telegram api or bot api format, and search for users by numeric id.
+- show the data center, registration date, chat creation date, and mutual contact status when available.
+- show the avatar date and time in the photo viewer.
+- display relative last-seen times or estimate recent activity from incoming messages.
+- hide phone numbers, premium statuses, and third-party verification badges.
+- show pinned music and balance in compact pills below the profile status.
+- customize your displayed phone number, id, rating, collectible usernames, label, verification badge, and premium status locally. these changes are visible on your client.
+- add up to 500 accounts, with an add account button above the profile.
+- start round video messages with the front, rear, or last-used camera, or ask before recording.
+- use the 0.5× ultrawide camera on supported devices, use the zoom slider, and optionally retain pinch zoom.
+- use a 3–2–1 recording countdown and select the built-in microphone.
+- control whether music pauses when recording round videos, recording voice messages, or listening to voice messages.
+- send a gallery video as a round video message or convert an audio file to a voice message.
+- transcribe voice and round video messages with telegram, apple, or automatic selection.
+- seek through videos by double-tapping for 5, 10, 15, or 30 seconds, and scrub through gifs with a slider.
+- pause videos, voice messages, or round videos when the app goes into the background. disable automatic playback of the next voice or round video message.
+- open a profile playlist without starting music automatically.
+- copy photos or the current video frame, and send supported videos from files as video messages.
+- open photos and videos from bot info cards with standard gallery actions.
+- download tiktok videos and photo or youtube shorts when sending a link. optionally add a downloaded-from caption.
+- configure download and upload acceleration.
+- automatically switch proxies with an adjustable timeout, disable proxies by network type, and force tcp for calls.
+- hide ads, proxy sponsors, the gift button, and birthday notifications.
+- control whether selling a gift opens the stars screen, and toggle telegram statistics separately.
+- ask for confirmation before calling, adding reactions in chats you haven’t joined, opening telegram links, or entering a chat from its preview.
+- choose alternate app icons and dynamic island styles. match the island to the icon or set it separately.
+- preview message, sticker, chat list, and tab bar appearance.
+- search settings in russian or english and jump straight to a matching option.
+- long-press a setting to see its description, copy its direct link, or share it.
+
+telegram ios bugs which was fixed in donutgram
+
+- editing in slow mode. the countdown and boost button could get in the way of saving an edit. the countdown now applies to new sends.
+- round videos with bluetooth headsets. recording could close immediately because the aac encoder rejected the fixed bitrate at 8 or 16 khz. the recorder now chooses a supported bitrate.
+- frozen round video preview. quickly switching cameras or toggling flash could leave a blurred placeholder over the live feed for the rest of the recording.
+- missing cancel button during round video recording. a quick swipe to lock recording could leave the button transparent. locking now resets the gesture offset.
+- gray bottom section after sharing a profile photo. cached jpeg bytes could be decoded using scan boundaries from a different encoding. photo cache reuse and decoding now account for that mismatch.
+- misplaced profile status and rating when the name was blank. header layout was skipped when the name had no size. status and rating now retain their positions.
+- removing music from your profile. the player could close while other tracks remained. it now checks the current playlist before dismissing.
+- stars balance refresh after selling a gift. the refresh used a fixed delay. it now follows request completion, and navigation waits for the gift sheet to close.
+- wallet history. loading and request failures could look like empty history, and an old error could persist after success. the wallet now distinguishes those states and offers a retry.
+- music playback. the media manager could start a track immediately after receiving a pause command when opening a playlist. it now honors the pause.
+- 1970 dates in the gallery. media without a message timestamp could display the unix epoch date. the date is now hidden in that case.
