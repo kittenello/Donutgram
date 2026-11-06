@@ -261,14 +261,20 @@ private final class ChannelMemberSingleCategoryListContext: ChannelMemberCategor
     
     private func updateHeadMembers(_ headMembers: [RenderedChannelParticipant]?) {
         if let headMembers = headMembers {
-            var existingIds = Set<PeerId>()
             var list = headMembers
-            for member in list {
-                existingIds.insert(member.peer.id)
+            let batchSize = self.batchCount ?? initialBatchSize
+            let containsAllAdmins: Bool
+            if case .admins(nil) = self.category {
+                containsAllAdmins = headMembers.count < Int(batchSize)
+            } else {
+                containsAllAdmins = false
             }
-            for member in self.listStateValue.list {
-                if !existingIds.contains(member.peer.id) {
-                    list.append(member)
+            if !containsAllAdmins {
+                let existingIds = Set(headMembers.map(\.peer.id))
+                for member in self.listStateValue.list {
+                    if !existingIds.contains(member.peer.id) {
+                        list.append(member)
+                    }
                 }
             }
             self.loadingDisposable.set(nil)
@@ -329,13 +335,17 @@ private final class ChannelMemberSingleCategoryListContext: ChannelMemberCategor
                     return
                 }
                 
-                var acc: UInt64 = 0
                 let batchSize = strongSelf.batchCount ?? initialBatchSize
-                for i in 0 ..< min(strongSelf.listStateValue.list.count, Int(batchSize)) {
-                    let peerId = strongSelf.listStateValue.list[i].peer.id
-                    combineInt64Hash(&acc, with: peerId)
+                let hashResult: Int64
+                if case .admins(nil) = strongSelf.category {
+                    hashResult = 0
+                } else {
+                    var acc: UInt64 = 0
+                    for member in strongSelf.listStateValue.list.prefix(Int(batchSize)) {
+                        combineInt64Hash(&acc, with: member.peer.id)
+                    }
+                    hashResult = finalizeInt64Hash(acc)
                 }
-                let hashResult = finalizeInt64Hash(acc)
                 strongSelf.headUpdateDisposable.set((strongSelf.loadSignal(offset: 0, count: batchSize, hash: hashResult)
                 |> deliverOnMainQueue).start(next: { members in
                     self?.updateHeadMembers(members)

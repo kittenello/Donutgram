@@ -6,11 +6,13 @@ public extension DGSimpleSettings {
         guard self.showInvisibleAdmins, let title else {
             return title
         }
-        let hasVisibleContent = title.unicodeScalars.contains { scalar in
+        let hasVisibleContent = title.precomposedStringWithCompatibilityMapping.unicodeScalars.contains { scalar in
             return !CharacterSet.whitespacesAndNewlines.contains(scalar)
-                && !CharacterSet.controlCharacters.contains(scalar)
+                && scalar.properties.generalCategory != .control
                 && !scalar.properties.isDefaultIgnorableCodePoint
-                && scalar.value != 0x2800 // Braille blank is not Unicode whitespace.
+                && scalar.value != 0x2800
+                && scalar.value != 0x1d159
+                && scalar.value != 0xfffc
         }
         return hasVisibleContent ? title : nil
     }

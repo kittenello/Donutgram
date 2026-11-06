@@ -235,9 +235,9 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("transcription", "Сервис расшифровки", "ГОЛОС В ТЕКСТ")
     ])
     add("downloads", "Загрузки и сеть", [
-        ("downloadTikTok", "TikTok", "ВИДЕО ВМЕСТО ССЫЛКИ"),
-        ("downloadShorts", "YouTube Shorts", "ВИДЕО ВМЕСТО ССЫЛКИ"),
-        ("signDownloads", "Подпись «Скачано с …»", "ВИДЕО ВМЕСТО ССЫЛКИ"),
+        ("downloadTikTok", "TikTok", "СКАЧИВАТЬ"),
+        ("downloadShorts", "YouTube Shorts", "СКАЧИВАТЬ"),
+        ("signDownloads", "Подпись «Скачано с …»", "СКАЧИВАТЬ"),
         ("accelerateUpload", "Ускорение отправки", "УСКОРЕНИЕ ЗАГРУЗКИ"),
         ("downloadAcceleration", "Ускорение загрузки", "")
     ])

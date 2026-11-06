@@ -104,7 +104,7 @@ if mode == "write" {
     let invisibleTitles = [
         "", " ", "\t\n", "\u{00a0}", "\u{200b}", "\u{200c}\u{200d}", "\u{2060}",
         "\u{202a}\u{202c}", "\u{feff}", "\u{034f}", "\u{115f}", "\u{1160}",
-        "\u{3164}", "\u{ffa0}", "\u{2800}", " \u{200b}\u{2800}\u{3164}\n"
+        "\u{3164}", "\u{ffa0}", "\u{2800}", "\u{1d159}", "\u{fffc}", " \u{200b}\u{2800}\u{3164}\n"
     ]
     let visibleTitles = ["админ", "модератор", "🛡️", "👩‍💻", " \u{200b}Главный\u{200d} ", "а\u{0301}"]
     for title in invisibleTitles + visibleTitles {

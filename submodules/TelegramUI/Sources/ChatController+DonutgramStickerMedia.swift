@@ -7,7 +7,6 @@ import TelegramCore
 import AccountContext
 import AnimationCache
 import EmojiTextAttachmentView
-import OverlayStatusController
 import PresentationDataUtils
 import ChatPresentationInterfaceState
 import DGSimpleSettings
@@ -209,38 +208,50 @@ private func donutgramStickerVideo(context: AccountContext, size: CGSize, frameC
 }
 
 private func donutgramStaticStickerMedia(context: AccountContext, peerId: EnginePeer.Id, file: FileMediaReference, size: CGSize) -> Signal<AnyMediaReference?, NoError> {
-    // Fetch completion (including an already cached file) starts the read. Errors and cancellation stay in the
-    // same signal as conversion instead of a separate subscription that can leave the reader waiting.
-    return context.engine.resources.fetch(reference: file.abstract.resourceReference(file.media.resource), userLocation: .peer(peerId), userContentType: .sticker, reportResultStatus: true)
-    |> map { _ in true }
-    |> `catch` { _ -> Signal<Bool, NoError> in
-        return .single(false)
+    let resource = file.media.resource
+    let reference: FileMediaReference
+    if case .standalone = file {
+        reference = stickerPackFileReference(file.media)
+    } else {
+        reference = file
     }
-    |> mapToSignal { fetched -> Signal<AnyMediaReference?, NoError> in
-        guard fetched else {
+    let data = Signal<EngineMediaResource.ResourceData?, NoError> { subscriber in
+        let read = (context.engine.resources.data(resource: EngineMediaResource(resource))
+        |> filter { $0.isComplete }
+        |> take(1)).start(next: { data in
+            subscriber.putNext(data)
+            subscriber.putCompletion()
+        })
+        let fetch = context.engine.resources.fetch(reference: reference.abstract.resourceReference(resource), userLocation: .peer(peerId), userContentType: .sticker).start(error: { _ in
+            subscriber.putNext(nil)
+            subscriber.putCompletion()
+        })
+        return ActionDisposable {
+            read.dispose()
+            fetch.dispose()
+        }
+    }
+    return data
+    |> take(1)
+    |> deliverOn(Queue.concurrentDefaultQueue())
+    |> mapToSignal { resourceData -> Signal<AnyMediaReference?, NoError> in
+        guard let resourceData,
+            let sourceData = try? Data(contentsOf: URL(fileURLWithPath: resourceData.path)),
+            let sourceImage = UIImage(data: sourceData) ?? WebP.convert(fromWebP: sourceData),
+            let cgImage = sourceImage.cgImage,
+            let image = generateImage(size, contextGenerator: { size, context in
+                context.setFillColor(UIColor.white.cgColor)
+                context.fill(CGRect(origin: .zero, size: size))
+                context.draw(cgImage, in: CGRect(origin: .zero, size: size))
+            }, opaque: true, scale: 1.0) else {
             return .single(nil)
         }
-        return context.engine.resources.data(resource: EngineMediaResource(file.media.resource))
-        |> filter { $0.isComplete }
-        |> take(1)
-        |> deliverOn(Queue.concurrentDefaultQueue())
-        |> mapToSignal { resourceData -> Signal<AnyMediaReference?, NoError> in
-            guard let sourceData = try? Data(contentsOf: URL(fileURLWithPath: resourceData.path)),
-                let sourceImage = WebP.convert(fromWebP: sourceData) ?? UIImage(data: sourceData),
-                let cgImage = sourceImage.cgImage,
-                let image = generateImage(size, contextGenerator: { size, context in
-                    context.setFillColor(UIColor.white.cgColor)
-                    context.fill(CGRect(origin: .zero, size: size))
-                    context.draw(cgImage, in: CGRect(origin: .zero, size: size))
-                }, opaque: true, scale: 1.0) else {
-                return .single(nil)
-            }
-            // Two identical samples, each held for half a second: a one-second silent MP4.
-            return donutgramStickerVideo(context: context, size: size, frameCount: 2, nextFrame: {
-                return (image, 0.5)
-            })
-        }
+        return donutgramStickerVideo(context: context, size: size, frameCount: 2, nextFrame: {
+            return (image, 0.5)
+        })
     }
+    |> then(.single(nil))
+    |> take(1)
     |> timeout(60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
 }
 
@@ -366,9 +377,15 @@ extension ChatControllerImpl {
                 guard !progress.isFinished else {
                     return EmptyDisposable
                 }
-                let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: {
-                    cancelImpl?()
-                }))
+                let controller = textAlertController(
+                    context: context,
+                    title: nil,
+                    text: dgLocalized("Преобразование стикера…", languageCode: presentationData.strings.baseLanguageCode),
+                    actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
+                        cancelImpl?()
+                    })],
+                    dismissOnOutsideTap: false
+                )
                 progress.show(controller, present: { [weak self] controller, completion in
                     self?.present(controller, in: .window(.root), completion: completion)
                 })
@@ -391,12 +408,14 @@ extension ChatControllerImpl {
                 self?.donutgramIsConvertingSticker = false
             }
             cancelImpl = { [weak self] in
-                conversionDisposable.dispose()
                 finish()
+                conversionDisposable.dispose()
                 self?.donutgramDropPendingSendAction(correlationIds: correlationIds)
                 subscriber.putCompletion()
             }
             conversionDisposable.set((donutgramPrepareStickerMedia(context: context, peer: peer, messages: messages)
+            |> then(.single(.failed))
+            |> take(1)
             |> deliverOnMainQueue).startStrict(next: { [weak self] result in
                 finish()
                 switch result {

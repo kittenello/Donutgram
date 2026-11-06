@@ -3894,10 +3894,10 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     })))
                 }
 
-                if !items.isEmpty {
-                    items.append(.separator)
-                }
                 if let (message, _, _) = strongSelf.contentInfo(), !donutgramIsBotInfoMediaMessage(message) {
+                    if !items.isEmpty {
+                        items.append(.separator)
+                    }
                     let context = strongSelf.context
                     items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.SharedMedia_ViewInChat, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)}, action: { [weak self] _, f in
                         guard let strongSelf = self, let peer = peer else {
