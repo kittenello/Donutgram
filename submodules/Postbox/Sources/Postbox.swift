@@ -323,6 +323,16 @@ public final class Transaction {
         return self.postbox?.peerChatInterfaceStateTable.get(id)
     }
 
+    public func getPeerChatInterfaceStateIds() -> [PeerId] {
+        assert(!self.disposed)
+        return self.postbox?.peerChatInterfaceStateTable.getAllPeerIds() ?? []
+    }
+
+    public func getPeerChatThreadInterfaceStateIds() -> [PeerChatThreadId] {
+        assert(!self.disposed)
+        return self.postbox?.peerChatThreadInterfaceStateTable.getAllThreadIds() ?? []
+    }
+
     public func getPeerChatThreadInterfaceState(_ id: PeerId, threadId: Int64) -> StoredPeerChatInterfaceState? {
         assert(!self.disposed)
         return self.postbox?.peerChatThreadInterfaceStateTable.get(PeerChatThreadId(peerId: id, threadId: threadId))

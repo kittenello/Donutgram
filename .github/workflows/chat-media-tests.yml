@@ -1,0 +1,48 @@
+name: Chat media tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/**'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramStickerMedia.swift'
+      - 'submodules/TelegramCore/Sources/Donutgram/DonutgramEmptyReplyDrafts.swift'
+      - 'submodules/TelegramCore/Sources/Account/Account.swift'
+      - 'submodules/Postbox/Sources/PeerChatInterfaceStateTable.swift'
+      - 'submodules/Postbox/Sources/PeerChatThreadInterfaceStateTable.swift'
+      - 'submodules/Postbox/Sources/Postbox.swift'
+      - 'submodules/TelegramCore/Sources/SyncCore/SyncCore_SynchronizeableChatInputState.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ChatList.swift'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift'
+      - 'submodules/TelegramCore/Sources/State/ApplyUpdateMessage.swift'
+      - 'submodules/PhotoResources/**'
+      - 'submodules/ChatListUI/**'
+      - 'submodules/WalletContext/**'
+      - 'submodules/PasscodeCore/**'
+      - 'submodules/TelegramCore/Sources/TelegramEngine/Wallet/Wallet.swift'
+      - 'submodules/TelegramUI/**'
+      - 'submodules/GalleryUI/Sources/Items/UniversalVideoGalleryItem.swift'
+      - 'Tests/sticker_media/**'
+      - 'Tests/wallet_history/**'
+      - 'Tests/avatar_share/**'
+      - '.github/workflows/chat-media-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check sticker permissions and empty reply drafts
+        run: python3 Tests/sticker_media/run.py
+      - name: Check wallet history loading and failures
+        run: python3 Tests/wallet_history/run.py
+      - name: Check shared avatar cache and complete JPEG decoding
+        run: python3 Tests/avatar_share/run.py
+

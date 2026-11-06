@@ -590,6 +590,7 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                             strongSelf.voiceMediaPlayer = nil
                         }
                     case .music, .file:
+                        let initialControl = control
                         strongSelf.voiceMediaPlayer?.control(.playback(.pause))
                         if let (context, playlist, settings, storedState) = inputData {
                             if areSharedMediaPlaylistsEqual(playlist, strongSelf.musicMediaPlayer?.playlist), case .seek = control {
@@ -612,7 +613,11 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                                     control = .seek(timestamp)
                                 }
                                 strongSelf.musicMediaPlayer?.control(control)
-                                strongSelf.musicMediaPlayer?.control(.playback(.play))
+                                if case .playback(.pause) = initialControl {
+                                    strongSelf.musicMediaPlayer?.control(.playback(.pause))
+                                } else {
+                                    strongSelf.musicMediaPlayer?.control(.playback(.play))
+                                }
                             }
                         } else {
                             strongSelf.musicMediaPlayer?.stop()

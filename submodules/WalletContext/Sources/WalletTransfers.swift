@@ -995,7 +995,8 @@ extension WalletContextImpl {
             transactions: TransactionsState(
                 items: items, offset: items.count,
                 canLoadMore: self.currentState.transactions.canLoadMore,
-                isLoadingMore: self.currentState.transactions.isLoadingMore, error: self.currentState.transactions.error
+                isLoadingMore: self.currentState.transactions.isLoadingMore, error: self.currentState.transactions.error,
+                hasLoaded: self.currentState.transactions.hasLoaded
             ),
             pendingTransfers: reconciliation.pendingTransfers, activeOperation: self.currentState.activeOperation
         )

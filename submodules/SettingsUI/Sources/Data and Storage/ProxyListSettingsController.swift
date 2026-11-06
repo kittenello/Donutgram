@@ -412,7 +412,6 @@ private func proxyAutomationOptionsController(accountManager: AccountManager<Tel
         for (index, condition) in [(Int32(1), "VPN"), (Int32(2), "Мобильная сеть"), (Int32(4), "Wi-Fi")].enumerated() {
             entries.append(.option(index, presentationData.theme, "condition.\(condition.0)", condition.1, nil, settings.disableOnNetworks & condition.0 != 0))
         }
-        entries.append(.option(3, presentationData.theme, "info", "Можно выбрать несколько условий. При совпадении любого из них прокси временно отключается; ручной выбор прокси сохраняется.", nil, nil))
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Отключать прокси"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks), arguments))
     }

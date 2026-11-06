@@ -658,6 +658,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var lastPostedScheduledMessagesToastTimestamp: Double = 0.0
     private var donutgramChannelSettingsObserver: NSObjectProtocol?
+    /// Donutgram: a sticker is being turned into a photo or a video for a chat that bans stickers.
+    var donutgramIsConvertingSticker = false
     var postedScheduledMessagesEventsDisposable: Disposable?
     
     var globalControlPanelsContext: GlobalControlPanelsContext?
@@ -2413,6 +2415,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return false
             }
+            // Donutgram: while a sticker is converted for a chat that bans stickers, a second tap must not send another one.
+            if strongSelf.donutgramIsConvertingSticker {
+                return false
+            }
             
             if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                 if let sourceView, let sourceRect {
@@ -2422,10 +2428,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             
             if let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramChannel, peer.hasBannedPermission(.banSendStickers) != nil {
-                if !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState) {
+                if !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState) && !donutgramCanSendStickerAsMedia(peer: peer, file: fileReference.media) {
                     strongSelf.interfaceInteraction?.openBoostToUnrestrict()
                     return false
                 }
+            }
+            if let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer as? TelegramGroup, peer.hasBannedPermission(.banSendStickers), !donutgramCanSendStickerAsMedia(peer: peer, file: fileReference.media) {
+                strongSelf.interfaceInteraction?.displayRestrictedInfo(.stickers, .tooltip)
+                return false
             }
             
             var attributes: [MessageAttribute] = []
@@ -2443,6 +2453,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             var shouldAnimateMessageTransition = strongSelf.chatDisplayNode.shouldAnimateMessageTransition
             if let _ = sourceView?.asyncdisplaykit_node as? ChatEmptyNodeStickerContentNode {
                 shouldAnimateMessageTransition = true
+            }
+            // Donutgram: a sticker that goes out as a photo or a video has no sticker to fly into the chat. Its send
+            // action (clearing the reply) waits for the converted message by correlation id instead of the next update.
+            let sendsStickerAsMedia = !canBypassRestrictions(chatPresentationInterfaceState: strongSelf.presentationInterfaceState) && donutgramCanSendStickerAsMedia(peer: strongSelf.presentationInterfaceState.renderedPeer?.peer, file: fileReference.media)
+            if sendsStickerAsMedia {
+                shouldAnimateMessageTransition = false
             }
             
             strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak strongSelf] postpone in
@@ -2524,7 +2540,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 return current
                             })
                         }
-                    }, shouldAnimateMessageTransition ? correlationId : nil)
+                    }, shouldAnimateMessageTransition || sendsStickerAsMedia ? correlationId : nil)
                     
                     addToTransitionNodeIfNeeded()
                     let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)
@@ -2553,7 +2569,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 return current
                             })
                         }
-                    }, shouldAnimateMessageTransition ? correlationId : nil)
+                    }, shouldAnimateMessageTransition || sendsStickerAsMedia ? correlationId : nil)
                     
                     strongSelf.presentScheduleTimePicker(completion: { [weak self] result in
                         if let strongSelf = self {
@@ -2623,7 +2639,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                     return current
                                 })
                             }
-                        }, shouldAnimateMessageTransition ? correlationId : nil)
+                        }, shouldAnimateMessageTransition || sendsStickerAsMedia ? correlationId : nil)
 
                         addToTransitionNodeIfNeeded()
 
@@ -7075,6 +7091,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.donutgramChannelSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             if self.isNodeLoaded {
+                if DGSimpleSettings.shared.hideAIFeatures {
+                    self.controllerInteraction?.summarizedMessageIds.removeAll()
+                }
                 if DGSimpleSettings.shared.hideBirthdayNotifications {
                     self.birthdayTooltipController?.dismiss()
                 }
@@ -9358,32 +9377,37 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     self.commitPurposefulAction()
                 }
                 
-                let _ = (enqueueMessages(account: self.context.account, peerId: peerId, messages: self.transformEnqueueMessages(messages, postpone: postpone))
+                let context = self.context
+                let outgoingMessages = self.transformEnqueueMessages(messages, postpone: postpone)
+                // Donutgram: stickers for a chat that bans them go out as photos or videos; other messages pass at once.
+                let _ = (self.donutgramMessagesWithStickerMedia(outgoingMessages)
+                |> mapToSignal { prepared -> Signal<[MessageId?], NoError> in
+                    return enqueueMessages(account: context.account, peerId: peerId, messages: prepared)
+                }
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-                    if isGhostScheduledSend, let self {
-                        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: self.context.account.peerId.toInt64())
+                    if isGhostScheduledSend {
+                        DGSimpleSettings.shared.requestGhostOffline(accountPeerId: context.account.peerId.toInt64())
                     }
                     if let strongSelf = self, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                         strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
+                    }
+                    if let self, !isScheduledMessages && shouldDivert {
+                        if let layoutActionOnViewTransitionAction = self.layoutActionOnViewTransitionAction {
+                            self.layoutActionOnViewTransitionAction = nil
+                            self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
+                            layoutActionOnViewTransitionAction()
+                        }
+
+                        if shouldOpenScheduledMessages {
+                            self.openScheduledMessages(force: true, completion: { _ in
+                            })
+                        }
                     }
                 })
                 
                 donateSendMessageIntent(account: self.context.account, sharedContext: self.context.sharedContext, intentContext: .chat, peerIds: [peerId])
                 
                 self.updateChatPresentationInterfaceState(interactive: true, { $0.updatedShowCommands(false) })
-                
-                if !isScheduledMessages && shouldDivert {
-                    if let layoutActionOnViewTransitionAction = self.layoutActionOnViewTransitionAction {
-                        self.layoutActionOnViewTransitionAction = nil
-                        self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
-                        layoutActionOnViewTransitionAction()
-                    }
-
-                    if shouldOpenScheduledMessages {
-                        self.openScheduledMessages(force: true, completion: { _ in
-                        })
-                    }
-                }
             } else {
                 self.presentScheduleTimePicker(style: media ? .media : .default, dismissByTapOutside: false, completion: { [weak self] result in
                     if let strongSelf = self {

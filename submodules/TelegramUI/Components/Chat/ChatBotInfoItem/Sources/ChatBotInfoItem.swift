@@ -181,6 +181,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
         )
         let videoNode = UniversalVideoNode(context: context, postbox: context.account.postbox, audioSession: context.sharedContext.mediaManager.audioSession, manager: context.sharedContext.mediaManager.universalVideoManager, decoration: VideoDecoration(), content: videoContent, priority: .embedded)
         videoNode.canAttachContent = true
+        videoNode.isUserInteractionEnabled = false
         self.videoNode = videoNode
         
         let cornerRadius = (self.item?.presentationData.chatBubbleCorners.mainRadius ?? 17.0)
@@ -331,7 +332,7 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
                 imageSize.height += 4.0
             }
             var displayCover = false
-            if imageSize.width == 0.0, let _ = item.peer {
+            if imageSize.width == 0.0, item.managedByBot != nil, let _ = item.peer {
                 displayCover = true
                 imageDimensions = CGSize(width: 100.0, height: 50.0).aspectFitted(CGSize(width: textSize.width + horizontalContentInset * 2.0 - imageInset * 2.0, height: CGFloat.greatestFiniteMagnitude))
                 imageSize = imageDimensions
@@ -513,6 +514,12 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
     }
     
     public func tapActionAtPoint(_ point: CGPoint, gesture: TapLongTapOrDoubleTapGesture, isEstimating: Bool) -> ChatMessageBubbleContentTapAction {
+        let mediaPoint = CGPoint(x: point.x - self.offsetContainer.frame.minX, y: point.y - self.offsetContainer.frame.minY)
+        if let item = self.item, (item.photo != nil || item.video != nil), self.imageNode.frame.contains(mediaPoint), case .tap = gesture {
+            return ChatMessageBubbleContentTapAction(content: .custom({ [weak self] in
+                self?.openMedia()
+            }), hasLongTapAction: false)
+        }
         let textNodeFrame = self.textNode.frame
         if let (index, attributes) = self.textNode.attributesAtPoint(CGPoint(x: point.x - self.offsetContainer.frame.minX - textNodeFrame.minX, y: point.y - self.offsetContainer.frame.minY - textNodeFrame.minY)) {
             if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
@@ -550,6 +557,39 @@ public final class ChatBotInfoItemNode: ListViewItemNode {
         }
     }
     
+    private func openMedia() {
+        guard let item = self.item else {
+            return
+        }
+        let media: EngineMedia
+        if let video = item.video {
+            // Bot descriptions are often silent looping MP4s marked as GIFs. In the gallery they use the full
+            // video player (speed, playback controls and the media menu), while the card still loops its original.
+            media = EngineMedia(video.withUpdatedAttributes(video.attributes.filter { attribute in
+                if case .Animated = attribute {
+                    return false
+                }
+                return true
+            }))
+        } else if let photo = item.photo {
+            media = EngineMedia(photo)
+        } else {
+            return
+        }
+        let peerId = item.peer?.id ?? item.context.account.peerId
+        let message = EngineMessage(
+            stableId: 0, stableVersion: 0,
+            id: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Local, id: 0),
+            globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0,
+            flags: [.Incoming], tags: [], globalTags: [], localTags: [], customTags: [],
+            forwardInfo: nil, author: item.peer, text: "", attributes: [DonutgramBotInfoMediaMessageAttribute()], media: [media],
+            peers: item.peer.map { [peerId: $0] } ?? [:], associatedMessages: [:], associatedMessageIds: [],
+            associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:]
+        )
+        let controller = item.context.sharedContext.makeGalleryController(context: item.context, source: .standaloneMessage(message._asMessage(), nil), streamSingleVideo: true, isPreview: false)
+        item.controllerInteraction.presentController(controller, nil)
+    }
+
     @objc private func tapLongTapOrDoubleTapGesture(_ recognizer: TapLongTapOrDoubleTapGestureRecognizer) {
         switch recognizer.state {
             case .ended:

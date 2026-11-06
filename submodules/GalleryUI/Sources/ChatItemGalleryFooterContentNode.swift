@@ -963,6 +963,11 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         if message.media.contains(where: { $0 is TelegramMediaPoll }) {
             canDelete = false
         }
+
+        if donutgramIsBotInfoMediaMessage(message) {
+            canDelete = false
+            canEdit = false
+        }
         
         var authorNameText: String?
         if let forwardInfo = message.forwardInfo, forwardInfo.flags.contains(.isImported), let authorSignature = forwardInfo.authorSignature {
@@ -1746,6 +1751,21 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     
     @objc func actionButtonPressed() {
         self.interacting?(true)
+
+        if let message = self.currentMessage, donutgramIsBotInfoMediaMessage(message), let media = message.media.first {
+            // This item is not in the message database. Share its media rather than looking up / forwarding id 0.
+            let shareController = self.context.sharedContext.makeShareScreen(context: self.context, params: ShareControllerParams(
+                subject: .media(.standalone(media: media), self.shareMediaParameters?()),
+                preferredAction: .saveToCameraRoll,
+                externalShare: true,
+                forceTheme: defaultDarkColorPresentationTheme,
+                dismissed: { [weak self] _ in
+                    self?.interacting?(false)
+                }
+            ))
+            self.controllerInteraction?.presentController(shareController, nil)
+            return
+        }
         
         if let currentMessage = self.currentMessage {
             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.MessageGroup(id: currentMessage.id))

@@ -155,7 +155,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     /// platter, which ride the page.
     var expansionDecorationViews: [UIView] {
         var views = self.expansionStatusFollowerViews
-        if let view = self.music?.view {
+        if !self.compactMusicAndBalance, let view = self.music?.view {
             views.append(view)
         }
         if let view = self.musicBackground {
@@ -169,7 +169,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     /// row), and the music strip.
     var expansionPageViews: [UIView] {
         var views: [UIView] = [self.buttonsContainerNode.view]
-        if let view = self.music?.view {
+        if !self.compactMusicAndBalance, let view = self.music?.view {
             views.append(view)
         }
         return views
@@ -186,6 +186,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         if let view = self.walletBalance?.view {
             views.append(view)
         }
+        if self.compactMusicAndBalance, let view = self.music?.view {
+            views.append(view)
+        }
         return views
     }
     let headerEdgeEffectContainer: UIView
@@ -199,9 +202,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var musicBackground: UIView?
     var music: ComponentView<Empty>?
     var walletBalance: ComponentView<Empty>?
+    private var compactMusicAndBalance = false
     private var walletBalanceCutoutIcon: (color: UIColor, image: UIImage)?
     var hasBottomStrip: Bool {
         return self.music != nil
+    }
+    /// Whether the music strip runs along the header's bottom edge: the compact layout puts the song next to the balance.
+    var hasMusicAlongBottomEdge: Bool {
+        return self.music != nil && !self.compactMusicAndBalance
     }
 
     /// The track the music strip shows for `peer` and `screenData` (`peerInfoProfileMusic`): none on Settings and on the
@@ -688,9 +696,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         } else {
             currentWalletBalance = nil
         }
-        let musicHeight: CGFloat = hasBackground || self.isAvatarExpanded ? 24.0 : 16.0
-        let bottomInset: CGFloat = currentSavedMusic != nil ? musicHeight : 0.0
-        let balanceInset: CGFloat = currentWalletBalance != nil ? 32.0 : 0.0
+        let compactMusicAndBalance = DGSimpleSettings.shared.compactProfileMusicAndBalance && !self.isSettings && !self.isAvatarExpanded
+        self.compactMusicAndBalance = compactMusicAndBalance
+        let musicHeight: CGFloat = compactMusicAndBalance ? 20.0 : (hasBackground || self.isAvatarExpanded ? 24.0 : 16.0)
+        let bottomInset: CGFloat = currentSavedMusic != nil && !compactMusicAndBalance ? musicHeight : 0.0
+        let hasStatusRow = currentWalletBalance != nil || (compactMusicAndBalance && currentSavedMusic != nil)
+        let balanceInset: CGFloat = hasStatusRow ? 32.0 : 0.0
         
         let isLandscape = containerInset > 16.0
         
@@ -2180,12 +2191,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.avatarListNode.containerNode.view.mask = nil
         }
         
+        self.avatarListNode.listContainerNode.photoTitleBottomInset = self.isAvatarExpanded ? max(40.0, expandedAvatarHeight - (titleFrame.minY + titleOffset + apparentTitleLockOffset + contentOffset * 0.5) + 16.0) : 40.0
         self.avatarListNode.listContainerNode.update(size: expandedAvatarListSize, peer: peer, isExpanded: self.isAvatarExpanded, transition: transition)
         if self.avatarListNode.listContainerNode.isCollapsing && !self.ignoreCollapse {
             self.avatarListNode.avatarContainerNode.canAttachVideo = false
         }
         
-        if currentWalletBalance != nil && !self.isAvatarExpanded && !self.isSettings {
+        if hasStatusRow && !self.isAvatarExpanded && !self.isSettings {
             let balanceBottom = max(subtitleFrame.maxY, usernameFrame.maxY) + 8.0 + 20.0
             let contentBelowBalance: CGFloat = self.isMyProfile ? 16.0 : 12.0 + 58.0 + 16.0
             let existingHeaderExtension: CGFloat = self.isMyProfile ? 20.0 : 99.0
@@ -2687,6 +2699,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         }
         
+        let compactHeaderLayout = PeerInfoCompactHeaderLayout(width: width, leftInset: stripLeft, rightInset: stripRight, top: max(subtitleFrame.maxY, usernameFrame.maxY) + titleOffset + 8.0)
+        var compactBalanceWidth: CGFloat = 0.0
         if let currentWalletBalance {
             let balance = self.walletBalance ?? {
                 let componentView = ComponentView<Empty>()
@@ -2708,7 +2722,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             let balanceTitle = presentationData.strings.Wallet_Send_Balance("").string.trimmingCharacters(in: .whitespacesAndNewlines)
             // Shrink unusually long amounts/localizations to fit the profile band.
-            let maximumBalanceWidth = max(1.0, width - stripLeft - stripRight - 32.0)
+            let maximumBalanceWidth = compactMusicAndBalance ? compactHeaderLayout.maximumBalanceWidth(hasMusic: currentSavedMusic != nil) : max(1.0, width - stripLeft - stripRight - 32.0)
             let titleWidth = (balanceTitle as NSString).size(withAttributes: [.font: Font.regular(12.0)]).width
             let amountWidth = (formattedBalance as NSString).size(withAttributes: [.font: Font.semibold(12.0)]).width
             let textScale = min(1.0, max(1.0, maximumBalanceWidth - 52.0) / max(1.0, titleWidth + amountWidth))
@@ -2754,7 +2768,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 containerSize: CGSize(width: maximumBalanceWidth, height: 20.0)
             )
             let balanceFrame: CGRect
-            if self.isAvatarExpanded {
+            if compactMusicAndBalance {
+                compactBalanceWidth = balanceSize.width
+                balanceFrame = compactHeaderLayout.balanceFrame(size: balanceSize, hasMusic: currentSavedMusic != nil)
+            } else if self.isAvatarExpanded {
                 let lastRowFrame = usernameFrame.maxY > subtitleFrame.maxY ? usernameFrame : subtitleFrame
                 balanceFrame = CGRect(origin: CGPoint(
                     x: width - stripRight - 16.0 - balanceSize.width,
@@ -2788,7 +2805,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         if currentSavedMusic != nil {
             var musicTransition = transition
-            if hasBackground || self.isAvatarExpanded {
+            if !compactMusicAndBalance && (hasBackground || self.isAvatarExpanded) {
                 if self.musicBackground == nil {
                     musicTransition = .immediate
                 }
@@ -2818,7 +2835,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
             let isOverlay = self.isAvatarExpanded || hasBackground
             let stripSecondaryColor = hasCoverColor ? navigationContentsSecondaryColor.mixedWith(.white, alpha: 0.45) : navigationContentsSecondaryColor
-            let musicBandWidth = max(0.0, backgroundFrame.width - stripLeft - stripRight)
+            let musicBandWidth = compactMusicAndBalance ? compactHeaderLayout.musicWidth(balanceWidth: compactBalanceWidth) : max(0.0, backgroundFrame.width - stripLeft - stripRight)
             if let currentSavedMusic {
                 var artist = presentationData.strings.MediaPlayer_UnknownArtist
                 var track: String?
@@ -2845,10 +2862,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
                 let musicString = NSMutableAttributedString()
                 // Keep music inside the profile band, including when a side strip is visible.
-                musicString.append(NSAttributedString(string: track ?? "", font: Font.semibold(12.0), textColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
+                musicString.append(NSAttributedString(string: compactMusicAndBalance ? artist : (track ?? ""), font: Font.semibold(12.0), textColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
                 let artistSeparatorIndex = musicString.length
-                musicString.append(NSAttributedString(string: " \(artist)", font: Font.regular(12.0), textColor: stripSecondaryColor))
-                musicString.addAttribute(.kern, value: CGFloat(2.0), range: NSRange(location: artistSeparatorIndex, length: 1))
+                musicString.append(NSAttributedString(string: compactMusicAndBalance ? " - \(track ?? "")" : " \(artist)", font: Font.regular(12.0), textColor: stripSecondaryColor))
+                if !compactMusicAndBalance {
+                    // The wider space sets the artist apart; in the compact pill « - » does, and a wider space before it
+                    // would leave the dash off-centre.
+                    musicString.addAttribute(.kern, value: CGFloat(2.0), range: NSRange(location: artistSeparatorIndex, length: 1))
+                }
 
                 let musicSize = music.update(
                     transition: .immediate,
@@ -2862,7 +2883,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "label",
-                                        component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: max(1.0, musicBandWidth - 96.0)))
+                                        component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: max(1.0, musicBandWidth - (compactMusicAndBalance ? 48.0 : 96.0))))
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "arrow",
@@ -2870,7 +2891,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                     )
                                 ], spacing: 4.0)
                             ),
-                            minSize: CGSize(width: musicBandWidth, height: musicHeight),
+                            background: compactMusicAndBalance ? AnyComponent(RoundedRectangle(color: contentButtonBackgroundColor, cornerRadius: 10.0)) : nil,
+                            minSize: CGSize(width: compactMusicAndBalance && currentWalletBalance == nil ? 0.0 : musicBandWidth, height: musicHeight),
+                            contentInsets: compactMusicAndBalance ? UIEdgeInsets(top: 1.0, left: 8.0, bottom: 1.0, right: 8.0) : .zero,
                             action: { [weak self] in
                                 self?.displaySavedMusic?()
                             }
@@ -2879,7 +2902,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     environment: {},
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
                 )
-                let musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
+                let musicFrame = compactMusicAndBalance ? compactHeaderLayout.musicFrame(size: musicSize, hasBalance: currentWalletBalance != nil) : CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
                 if let musicView = music.view {
                     if musicView.superview == nil {
                         // A newly loaded strip item fades in at its final position.
@@ -2894,7 +2917,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         musicTransition.updateFrame(view: musicView, frame: musicFrame)
                     }
 
-                    ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha)
+                    ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha * (compactMusicAndBalance ? 1.0 - titleCollapseFraction : 1.0))
                 }
             }
         } else {

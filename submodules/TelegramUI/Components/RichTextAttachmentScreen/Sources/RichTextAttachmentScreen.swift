@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import Display
 import ComponentFlow
@@ -2185,7 +2186,8 @@ final class RichTextAttachmentScreenComponent: Component {
             
             let actionBarSpacing: CGFloat = 6.0
             
-            let aiButtonSize = self.aiButton.update(
+            let hideAI = DGSimpleSettings.shared.hideAIFeatures
+            var aiButtonSize = self.aiButton.update(
                 transition: transition,
                 component: AnyComponent(GlassControlGroupComponent(
                     theme: environment.theme,
@@ -2193,6 +2195,9 @@ final class RichTextAttachmentScreenComponent: Component {
                     background: .panel,
                     items: [
                         GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/InputAIIcon"), action: { [weak self] in
+                            guard !DGSimpleSettings.shared.hideAIFeatures else {
+                                return
+                            }
                             Task { @MainActor in
                                 guard let self, let component = self.component, let environment = self.environment else {
                                     return
@@ -2297,6 +2302,9 @@ final class RichTextAttachmentScreenComponent: Component {
                 containerSize: CGSize(width: 44.0, height: 44.0)
             )
             
+            if hideAI {
+                aiButtonSize = .zero
+            }
             var isSendEnabled = true
             let content = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
             if content.isEmptyWhitespaceTrimmed {
@@ -2337,13 +2345,14 @@ final class RichTextAttachmentScreenComponent: Component {
                     actions: barActions
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - bottomRowInsets.left - bottomRowInsets.right - actionBarSpacing * 2.0 - aiButtonSize.width - sendButtonSize.width, height: 44.0)
+                containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - bottomRowInsets.left - bottomRowInsets.right - actionBarSpacing * (hideAI ? 1.0 : 2.0) - aiButtonSize.width - sendButtonSize.width, height: 44.0)
             )
             
             var bottomInset = max(environment.inputHeight, emojiPanelHeight, environment.safeInsets.bottom)
             
             let aiButtonFrame = CGRect(origin: CGPoint(x: sideInset + bottomRowInsets.left, y: availableSize.height - bottomInset - 6.0 - aiButtonSize.height), size: aiButtonSize)
             if let aiButtonView = self.aiButton.view {
+                aiButtonView.isHidden = hideAI
                 if aiButtonView.superview == nil {
                     self.addSubview(aiButtonView)
                 }
@@ -2365,7 +2374,7 @@ final class RichTextAttachmentScreenComponent: Component {
             transition.setPosition(view: self.sendButtonExtractedContainer.contentView, position: CGPoint(x: sendButtonFrame.width * 0.5, y: sendButtonFrame.height * 0.5))
             transition.setBounds(view: self.sendButtonExtractedContainer.contentView, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
             
-            let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + bottomRowInsets.left + aiButtonSize.width + actionBarSpacing, y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
+            let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + bottomRowInsets.left + aiButtonSize.width + (hideAI ? 0.0 : actionBarSpacing), y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
             if let actionBarView = self.actionBar.view {
                 if actionBarView.superview == nil {
                     self.addSubview(actionBarView)

@@ -883,6 +883,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
     public let stripContainerNode: ASDisplayNode
     public let highlightContainerNode: ASDisplayNode
     public let setByYouNode: ImmediateTextNode
+    public var photoTitleBottomInset: CGFloat = 40.0
     private let setByYouImageNode: ImageNode
     private var setByYouTapRecognizer: UITapGestureRecognizer?
     
@@ -1728,9 +1729,13 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
                         
             if let photoTitle = photoTitle {
                 transition.updateAlpha(node: self.setByYouNode, alpha: 0.7)
-                self.setByYouNode.attributedText = NSAttributedString(string: photoTitle, font: Font.regular(12.0), textColor: UIColor.white)
-                let setByYouSize = self.setByYouNode.updateLayout(size)
-                self.setByYouNode.frame = CGRect(origin: CGPoint(x: size.width - setByYouSize.width - 14.0, y: size.height - setByYouSize.height - 40.0), size: setByYouSize)
+                let shadow = NSShadow()
+                shadow.shadowColor = UIColor.black
+                shadow.shadowBlurRadius = 3.0
+                shadow.shadowOffset = CGSize(width: 0.0, height: 1.0)
+                self.setByYouNode.attributedText = NSAttributedString(string: photoTitle, attributes: [.font: Font.regular(12.0), .foregroundColor: UIColor.white, .shadow: shadow])
+                let setByYouSize = self.setByYouNode.updateLayout(CGSize(width: max(1.0, size.width - (hasLink ? 60.0 : 28.0)), height: size.height))
+                transition.updateFrame(node: self.setByYouNode, frame: CGRect(origin: CGPoint(x: size.width - setByYouSize.width - 14.0, y: size.height - setByYouSize.height - self.photoTitleBottomInset), size: setByYouSize))
                 self.setByYouNode.isUserInteractionEnabled = hasLink
             } else {
                 transition.updateAlpha(node: self.setByYouNode, alpha: 0.0)
@@ -1740,7 +1745,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
             if let fallbackImageSignal = fallbackImageSignal {
                 self.setByYouImageNode.setSignal(fallbackImageSignal)
                 transition.updateAlpha(node: self.setByYouImageNode, alpha: 1.0)
-                self.setByYouImageNode.frame = CGRect(origin: CGPoint(x: self.setByYouNode.frame.minX - 32.0, y: self.setByYouNode.frame.minY - 7.0), size: CGSize(width: 28.0, height: 28.0))
+                transition.updateFrame(node: self.setByYouImageNode, frame: CGRect(origin: CGPoint(x: self.setByYouNode.frame.minX - 32.0, y: self.setByYouNode.frame.minY - 7.0), size: CGSize(width: 28.0, height: 28.0)))
             } else {
                 transition.updateAlpha(node: self.setByYouImageNode, alpha: 0.0)
             }

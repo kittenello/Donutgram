@@ -182,6 +182,13 @@ public final class WalletContext {
         }
     }
 
+    public func retryHistory() {
+        let impl = self.impl
+        Task {
+            await impl.retryHistory()
+        }
+    }
+
     private func beginScreenUpdates(collectiblesOnly: Bool) -> Disposable {
         self.updateScreenDemand {
             if collectiblesOnly {

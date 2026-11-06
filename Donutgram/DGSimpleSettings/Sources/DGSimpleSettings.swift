@@ -180,6 +180,9 @@ public final class DGSimpleSettings {
         static let bypassContentRestrictions = "donutgram.general.bypassContentRestrictions"
         static let anonymousStickerSending = "donutgram.chats.anonymousStickerSending"
         static let gifUnlock = "donutgram.general.gifUnlock"
+        static let stickerUnlock = "donutgram.general.stickerUnlock"
+        static let hideEmptyReplyDrafts = "donutgram.chats.hideEmptyReplyDrafts"
+        static let compactProfileMusicAndBalance = "donutgram.profiles.compactMusicAndBalance"
         static let keepBannedChats = "donutgram.general.keepBannedChats"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
@@ -229,6 +232,7 @@ public final class DGSimpleSettings {
         static let chatListHideStatus = "donutgram.chats.appearance.hideStatus"
         static let chatListHideEmojiStatus = "donutgram.chats.appearance.hideEmojiStatus"
         static let chatListCenteredTitle = "donutgram.chats.appearance.centeredTitle"
+        static let neutralComposeButton = "donutgram.chats.appearance.neutralComposeButton"
         static let chatListHideSearch = "donutgram.chats.appearance.hideSearch"
         static let chatListFoldersAtBottom = "donutgram.chats.appearance.foldersAtBottom"
         static let chatListTitleMode = "donutgram.chats.appearance.titleMode"
@@ -242,6 +246,12 @@ public final class DGSimpleSettings {
         static let onlyAddedStickers = "donutgram.chats.onlyAddedStickers"
         static let infiniteRecentStickers = "donutgram.chats.infiniteRecentStickers"
         static let hidePaidReactions = "donutgram.chats.hidePaidReactions"
+        static let hideTrendingStickers = "donutgram.chats.hideTrendingStickers"
+        static let hideTrendingEmoji = "donutgram.chats.hideTrendingEmoji"
+        static let hideAIFeatures = "donutgram.chats.hideAIFeatures"
+        static let hidePhoneNumberInChatTitle = "donutgram.chats.hidePhoneNumberInTitle"
+        static let disableProfileMusicAutoplay = "donutgram.media.disableProfileMusicAutoplay"
+        static let gifScrubber = "donutgram.media.gifScrubber"
         static let hideBirthdayNotifications = "donutgram.appearance.hideBirthdayNotifications"
         static let hideViaBot = "donutgram.chats.hideViaBot"
         static let hideBotAutomation = "donutgram.chats.hideBotAutomation"
@@ -785,6 +795,7 @@ public final class DGSimpleSettings {
     /// No emoji status or Premium star next to the chat list title.
     public var chatListHideEmojiStatus: Bool { get { bool(Key.chatListHideEmojiStatus) } set { setBool(newValue, Key.chatListHideEmojiStatus) } }
     public var chatListCenteredTitle: Bool { get { bool(Key.chatListCenteredTitle) } set { setBool(newValue, Key.chatListCenteredTitle) } }
+    public var neutralComposeButton: Bool { get { bool(Key.neutralComposeButton) } set { setBool(newValue, Key.neutralComposeButton) } }
     public var chatListHideSearch: Bool { get { bool(Key.chatListHideSearch) } set { setBool(newValue, Key.chatListHideSearch) } }
     public var chatListFoldersAtBottom: Bool { get { bool(Key.chatListFoldersAtBottom) } set { setBool(newValue, Key.chatListFoldersAtBottom) } }
     public var chatListTitleMode: ChatListTitleMode {
@@ -1216,7 +1227,20 @@ public final class DGSimpleSettings {
 
     public var onlyAddedStickers: Bool { get { bool(Key.onlyAddedStickers) } set { setBool(newValue, Key.onlyAddedStickers) } }
     public var infiniteRecentStickers: Bool { get { bool(Key.infiniteRecentStickers) } set { setBool(newValue, Key.infiniteRecentStickers) } }
+    public var stickerUnlock: Bool { get { bool(Key.stickerUnlock) } set { setBool(newValue, Key.stickerUnlock) } }
+    public var hideEmptyReplyDrafts: Bool { get { bool(Key.hideEmptyReplyDrafts) } set { setBool(newValue, Key.hideEmptyReplyDrafts) } }
+    public var compactProfileMusicAndBalance: Bool { get { bool(Key.compactProfileMusicAndBalance) } set { setBool(newValue, Key.compactProfileMusicAndBalance) } }
     public var hidePaidReactions: Bool { get { bool(Key.hidePaidReactions) } set { setBool(newValue, Key.hidePaidReactions) } }
+    public var hideTrendingStickers: Bool { get { bool(Key.hideTrendingStickers) } set { setBool(newValue, Key.hideTrendingStickers) } }
+    public var hideTrendingEmoji: Bool { get { bool(Key.hideTrendingEmoji) } set { setBool(newValue, Key.hideTrendingEmoji) } }
+    public var hideAIFeatures: Bool { get { bool(Key.hideAIFeatures) } set { setBool(newValue, Key.hideAIFeatures) } }
+    public var hidePhoneNumberInChatTitle: Bool { get { bool(Key.hidePhoneNumberInChatTitle) } set { setBool(newValue, Key.hidePhoneNumberInChatTitle) } }
+    public var disableProfileMusicAutoplay: Bool { get { bool(Key.disableProfileMusicAutoplay) } set { setBool(newValue, Key.disableProfileMusicAutoplay) } }
+    /// «Перемотка GIF», on by default: the media viewer gives GIFs a scrubber, as videos have.
+    public var gifScrubber: Bool {
+        get { self.defaults.object(forKey: Key.gifScrubber) == nil ? true : bool(Key.gifScrubber) }
+        set { setBool(newValue, Key.gifScrubber) }
+    }
     public var hideBirthdayNotifications: Bool { get { bool(Key.hideBirthdayNotifications) } set { setBool(newValue, Key.hideBirthdayNotifications) } }
     public var hideViaBot: Bool { get { bool(Key.hideViaBot) } set { setBool(newValue, Key.hideViaBot) } }
     public var hideBotAutomation: Bool { get { bool(Key.hideBotAutomation) } set { setBool(newValue, Key.hideBotAutomation) } }

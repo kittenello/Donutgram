@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import LottieSettings
 import UniformTypeIdentifiers
 import UIKit
@@ -3572,7 +3573,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var isAIButtonVisible = false
         var attachmentPillHeight: CGFloat = 40.0
         let inputHasNonWhitespaceText = !(self.richTextInputNode?.inputContentIsEmptyWhitespaceTrimmed ?? true)
-        if self.isAIEnabled, inputHasNonWhitespaceText, let node = self.richTextInputNode {
+        if self.isAIEnabled, !DGSimpleSettings.shared.hideAIFeatures, inputHasNonWhitespaceText, let node = self.richTextInputNode {
             let threeLineHeight = self.threeLineFieldHeight(forWidth: baseWidth, node: node, metrics: metrics, bottomInset: bottomInset, textFieldInsets: textFieldInsets)
             if textInputHeight >= threeLineHeight - 0.5 {
                 isAIButtonVisible = true
@@ -3594,7 +3595,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
 
         // AI button in the TOP 40x40 slot of the capsule (fades in with the 3-line rule).
-        if self.isAIEnabled {
+        if self.isAIEnabled && !DGSimpleSettings.shared.hideAIFeatures {
             let aiButton: (button: HighlightTrackingButton, icon: UIImageView)
             if let current = self.attachmentAIButton {
                 aiButton = current

@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import LegacyComponents
@@ -458,7 +459,7 @@ public class LegacyMessageInputPanelNode: ASDisplayNode, TGCaptionPanelView {
                     isChannel: false,
                     storyItem: nil,
                     chatLocation: self.chatLocation,
-                    aiCompose: self.isAIEnabled ? { [weak self] in
+                    aiCompose: self.isAIEnabled && !DGSimpleSettings.shared.hideAIFeatures ? { [weak self] in
                         self?.openAICompose()
                     } : nil
                 )
@@ -674,6 +675,9 @@ public class LegacyMessageInputPanelNode: ASDisplayNode, TGCaptionPanelView {
     }
 
     private func openAICompose() {
+        guard !DGSimpleSettings.shared.hideAIFeatures else {
+            return
+        }
         Task { @MainActor [weak self] in
             guard let self else {
                 return

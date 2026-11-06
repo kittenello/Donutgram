@@ -3,6 +3,19 @@ import TelegramCore
 
 @available(macOS 10.15, *)
 extension WalletContextImpl {
+    func retryHistory() {
+        self.logger.log("event=wallet_history_retry")
+        self.replaceState(
+            phase: self.currentState.phase,
+            balance: self.currentState.balance,
+            transactions: self.currentState.transactions.withError(nil),
+            pendingTransfers: self.currentState.pendingTransfers,
+            activeOperation: self.currentState.activeOperation
+        )
+        self.requestServerWalletState(forceRefreshAfterCurrent: true)
+        self.requestSynchronization(scope: .transactions, force: true)
+    }
+
     var activeSynchronizationScope: WalletSynchronizationScope {
         self.synchronizationGate.pendingScope.union(self.collectiblesSynchronizationGate.pendingScope)
     }

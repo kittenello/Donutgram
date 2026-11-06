@@ -607,19 +607,22 @@ public extension WalletContext {
         public let canLoadMore: Bool
         public let isLoadingMore: Bool
         public let error: SynchronizationError?
+        public let hasLoaded: Bool
 
         public init(
             items: [Transaction],
             offset: Int,
             canLoadMore: Bool,
             isLoadingMore: Bool,
-            error: SynchronizationError?
+            error: SynchronizationError?,
+            hasLoaded: Bool = false
         ) {
             self.items = items
             self.offset = offset
             self.canLoadMore = canLoadMore
             self.isLoadingMore = isLoadingMore
             self.error = error
+            self.hasLoaded = hasLoaded
         }
     }
 

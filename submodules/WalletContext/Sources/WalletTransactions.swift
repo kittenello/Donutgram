@@ -577,7 +577,8 @@ struct WalletTransactionHistory {
             offset: items.count,
             canLoadMore: self.nextOffset != nil,
             isLoadingMore: previous.isLoadingMore,
-            error: nil
+            error: nil,
+            hasLoaded: true
         )
     }
 
@@ -596,7 +597,8 @@ struct WalletTransactionHistory {
                     offset: previous.offset,
                     canLoadMore: shouldContinue,
                     isLoadingMore: shouldContinue,
-                    error: previous.error
+                    error: previous.error,
+                    hasLoaded: previous.hasLoaded
                 ),
                 shouldContinue
             )
@@ -615,7 +617,8 @@ struct WalletTransactionHistory {
                 offset: items.count,
                 canLoadMore: self.nextOffset != nil,
                 isLoadingMore: shouldContinue,
-                error: nil
+                error: nil,
+                hasLoaded: true
             ),
             shouldContinue
         )
@@ -631,7 +634,8 @@ struct WalletTransactionHistory {
             offset: previous.offset,
             canLoadMore: previous.canLoadMore,
             isLoadingMore: pagination ? false : previous.isLoadingMore,
-            error: error is CancellationError ? previous.error : synchronizationError(error)
+            error: error is CancellationError ? previous.error : synchronizationError(error),
+            hasLoaded: previous.hasLoaded
         )
     }
 }

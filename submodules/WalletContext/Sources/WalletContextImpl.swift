@@ -424,7 +424,8 @@ actor WalletContextImpl {
                 offset: cachedTransactions.count,
                 canLoadMore: false,
                 isLoadingMore: false,
-                error: nil
+                error: nil,
+                hasLoaded: !cachedTransactions.isEmpty
             ),
             collectibles: CollectiblesState(
                 items: Array(storedState.collectibles.prefix(walletTransactionFetchLimit)),
@@ -601,6 +602,19 @@ actor WalletContextImpl {
                     activeOperation: self.currentState.activeOperation
                 )
             }
+            if !self.isShutdown,
+               self.serverStateMutationRevision == revision,
+               self.latestWalletStateRevision == walletStateRevision,
+               self.activationGeneration == generation,
+               case .restoring = self.currentState.phase {
+                self.replaceState(
+                    phase: self.currentState.phase,
+                    balance: self.currentState.balance,
+                    transactions: self.currentState.transactions.withError(.network),
+                    pendingTransfers: self.currentState.pendingTransfers,
+                    activeOperation: self.currentState.activeOperation
+                )
+            }
             self.scheduleServerStateRetry()
         }
     }
@@ -771,11 +785,13 @@ actor WalletContextImpl {
                 self.transactionHistory.reset()
                 self.pendingScreenSynchronizationScope.formUnion(self.visibleScreenSynchronizationScope)
             }
+            // A failed state request leaves its error in the history (`.network` while restoring): the state has arrived
+            // now, and the history reloads once the wallet activates.
             self.replaceState(
                 phase: .restoring,
                 balance: .value(serverBalance, updatedAt: currentWalletTimestamp()),
                 transactions: isSameCachedIdentity
-                    ? self.currentState.transactions
+                    ? self.currentState.transactions.withError(nil)
                     : TransactionsState(items: [], offset: 0, canLoadMore: false, isLoadingMore: false, error: nil),
                 collectibles: isSameCachedIdentity ? self.currentState.collectibles : .empty,
                 pendingTransfers: isSameCachedIdentity ? self.currentState.pendingTransfers : [],
@@ -1197,7 +1213,8 @@ actor WalletContextImpl {
                     transaction.transactionHash.flatMap { presentationIds[$0] } ?? transaction.presentationId)
             },
             offset: transactions.offset, canLoadMore: transactions.canLoadMore,
-            isLoadingMore: transactions.isLoadingMore, error: transactions.error
+            isLoadingMore: transactions.isLoadingMore, error: transactions.error,
+            hasLoaded: transactions.hasLoaded
         )
         let walletAddress: String?
         if case let .ready(_, _, _, address, _, _)? = self.serverWalletState {
@@ -1711,4 +1728,12 @@ func walletEngineBalance(_ nanograms: String) -> Int64? {
 @available(macOS 10.15, *)
 func walletEngineAcceptsSubmission(_ phase: SendPhase) -> Bool {
     phase == .submitted || phase == .submissionUnknown || phase == .confirmed
+}
+
+@available(macOS 10.15, *)
+extension WalletContext.TransactionsState {
+    /// The same history with `error` in place of its current one.
+    func withError(_ error: WalletContext.SynchronizationError?) -> WalletContext.TransactionsState {
+        return WalletContext.TransactionsState(items: self.items, offset: self.offset, canLoadMore: self.canLoadMore, isLoadingMore: self.isLoadingMore, error: error, hasLoaded: self.hasLoaded)
+    }
 }

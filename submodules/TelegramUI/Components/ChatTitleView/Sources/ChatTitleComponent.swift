@@ -199,7 +199,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarGlassPillTit
             strings: strings,
             dateTimeFormat: dateTimeFormat,
             nameDisplayOrder: nameDisplayOrder,
-            content: content
+            content: content.withCurrentDonutgramSettings()
         )
         let isUpdated = self.contentData != contentData
         self.contentData = contentData
@@ -636,7 +636,7 @@ public final class ChatTitleComponent: Component {
                                 content: .text(component.strings.ChatList_AuthorHidden)
                             )]
                         } else {
-                            if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
+                            if !peerView.hidePhoneNumberInChatTitle, !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                 titleSegments = [AnimatedTextComponent.Item(
                                     id: AnyHashable(0),
                                     isUnbreakable: true,

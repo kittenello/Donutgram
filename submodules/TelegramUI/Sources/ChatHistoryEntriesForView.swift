@@ -564,7 +564,7 @@ func chatHistoryEntriesForView(
                     if location.threadId == nil {
                         if let subject, case .pinnedMessages = subject {
                         } else {
-                            entries.insert(.ChatInfoEntry(.botInfo(title: presentationData.strings.Bot_DescriptionTitle, text: botInfo.description, photo: botInfo.photo, video: botInfo.video, peer: nil, managedByBot: nil), presentationData), at: 0)
+                            entries.insert(.ChatInfoEntry(.botInfo(title: presentationData.strings.Bot_DescriptionTitle, text: botInfo.description, photo: botInfo.photo, video: botInfo.video, peer: chatPeer.flatMap(EnginePeer.init), managedByBot: nil), presentationData), at: 0)
                         }
                     }
                 } else if let botManagerId = cachedPeerData.botManagerId, let managedByBot = cachedPeerDataPeers[botManagerId], let peer = chatPeer.flatMap(EnginePeer.init) {

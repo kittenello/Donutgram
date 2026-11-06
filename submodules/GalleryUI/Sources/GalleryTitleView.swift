@@ -137,8 +137,9 @@ public final class GalleryTitleView: UIView, NavigationBarTitleView {
         
         if let content {
             if let message = content.message {
-                authorNameText = stringForFullAuthorName(message: message, strings: self.presentationData.strings, nameDisplayOrder: self.presentationData.nameDisplayOrder, accountPeerId: self.context.account.peerId).first ?? ""
-                dateText = humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: message.timestamp).string
+                // A standalone message without its chat (a bot card's media) still names its author.
+                authorNameText = stringForFullAuthorName(message: message, strings: self.presentationData.strings, nameDisplayOrder: self.presentationData.nameDisplayOrder, accountPeerId: self.context.account.peerId).first ?? message.author?.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder) ?? ""
+                dateText = message.timestamp == 0 ? nil : humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: message.timestamp).string
             } else {
                 authorNameText = content.authorTitle
                 dateText = content.dateTitle

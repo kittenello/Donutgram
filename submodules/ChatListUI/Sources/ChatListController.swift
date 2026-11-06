@@ -390,7 +390,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     
                     self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        tint: .accent,
+                        tint: DGSimpleSettings.shared.neutralComposeButton ? .generic : .accent,
+                        requiresOwnSection: true,
                         action: { [weak self] _ in
                             self?.composePressed()
                         }
@@ -7396,7 +7397,8 @@ private final class ChatListLocationContext {
                 } else {
                     self.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        tint: .accent,
+                        tint: DGSimpleSettings.shared.neutralComposeButton ? .generic : .accent,
+                        requiresOwnSection: true,
                         action: { [weak self] _ in
                             self?.parentController?.composePressed()
                         }

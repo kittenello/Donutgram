@@ -84,7 +84,7 @@ public final class PasscodeEnvironment: @unchecked Sendable {
     // keychain access group, and the private group built from the team prefix depends on how the signing tool set up the
     // keychain groups: passcode reads and writes failed, so a passcode could be neither set nor entered. Such a build has
     // no app extensions, so its main app keeps the items in its default access group, which every signature has.
-    var usesDefaultKeychainAccessGroup: Bool {
+    public var usesDefaultKeychainAccessGroup: Bool {
         self.mutex.lock()
         defer { self.mutex.unlock() }
         #if os(macOS)

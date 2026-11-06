@@ -141,36 +141,29 @@ enum DGListEntry: ItemListNodeEntry {
         case let .header(_, _, title):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: title, sectionId: self.section)
         case let .toggle(_, _, key, title, value, enabled):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: enabled, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { arguments.toggle(key, $0) }, activatedWhileDisabled: { arguments.toggleWhileDisabled(key) }, tag: DGSettingItemTag(key: key))
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enableInteractiveChanges: enabled, enabled: enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { arguments.toggle(key, $0) }, activatedWhileDisabled: { arguments.toggleWhileDisabled(key) }, tag: DGSettingItemTag(key: key, title: title))
         case let .disclosure(_, _, key, title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key, title: title))
         case let .searchResult(_, _, key, title, path):
             let attributedTitle = NSAttributedString(string: title, font: Font.regular(presentationData.fontSize.itemListBaseFontSize), textColor: presentationData.theme.list.itemPrimaryTextColor)
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, attributedTitle: attributedTitle, label: path, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.open(key) })
         case let .rootRow(_, _, key, title, label, glyph, color):
             let icon = PresentationResourcesSettings.donutgramIcon(glyph, color: UIColor(rgb: color))
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key, title: title))
         case let .menu(_, _, key, title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .optionArrows, action: { arguments.openMenu(key) }, tag: DGSettingItemTag(key: key))
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .optionArrows, action: { arguments.openMenu(key) }, tag: DGSettingItemTag(key: key, title: title))
         case let .action(_, _, key, title):
-            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key))
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { arguments.open(key) }, tag: DGSettingItemTag(key: key, title: title))
         case let .value(_, _, key, title, value):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: { arguments.copyValue(value) }, tag: DGSettingItemTag(key: key))
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: value, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: { arguments.copyValue(value) }, tag: DGSettingItemTag(key: key, title: title))
         case let .info(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .markdown(text), sectionId: self.section)
         case let .input(_, _, key, value, placeholder):
             if key == "settingsSearch" {
-                let title = NSMutableAttributedString(string: "")
-                if let icon = UIImage(systemName: "magnifyingglass", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17.0))?.withRenderingMode(.alwaysTemplate) {
-                    // TextNode tints image attachments with the attributed foreground color.
-                    title.append(NSAttributedString(string: "M", attributes: [
-                        .attachment: icon,
-                        .foregroundColor: presentationData.theme.list.itemSecondaryTextColor
-                    ]))
-                }
+                let title = dgSettingsSearchIcon(font: Font.regular(presentationData.fontSize.itemListBaseFontSize), color: presentationData.theme.list.itemSecondaryTextColor)
                 return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
             }
-            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
+            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key, title: placeholder), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
         case let .messagePreview(_, _, _, emoji):
             return donutgramMessagePreviewItem(context: arguments.context, sectionId: self.section, emoji: emoji)
         case let .chatListPreview(_, _, snow, hideEmojiStatus, centerTitle, hideSearch, titleMode):
@@ -296,13 +289,9 @@ func dgController(context: AccountContext, page: DGSettingsPage, title: String, 
     controller.alwaysSynchronous = true
     // Re-read the entries on return from a sub-page, but not on other re-appearances (tab switches, dismissed modals):
     // that would overwrite a text field the user is still editing with its stored value.
-    controller.didAppear = { [weak controller] firstTime in
+    controller.didAppear = { firstTime in
         if firstTime {
-            let gesture = UILongPressGestureRecognizer(target: longPressHandler, action: #selector(DGSettingsLongPressHandler.handle(_:)))
-            // Keep the default cancelsTouchesInView: when the menu opens, the list gets touchesCancelled
-            // and does not open the row on release, as with its own scroll pan.
-            gesture.delegate = longPressHandler
-            controller?.view.addGestureRecognizer(gesture)
+            longPressHandler.install()
         }
         if !firstTime && needsRefreshOnAppear {
             needsRefreshOnAppear = false
@@ -418,7 +407,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
     return dgController(context: context, page: .root, title: "Настройки Donutgram", focusKey: focusKey, entries: {
         // Every guard of the ghost page counts, «Автоматический «офлайн»» included: without it sending shows the account online.
         let hiddenByGhost = [!s.ghostReadMessages, !s.ghostReadStories, !s.ghostSendOnline, s.ghostAutomaticOffline, !s.ghostSendTyping].filter { $0 }.count
-        let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.saveProtectedStories, s.gifUnlock, s.bypassContentRestrictions].filter { $0 }.count
+        let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.saveProtectedStories, s.gifUnlock, s.stickerUnlock, s.bypassContentRestrictions].filter { $0 }.count
         let isSaving = s.saveDeletedMessages || s.saveEditHistory || s.saveViewOnceMedia || s.showDisappearedGifts || s.keepBannedChats
         let shadowBanned = s.shadowBannedPeerIds.count
         let acceleration = ["", "Быстро", "Ультра"][s.downloadAcceleration]
@@ -435,7 +424,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         entries.append(.header(0, 0, "ПРИВАТНОСТЬ"))
         entries.append(.rootRow(1, 0, "ghost", "Режим призрака", s.ghostModeEnabled ? "Вкл · \(hiddenByGhost) из 5" : "Выкл", "NoForward", 0x5E5CE6))
         entries.append(.rootRow(2, 0, "saving", "Удалённые и правки", isSaving ? "Вкл" : "Выкл", "Delete", 0xFF9F0A))
-        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 5", "Key", 0x00C7BE))
+        entries.append(.rootRow(3, 0, "bypass", "Обход ограничений", bypassed == 0 ? "Выкл" : "Вкл · \(bypassed) из 6", "Key", 0x00C7BE))
         entries.append(.rootRow(4, 0, "shadowBan", "Теневой бан", shadowBanned == 0 ? "Нет" : "\(shadowBanned)", "Block", 0xFF453A))
         entries.append(.rootRow(5, 0, "security", "Подтверждения и статистика", "", "Checkbox", 0x8E8E93))
         entries.append(.header(10, 1, "ИНТЕРФЕЙС"))

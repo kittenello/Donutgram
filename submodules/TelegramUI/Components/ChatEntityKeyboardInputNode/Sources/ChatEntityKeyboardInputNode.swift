@@ -439,7 +439,6 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
 
     private var currentState: (width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, standardInputHeight: CGFloat, inputHeight: CGFloat, maximumHeight: CGFloat, inputPanelHeight: CGFloat, interfaceState: ChatPresentationInterfaceState, layoutMetrics: LayoutMetrics, deviceMetrics: DeviceMetrics, isVisible: Bool, isExpanded: Bool)?
     private var donutgramSettingsObserver: NSObjectProtocol?
-    private var donutgramGifUnlock = DGSimpleSettings.shared.gifUnlock
 
     private var scheduledContentAnimationHint: EmojiPagerContentComponent.ContentAnimation?
     private var scheduledInnerTransition: ComponentTransition?
@@ -1759,8 +1758,7 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
             }
         })
         self.donutgramSettingsObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
-            guard let self, self.donutgramGifUnlock != DGSimpleSettings.shared.gifUnlock else { return }
-            self.donutgramGifUnlock = DGSimpleSettings.shared.gifUnlock
+            guard let self else { return }
             self.performLayout(transition: .immediate)
         })
     }
@@ -1860,6 +1858,12 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
         var emojiContent: EmojiPagerContentComponent? = self.currentInputData.emoji
         var stickerContent: EmojiPagerContentComponent? = self.currentInputData.stickers
         var gifContent: EntityKeyboardGifContent? = self.currentInputData.gifs
+        if DGSimpleSettings.shared.hideTrendingEmoji, let content = emojiContent {
+            emojiContent = self.contentWithoutTrending(content)
+        }
+        if DGSimpleSettings.shared.hideTrendingStickers, let content = stickerContent {
+            stickerContent = self.contentWithoutTrending(content)
+        }
 
         var stickersEnabled = true
         var emojiEnabled = true
@@ -1883,8 +1887,10 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
             }
         }
 
-        if !stickersEnabled {
+        if !stickersEnabled && !donutgramCanSendStickerAsMedia(peer: interfaceState.renderedPeer?.peer) {
             stickerContent = nil
+        }
+        if !stickersEnabled {
             if !donutgramCanSendGifAsVideo(peer: interfaceState.renderedPeer?.peer) {
                 gifContent = nil
             }
@@ -2024,7 +2030,8 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
                 displayBottomPanel: true,
                 isExpanded: isExpanded && !self.isEmojiSearchActive,
                 clipContentToTopPanel: self.clipContentToTopPanel,
-                useExternalSearchContainer: self.useExternalSearchContainer
+                useExternalSearchContainer: self.useExternalSearchContainer,
+                hideTrendingStickers: DGSimpleSettings.shared.hideTrendingStickers
             )),
             environment: {},
             containerSize: CGSize(width: width, height: expandedHeight)
@@ -2089,6 +2096,26 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
         }
 
         return (expandedHeight, 0.0)
+    }
+
+    private func contentWithoutTrending(_ content: EmojiPagerContentComponent) -> EmojiPagerContentComponent {
+        let isSearching: Bool
+        switch content.searchState {
+        case .empty:
+            isSearching = false
+        case .active, .searching:
+            isSearching = true
+        }
+        let isVisible: (EmojiPagerContentComponent.ItemGroup) -> Bool = { group in
+            return group.groupId != AnyHashable("featuredTop") && (isSearching || !group.isFeatured)
+        }
+        return content.withUpdatedItemGroups(
+            panelItemGroups: content.panelItemGroups.filter(isVisible),
+            contentItemGroups: content.contentItemGroups.filter(isVisible),
+            itemContentUniqueId: content.itemContentUniqueId,
+            emptySearchResults: content.emptySearchResults,
+            searchState: content.searchState
+        )
     }
 
     private func processStableItemGroupList(category: EntityKeyboardComponent.ReorderCategory, itemGroups: [EmojiPagerContentComponent.ItemGroup]) -> [EmojiPagerContentComponent.ItemGroup] {

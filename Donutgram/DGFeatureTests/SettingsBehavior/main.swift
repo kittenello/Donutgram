@@ -37,6 +37,21 @@ if mode == "write" {
         check(settings.shouldShowBotAutomation() == !hidden, "the bot automation panel follows its own switch")
     }
     settings.hidePaidReactions = true
+    check(!settings.hideEmptyReplyDrafts, "hiding empty reply drafts is opt-in")
+    check(!settings.neutralComposeButton, "the compose button keeps its accent color by default")
+    settings.neutralComposeButton = true
+    check(!settings.compactProfileMusicAndBalance, "compact music and balance is opt-in")
+    settings.compactProfileMusicAndBalance = true
+    settings.hideEmptyReplyDrafts = true
+    check(!settings.stickerUnlock && !settings.hideTrendingStickers && !settings.hideTrendingEmoji && !settings.hideAIFeatures && !settings.hidePhoneNumberInChatTitle && !settings.disableProfileMusicAutoplay, "new media preferences preserve the default behavior")
+    check(settings.gifScrubber, "GIFs get a scrubber until it is switched off")
+    settings.gifScrubber = false
+    settings.stickerUnlock = true
+    settings.hideTrendingStickers = true
+    settings.hideTrendingEmoji = true
+    settings.hideAIFeatures = true
+    settings.hidePhoneNumberInChatTitle = true
+    settings.disableProfileMusicAutoplay = true
     settings.hideBirthdayNotifications = true
     settings.disableStoryCameraSwipe = true
     settings.disableGiftStarsRedirect = true
@@ -85,6 +100,11 @@ if mode == "write" {
     defaults.synchronize()
     print("settings behavior checks passed")
 } else if mode == "read" {
+    check(settings.hideEmptyReplyDrafts, "hiding empty reply drafts survives a process restart")
+    check(settings.neutralComposeButton, "the compose button color survives a process restart")
+    check(settings.compactProfileMusicAndBalance, "compact music and balance survives a process restart")
+    check(settings.stickerUnlock && settings.hideTrendingStickers && settings.hideTrendingEmoji && settings.hideAIFeatures && settings.hidePhoneNumberInChatTitle && settings.disableProfileMusicAutoplay, "media preferences survive a process restart")
+    check(!settings.gifScrubber, "a switched-off GIF scrubber stays off after a process restart")
     check(settings.anonymousStickerPackData(accountId: 1001, fileId: 5001) == Data([1, 2, 3]), "sticker pack data survives process restart")
     check(settings.anonymousStickerPackData(accountId: 1003, fileId: Int64(DGSimpleSettings.anonymousStickerPackLimit) + 1) == Data([6]), "the newest sticker packs survive process restart")
     check(settings.hideBlockedMessages, "hiding blocked peers must survive process restart")

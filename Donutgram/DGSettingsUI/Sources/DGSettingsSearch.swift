@@ -100,14 +100,15 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("saveEdits", "Сохранять историю правок", "СООБЩЕНИЯ"),
         ("saveBots", "Сохранять в чатах с ботами", "СООБЩЕНИЯ"),
         ("saveOnce", "Сохранять одноразовые медиа", "ДРУГОЕ"),
-        ("disappearedGifts", "Видеть удалённые подарки", "ДРУГОЕ"),
-        ("keepBannedChats", "Оставлять чаты после бана", "ДРУГОЕ")
+        ("keepBannedChats", "Оставлять чаты после бана", "ДРУГОЕ"),
+        ("disappearedGifts", "Видеть удалённые подарки", "ДРУГОЕ")
     ])
     add("bypass", "Обход ограничений", [
         ("bypassForward", "Пересылка из защищённых чатов", "ПЕРЕСЫЛКА"),
         ("protectedScreenshots", "Скриншоты в защищённых чатах", "ЗАЩИЩЁННОЕ СОДЕРЖИМОЕ"),
         ("saveProtectedStories", "Сохранять защищённые истории", "ЗАЩИЩЁННОЕ СОДЕРЖИМОЕ"),
         ("gifUnlock", "Обход блокировок GIF", "GIF"),
+        ("stickerUnlock", "Обход блокировки стикеров", "СТИКЕРЫ"),
         ("bypassContentRestrictions", "Обход ограничений контента", "ОГРАНИЧЕННЫЙ КОНТЕНТ")
     ])
     add("shadow-ban", "Теневой бан", [
@@ -120,8 +121,10 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideEmojiStatus", "Скрыть эмодзи-статус", "ЗАГОЛОВОК"),
         ("hideStatus", "Скрыть статус соединения", "ЗАГОЛОВОК"),
         ("hideSearch", "Скрыть строку поиска", "ЗАГОЛОВОК"),
+        ("neutralComposeButton", "Обычный цвет кнопки нового сообщения", "ЗАГОЛОВОК"),
         ("foldersAtBottom", "Папки внизу", "СПИСОК"),
         ("hideArchive", "Скрыть архив из списка чатов", "СПИСОК"),
+        ("hideEmptyReplyDrafts", "Скрывать черновик пустого ответа", "СПИСОК"),
         ("hideStories", "Скрыть истории", "СПИСОК"),
         ("disableStoryCameraSwipe", "Отключить камеру по свайпу", "СПИСОК"),
         ("onlineIndicator", "Показывать индикатор онлайна", "СПИСОК"),
@@ -145,8 +148,10 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideServiceMessages", "Скрыть служебные сообщения", "СОДЕРЖИМОЕ"),
         ("greetingSticker", "Скрыть приветственный стикер", "СОДЕРЖИМОЕ"),
         ("pollResultsBeforeVoting", "Итоги до голосования", "СОДЕРЖИМОЕ"),
-        ("hideBotAutomation", "Скрыть плашку чат-бота", "СОДЕРЖИМОЕ"),
+        ("hideBotAutomation", "Скрыть плашку автоматизации", "СОДЕРЖИМОЕ"),
         ("customBackgrounds", "Отключить кастомные фоны", "СОДЕРЖИМОЕ"),
+        ("hideAIFeatures", "Скрыть функции ИИ", "СОДЕРЖИМОЕ"),
+        ("hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", "СОДЕРЖИМОЕ"),
         ("removeLinkPreviews", "Отправлять без превью ссылок", "ОТПРАВКА"),
         ("wideChannelPosts", "Широкие посты в каналах", "КАНАЛЫ"),
         ("channelForwardCount", "Счётчик пересылок у постов", "КАНАЛЫ"),
@@ -161,6 +166,8 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideStickerReplyBackground", "Ответ без фона", "СТИКЕРЫ"),
         ("onlyAdded", "Показывать только добавленные стикеры", "ПАНЕЛЬ СТИКЕРОВ"),
         ("recent", "Недавние стикеры без лимита", "ПАНЕЛЬ СТИКЕРОВ"),
+        ("hideTrendingStickers", "Скрыть популярные стикеры", "ПАНЕЛЬ СТИКЕРОВ"),
+        ("hideTrendingEmoji", "Скрыть популярные эмодзи", "ПАНЕЛЬ СТИКЕРОВ"),
         ("anonymousStickerSending", "Анонимная отправка стикеров", "ОТПРАВКА"),
         ("reactionsInChannels", "Скрыть реакции в каналах", "РЕАКЦИИ"),
         ("reactionsInGroups", "Скрыть реакции в группах", "РЕАКЦИИ"),
@@ -178,6 +185,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("chatDate", "Показывать дату создания чата", "ИНФОРМАЦИЯ"),
         ("mutualContact", "Показывать взаимный контакт", "ИНФОРМАЦИЯ"),
         ("hidePhoneNumber", "Скрыть номер телефона", "ИНФОРМАЦИЯ"),
+        ("compactProfileMusicAndBalance", "Компактные музыка и баланс", "МУЗЫКА И БАЛАНС"),
         ("relativeOnlineTime", "Относительное время онлайна", "ВРЕМЯ В СЕТИ"),
         ("approximateLastSeen", "Примерный онлайн", "ВРЕМЯ В СЕТИ"),
         ("premiumStatuses", "Скрыть премиум-статусы", "ЗНАЧКИ У ИМЁН"),
@@ -214,6 +222,8 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("pauseMusicVoiceRecording", "При записи голосовых", "ПАУЗА МУЗЫКИ"),
         ("pauseMusicVoicePlayback", "При прослушивании голосовых", "ПАУЗА МУЗЫКИ"),
         ("doubleTapSeek", "Перемотка", "ВИДЕО"),
+        ("gifScrubber", "Перемотка GIF", "GIF"),
+        ("disableProfileMusicAutoplay", "Не включать музыку автоматически", "МУЗЫКА В ПРОФИЛЕ"),
         ("autoPause", "Пауза при сворачивании", "АВТОПАУЗА"),
         ("autoPauseVideo", "Видео", "АВТОПАУЗА"),
         ("autoPauseVoice", "Голосовые", "АВТОПАУЗА"),
@@ -224,9 +234,9 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("transcription", "Сервис расшифровки", "ГОЛОС В ТЕКСТ")
     ])
     add("downloads", "Загрузки и сеть", [
-        ("downloadTikTok", "TikTok", "ВИДЕО ВМЕСТО ССЫЛКИ"),
-        ("downloadShorts", "YouTube Shorts", "ВИДЕО ВМЕСТО ССЫЛКИ"),
-        ("signDownloads", "Подпись «Скачано с …»", "ВИДЕО ВМЕСТО ССЫЛКИ"),
+        ("downloadTikTok", "TikTok", "СКАЧИВАТЬ"),
+        ("downloadShorts", "YouTube Shorts", "СКАЧИВАТЬ"),
+        ("signDownloads", "Подпись «Скачано с …»", "СКАЧИВАТЬ"),
         ("accelerateUpload", "Ускорение отправки", "УСКОРЕНИЕ ЗАГРУЗКИ"),
         ("downloadAcceleration", "Ускорение загрузки", "")
     ])
