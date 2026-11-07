@@ -46,16 +46,25 @@ struct FixtureChatTheme {
     }
     let message = Message()
 }
-struct FixtureTheme { let chat = FixtureChatTheme() }
+struct FixtureTheme {
+    struct List { let itemPrimaryTextColor = FixtureColor(name: "primary") }
+    let chat = FixtureChatTheme()
+    let list = List()
+}
 struct FixtureThemeWrapper { let theme = FixtureTheme(); let wallpaper = 0 }
-struct FixturePresentation { let theme = FixtureThemeWrapper() }
+struct FixturePresentation {
+    struct ChatBubbleCorners { let bubbleMode: Bool }
+    let theme = FixtureThemeWrapper()
+    let chatBubbleCorners: ChatBubbleCorners
+    init(bubbleMode: Bool = true) { self.chatBubbleCorners = ChatBubbleCorners(bubbleMode: bubbleMode) }
+}
 enum FixtureReplyType { case bubble(incoming: Bool); case standalone }
-struct FixtureReplyArguments { let type: FixtureReplyType; let presentationData = FixturePresentation() }
+struct FixtureReplyArguments { let type: FixtureReplyType; let presentationData: FixturePresentation }
 struct FixtureServiceColors { let primaryText = FixtureColor(name: "service") }
 func serviceMessageColorComponents(theme: FixtureTheme, wallpaper: Int) -> FixtureServiceColors { FixtureServiceColors() }
 func serviceMessageColorComponents(chatTheme: FixtureChatTheme, wallpaper: Int) -> FixtureServiceColors { FixtureServiceColors() }
-func replyColors(type: FixtureReplyType, isStickerReply: Bool, authorNameColor: UIColor?) -> (UIColor, UIColor) {
-    let arguments = FixtureReplyArguments(type: type)
+func replyColors(type: FixtureReplyType, isStickerReply: Bool, authorNameColor: UIColor?, bubbleMode: Bool = true) -> (UIColor, UIColor) {
+    let arguments = FixtureReplyArguments(type: type, presentationData: FixturePresentation(bubbleMode: bubbleMode))
     let titleColor: UIColor
     let mainColor: UIColor
     let dustColor: UIColor
@@ -163,6 +172,8 @@ if mode == "write" {
             check(outgoing.0.name == "outgoing" && outgoing.1.name == "outgoing", "outgoing replies keep the stock accent color")
             let standalone = replyColors(type: .standalone, isStickerReply: isStickerReply, authorNameColor: authorNameColor)
             check(standalone.0.name == "service" && standalone.1.name == "service", "replies above stickers and round videos keep the stock service color")
+            let bubbleless = replyColors(type: .standalone, isStickerReply: isStickerReply, authorNameColor: authorNameColor, bubbleMode: false)
+            check(bubbleless.0.name == "primary" && bubbleless.1.name == "primary", "bubbleless standalone replies use the primary text color")
         }
     }
     check(donutgramArchiveRestoredOffset(-80, hideArchive: true, hasStories: false) == 0, "old archive offset cannot leave a blank row after restart")

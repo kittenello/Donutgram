@@ -22,6 +22,15 @@ def block(source, marker):
         end += 1
     return source[start:end]
 
+def reply_arguments_harness():
+    reply = read(REPLY)
+    arguments = block(reply, "public class Arguments {").replace("public ", "")
+    start = reply.index("            let arguments: Arguments = arguments.donutgramHidden ? Arguments(")
+    end = reply.index("            let isStickerReply =", start)
+    projection = reply[start:end]
+    fixture = Path(__file__).with_name("reply_arguments.swift").read_text(encoding="utf-8")
+    return fixture.replace("struct Arguments {}", arguments).replace("    return arguments\n", projection + "    return arguments\n")
+
 def prepare():
     reply = read(REPLY)
     start = reply.index("                if isMediaValue && DGSimpleSettings.shared.hideStickerReplyEmoji")
@@ -77,6 +86,7 @@ if __name__ == "__main__":
     parser.add_argument("--source-only", action="store_true")
     args = parser.parse_args()
     harness = prepare()
+    reply_harness = reply_arguments_harness()
     if args.source_only:
         print("message control and preview integration checks passed")
     else:
@@ -93,6 +103,12 @@ if __name__ == "__main__":
             suite = "donutgram-message-controls-" + uuid.uuid4().hex
             for mode in ["write", "read"]:
                 subprocess.run([str(executable), mode, suite], check=True)
+            reply_main = temporary / "reply" / "main.swift"
+            reply_main.parent.mkdir()
+            reply_main.write_text(reply_harness, encoding="utf-8")
+            reply_executable = reply_main.parent / "checks"
+            subprocess.run([swift, "-warnings-as-errors", str(reply_main), "-o", str(reply_executable)], check=True)
+            subprocess.run([str(reply_executable)], check=True)
             paths = [REPLY, PREVIEW, "Donutgram/DGSettingsUI/Sources/DGSettingsController.swift", "Donutgram/DGSettingsUI/Sources/DGFeatureControllers.swift", "submodules/TelegramUI/Sources/ChatHistoryListNode.swift", "submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift", "submodules/ChatPresentationInterfaceState/Sources/ChatTextFormat.swift", "submodules/ChatListUI/Sources/Node/ChatListNode.swift", "submodules/ChatListUI/Sources/ChatListControllerNode.swift", "submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift", "submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/Sources/MessageInlineBlockBackgroundView.swift"]
             for path in paths:
                 subprocess.run([swift, "-frontend", "-parse", str(ROOT / path)], check=True)

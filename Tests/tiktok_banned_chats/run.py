@@ -41,8 +41,8 @@ def prepare(directory):
     failed = cached.split("let isPreservedBannedChat = donutgramIsPreservedBannedChat(transaction: transaction, peerId: peerId)", 1)[1]
     keep = "if isPreservedBannedChat, let current {\n                                    if let current = current as? CachedChannelData {\n                                        return current.withUpdatedActiveCall(nil)\n                                    }\n                                    return current\n"
     assert failed.index(keep) < failed.index("withUpdatedIsNotAccessible(true)")
-    sync = source("submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift")
-    poll = sync.split("private func pollChannel(", 1)[1]
+    sync = source("submodules/TelegramCore/Sources/State/Sync/ChannelPolling.swift")
+    poll = sync.split("func pollChannel(", 1)[1]
     assert poll.index("if donutgramPeerIsBanned(peer)") < poll.index("network.request(")
     # A kept chat is a channel the account is not in (kicked), and such a channel keeps no read state since 13.1: it is
     # still read like any chat, and the synchronizer confirms that read without a request.

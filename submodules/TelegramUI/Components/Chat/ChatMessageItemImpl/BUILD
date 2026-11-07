@@ -13,6 +13,8 @@ swift_library(
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         # Donutgram: ChatMessageDateHeader's online dot reads presences from Postbox.
         "//submodules/Postbox",
+        "//submodules/TelegramUI/Components/StaticGlassBackground",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
         "//submodules/SSignalKit/SwiftSignalKit",
