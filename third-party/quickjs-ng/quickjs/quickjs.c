@@ -631,6 +631,7 @@ struct JSContext {
                              const char *input, size_t input_len,
                              const char *filename, int line, int flags, int scope_idx);
     void *user_opaque;
+    bool dynamic_compilation_disabled;
 };
 
 typedef union JSFloat64Union {
@@ -2533,6 +2534,7 @@ int JS_EnqueueJob(JSContext *ctx, JSJobFunc *job_func,
                   int argc, JSValueConst *argv)
 {
     JSRuntime *rt = ctx->rt;
+
     JSJobEntry *e;
     int i;
 
@@ -38503,6 +38505,11 @@ static JSValue JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
 {
     JSRuntime *rt = ctx->rt;
 
+    if (ctx->dynamic_compilation_disabled &&
+        ((flags & JS_EVAL_TYPE_MASK) == JS_EVAL_TYPE_DIRECT ||
+         (flags & JS_EVAL_TYPE_MASK) == JS_EVAL_TYPE_INDIRECT)) {
+        return JS_ThrowTypeError(ctx, "dynamic compilation is disabled");
+    }
     if (unlikely(!ctx->eval_internal)) {
         return JS_ThrowTypeError(ctx, "eval is not supported");
     }
@@ -42593,6 +42600,8 @@ static JSValue js_function_proto(JSContext *ctx, JSValueConst this_val,
 static JSValue js_function_constructor(JSContext *ctx, JSValueConst new_target,
                                        int argc, JSValueConst *argv, int magic)
 {
+    if (ctx->dynamic_compilation_disabled)
+        return JS_ThrowTypeError(ctx, "dynamic compilation is disabled");
     JSFunctionKindEnum func_kind = magic;
     int i, n, ret;
     JSValue s, proto, obj = JS_UNDEFINED;
@@ -58685,6 +58694,11 @@ int JS_AddIntrinsicDate(JSContext *ctx)
 }
 
 /* eval */
+
+void JS_SetDynamicCompilationAllowed(JSContext *ctx, bool allowed)
+{
+    ctx->dynamic_compilation_disabled = !allowed;
+}
 
 int JS_AddIntrinsicEval(JSContext *ctx)
 {

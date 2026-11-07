@@ -254,6 +254,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("hideBirthdayNotifications", "Скрыть уведомления о днях рождения", "ПОДАРКИ"),
         ("disableGiftStarsRedirect", "Не открывать звёзды после продажи", "ПОДАРКИ")
     ])
+    add("plugins", "Плагины", [("", "JavaScript plugins", "Расширения")])
     add("about", "О Donutgram", [
         ("channel", "Канал", ""),
         ("sourceCode", "Исходный код", ""),

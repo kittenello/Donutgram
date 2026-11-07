@@ -1,0 +1,29 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.quiet-links",
+  "name": "тихие ссылки",
+  "version": "1.0.0",
+  "description": "удаляет utm-параметры из выделенной ссылки в черновике",
+  "apiVersion": "^1.0.0",
+  "minClientVersion": "13.2",
+  "entry": "main.js",
+  "profile": "localPrivate",
+  "permissions": [
+    {
+      "capability": "ui.contribute",
+      "scope": "composer",
+      "reason": "показать команду очистки"
+    },
+    {
+      "capability": "composer.read",
+      "scope": "activeComposer",
+      "reason": "прочитать выделенную ссылку"
+    },
+    {
+      "capability": "composer.transform",
+      "scope": "activeComposer",
+      "reason": "заменить выделенную ссылку"
+    }
+  ]
+}

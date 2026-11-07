@@ -339,6 +339,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     let chatBackgroundNode: WallpaperBackgroundNode
     public private(set) var controllerInteraction: ChatControllerInteraction?
     var interfaceInteraction: ChatPanelInterfaceInteraction?
+    let dgPluginChatState = DGPluginChatState()
     
     let messageContextDisposable = MetaDisposable()
     let controllerNavigationDisposable = MetaDisposable()
@@ -6571,7 +6572,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     source = .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: .zero))
                 }
                 
-                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { [weak strongSelf] list in
+                    let commands = strongSelf?.dgPluginMenuItems(placements: ["composer", "chatToolbar"]) ?? []
+                    return ContextController.Items(content: .list(list + commands))
+                }, gesture: gesture)
                 contextController.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
                 }
@@ -8108,6 +8112,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        self.dgBindChatPlugins()
         self.forwardSideListAppearance(.didAppear, animated: animated)
         
         self.didAppear = true

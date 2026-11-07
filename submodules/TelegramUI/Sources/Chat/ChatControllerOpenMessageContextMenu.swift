@@ -66,6 +66,9 @@ extension ChatControllerImpl {
                 var (allowedReactions, _) = allowedReactionsAndStars
                 
                 var actions = actions
+                if case let .list(existing) = actions.content {
+                    actions.content = .list(existing + self.dgPluginMenuItems(placements: ["selection", "messageMenu"], message: EngineMessage(topMessage)))
+                }
                 switch actions.content {
                 case let .list(itemList):
                     if itemList.isEmpty {

@@ -1,0 +1,15 @@
+# bounded javascript runtime
+
+one quickjs runtime belongs to one installation/account. the swift wrapper owns a serial queue; stop only sets a cross-thread atomic latch, and engine interruption/destruction occurs on the owned queue. no helper process or jit is used.
+
+limits: 16 mib quickjs heap; 512 kib interpreter stack; 4 mib installed source/resource snapshot; 128 files; 1 mib per file; 1 s activation; 250 ms dispatch; 4096 job-pump steps per operation; 64 simultaneous native requests; 64 commands; 64 event names and 16 listeners/name. no plugin timers, arbitrary filesystem access, bytecode, std/os modules, node, native modules, network code loader or browser globals are installed. module paths must be relative installed .js paths; parent traversal is refused.
+
+`definePlugin(manifest, {activate(api) {}})` and its shorthand are supported. `api.commands.register` accepts `{id,title,placement,run}` or a separate handler. asynchronous registrations resolve after the native broker accepts them. the native closure supplies trusted installation identity; no identity comes from javascript. omitted adapters return the broker's explicit unavailable error. `api.environment.get()` returns the supplied immutable environment snapshot. safe url helpers must be bundled with sdk sources; `URL` is not supplied by quickjs.
+
+`JS_SetDynamicCompilationAllowed(ctx, false)` is a context opt-in. direct/indirect eval and normal, async, generator and async-generator function constructors fail inside the engine. native host loading of verified source remains available. widgets retain their previous default. javascript protection is not process isolation: native interpreter defects remain in the threat model.
+
+interrupts occur at quickjs poll sites. some expensive native builtins can run until their next poll, so this implementation does not claim a hard preemptive wall deadline. initial fixtures verify loops, async microtasks, recursion, heap exhaustion, imports, constructors, cancellation and unchanged default engine policy. further builtin adversarial coverage remains required.
+
+run `powershell -File Donutgram/DGPluginRuntime/run-tests.ps1` from any directory on the current windows/visual studio host. this compiles the real vendored engine and c host with clang. bazel target: `//Donutgram/DGPluginRuntime:DGPluginRuntimeTests`. swift integration requires xcode and the full app build; windows checks do not verify swift compilation or ios behaviour.
+
+`engine-lock.json` hashes the actual fork source/header files rather than claiming an upstream archive matches the fork. recompute and review it whenever the engine changes. `Sources/DGPluginBootstrap.swift` embeds `Sources/bootstrap.js`; keep them byte-for-byte aligned when editing.

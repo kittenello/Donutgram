@@ -1,0 +1,40 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.templates",
+  "name": "шаблоны",
+  "version": "1.0.0",
+  "description": "вставляет сохранённый шаблон в открытый черновик",
+  "apiVersion": "^1.0.0",
+  "minClientVersion": "13.2",
+  "entry": "main.js",
+  "profile": "localPrivate",
+  "permissions": [
+    {
+      "capability": "ui.contribute",
+      "scope": "composer",
+      "reason": "показать команду вставки"
+    },
+    {
+      "capability": "composer.read",
+      "scope": "activeComposer",
+      "reason": "получить версию и выделение черновика"
+    },
+    {
+      "capability": "composer.transform",
+      "scope": "activeComposer",
+      "reason": "вставить шаблон в выделение"
+    }
+  ],
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "template": {
+        "type": "string",
+        "title": "текст шаблона",
+        "default": "привет!",
+        "maxLength": 4096
+      }
+    }
+  }
+}
