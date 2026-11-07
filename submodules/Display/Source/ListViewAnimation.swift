@@ -171,7 +171,7 @@ public final class ListViewAnimation {
     }
     
     public func completeAt(_ timestamp: Double) -> Bool {
-        if timestamp >= self.startTime + self.duration {
+        if isEnhancedPowerSavingEnabled || timestamp >= self.startTime + self.duration {
             self.completed(true)
             return true
         } else {
@@ -194,7 +194,7 @@ public final class ListViewAnimation {
     }
     
     public func applyAt(_ timestamp: Double) {
-        var t = CGFloat((timestamp - self.startTime) / self.duration)
+        var t: CGFloat = isEnhancedPowerSavingEnabled || self.duration <= 0.0 ? 1.0 : CGFloat((timestamp - self.startTime) / self.duration)
         let ct: CGFloat
         if t <= 0.0 + CGFloat.ulpOfOne {
             t = 0.0

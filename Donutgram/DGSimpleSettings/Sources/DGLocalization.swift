@@ -27,6 +27,9 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Усиленное энергосбережение": "Enhanced Power Saving",
+    "Чтобы изменить эти настройки, выключите усиленное энергосбережение.": "Turn off Enhanced Power Saving to change these settings.",
+    "Полностью отключает анимации, воспроизведение стикеров и эмодзи, автозапуск видео и GIF, эффекты и фоновые предзагрузки.": "Disables animations, sticker and emoji playback, video and GIF autoplay, effects, and background preloading.",
     "Обычный цвет кнопки нового сообщения": "Neutral New Message Button",
     "Преобразование стикера…": "Converting sticker…",
     "Когда вас упомянут, отдельной отметки и уведомления об упоминании не будет.": "When someone mentions you, there is no separate mention indicator or notification.",

@@ -11,6 +11,32 @@ ROOT = Path(__file__).resolve().parents[2]
 def source(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
+def block(text, marker):
+    start = text.index(marker)
+    opening = text.index("{", start)
+    depth, end = 1, opening + 1
+    while depth:
+        depth += (text[end] == "{") - (text[end] == "}")
+        end += 1
+    return text[start:end].replace("public ", "").replace("private ", "")
+
+def visible_history_harness():
+    history = source("submodules/TelegramUI/Sources/ChatHistoryListNode.swift")
+    visible = source("submodules/TelegramUI/Components/ChatControllerInteraction/Sources/ChatHistoryVisibleReadIndex.swift")
+    shadowban = source("submodules/TelegramCore/Sources/Donutgram/DonutgramShadowBan.swift")
+    fixture = Path(__file__).with_name("visible_history.swift").read_text(encoding="utf-8")
+    replacements = {
+        "struct ChatHistoryVisibleReadRow {}": block(visible, "public struct ChatHistoryVisibleReadRow {"),
+        "func chatHistoryMaxVisibleReadIndex() {}": block(visible, "public func chatHistoryMaxVisibleReadIndex("),
+        "static func readIndexPastHidden() {}": block(shadowban, "public static func readIndexPastHidden("),
+        "func updateMaxVisibleReadIncomingMessageIndexFromVisibleItems() {}": block(history, "private func updateMaxVisibleReadIncomingMessageIndexFromVisibleItems()"),
+        "func readVisibleMessagesBeforeLeaving() {}": block(history, "public func readVisibleMessagesBeforeLeaving()"),
+    }
+    for marker, implementation in replacements.items():
+        assert fixture.count(marker) == 1
+        fixture = fixture.replace(marker, implementation)
+    return fixture
+
 def prepare():
     ghost = source("submodules/TelegramCore/Sources/Donutgram/DonutgramGhostLocalRead.swift")
     ghost = "\n".join(line for line in ghost.splitlines() if not line.startswith("import "))
@@ -56,6 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--source-only", action="store_true")
     args = parser.parse_args()
     harness = prepare()
+    visible_harness = visible_history_harness()
     if args.source_only:
         print("source integration checks passed")
     else:
@@ -71,3 +98,9 @@ if __name__ == "__main__":
             suite = "donutgram-local-read-" + uuid.uuid4().hex
             for mode in ["write", "read"]:
                 subprocess.run([str(executable), mode, suite], check=True)
+            visible_main = directory / "visible" / "main.swift"
+            visible_main.parent.mkdir()
+            visible_main.write_text(visible_harness, encoding="utf-8")
+            visible_executable = visible_main.parent / "checks"
+            subprocess.run([compiler, str(visible_main), "-o", str(visible_executable)], check=True)
+            subprocess.run([str(visible_executable)], check=True)

@@ -1,5 +1,4 @@
 import Foundation
-import LottieSettings
 import SwiftSignalKit
 import Compression
 import Display
@@ -220,6 +219,8 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     public var isPlaying: Bool = false
     private var currentLoopCount: Int = 0
     private var canDisplayFirstFrame: Bool = false
+    private var powerSavingObserver: NSObjectProtocol?
+    private var resumePlaybackAfterPowerSaving = false
     public var playbackMode: AnimatedStickerPlaybackMode = .loop
     
     public var stopAtNearestLoop: Bool = false
@@ -269,14 +270,12 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     
     public var forceSynchronous = false
     
-    private let lottieSettings: LottieRenderingSettings
 
-    public init(useMetalCache: Bool = false, lottieSettings: LottieRenderingSettings) {
+    public init(useMetalCache: Bool = false) {
         self.queue = sharedQueue
         self.eventsNode = AnimatedStickerNodeDisplayEvents()
         
         self.useMetalCache = useMetalCache
-        self.lottieSettings = lottieSettings
         
         super.init()
         
@@ -287,9 +286,15 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
             strongSelf.isDisplaying = value
         }
         self.addSubnode(self.eventsNode)
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.updateIsPlaying()
+        }
     }
     
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         self.disposable.dispose()
         self.fetchDisposable.dispose()
         self.timer.swap(nil)?.invalidate()
@@ -414,12 +419,26 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     }
     
     public func reset() {
+        self.resumePlaybackAfterPowerSaving = false
         self.disposable.set(nil)
         self.fetchDisposable.set(nil)
     }
     
     private func updateIsPlaying() {
+        if isEnhancedPowerSavingEnabled {
+            let resumePlayback = self.resumePlaybackAfterPowerSaving || self.isPlaying
+            self.pause()
+            self.resumePlaybackAfterPowerSaving = resumePlayback
+            self.isPlaying = false
+            self.isPlayingChanged(false)
+            self.canDisplayFirstFrame = self.isDisplaying || self.overrideVisibility
+            if self.canDisplayFirstFrame {
+                self.play(firstFrame: true, fromIndex: 0)
+            }
+            return
+        }
         if !self.autoplay {
+            self.resumePlaybackAfterPowerSaving = false
             let isPlaying = self.visibility && (self.isDisplaying || self.overrideVisibility)
             if self.isPlaying != isPlaying {
                 self.isPlaying = isPlaying
@@ -431,6 +450,11 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                 
                 self.isPlayingChanged(isPlaying)
             }
+        } else if self.resumePlaybackAfterPowerSaving && (self.isDisplaying || self.overrideVisibility) {
+            self.resumePlaybackAfterPowerSaving = false
+            self.isPlaying = true
+            self.play()
+            self.isPlayingChanged(true)
         }
         if self.automaticallyLoadLastFrame {
             if self.isDisplaying {
@@ -440,7 +464,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
             let canDisplayFirstFrame = self.automaticallyLoadFirstFrame && self.isDisplaying
             if self.canDisplayFirstFrame != canDisplayFirstFrame {
                 self.canDisplayFirstFrame = canDisplayFirstFrame
-                if canDisplayFirstFrame {
+                if canDisplayFirstFrame && !self.isPlaying {
                     self.play(firstFrame: true)
                 }
             }
@@ -460,7 +484,15 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     }
         
     public func play(firstFrame: Bool = false, fromIndex: Int? = nil) {
+        if isEnhancedPowerSavingEnabled && !firstFrame {
+            self.pause()
+            self.resumePlaybackAfterPowerSaving = true
+            self.isPlaying = false
+            self.play(firstFrame: true, fromIndex: 0)
+            return
+        }
         if !firstFrame {
+            self.resumePlaybackAfterPowerSaving = false
             switch self.playbackMode {
             case .once:
                 self.isPlaying = true
@@ -478,7 +510,6 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
             let timerHolder = self.timer
             let frameSourceHolder = self.frameSource
             let useMetalCache = self.useMetalCache
-            let lottieSettings = self.lottieSettings
             self.queue.async { [weak self] in
                 var maybeFrameSource: AnimatedStickerFrameSource? = frameSourceHolder.with { $0 }?.syncWith { $0 }.value
                 if maybeFrameSource == nil {
@@ -487,7 +518,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                         if directData.6 {
                             maybeFrameSource = VideoStickerDirectFrameSource(queue: queue, path: directData.1, width: directData.2, height: directData.3, cachePathPrefix: directData.4)
                         } else {
-                            maybeFrameSource = AnimatedStickerDirectFrameSource(queue: queue, data: directData.0, width: directData.2, height: directData.3, cachePathPrefix: directData.4, useMetalCache: useMetalCache, fitzModifier: directData.5, lottieSettings: lottieSettings)
+                            maybeFrameSource = AnimatedStickerDirectFrameSource(queue: queue, data: directData.0, width: directData.2, height: directData.3, cachePathPrefix: directData.4, useMetalCache: useMetalCache, fitzModifier: directData.5)
                         }
                     } else if let (cachedData, cachedDataComplete, _) = cachedData {
                         if #available(iOS 9.0, *) {
@@ -579,7 +610,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                     }
                 }
                 
-                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame, completion: {
+                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame && !isEnhancedPowerSavingEnabled, completion: {
                     timerEvent()
                 }, queue: queue)
                 let _ = timerHolder.swap(timer)
@@ -597,7 +628,6 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
             let timerHolder = self.timer
             let frameSourceHolder = self.frameSource
             let useMetalCache = self.useMetalCache
-            let lottieSettings = self.lottieSettings
             self.queue.async { [weak self] in
                 var maybeFrameSource: AnimatedStickerFrameSource?
                 let notifyUpdated: (() -> Void)? = nil
@@ -605,7 +635,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                     if directData.6 {
                         maybeFrameSource = VideoStickerDirectFrameSource(queue: queue, path: directData.1, width: directData.2, height: directData.3, cachePathPrefix: directData.4)
                     } else {
-                        maybeFrameSource = AnimatedStickerDirectFrameSource(queue: queue, data: directData.0, width: directData.2, height: directData.3, cachePathPrefix: directData.4, useMetalCache: useMetalCache, fitzModifier: directData.5, lottieSettings: lottieSettings)
+                        maybeFrameSource = AnimatedStickerDirectFrameSource(queue: queue, data: directData.0, width: directData.2, height: directData.3, cachePathPrefix: directData.4, useMetalCache: useMetalCache, fitzModifier: directData.5)
                     }
                 } else if let (cachedData, cachedDataComplete, _) = cachedData {
                     if #available(iOS 9.0, *) {
@@ -633,7 +663,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                 let duration: Double = frameSource.frameRate > 0 ? Double(frameSource.frameCount) / Double(frameSource.frameRate) : 0
                 let frameRate = frameSource.frameRate
                 
-                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame, completion: {
+                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame && !isEnhancedPowerSavingEnabled, completion: {
                     let frame = frameQueue.syncWith { frameQueue in
                         return frameQueue.take(draw: true)
                     }
@@ -702,10 +732,12 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     }
     
     public func pause() {
+        self.resumePlaybackAfterPowerSaving = false
         self.timer.swap(nil)?.invalidate()
     }
     
     public func stop() {
+        self.resumePlaybackAfterPowerSaving = false
         self.isSetUpForPlayback = false
         self.reportedStarted = false
         self.timer.swap(nil)?.invalidate()
@@ -715,6 +747,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     }
     
     public func seekTo(_ position: AnimatedStickerPlaybackPosition) {
+        self.resumePlaybackAfterPowerSaving = false
         self.isPlaying = false
         
         let directData = self.directData
@@ -723,7 +756,6 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
         let frameSourceHolder = self.frameSource
         let timerHolder = self.timer
         let useMetalCache = self.useMetalCache
-        let lottieSettings = self.lottieSettings
         
         let action = { [weak self] in
             var maybeFrameSource: AnimatedStickerFrameSource? = frameSourceHolder.with { $0 }?.syncWith { $0 }.value
@@ -733,7 +765,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                     if directData.6 {
                         maybeFrameSource = VideoStickerDirectFrameSource(queue: queue, path: directData.1, width: directData.2, height: directData.3, cachePathPrefix: directData.4)
                     } else {
-                        maybeFrameSource = AnimatedStickerDirectFrameSource(queue: queue, data: directData.0, width: directData.2, height: directData.3, cachePathPrefix: directData.4, useMetalCache: useMetalCache, fitzModifier: directData.5, lottieSettings: lottieSettings)
+                        maybeFrameSource = AnimatedStickerDirectFrameSource(queue: queue, data: directData.0, width: directData.2, height: directData.3, cachePathPrefix: directData.4, useMetalCache: useMetalCache, fitzModifier: directData.5)
                     }
                     if case .end = position {
                         maybeFrameSource?.skipToEnd()

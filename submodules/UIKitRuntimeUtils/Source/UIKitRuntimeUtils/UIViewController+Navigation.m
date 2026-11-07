@@ -6,6 +6,121 @@
 #import "NSWeakReference.h"
 #import <UIKitRuntimeUtils/UIKitUtils.h>
 #import <dlfcn.h>
+#import <stdatomic.h>
+#import <float.h>
+#import <math.h>
+
+static atomic_bool enhancedPowerSavingEnabled = false;
+
+bool getEnhancedPowerSavingEnabled(void) {
+    return atomic_load(&enhancedPowerSavingEnabled);
+}
+
+void setEnhancedPowerSavingEnabled(bool enabled) {
+    atomic_store(&enhancedPowerSavingEnabled, enabled);
+}
+
+CAAnimation *animationForEnhancedPowerSaving(CAAnimation *animation) {
+    CAAnimation *result = [animation copy];
+    result.duration = 0.000001;
+    result.beginTime = 0.0;
+    result.timeOffset = 0.0;
+    result.speed = 1.0;
+    result.repeatCount = 0.0;
+    result.repeatDuration = 0.0;
+    result.autoreverses = false;
+    if ([result isKindOfClass:[CAAnimationGroup class]]) {
+        NSMutableArray<CAAnimation *> *animations = [[NSMutableArray alloc] init];
+        for (CAAnimation *child in ((CAAnimationGroup *)result).animations) {
+            [animations addObject:animationForEnhancedPowerSaving(child)];
+        }
+        ((CAAnimationGroup *)result).animations = animations;
+    }
+    return result;
+}
+
+static NSMapTable<CALayer *, NSMutableDictionary<NSString *, CAAnimation *> *> *enhancedPowerSavingAnimations(void) {
+    static NSMapTable<CALayer *, NSMutableDictionary<NSString *, CAAnimation *> *> *animations;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        animations = [NSMapTable weakToStrongObjectsMapTable];
+    });
+    return animations;
+}
+
+static void forgetEnhancedPowerSavingAnimation(CALayer *layer, NSString *key) {
+    NSMapTable *animations = enhancedPowerSavingAnimations();
+    @synchronized (animations) {
+        if (key == nil) {
+            [animations removeObjectForKey:layer];
+        } else {
+            NSMutableDictionary *layerAnimations = [animations objectForKey:layer];
+            [layerAnimations removeObjectForKey:key];
+            if (layerAnimations.count == 0) {
+                [animations removeObjectForKey:layer];
+            }
+        }
+    }
+}
+
+static CAAnimation *animationForEnhancedPowerSavingOnLayer(CALayer *layer, CAAnimation *animation, NSString *key) {
+    bool enabled = getEnhancedPowerSavingEnabled();
+    if (key != nil) {
+        CAAnimation *savedAnimation = nil;
+        if (animation.delegate == nil && (animation.repeatCount >= FLT_MAX || isinf(animation.repeatDuration))) {
+            savedAnimation = [animation copy];
+            if (savedAnimation.beginTime != 0.0) {
+                savedAnimation.beginTime -= [layer convertTime:CACurrentMediaTime() fromLayer:nil];
+            }
+            if (savedAnimation.duration == 0.0) {
+                savedAnimation.duration = [CATransaction animationDuration];
+            }
+        }
+        NSMapTable *animations = enhancedPowerSavingAnimations();
+        @synchronized (animations) {
+            enabled = getEnhancedPowerSavingEnabled();
+            if (enabled && savedAnimation != nil) {
+                NSMutableDictionary *layerAnimations = [animations objectForKey:layer];
+                if (layerAnimations == nil) {
+                    layerAnimations = [[NSMutableDictionary alloc] init];
+                    [animations setObject:layerAnimations forKey:layer];
+                }
+                layerAnimations[key] = savedAnimation;
+            } else {
+                forgetEnhancedPowerSavingAnimation(layer, key);
+            }
+        }
+    }
+    return enabled ? animationForEnhancedPowerSaving(animation) : animation;
+}
+
+void restoreAnimationsAfterEnhancedPowerSaving(void) {
+    if (getEnhancedPowerSavingEnabled()) {
+        return;
+    }
+    NSMapTable *animations = enhancedPowerSavingAnimations();
+    NSArray<CALayer *> *layers;
+    @synchronized (animations) {
+        layers = animations.keyEnumerator.allObjects;
+    }
+    for (CALayer *layer in layers) {
+        NSDictionary<NSString *, CAAnimation *> *layerAnimations;
+        @synchronized (animations) {
+            layerAnimations = [[animations objectForKey:layer] copy];
+        }
+        for (NSString *key in layerAnimations) {
+            CAAnimation *animation;
+            @synchronized (animations) {
+                animation = [[animations objectForKey:layer] objectForKey:key];
+                forgetEnhancedPowerSavingAnimation(layer, key);
+            }
+            if (animation != nil) {
+                animation.beginTime += [layer convertTime:CACurrentMediaTime() fromLayer:nil];
+                [layer addAnimation:animation forKey:key];
+            }
+        }
+    }
+}
 
 @interface UIViewControllerPresentingProxy : UIViewController
 
@@ -283,7 +398,20 @@ static NSMutableArray<CALayerSpringParametersOverride *> *currentSpringParameter
             }
         }
     }
+    updatedAnimation = animationForEnhancedPowerSavingOnLayer(self, updatedAnimation, key);
     [self _65087dc8_addAnimation:updatedAnimation forKey:key];
+}
+
+- (void)_65087dc8_removeAnimationForKey:(NSString *)key {
+    if (key != nil) {
+        forgetEnhancedPowerSavingAnimation(self, key);
+    }
+    [self _65087dc8_removeAnimationForKey:key];
+}
+
+- (void)_65087dc8_removeAllAnimations {
+    forgetEnhancedPowerSavingAnimation(self, nil);
+    [self _65087dc8_removeAllAnimations];
 }
 
 @end
@@ -508,13 +636,19 @@ static void registerEffectViewOverrides(void) {
         }
     }
     NSString *selectorString = [@"backdropLayer" stringByAppendingString:@":didChangeLuma:"];
-    
-    for (NSString *name in nameList) {
+
+    // UIKit's SDF glass backdrop view is file-private on iOS 26 and module-level from iOS 27, where its old name
+    // resolves to nil (which left the luma limits uninstalled there).
+    NSArray<NSString *> *lumaClassNames = @[
+        TGEncodeText(@"_TtC5UIKit17UISDFBackdropView", 0),
+        nameList.firstObject
+    ];
+    for (NSString *name in lumaClassNames) {
         Class classValue = NSClassFromString(name);
         if (classValue == nil) {
             continue;
         }
-        
+
         Method method = (Method)[RuntimeUtils getMethodOfClass:classValue selector:NSSelectorFromString(selectorString)];
         if (method) {
             const char *typeEncoding = method_getTypeEncoding(method);
@@ -676,6 +810,8 @@ static NSMutableDictionary<NSString *, TrustedWebRecord *> *trustedWebRecords() 
         }
         
         [RuntimeUtils swizzleInstanceMethodOfClass:[CALayer class] currentSelector:@selector(addAnimation:forKey:) newSelector:@selector(_65087dc8_addAnimation:forKey:)];
+        [RuntimeUtils swizzleInstanceMethodOfClass:[CALayer class] currentSelector:@selector(removeAnimationForKey:) newSelector:@selector(_65087dc8_removeAnimationForKey:)];
+        [RuntimeUtils swizzleInstanceMethodOfClass:[CALayer class] currentSelector:@selector(removeAllAnimations) newSelector:@selector(_65087dc8_removeAllAnimations)];
         
         [RuntimeUtils swizzleInstanceMethodOfClass:[UIFocusSystem class] currentSelector:@selector(updateFocusIfNeeded) newSelector:@selector(_65087dc8_updateFocusIfNeeded)];
         
@@ -1057,8 +1193,9 @@ void snapshotViewByDrawingInContext(UIView * _Nonnull view) {
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self != nil) {
+        // No limit until the owner sets one: a luma that arrives first passes through instead of clamping to 0.
         _lumaMin = 0.0;
-        _lumaMax = 0.0;
+        _lumaMax = 1.0;
     }
     return self;
 }

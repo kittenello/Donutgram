@@ -120,6 +120,9 @@ final class MessageHistoryTableFixture {
     static let messageNamespace: MessageId.Namespace = 0
     /// A local tag that keeps a message in the history but takes it out of the unread count.
     static let unreadExcludedLocalTag = LocalMessageTags(rawValue: 1 << 29)
+    /// A message with this text is a group's upgrade message (`SeedConfiguration.isPeerUpgradeMessage`): a chat list row
+    /// whose only message it is shows the legacy group's history instead.
+    static let peerUpgradeMessageText = "[upgrade]"
 
     static func makeSeedConfiguration() -> SeedConfiguration {
         return SeedConfiguration(
@@ -147,7 +150,7 @@ final class MessageHistoryTableFixture {
             decodeMessageThreadInfo: { _ in nil },
             decodeAutoremoveTimeout: { _ in nil },
             decodeDisplayPeerAsRegularChat: { _ in false },
-            isPeerUpgradeMessage: { _ in false },
+            isPeerUpgradeMessage: { $0.text == MessageHistoryTableFixture.peerUpgradeMessageText },
             automaticThreadIndexInfo: { _, _ in nil },
             customTagsFromAttributes: { _ in [] },
             displaySavedMessagesAsTopicListPreferencesKey: ValueBoxKey(length: 0),

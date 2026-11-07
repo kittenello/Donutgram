@@ -271,6 +271,7 @@ public struct EnergyUsageSettings: Codable, Equatable {
         case fullTranslucency
         case extendBackgroundWork
         case autodownloadInBackground
+        case enhancedPowerSaving
     }
     
     public static let `default`: EnergyUsageSettings = {
@@ -301,7 +302,8 @@ public struct EnergyUsageSettings: Codable, Equatable {
             loopEmoji: false,
             fullTranslucency: false,
             extendBackgroundWork: false,
-            autodownloadInBackground: false
+            autodownloadInBackground: false,
+            enhancedPowerSaving: true
         )
     }
     
@@ -314,6 +316,21 @@ public struct EnergyUsageSettings: Codable, Equatable {
     public var fullTranslucency: Bool
     public var extendBackgroundWork: Bool
     public var autodownloadInBackground: Bool
+    public var enhancedPowerSaving: Bool
+
+    public func resolved(powerSaving: Bool) -> EnergyUsageSettings {
+        var result = powerSaving ? EnergyUsageSettings.powerSavingDefault : self
+        if result.enhancedPowerSaving {
+            result.autoplayVideo = false
+            result.autoplayGif = false
+            result.loopStickers = false
+            result.loopEmoji = false
+            result.fullTranslucency = false
+            result.extendBackgroundWork = false
+            result.autodownloadInBackground = false
+        }
+        return result
+    }
     
     public init(
         activationThreshold: Int32,
@@ -323,7 +340,8 @@ public struct EnergyUsageSettings: Codable, Equatable {
         loopEmoji: Bool,
         fullTranslucency: Bool,
         extendBackgroundWork: Bool,
-        autodownloadInBackground: Bool
+        autodownloadInBackground: Bool,
+        enhancedPowerSaving: Bool = false
     ) {
         self.activationThreshold = activationThreshold
         self.autoplayVideo = autoplayVideo
@@ -333,6 +351,7 @@ public struct EnergyUsageSettings: Codable, Equatable {
         self.fullTranslucency = fullTranslucency
         self.extendBackgroundWork = extendBackgroundWork
         self.autodownloadInBackground = autodownloadInBackground
+        self.enhancedPowerSaving = enhancedPowerSaving
     }
     
     public init(from decoder: Decoder) throws {
@@ -346,6 +365,7 @@ public struct EnergyUsageSettings: Codable, Equatable {
         self.fullTranslucency = try container.decodeIfPresent(Bool.self, forKey: .fullTranslucency) ?? EnergyUsageSettings.default.fullTranslucency
         self.extendBackgroundWork = try container.decodeIfPresent(Bool.self, forKey: .extendBackgroundWork) ?? EnergyUsageSettings.default.extendBackgroundWork
         self.autodownloadInBackground = try container.decodeIfPresent(Bool.self, forKey: .autodownloadInBackground) ?? EnergyUsageSettings.default.autodownloadInBackground
+        self.enhancedPowerSaving = try container.decodeIfPresent(Bool.self, forKey: .enhancedPowerSaving) ?? false
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -359,6 +379,7 @@ public struct EnergyUsageSettings: Codable, Equatable {
         try container.encode(self.fullTranslucency, forKey: .fullTranslucency)
         try container.encode(self.extendBackgroundWork, forKey: .extendBackgroundWork)
         try container.encode(self.autodownloadInBackground, forKey: .autodownloadInBackground)
+        try container.encode(self.enhancedPowerSaving, forKey: .enhancedPowerSaving)
     }
 }
 

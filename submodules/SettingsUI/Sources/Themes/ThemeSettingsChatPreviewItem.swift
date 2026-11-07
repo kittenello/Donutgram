@@ -251,6 +251,10 @@ class ThemeSettingsChatPreviewItemNode: ListViewItemNode {
         self.addSubnode(self.containerNode)
         self.addSubnode(self.leftInsetNode)
         self.addSubnode(self.rightInsetNode)
+        
+        // A visual sample of the theme (made-up messages and wallpaper), not content: the theme choices under it say
+        // what is picked.
+        self.accessibilityElementsHidden = true
     }
     
     deinit {

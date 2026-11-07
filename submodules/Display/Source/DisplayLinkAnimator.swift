@@ -319,7 +319,7 @@ public final class DisplayLinkAnimator {
             return
         }
         let timestamp = CACurrentMediaTime()
-        var t = (timestamp - self.startTime) / self.duration
+        var t = isEnhancedPowerSavingEnabled || self.duration <= 0.0 ? 1.0 : (timestamp - self.startTime) / self.duration
         t = max(0.0, t)
         t = min(1.0, t)
         self.update(self.fromValue * CGFloat(1 - t) + self.toValue * CGFloat(t))

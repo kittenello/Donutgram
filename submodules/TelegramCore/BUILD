@@ -45,8 +45,10 @@ swift_library(
     ]),
     deps = [
         ":TelegramCore",
+        "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramApi:TelegramApi",
+        "//submodules/Utils/RangeSet:RangeSet",
         "//submodules/MtProtoKit:MtProtoKit",
         "//submodules/Postbox:Postbox",
         "//submodules/WebProxyTransport:WebProxyTransport",

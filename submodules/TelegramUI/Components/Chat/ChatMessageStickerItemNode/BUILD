@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
+        "//submodules/TelegramUI/Components/StaticGlassBackground",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
         "//submodules/SSignalKit/SwiftSignalKit",

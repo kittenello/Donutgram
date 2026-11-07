@@ -3,6 +3,8 @@ import UIKit
 import Display
 import UIKitRuntimeUtils
 
+private var transientBlurFilterKey: UInt8 = 0
+
 #if targetEnvironment(simulator)
 @_silgen_name("UIAnimationDragCoefficient") func UIAnimationDragCoefficient() -> Float
 #endif
@@ -178,7 +180,11 @@ public struct ComponentTransition {
         case curve(duration: Double, curve: Curve)
     }
     
-    public var animation: Animation
+    private var storedAnimation: Animation
+    public var animation: Animation {
+        get { return isEnhancedPowerSavingEnabled ? .none : self.storedAnimation }
+        set { self.storedAnimation = newValue }
+    }
     private var _userData: [Any] = []
 
     public func userData<T>(_ type: T.Type) -> T? {
@@ -224,7 +230,7 @@ public struct ComponentTransition {
     }
 
     public init(animation: Animation) {
-        self.animation = animation
+        self.storedAnimation = animation
     }
     
     public func setFrame(view: UIView, frame: CGRect, completion: ((Bool) -> Void)? = nil) {
@@ -1502,6 +1508,28 @@ public struct ComponentTransition {
                 
                 completion?(flag)
             })
+        }
+    }
+    
+    public static func animateTransientBlur(layer: CALayer, fromRadius: CGFloat, toRadius: CGFloat, duration: Double, delay: Double = 0.0) {
+        let ownFilter = objc_getAssociatedObject(layer, &transientBlurFilterKey) as? NSObject
+        let previousFilters = (layer.filters ?? []).filter { ($0 as? NSObject) !== ownFilter }
+        ComponentTransition.easeInOut(duration: duration).animateBlur(layer: layer, fromRadius: fromRadius, toRadius: toRadius, delay: delay)
+        guard let installed = layer.filters?.first as? NSObject else {
+            return
+        }
+        objc_setAssociatedObject(layer, &transientBlurFilterKey, installed, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        if !previousFilters.isEmpty {
+            layer.filters = [installed] + previousFilters
+        }
+        let factor = UIView.animationDurationFactor()
+        DispatchQueue.main.asyncAfter(deadline: .now() + (delay + duration) * (factor > 0.0 ? factor : 1.0)) { [weak layer] in
+            guard let layer, (objc_getAssociatedObject(layer, &transientBlurFilterKey) as? NSObject) === installed else {
+                return
+            }
+            objc_setAssociatedObject(layer, &transientBlurFilterKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            let remaining = (layer.filters ?? []).filter { ($0 as? NSObject) !== installed }
+            layer.filters = remaining.isEmpty ? nil : remaining
         }
     }
     

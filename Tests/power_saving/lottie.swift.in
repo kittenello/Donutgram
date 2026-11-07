@@ -1,0 +1,100 @@
+func CACurrentMediaTime() -> Double {
+    return Date.timeIntervalSinceReferenceDate
+}
+
+final class SharedDisplayLinkDriver {
+    final class Link {
+        var isPaused = false
+        var isValid = true
+
+        func invalidate() {
+            self.isValid = false
+        }
+    }
+
+    static let shared = SharedDisplayLinkDriver()
+
+    func add(_ update: (CGFloat) -> Void) -> Link {
+        return Link()
+    }
+}
+
+final class TestLottieView {
+    enum StartingPosition {
+        case begin
+        case end
+        case fraction(Double)
+    }
+
+    struct Component {
+        var loop = false
+    }
+
+    var playOnceId = 0
+    var isHidden = false
+    var isPlaying = false
+    var isEffectivelyVisible = true
+    var scheduledPlayOnce = false
+    var playOnceCompletion: (() -> Void)?
+    var displayLink: SharedDisplayLinkDriver.Link?
+    var currentFrameStartTime: Double?
+    var currentFrame = 0
+    var animationInstance: Bool? = true
+    var animationFrameRange: Range<Int>? = 0 ..< 10
+    var component: Component? = Component()
+
+    func updateImage() {}
+    func advanceIfNeeded() {}
+
+    func setFrameIndex(index: Int) {
+        self.currentFrame = index
+    }
+
+    LOTTIE_PLAY_IMPLEMENTATION
+
+    LOTTIE_STOP_IMPLEMENTATION
+
+    LOTTIE_VISIBILITY_IMPLEMENTATION
+}
+
+isEnhancedPowerSavingEnabled = false
+let delayedLottie = TestLottieView()
+var delayedCompletions = 0
+delayedLottie.playOnce(delay: 0.01, completion: { delayedCompletions += 1 })
+precondition(delayedLottie.isHidden && delayedLottie.displayLink == nil)
+isEnhancedPowerSavingEnabled = true
+delayedLottie.visibilityUpdated()
+precondition(delayedCompletions == 1 && !delayedLottie.isHidden && !delayedLottie.isPlaying)
+precondition(delayedLottie.currentFrame == 9)
+isEnhancedPowerSavingEnabled = false
+delayedLottie.visibilityUpdated()
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+precondition(delayedLottie.displayLink == nil && !delayedLottie.isPlaying)
+precondition(delayedCompletions == 1)
+
+let stoppedLottie = TestLottieView()
+stoppedLottie.playOnce(delay: 0.01)
+stoppedLottie.stop(at: .begin)
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+precondition(stoppedLottie.displayLink == nil && !stoppedLottie.isHidden && stoppedLottie.currentFrame == 0)
+
+let replacedLottie = TestLottieView()
+replacedLottie.playOnce(delay: 0.01)
+replacedLottie.stop()
+replacedLottie.isEffectivelyVisible = false
+replacedLottie.playOnce()
+precondition(replacedLottie.scheduledPlayOnce)
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+precondition(replacedLottie.displayLink == nil && !replacedLottie.isPlaying)
+replacedLottie.isEffectivelyVisible = true
+replacedLottie.visibilityUpdated()
+precondition(replacedLottie.isPlaying && replacedLottie.displayLink != nil)
+
+let immediateLottie = TestLottieView()
+immediateLottie.playOnce(delay: 0.01)
+immediateLottie.playOnce()
+precondition(!immediateLottie.isHidden && immediateLottie.isPlaying && immediateLottie.displayLink != nil)
+let immediateStart = immediateLottie.currentFrameStartTime
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+precondition(immediateLottie.currentFrameStartTime == immediateStart)
+print("Delayed Lottie cancellation and power-saving completions passed.")
