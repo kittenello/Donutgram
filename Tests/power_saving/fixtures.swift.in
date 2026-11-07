@@ -83,7 +83,9 @@ final class Panel {
 var settings = EnergyUsageSettings.default
 settings.activationThreshold = 25
 let original = settings
-let bytes = try JSONEncoder().encode(settings)
+let encoder = JSONEncoder()
+encoder.outputFormatting = [.sortedKeys]
+let bytes = try encoder.encode(settings)
 for level: Float in [1.0, 0.26, 0.25, 0.10, -1.0] {
     UIDevice.current.batteryLevel = level
     let active = automaticEnergyUsageShouldBeOnNow(settings: MediaAutoDownloadSettings(energyUsageSettings: settings))
@@ -99,7 +101,7 @@ for level: Float in [1.0, 0.26, 0.25, 0.10, -1.0] {
         precondition(effective == original)
     }
 }
-let unchangedBytes = try JSONEncoder().encode(settings)
+let unchangedBytes = try encoder.encode(settings)
 precondition(unchangedBytes == bytes)
 settings.activationThreshold = 4
 UIDevice.current.batteryLevel = 0.01
