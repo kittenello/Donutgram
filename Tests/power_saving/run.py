@@ -27,12 +27,15 @@ def prepare():
     threshold = block(read("submodules/TelegramPresentationData/Sources/PresentationData.swift"), "public func automaticEnergyUsageShouldBeOnNow(")
     panel = read("submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift")
     metrics = block(panel, "private func calculateTextFieldMetrics(").replace("private func", "func", 1)
-    fixture = Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
-    fixture = fixture.replace("SETTINGS_IMPLEMENTATION", settings + "\n" + threshold)
+    fixture = Path(__file__).with_name("fixtures.swift.in").read_text(encoding="utf-8")
+    fixture = fixture.replace("SETTINGS_IMPLEMENTATION", (settings + "\n" + threshold).replace("public ", ""))
     fixture = fixture.replace("PANEL_IMPLEMENTATION", metrics)
     native = read("submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m")
     animation = block(native, "CAAnimation *animationForEnhancedPowerSaving(")
-    native_fixture = Path(__file__).with_name("animations.m").read_text(encoding="utf-8").replace("ANIMATION_IMPLEMENTATION", animation)
+    native_fixture = Path(__file__).with_name("animations.m.in").read_text(encoding="utf-8").replace("ANIMATION_IMPLEMENTATION", animation)
+    assert "SETTINGS_IMPLEMENTATION" not in fixture
+    assert "PANEL_IMPLEMENTATION" not in fixture
+    assert "ANIMATION_IMPLEMENTATION" not in native_fixture
     return fixture, native_fixture
 
 
