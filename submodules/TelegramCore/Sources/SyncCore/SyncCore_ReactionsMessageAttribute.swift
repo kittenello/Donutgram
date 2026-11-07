@@ -96,7 +96,6 @@ public struct MessageReaction: Equatable, PostboxCoding, Codable {
     public var value: Reaction
     public var count: Int32
     public var chosenOrder: Int?
-    public var isRemoved = false
     
     public var isSelected: Bool {
         return self.chosenOrder != nil
@@ -374,23 +373,17 @@ public final class ReactionsMessageAttribute: Equatable, MessageAttribute {
     public let canViewList: Bool
     public let isTags: Bool
     public let reactions: [MessageReaction]
-    public let removedReactions: [MessageReaction]
-    public let removedPeers: [RecentPeer]
     public let recentPeers: [RecentPeer]
     public let topPeers: [TopPeer]
     
     public var associatedPeerIds: [PeerId] {
-        var result = self.recentPeers.map(\.peerId)
-        for peer in self.removedPeers where !result.contains(peer.peerId) {
-            result.append(peer.peerId)
-        }
-        return result
+        return self.recentPeers.map(\.peerId)
     }
     
     public var associatedMediaIds: [MediaId] {
         var result: [MediaId] = []
         
-        for reaction in self.reactions + self.removedReactions {
+        for reaction in self.reactions {
             switch reaction.value {
             case .builtin:
                 break
@@ -407,12 +400,10 @@ public final class ReactionsMessageAttribute: Equatable, MessageAttribute {
         return result
     }
     
-    public init(canViewList: Bool, isTags: Bool, reactions: [MessageReaction], recentPeers: [RecentPeer], topPeers: [TopPeer], removedReactions: [MessageReaction] = [], removedPeers: [RecentPeer] = []) {
+    public init(canViewList: Bool, isTags: Bool, reactions: [MessageReaction], recentPeers: [RecentPeer], topPeers: [TopPeer]) {
         self.canViewList = canViewList
         self.isTags = isTags
         self.reactions = reactions
-        self.removedReactions = removedReactions
-        self.removedPeers = removedPeers
         self.recentPeers = recentPeers
         self.topPeers = topPeers
     }
@@ -421,8 +412,6 @@ public final class ReactionsMessageAttribute: Equatable, MessageAttribute {
         self.canViewList = decoder.decodeBoolForKey("vl", orElse: true)
         self.isTags = decoder.decodeBoolForKey("tg", orElse: false)
         self.reactions = decoder.decodeObjectArrayWithDecoderForKey("r")
-        self.removedReactions = decoder.decodeObjectArrayWithDecoderForKey("dgr")
-        self.removedPeers = decoder.decodeObjectArrayWithDecoderForKey("dgp")
         self.recentPeers = decoder.decodeObjectArrayWithDecoderForKey("rp")
         self.topPeers = decoder.decodeObjectArrayWithDecoderForKey("tp")
     }
@@ -431,12 +420,6 @@ public final class ReactionsMessageAttribute: Equatable, MessageAttribute {
         encoder.encodeBool(self.canViewList, forKey: "vl")
         encoder.encodeBool(self.isTags, forKey: "tg")
         encoder.encodeObjectArray(self.reactions, forKey: "r")
-        if !self.removedReactions.isEmpty {
-            encoder.encodeObjectArray(self.removedReactions, forKey: "dgr")
-        }
-        if !self.removedPeers.isEmpty {
-            encoder.encodeObjectArray(self.removedPeers, forKey: "dgp")
-        }
         encoder.encodeObjectArray(self.recentPeers, forKey: "rp")
         encoder.encodeObjectArray(self.topPeers, forKey: "tp")
     }
@@ -449,9 +432,6 @@ public final class ReactionsMessageAttribute: Equatable, MessageAttribute {
             return false
         }
         if lhs.reactions != rhs.reactions {
-            return false
-        }
-        if lhs.removedReactions != rhs.removedReactions || lhs.removedPeers != rhs.removedPeers {
             return false
         }
         if lhs.recentPeers != rhs.recentPeers {
@@ -482,9 +462,7 @@ public final class ReactionsMessageAttribute: Equatable, MessageAttribute {
                 recentPeer.isUnseen = false
                 return recentPeer
             },
-            topPeers: self.topPeers,
-            removedReactions: self.removedReactions,
-            removedPeers: self.removedPeers
+            topPeers: self.topPeers
         )
     }
 }

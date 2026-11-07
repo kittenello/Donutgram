@@ -73,7 +73,7 @@ public final class SeedConfiguration {
     public let chatMessagesNamespaces: Set<MessageId.Namespace>
     public let getGlobalNotificationSettings: (Transaction) -> PostboxGlobalNotificationSettings?
     public let defaultGlobalNotificationSettings: PostboxGlobalNotificationSettings
-    public let mergeMessageAttributes: (MessageId, MessageFlags, [MessageAttribute], inout [MessageAttribute]) -> Void
+    public let mergeMessageAttributes: ([MessageAttribute], inout [MessageAttribute]) -> Void
     public let decodeMessageThreadInfo: (CodableEntry) -> Message.AssociatedThreadInfo?
     public let decodeAutoremoveTimeout: (CachedPeerData) -> Int32?
     public let decodeDisplayPeerAsRegularChat: (CachedPeerData) -> Bool
@@ -107,7 +107,7 @@ public final class SeedConfiguration {
         chatMessagesNamespaces: Set<MessageId.Namespace>,
         getGlobalNotificationSettings: @escaping (Transaction) -> PostboxGlobalNotificationSettings?,
         defaultGlobalNotificationSettings: PostboxGlobalNotificationSettings,
-        mergeMessageAttributes: @escaping (MessageId, MessageFlags, [MessageAttribute], inout [MessageAttribute]) -> Void,
+        mergeMessageAttributes: @escaping ([MessageAttribute], inout [MessageAttribute]) -> Void,
         decodeMessageThreadInfo: @escaping (CodableEntry) -> Message.AssociatedThreadInfo?,
         decodeAutoremoveTimeout: @escaping (CachedPeerData) -> Int32?,
         decodeDisplayPeerAsRegularChat: @escaping (CachedPeerData) -> Bool,

@@ -408,7 +408,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         // Every guard of the ghost page counts, «Автоматический «офлайн»» included: without it sending shows the account online.
         let hiddenByGhost = [!s.ghostReadMessages, !s.ghostReadStories, !s.ghostSendOnline, s.ghostAutomaticOffline, !s.ghostSendTyping].filter { $0 }.count
         let bypassed = [s.bypassForwardRestrictions, s.allowProtectedScreenshots, s.saveProtectedStories, s.gifUnlock, s.stickerUnlock, s.bypassContentRestrictions].filter { $0 }.count
-        let isSaving = s.saveDeletedMessages || s.saveEditHistory || s.saveViewOnceMedia || s.showDisappearedGifts || s.showRemovedReactions || s.keepBannedChats
+        let isSaving = s.saveDeletedMessages || s.saveEditHistory || s.saveViewOnceMedia || s.showDisappearedGifts || s.keepBannedChats
         let shadowBanned = s.shadowBannedPeerIds.count
         let acceleration = ["", "Быстро", "Ультра"][s.downloadAcceleration]
         var localProfile = s.visualPhoneEnabled || s.localPremium(accountId: accountId)

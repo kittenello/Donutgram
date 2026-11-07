@@ -16,7 +16,6 @@ if mode == "write" {
     check(!settings.hideServiceMessages && !settings.confirmReactionsInUnjoinedChats && !settings.confirmTelegramLinks && !settings.confirmChatPreviewEntry, "safety switches must be opt-in")
     check(!settings.disableStoryCameraSwipe, "the swipe to the story camera must stay on by default")
     check(!settings.disableGiftStarsRedirect, "gift sales open Stars by default")
-    check(!settings.showRemovedReactions, "removed reactions are opt-in")
     check(!settings.keepBannedChats, "keeping banned chats is opt-in")
     check(settings.visualLabel(accountId: 1001) == .none, "visual badge is disabled by default")
     check(settings.visualLabel(accountId: 1002) == .none, "another account starts without a badge")
@@ -56,7 +55,6 @@ if mode == "write" {
     settings.hideBirthdayNotifications = true
     settings.disableStoryCameraSwipe = true
     settings.disableGiftStarsRedirect = true
-    settings.showRemovedReactions = true
     settings.keepBannedChats = true
     settings.hideViaBot = true
     settings.hideBotAutomation = true
@@ -117,7 +115,6 @@ if mode == "write" {
     check(settings.hideServiceMessages && settings.confirmReactionsInUnjoinedChats && settings.confirmTelegramLinks && settings.confirmChatPreviewEntry, "safety preferences must survive process restart")
     check(settings.disableStoryCameraSwipe, "turning off the swipe to the story camera must survive process restart")
     check(settings.disableGiftStarsRedirect, "disabling the gift Stars redirect must survive process restart")
-    check(settings.showRemovedReactions, "removed reactions survive process restart")
     check(settings.keepBannedChats, "keeping banned chats must survive process restart")
     check(settings.visualLabel(accountId: 1001) == .scam, "account badge must persist across restart")
     check(settings.visualLabel(accountId: 1002) == .bot, "second account badge must persist independently")

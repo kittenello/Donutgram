@@ -76,119 +76,20 @@ extension ReactionsMessageAttribute {
                 }
             }
 
-            return ReactionsMessageAttribute(canViewList: canViewList, isTags: isTags, reactions: reactions, recentPeers: parsedRecentReactions, topPeers: topPeers, removedReactions: self.removedReactions, removedPeers: self.removedPeers)
+            return ReactionsMessageAttribute(canViewList: canViewList, isTags: isTags, reactions: reactions, recentPeers: parsedRecentReactions, topPeers: topPeers)
         }
-    }
-}
-
-func donutgramRemovedReactions(previous: [MessageReaction], updated: [MessageReaction], retained: [MessageReaction], previousPeers: [ReactionsMessageAttribute.RecentPeer], updatedPeers: [ReactionsMessageAttribute.RecentPeer], retainedPeers: [ReactionsMessageAttribute.RecentPeer], enabled: Bool, hasPending: Bool) -> (reactions: [MessageReaction], peers: [ReactionsMessageAttribute.RecentPeer]) {
-    if hasPending {
-        return (retained, retainedPeers)
-    }
-    func otherCount(_ reactions: [MessageReaction], _ value: MessageReaction.Reaction) -> Int64 {
-        guard let reaction = reactions.first(where: { $0.value == value }) else { return 0 }
-        return max(0, Int64(reaction.count) - (reaction.isSelected ? 1 : 0))
-    }
-    func matches(_ lhs: ReactionsMessageAttribute.RecentPeer, _ rhs: ReactionsMessageAttribute.RecentPeer) -> Bool {
-        return lhs.peerId == rhs.peerId && lhs.value == rhs.value
-    }
-    let previousPeers = previousPeers.filter { !$0.isMy && $0.value != .stars }
-    let updatedPeers = updatedPeers.filter { !$0.isMy && $0.value != .stars }
-    var peers = retainedPeers.filter { retained in
-        return !updatedPeers.contains(where: { matches($0, retained) })
-    }
-    var values: [MessageReaction.Reaction] = []
-    for reaction in retained + previous where reaction.value != .stars {
-        if !values.contains(reaction.value) {
-            values.append(reaction.value)
-        }
-    }
-    var result: [MessageReaction] = []
-    for value in values {
-        let oldCount = otherCount(previous, value)
-        let newCount = otherCount(updated, value)
-        let oldPeers = previousPeers.filter { $0.value == value }
-        let newPeers = updatedPeers.filter { $0.value == value }
-        let lost = Int64(newPeers.count) >= newCount ? oldPeers.filter { old in !newPeers.contains(where: { matches($0, old) }) } : []
-        let added = Int64(oldPeers.count) >= oldCount ? newPeers.filter { new in !oldPeers.contains(where: { matches($0, new) }) } : []
-        if enabled {
-            for var peer in lost where !peers.contains(where: { matches($0, peer) }) {
-                peer.isUnseen = false
-                peer.isLarge = false
-                peers.append(peer)
-            }
-        }
-        let savedCount = Int64(retained.first(where: { $0.value == value })?.count ?? 0)
-        let savedPeersCount = Int64(retainedPeers.filter { $0.value == value }.count)
-        let anonymousCount = max(0, savedCount - savedPeersCount)
-        let anonymousLoss = enabled ? max(0, oldCount - newCount - Int64(lost.count) + Int64(added.count)) : 0
-        let count = Int32(clamping: anonymousCount + anonymousLoss + Int64(peers.filter { $0.value == value }.count))
-        if count > 0 {
-            result.append(MessageReaction(value: value, count: count, chosenOrder: nil))
-        }
-    }
-    return (result, peers)
-}
-
-func donutgramMergeRemovedReactions(messageId: MessageId, flags: MessageFlags, previous: [MessageAttribute], updated: inout [MessageAttribute]) {
-    guard messageId.namespace == Namespaces.Message.Cloud, !flags.contains(.Incoming),
-        let previousReactions = previous.first(where: { $0 is ReactionsMessageAttribute }) as? ReactionsMessageAttribute,
-        !previousReactions.isTags else {
-        return
-    }
-    let index = updated.firstIndex(where: { $0 is ReactionsMessageAttribute })
-    let current = index.flatMap { updated[$0] as? ReactionsMessageAttribute }
-    if current?.isTags == true {
-        return
-    }
-    let removed: (reactions: [MessageReaction], peers: [ReactionsMessageAttribute.RecentPeer])
-    if let current {
-        let hasPending = previous.contains(where: { $0 is PendingReactionsMessageAttribute }) || updated.contains(where: { $0 is PendingReactionsMessageAttribute })
-        func otherPeers(_ attribute: ReactionsMessageAttribute) -> [ReactionsMessageAttribute.RecentPeer] {
-            if messageId.peerId.namespace != Namespaces.Peer.CloudUser {
-                return attribute.recentPeers
-            }
-            return attribute.reactions.filter { $0.value != .stars && $0.count > ($0.isSelected ? 1 : 0) }.map {
-                ReactionsMessageAttribute.RecentPeer(value: $0.value, isLarge: false, isUnseen: false, isMy: false, peerId: messageId.peerId, timestamp: nil)
-            }
-        }
-        removed = donutgramRemovedReactions(previous: previousReactions.reactions, updated: current.reactions, retained: previousReactions.removedReactions, previousPeers: otherPeers(previousReactions), updatedPeers: otherPeers(current), retainedPeers: previousReactions.removedPeers, enabled: DGSimpleSettings.shared.showRemovedReactions, hasPending: hasPending)
-    } else {
-        removed = (previousReactions.removedReactions, previousReactions.removedPeers)
-    }
-    if current == nil && removed.reactions.isEmpty {
-        return
-    }
-    let attribute = ReactionsMessageAttribute(canViewList: current?.canViewList ?? false, isTags: false, reactions: current?.reactions ?? [], recentPeers: current?.recentPeers ?? [], topPeers: current?.topPeers ?? [], removedReactions: removed.reactions, removedPeers: removed.peers)
-    if let index {
-        updated[index] = attribute
-    } else {
-        updated.append(attribute)
     }
 }
 
 public func donutgramVisibleMessageReactions(attributes: [MessageAttribute], isTags: Bool) -> ReactionsMessageAttribute? {
-    let current = mergedMessageReactions(attributes: attributes, isTags: isTags)
-    var reactions = current?.reactions ?? []
-    if DGSimpleSettings.shared.showRemovedReactions && !isTags,
-        let stored = attributes.first(where: { $0 is ReactionsMessageAttribute }) as? ReactionsMessageAttribute, !stored.isTags {
-        for var reaction in stored.removedReactions where reaction.count > 0 && reaction.value != .stars {
-            reaction.isRemoved = true
-            reaction.chosenOrder = nil
-            reactions.append(reaction)
-        }
-    }
-    let hidePaid = DGSimpleSettings.shared.hidePaidReactions
-    if hidePaid {
-        reactions.removeAll(where: { $0.value == .stars })
-    }
-    guard current != nil || !reactions.isEmpty else { return nil }
+    guard let attribute = mergedMessageReactions(attributes: attributes, isTags: isTags) else { return nil }
+    guard DGSimpleSettings.shared.hidePaidReactions else { return attribute }
     return ReactionsMessageAttribute(
-        canViewList: current?.canViewList ?? false,
-        isTags: current?.isTags ?? isTags,
-        reactions: reactions,
-        recentPeers: (current?.recentPeers ?? []).filter { !hidePaid || $0.value != .stars },
-        topPeers: hidePaid ? [] : (current?.topPeers ?? [])
+        canViewList: attribute.canViewList,
+        isTags: attribute.isTags,
+        reactions: attribute.reactions.filter { $0.value != .stars },
+        recentPeers: attribute.recentPeers.filter { $0.value != .stars },
+        topPeers: []
     )
 }
 
@@ -200,7 +101,7 @@ public func mergedMessageReactionsAndPeers(accountPeerId: EnginePeer.Id, account
     var recentPeers: [(MessageReaction.Reaction, EnginePeer)] = []
     
     if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
-        for reaction in attribute.reactions where !reaction.isRemoved {
+        for reaction in attribute.reactions {
             var selfCount: Int32 = 0
             if reaction.isSelected {
                 selfCount += 1

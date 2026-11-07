@@ -1131,7 +1131,7 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
         guard let layout = self.layout else {
             return
         }
-        if self.ignoreButtonTap || layout.spec.component.reaction.isRemoved {
+        if self.ignoreButtonTap {
             return
         }
         layout.spec.component.action(self, layout.spec.component.reaction.value, self.containerView)
@@ -1224,8 +1224,6 @@ public final class ReactionButtonAsyncNode: ContextControllerSourceView {
     }
     
     fileprivate func apply(layout: Layout, animation: ListViewItemUpdateAnimation, arguments: ReactionButtonsAsyncLayoutContainer.Arguments) {
-        self.isUserInteractionEnabled = !layout.spec.component.reaction.isRemoved
-        animation.animator.updateAlpha(layer: self.containerView.contentView.layer, alpha: layout.spec.component.reaction.isRemoved ? 0.55 : 1.0, completion: nil)
         self.containerView.frame = CGRect(origin: CGPoint(), size: layout.extractedSize)
         self.containerView.contentView.frame = CGRect(origin: CGPoint(), size: layout.extractedSize)
         self.containerView.contentRect = CGRect(origin: CGPoint(), size: layout.extractedSize)
@@ -1406,14 +1404,12 @@ public final class ReactionButtonComponent: Equatable {
         public var centerAnimation: TelegramMediaFile?
         public var animationFileId: Int64?
         public var title: String?
-        public var isRemoved: Bool
         
-        public init(value: MessageReaction.Reaction, centerAnimation: TelegramMediaFile?, animationFileId: Int64?, title: String?, isRemoved: Bool = false) {
+        public init(value: MessageReaction.Reaction, centerAnimation: TelegramMediaFile?, animationFileId: Int64?, title: String?) {
             self.value = value
             self.centerAnimation = centerAnimation
             self.animationFileId = animationFileId
             self.title = title
-            self.isRemoved = isRemoved
         }
         
         public static func ==(lhs: Reaction, rhs: Reaction) -> Bool {
@@ -1424,9 +1420,6 @@ public final class ReactionButtonComponent: Equatable {
                 return false
             }
             if lhs.animationFileId != rhs.animationFileId {
-                return false
-            }
-            if lhs.isRemoved != rhs.isRemoved {
                 return false
             }
             if lhs.title != rhs.title {
@@ -1591,16 +1584,6 @@ public final class ReactionNodePool {
 }
 
 public final class ReactionButtonsAsyncLayoutContainer {
-    public struct ReactionId: Hashable {
-        public var value: MessageReaction.Reaction
-        public var isRemoved: Bool
-
-        public init(value: MessageReaction.Reaction, isRemoved: Bool) {
-            self.value = value
-            self.isRemoved = isRemoved
-        }
-    }
-
     public final class Arguments {
         public let animationCache: AnimationCache
         public let animationRenderer: MultiAnimationRenderer
@@ -1645,7 +1628,6 @@ public final class ReactionButtonsAsyncLayoutContainer {
     public struct ApplyResult {
         public struct Item {
             public var value: MessageReaction.Reaction
-            public var id: ReactionId
             public var node: ReactionNodePool.Item
             public var size: CGSize
         }
@@ -1654,7 +1636,7 @@ public final class ReactionButtonsAsyncLayoutContainer {
         public var removedNodes: [ReactionNodePool.Item]
     }
     
-    public private(set) var buttons: [ReactionId: ReactionNodePool.Item] = [:]
+    public private(set) var buttons: [MessageReaction.Reaction: ReactionNodePool.Item] = [:]
     
     public init() {
     }
@@ -1674,12 +1656,9 @@ public final class ReactionButtonsAsyncLayoutContainer {
         constrainedWidth: CGFloat
     ) -> Result {
         var items: [Result.Item] = []
-        var applyItems: [(key: ReactionId, size: CGSize, apply: (_ animation: ListViewItemUpdateAnimation, _ arguments: Arguments) -> ReactionNodePool.Item)] = []
+        var applyItems: [(key: MessageReaction.Reaction, size: CGSize, apply: (_ animation: ListViewItemUpdateAnimation, _ arguments: Arguments) -> ReactionNodePool.Item)] = []
         
         var reactions = reactions.sorted(by: { lhs, rhs in
-            if lhs.reaction.isRemoved != rhs.reaction.isRemoved {
-                return !lhs.reaction.isRemoved
-            }
             var lhsCount = lhs.count
             if lhs.chosenOrder != nil {
                 lhsCount -= 1
@@ -1717,13 +1696,9 @@ public final class ReactionButtonsAsyncLayoutContainer {
             reactions.insert(value, at: 0)
         }
         
-        let validIds = Set(reactions.map { ReactionId(value: $0.reaction.value, isRemoved: $0.reaction.isRemoved) })
+        var validIds = Set<MessageReaction.Reaction>()
         for reaction in reactions {
-            let id = ReactionId(value: reaction.reaction.value, isRemoved: reaction.reaction.isRemoved)
-            let alternateId = ReactionId(value: reaction.reaction.value, isRemoved: !reaction.reaction.isRemoved)
-            if self.buttons[id] == nil, !validIds.contains(alternateId), let previous = self.buttons.removeValue(forKey: alternateId) {
-                self.buttons[id] = previous
-            }
+            validIds.insert(reaction.reaction.value)
             
             var avatarPeers = reaction.peers
             for i in 0 ..< avatarPeers.count {
@@ -1735,7 +1710,7 @@ public final class ReactionButtonsAsyncLayoutContainer {
                 }
             }
             
-            let viewLayout = ReactionButtonAsyncNode.asyncLayout(self.buttons[id])
+            let viewLayout = ReactionButtonAsyncNode.asyncLayout(self.buttons[reaction.reaction.value])
             let (size, apply) = viewLayout(ReactionButtonComponent(
                 context: context,
                 colors: colors,
@@ -1750,10 +1725,10 @@ public final class ReactionButtonsAsyncLayoutContainer {
             items.append(Result.Item(
                 size: size
             ))
-            applyItems.append((id, size, apply))
+            applyItems.append((reaction.reaction.value, size, apply))
         }
         
-        var removeIds: [ReactionId] = []
+        var removeIds: [MessageReaction.Reaction] = []
         for (id, _) in self.buttons {
             if !validIds.contains(id) {
                 removeIds.append(id)
@@ -1772,7 +1747,7 @@ public final class ReactionButtonsAsyncLayoutContainer {
                 var items: [ApplyResult.Item] = []
                 for (key, size, apply) in applyItems {
                     let nodeItem = apply(animation, arguments)
-                    items.append(ApplyResult.Item(value: key.value, id: key, node: nodeItem, size: size))
+                    items.append(ApplyResult.Item(value: key, node: nodeItem, size: size))
                     
                     if let current = self.buttons[key] {
                         assert(current === nodeItem)

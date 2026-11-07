@@ -119,11 +119,10 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
         defaultGlobalNotificationSettings: PostboxGlobalNotificationSettings(defaultIncludePeer: { peer in
             return GlobalNotificationSettings.defaultSettings.defaultIncludePeer(peer: peer)
         }),
-        mergeMessageAttributes: { messageId, flags, previous, updated in
+        mergeMessageAttributes: { previous, updated in
             if previous.isEmpty {
                 return
             }
-            donutgramMergeRemovedReactions(messageId: messageId, flags: flags, previous: previous, updated: &updated)
             var audioTranscription: AudioTranscriptionMessageAttribute?
             for attribute in previous {
                 if let attribute = attribute as? AudioTranscriptionMessageAttribute {

@@ -1650,7 +1650,7 @@ final class MessageHistoryTable: Table {
             }
             
             var updatedAttributes = message.attributes
-            self.seedConfiguration.mergeMessageAttributes(index.id, previousMessage.flags, previousAttributes, &updatedAttributes)
+            self.seedConfiguration.mergeMessageAttributes(previousAttributes, &updatedAttributes)
             
             self.valueBox.remove(self.table, key: self.key(index), secure: true)
             
