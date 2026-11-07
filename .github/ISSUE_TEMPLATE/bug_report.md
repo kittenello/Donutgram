@@ -8,6 +8,13 @@ assignees: ""
 
 please report one bug per issue. you can write in english or russian.
 
+### how to fill out this template
+
+1. in the checklist below, replace `- [ ]` with `- [x]` for each statement that is true. leave other boxes unchecked.
+2. replace the prompts under each heading with your answers. for example, enter your actual device model and app version.
+3. attach screenshots or a recording if useful. write "not applicable" or remove optional sections you do not need.
+4. give the issue a short title that describes the bug, then submit it.
+
 ### checklist
 
 - [ ] i am reporting a bug in donutgram, not requesting a new feature
