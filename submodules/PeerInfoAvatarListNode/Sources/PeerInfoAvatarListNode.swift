@@ -886,6 +886,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
     public var photoTitleBottomInset: CGFloat = 40.0
     private let setByYouImageNode: ImageNode
     private var setByYouTapRecognizer: UITapGestureRecognizer?
+    public var setByYouBottomInset: CGFloat = 0.0
     
     public private(set) var galleryEntries: [AvatarGalleryEntry] = []
     private var items: [PeerInfoAvatarListItem] = []
@@ -1735,7 +1736,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
                 shadow.shadowOffset = CGSize(width: 0.0, height: 1.0)
                 self.setByYouNode.attributedText = NSAttributedString(string: photoTitle, attributes: [.font: Font.regular(12.0), .foregroundColor: UIColor.white, .shadow: shadow])
                 let setByYouSize = self.setByYouNode.updateLayout(CGSize(width: max(1.0, size.width - (hasLink ? 60.0 : 28.0)), height: size.height))
-                transition.updateFrame(node: self.setByYouNode, frame: CGRect(origin: CGPoint(x: size.width - setByYouSize.width - 14.0, y: size.height - setByYouSize.height - self.photoTitleBottomInset), size: setByYouSize))
+                transition.updateFrame(node: self.setByYouNode, frame: CGRect(origin: CGPoint(x: size.width - setByYouSize.width - 14.0, y: size.height - setByYouSize.height - max(self.photoTitleBottomInset, self.setByYouBottomInset + 40.0)), size: setByYouSize))
                 self.setByYouNode.isUserInteractionEnabled = hasLink
             } else {
                 transition.updateAlpha(node: self.setByYouNode, alpha: 0.0)

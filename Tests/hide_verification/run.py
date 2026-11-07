@@ -110,10 +110,10 @@ def main():
         subprocess.run([str(executable), "read-setting"], check=True)
         subprocess.run([str(executable), "read-restored"], check=True)
         # Parse every changed Swift file, including complete UI files.
-        changed = subprocess.check_output(["git", "diff", "--name-only", "HEAD^1", "HEAD"], cwd=ROOT, text=True).splitlines()
+        changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "HEAD^1", "HEAD"], cwd=ROOT, text=True).splitlines()
         for file in changed:
             if file.endswith(".swift"):
-                subprocess.run([swift, "-frontend", "-parse", str(ROOT / file)], check=True)
+                subprocess.run([swift, "-frontend", "-parse", "-enable-bare-slash-regex", str(ROOT / file)], check=True)
         print("Changed Swift source parsing passed.")
 
 

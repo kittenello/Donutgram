@@ -21,9 +21,13 @@ open class MultiAnimationRenderTarget: SimpleLayer {
     public let deinitCallbacks = Bag<() -> Void>()
     public let updateStateCallbacks = Bag<() -> Void>()
 
-    public final var shouldBeAnimating: Bool = false {
-        didSet {
-            if self.shouldBeAnimating != oldValue {
+    private var requestedAnimation: Bool = false
+    private var powerSavingObserver: NSObjectProtocol?
+    public final var shouldBeAnimating: Bool {
+        get { return self.requestedAnimation && !isEnhancedPowerSavingEnabled }
+        set {
+            if self.requestedAnimation != newValue {
+                self.requestedAnimation = newValue
                 for f in self.updateStateCallbacks.copyItems() {
                     f()
                 }
@@ -49,6 +53,7 @@ open class MultiAnimationRenderTarget: SimpleLayer {
         nextRenderTargetId += 1
 
         super.init()
+        self.observePowerSaving()
     }
 
     public override init(layer: Any) {
@@ -59,6 +64,7 @@ open class MultiAnimationRenderTarget: SimpleLayer {
         self.id = layer.id
 
         super.init(layer: layer)
+        self.observePowerSaving()
     }
 
     required public init?(coder: NSCoder) {
@@ -66,12 +72,24 @@ open class MultiAnimationRenderTarget: SimpleLayer {
     }
 
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         for f in self.deinitCallbacks.copyItems() {
             f()
         }
     }
 
     open func updateDisplayPlaceholder(displayPlaceholder: Bool) {
+    }
+
+    private func observePowerSaving() {
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            for update in self.updateStateCallbacks.copyItems() {
+                update()
+            }
+        }
     }
 
     open func transitionToContents(_ contents: AnyObject, didLoop: Bool) {

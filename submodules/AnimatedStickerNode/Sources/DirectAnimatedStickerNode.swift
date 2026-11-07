@@ -2,7 +2,6 @@ import Foundation
 import UIKit
 import AsyncDisplayKit
 import LottieBinding
-import LottieSettings
 import SwiftSignalKit
 import GZip
 import Display
@@ -82,16 +81,21 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
     private var frameImages: [Int: UIImage] = [:]
     private var loadFrameTasks: [Int: LoadFrameTask] = [:]
     private var nextFrameTimer: SwiftSignalKit.Timer?
+    private var powerSavingObserver: NSObjectProtocol?
     
-    private let lottieSettings: LottieRenderingSettings
 
-    public init(lottieSettings: LottieRenderingSettings) {
-        self.lottieSettings = lottieSettings
+    override public init() {
 
         super.init()
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.updatePlayback()
+        }
     }
     
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         self.sourceDisposable?.dispose()
         self.nextFrameTimer?.invalidate()
     }
@@ -127,7 +131,7 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
                 
                 let decompressedData = TGGUnzipData(data, 8 * 1024 * 1024) ?? data
                 
-                guard let lottieInstance = makeLottieInstance(data: decompressedData, fitzModifier: .none, colorReplacements: nil, cacheKey: "", settings: strongSelf.lottieSettings) else {
+                guard let lottieInstance = makeLottieInstance(data: decompressedData, fitzModifier: .none, colorReplacements: nil) else {
                     print("Could not load sticker data")
                     return
                 }
@@ -138,7 +142,7 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
     }
     
     private func updatePlayback() {
-        let isPlaying = self.visibility && (self.lottieInstance != nil || self.videoSource != nil)
+        let isPlaying = self.visibility && !isEnhancedPowerSavingEnabled && (self.lottieInstance != nil || self.videoSource != nil)
         if self.isPlaying != isPlaying {
             self.isPlaying = isPlaying
             
@@ -155,6 +159,11 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
     }
     
     private func startNextFrameTimerIfNeeded() {
+        guard !isEnhancedPowerSavingEnabled else {
+            self.nextFrameTimer?.invalidate()
+            self.nextFrameTimer = nil
+            return
+        }
         var frameRate: Double?
         if let lottieInstance = self.lottieInstance {
             frameRate = Double(lottieInstance.frameRate)

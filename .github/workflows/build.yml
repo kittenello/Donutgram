@@ -87,6 +87,20 @@ jobs:
           xcodebuild -version
           sw_vers
 
+      - name: Check client regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          for suite in sorted(pathlib.Path("Tests").glob("*/run.py")):
+              print(f"Running {suite.parent.name}", flush=True)
+              subprocess.run([sys.executable, str(suite)], check=True)
+          PY
+
       # A PR's own entries carry its number (see «Save Bazel disk cache»), so
       # its next push restores them before master's.
       - name: Restore Bazel disk cache

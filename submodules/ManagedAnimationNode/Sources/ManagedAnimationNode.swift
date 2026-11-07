@@ -4,7 +4,6 @@ import Display
 import AsyncDisplayKit
 import TelegramCore
 import LottieBinding
-import LottieSettings
 import AppBundle
 import GZip
 import SwiftSignalKit
@@ -30,7 +29,7 @@ public final class ManagedAnimationState {
     
     public var executedCallbacks = Set<Int>()
     
-    public init?(displaySize: CGSize, item: ManagedAnimationItem, current: ManagedAnimationState?, lottieSettings: LottieRenderingSettings) {
+    public init?(displaySize: CGSize, item: ManagedAnimationItem, current: ManagedAnimationState?) {
         let resolvedInstance: LottieInstance
         
         if let current = current {
@@ -47,7 +46,7 @@ public final class ManagedAnimationState {
             } else if let unpackedData = TGGUnzipData(data, 5 * 1024 * 1024) {
                 data = unpackedData
             }
-            guard let instance = makeLottieInstance(data: data, fitzModifier: .none, colorReplacements: item.replaceColors, cacheKey: "", settings: lottieSettings) else {
+            guard let instance = makeLottieInstance(data: data, fitzModifier: .none, colorReplacements: item.replaceColors) else {
                 return nil
             }
             resolvedInstance = instance
@@ -159,6 +158,7 @@ open class ManagedAnimationNode: ASDisplayNode {
     
     private var previousTimestamp: Double?
     private var delta: Double?
+    private var powerSavingObserver: NSObjectProtocol?
     
     public var customColor: UIColor? {
         didSet {
@@ -174,10 +174,8 @@ open class ManagedAnimationNode: ASDisplayNode {
         }
     }
     
-    public let lottieSettings: LottieRenderingSettings
 
-    public init(size: CGSize, lottieSettings: LottieRenderingSettings) {
-        self.lottieSettings = lottieSettings
+    public init(size: CGSize) {
         self.intrinsicSize = size
         
         self.imageNode = ASImageNode()
@@ -208,6 +206,22 @@ open class ManagedAnimationNode: ASDisplayNode {
                 strongSelf.previousTimestamp = currentTimestamp
             }
         }
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            if isEnhancedPowerSavingEnabled {
+                self.updateAnimation()
+            } else if self.state?.item.loop == true || !self.trackStack.isEmpty {
+                self.previousTimestamp = nil
+                self.displayLink.isPaused = false
+            }
+        }
+    }
+
+    deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
+        self.displayLink.invalidate()
     }
     
     open func advanceState() {
@@ -219,9 +233,9 @@ open class ManagedAnimationNode: ASDisplayNode {
         let item = self.trackStack.removeFirst()
         
         if let state = self.state, state.item.source == item.source {
-            self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: state, lottieSettings: self.lottieSettings)
+            self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: state)
         } else {
-            self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: nil, lottieSettings: self.lottieSettings)
+            self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: nil)
         }
         
         self.didTryAdvancingState = false
@@ -269,7 +283,7 @@ open class ManagedAnimationNode: ASDisplayNode {
             duration = Double(state.frameCount) / fps
         }
         
-        var t = state.relativeTime / duration
+        var t = isEnhancedPowerSavingEnabled || duration <= 0.0 ? 1.0 : state.relativeTime / duration
         t = max(0.0, t)
         t = min(1.0, t)
         //print("\(t) \(state.item.name)")
@@ -300,11 +314,18 @@ open class ManagedAnimationNode: ASDisplayNode {
         var animationAdvancement: Double = self.delta ?? 1.0 / 60.0
         animationAdvancement *= Double(min(2, self.trackStack.count + 1))
         state.relativeTime += animationAdvancement
+        if isEnhancedPowerSavingEnabled {
+            state.relativeTime = duration
+        }
         
         if state.relativeTime >= duration && !self.didTryAdvancingState {
             if state.item.loop && self.trackStack.isEmpty {
-                state.frameIndex = nil
-                state.relativeTime = 0.0
+                if isEnhancedPowerSavingEnabled {
+                    self.displayLink.isPaused = true
+                } else {
+                    state.frameIndex = nil
+                    state.relativeTime = 0.0
+                }
             } else {
                 self.didTryAdvancingState = true
                 self.advanceState()
@@ -316,9 +337,9 @@ open class ManagedAnimationNode: ASDisplayNode {
         if immediately {
             self.trackStack.removeAll()
             if let state = self.state, state.item.source == item.source {
-                self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: state, lottieSettings: self.lottieSettings)
+                self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: state)
             } else {
-                self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: nil, lottieSettings: self.lottieSettings)
+                self.state = ManagedAnimationState(displaySize: self.intrinsicSize, item: item, current: nil)
             }
             self.didTryAdvancingState = false
             self.previousTimestamp = CACurrentMediaTime()
@@ -349,7 +370,7 @@ public final class SimpleAnimationNode: ManagedAnimationNode {
     private let playOnce: Bool
     public private(set) var didPlay = false
     
-    public init(animationName: String, replaceColors: [UInt32: UInt32]? = nil, size: CGSize, playOnce: Bool = false, startFrame: Int = 0, lottieSettings: LottieRenderingSettings) {
+    public init(animationName: String, replaceColors: [UInt32: UInt32]? = nil, size: CGSize, playOnce: Bool = false, startFrame: Int = 0) {
         let startFrame = max(0, startFrame)
         let source = ManagedAnimationSource.local(animationName)
         self.size = size
@@ -358,7 +379,7 @@ public final class SimpleAnimationNode: ManagedAnimationNode {
         self.stillEndItem = ManagedAnimationItem(source: source, replaceColors: replaceColors, frames: .still(.end), duration: 0.01)
         self.animationItem = ManagedAnimationItem(source: source, replaceColors: replaceColors)
 
-        super.init(size: size, lottieSettings: lottieSettings)
+        super.init(size: size)
         
         self.trackTo(item: self.stillItem)
         if startFrame > 0, let state = self.state {

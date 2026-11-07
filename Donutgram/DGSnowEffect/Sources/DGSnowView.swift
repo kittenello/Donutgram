@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import SwiftSignalKit
 import DGSimpleSettings
+import Display
 
 /// Falling snow behind the Donutgram «Снег» toggle (`DGSimpleSettings.forceSnow`).
 ///
@@ -57,6 +58,9 @@ public final class DGSnowView: UIView {
         self.clipsToBounds = true
 
         let notificationCenter = NotificationCenter.default
+        self.observers.append(notificationCenter.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.updateIsRunning()
+        }))
         self.observers.append(notificationCenter.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
             self?.updateIsRunning()
         }))
@@ -120,7 +124,7 @@ public final class DGSnowView: UIView {
     }
 
     private func updateIsRunning() {
-        let shouldRun = self.window != nil && !self.isInBackground && !self.bounds.isEmpty && DGSimpleSettings.shared.forceSnow
+        let shouldRun = self.window != nil && !self.isInBackground && !self.bounds.isEmpty && DGSimpleSettings.shared.forceSnow && !isEnhancedPowerSavingEnabled
         if shouldRun {
             if self.timer == nil {
                 let timer = SwiftSignalKit.Timer(timeout: DGSnowView.tickInterval, repeat: true, completion: { [weak self] in

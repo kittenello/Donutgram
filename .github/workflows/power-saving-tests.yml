@@ -1,0 +1,52 @@
+name: Power saving regression tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/power-saving-tests.yml'
+      - 'Tests/power_saving/**'
+      - 'versions.json'
+      - 'submodules/TelegramUIPreferences/Sources/MediaAutoDownloadSettings.swift'
+      - 'submodules/TelegramPresentationData/Sources/PresentationData.swift'
+      - 'submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift'
+      - 'submodules/AnimationUI/Sources/AnimationNode.swift'
+      - 'submodules/AnimatedStickerNode/Sources/AnimatedStickerNode.swift'
+      - 'submodules/TelegramUI/Components/LottieComponent/Sources/LottieComponent.swift'
+      - 'submodules/Display/Source/EnhancedPowerSaving.swift'
+      - 'submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: power-saving-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regressions:
+    runs-on: xcode-27
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /Tests/power_saving/
+            /versions.json
+            /submodules/TelegramUIPreferences/Sources/MediaAutoDownloadSettings.swift
+            /submodules/TelegramPresentationData/Sources/PresentationData.swift
+            /submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift
+            /submodules/AnimationUI/Sources/AnimationNode.swift
+            /submodules/AnimatedStickerNode/Sources/AnimatedStickerNode.swift
+            /submodules/TelegramUI/Components/LottieComponent/Sources/LottieComponent.swift
+            /submodules/Display/Source/EnhancedPowerSaving.swift
+            /submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m
+      - name: Run power saving regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')"
+          export DEVELOPER_DIR="/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          python3 Tests/power_saving/run.py

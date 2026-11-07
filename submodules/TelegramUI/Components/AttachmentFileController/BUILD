@@ -17,7 +17,6 @@ swift_library(
         "//submodules/AudioWaveform",
         "//submodules/OverlayStatusController",
         "//submodules/SSignalKit/SwiftSignalKit",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
         "//submodules/TelegramCore",

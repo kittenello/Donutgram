@@ -26,6 +26,7 @@ swift_library(
         "//submodules/TextFormat:TextFormat",
         "//submodules/AppBundle",
         "//submodules/TelegramUI/Components/AnimatedTextComponent",
+        "//submodules/TelegramUI/Components/StaticGlassBackground",
     ],
     visibility = [
         "//visibility:public",

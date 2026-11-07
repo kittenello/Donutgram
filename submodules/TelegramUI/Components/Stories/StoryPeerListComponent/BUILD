@@ -71,6 +71,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ChatListTitleView",
         "//submodules/TelegramUI/Components/Utils/AnimatableProperty",
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
+        "//submodules/TelegramStringFormatting",
     ],
     visibility = [
         "//visibility:public",

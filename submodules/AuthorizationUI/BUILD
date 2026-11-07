@@ -13,7 +13,6 @@ swift_library(
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/AppBundle:AppBundle",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
-        "//submodules/LottieSettings:LottieSettings",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/Display:Display",
         "//submodules/SSignalKit/SSignalKit",
