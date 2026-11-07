@@ -14,6 +14,7 @@ on:
       - 'submodules/AnimatedStickerNode/Sources/AnimatedStickerNode.swift'
       - 'submodules/TelegramUI/Components/LottieComponent/Sources/LottieComponent.swift'
       - 'submodules/Display/Source/EnhancedPowerSaving.swift'
+      - 'submodules/TelegramUI/Sources/SharedAccountContext.swift'
       - 'submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m'
 
 permissions:
@@ -42,6 +43,7 @@ jobs:
             /submodules/AnimatedStickerNode/Sources/AnimatedStickerNode.swift
             /submodules/TelegramUI/Components/LottieComponent/Sources/LottieComponent.swift
             /submodules/Display/Source/EnhancedPowerSaving.swift
+            /submodules/TelegramUI/Sources/SharedAccountContext.swift
             /submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m
       - name: Run power saving regressions
         shell: bash

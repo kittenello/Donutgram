@@ -76,6 +76,10 @@ def prepare():
     policy = read("submodules/Display/Source/EnhancedPowerSaving.swift")
     assert "layer.add(animation, forKey: key)" in policy
     assert "restoreAnimationsAfterEnhancedPowerSaving()" in policy
+    context = read("submodules/TelegramUI/Sources/SharedAccountContext.swift")
+    subscription = block(context, "self.automaticMediaDownloadSettingsDisposable.set(")
+    delivery = subscription.split(".start(next:", 1)[0]
+    assert "|> deliverOnMainQueue" in delivery, "energy settings must reach the main queue before changing the animation policy"
     assert "SETTINGS_IMPLEMENTATION" not in fixture
     assert "PANEL_IMPLEMENTATION" not in fixture
     assert "ANIMATION_IMPLEMENTATION" not in native_fixture
