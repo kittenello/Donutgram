@@ -47,17 +47,7 @@ precondition(!cameraRemoved)
 RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 precondition(!archiveHidden && archiveCompletions == 1 && cameraRemoved)
 
-enum TestPlaybackPosition {
-    case start
-    case end
-}
-
-enum TestPlaybackMode {
-    case loop
-    case once
-    case count(Int)
-    case still(TestPlaybackPosition)
-}
+STICKER_TYPES_IMPLEMENTATION
 
 final class TestTimer {
     func invalidate() {}
@@ -79,7 +69,7 @@ final class TestStickerNode {
     var canDisplayFirstFrame = false
     var automaticallyLoadLastFrame = false
     var automaticallyLoadFirstFrame = false
-    var playbackMode: TestPlaybackMode = .loop
+    var playbackMode: AnimatedStickerPlaybackMode = .loop
     var currentLoopCount = 0
     var isSetUpForPlayback = false
     var reportedStarted = false

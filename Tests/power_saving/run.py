@@ -34,6 +34,7 @@ def prepare():
     sticker_node = read("submodules/AnimatedStickerNode/Sources/AnimatedStickerNode.swift")
     playback = Path(__file__).with_name("playback.swift.in").read_text(encoding="utf-8")
     replacements = {
+        "STICKER_TYPES_IMPLEMENTATION": block(sticker_node, "public enum AnimatedStickerPlaybackPosition") + "\n" + block(sticker_node, "public enum AnimatedStickerPlaybackMode"),
         "ANIMATION_PLAY_IMPLEMENTATION": block(animation_node, "public func play()"),
         "STICKER_UPDATE_IMPLEMENTATION": block(sticker_node, "private func updateIsPlaying()"),
         "STICKER_PLAY_IMPLEMENTATION": block(sticker_node, "public func play(firstFrame: Bool = false,").split("        if self.isSetUpForPlayback {")[0],
