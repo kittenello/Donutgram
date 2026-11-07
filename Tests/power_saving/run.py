@@ -49,6 +49,20 @@ def prepare():
     native = read("submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m")
     animation = block(native, "CAAnimation *animationForEnhancedPowerSaving(")
     native_fixture = Path(__file__).with_name("animations.m.in").read_text(encoding="utf-8").replace("ANIMATION_IMPLEMENTATION", animation)
+    native_replacements = {
+        "POWER_SAVING_STATE_IMPLEMENTATION": "static atomic_bool enhancedPowerSavingEnabled = false;\n" + block(native, "bool getEnhancedPowerSavingEnabled(") + "\n" + block(native, "void setEnhancedPowerSavingEnabled("),
+        "ANIMATION_RESTORATION_IMPLEMENTATION": native[native.index("static NSMapTable<CALayer *, NSMutableDictionary<NSString *, CAAnimation *> *> *enhancedPowerSavingAnimations("):native.index("@interface UIViewControllerPresentingProxy")],
+        "ANIMATION_REMOVE_IMPLEMENTATION": block(native, "- (void)_65087dc8_removeAnimationForKey:"),
+        "ANIMATION_REMOVE_ALL_IMPLEMENTATION": block(native, "- (void)_65087dc8_removeAllAnimations"),
+    }
+    for marker, implementation in native_replacements.items():
+        assert marker in native_fixture
+        native_fixture = native_fixture.replace(marker, implementation)
+        assert marker not in native_fixture
+    assert "animationForEnhancedPowerSavingOnLayer(self, updatedAnimation, key)" in block(native, "- (void)_65087dc8_addAnimation:")
+    policy = read("submodules/Display/Source/EnhancedPowerSaving.swift")
+    assert "layer.add(animation, forKey: key)" in policy
+    assert "restoreAnimationsAfterEnhancedPowerSaving()" in policy
     assert "SETTINGS_IMPLEMENTATION" not in fixture
     assert "PANEL_IMPLEMENTATION" not in fixture
     assert "ANIMATION_IMPLEMENTATION" not in native_fixture

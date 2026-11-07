@@ -1,8 +1,31 @@
 #import <Foundation/Foundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
+#import <float.h>
+#import <stdatomic.h>
+#import <objc/runtime.h>
+
+POWER_SAVING_STATE_IMPLEMENTATION
 
 ANIMATION_IMPLEMENTATION
+
+ANIMATION_RESTORATION_IMPLEMENTATION
+
+@interface CALayer (PowerSavingTests)
+- (void)_65087dc8_addAnimation:(CAAnimation *)animation forKey:(NSString *)key;
+- (void)_65087dc8_removeAnimationForKey:(NSString *)key;
+- (void)_65087dc8_removeAllAnimations;
+@end
+
+@implementation CALayer (PowerSavingTests)
+- (void)_65087dc8_addAnimation:(CAAnimation *)animation forKey:(NSString *)key {
+    [self _65087dc8_addAnimation:animationForEnhancedPowerSavingOnLayer(self, animation, key) forKey:key];
+}
+
+ANIMATION_REMOVE_IMPLEMENTATION
+
+ANIMATION_REMOVE_ALL_IMPLEMENTATION
+@end
 
 @interface TestDelegate : NSObject <CAAnimationDelegate>
 @end
@@ -11,6 +34,9 @@ ANIMATION_IMPLEMENTATION
 
 int main(void) {
     @autoreleasepool {
+        method_exchangeImplementations(class_getInstanceMethod([CALayer class], @selector(addAnimation:forKey:)), class_getInstanceMethod([CALayer class], @selector(_65087dc8_addAnimation:forKey:)));
+        method_exchangeImplementations(class_getInstanceMethod([CALayer class], @selector(removeAnimationForKey:)), class_getInstanceMethod([CALayer class], @selector(_65087dc8_removeAnimationForKey:)));
+        method_exchangeImplementations(class_getInstanceMethod([CALayer class], @selector(removeAllAnimations)), class_getInstanceMethod([CALayer class], @selector(_65087dc8_removeAllAnimations)));
         CABasicAnimation *source = [CABasicAnimation animationWithKeyPath:@"opacity"];
         source.fromValue = @0;
         source.toValue = @1;
@@ -49,6 +75,84 @@ int main(void) {
         NSCAssert(attachedGroup.duration > 0 && attachedGroup.duration < 0.001, @"group inherited the transaction duration");
         NSCAssert(attachedGroup.animations.firstObject.duration > 0 && attachedGroup.animations.firstObject.duration < 0.001, @"group child still animates");
         [CATransaction commit];
+        layer.speed = 0;
+        layer.timeOffset = 100;
+        CABasicAnimation *loop = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        loop.fromValue = @0;
+        loop.toValue = @1;
+        loop.duration = 2;
+        loop.repeatCount = HUGE_VALF;
+        loop.autoreverses = true;
+        loop.beginTime = [layer convertTime:CACurrentMediaTime() fromLayer:nil] - 0.5;
+        [layer addAnimation:loop forKey:@"idle"];
+        setEnhancedPowerSavingEnabled(true);
+        [layer addAnimation:[layer animationForKey:@"idle"] forKey:@"idle"];
+        NSCAssert([layer animationForKey:@"idle"].repeatCount == 0, @"existing loop was not stopped");
+        [layer addAnimation:loop forKey:@"new"];
+        [layer addAnimation:loop forKey:@"removed"];
+        [layer removeAnimationForKey:@"removed"];
+        [layer addAnimation:loop forKey:@"replaced"];
+        CABasicAnimation *replacement = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        replacement.toValue = @0.4;
+        replacement.duration = 0.2;
+        [layer addAnimation:replacement forKey:@"replaced"];
+        [layer addAnimation:loop forKey:@"updated"];
+        CABasicAnimation *updatedLoop = [loop copy];
+        updatedLoop.toValue = @0.6;
+        [layer addAnimation:updatedLoop forKey:@"updated"];
+        CAAnimationGroup *loopGroup = [CAAnimationGroup animation];
+        CAAnimation *groupChild = [loop copy];
+        groupChild.beginTime = 0;
+        loopGroup.animations = @[groupChild];
+        loopGroup.duration = 3;
+        loopGroup.repeatCount = FLT_MAX;
+        [layer addAnimation:loopGroup forKey:@"loopGroup"];
+        CALayer *clearedLayer = [CALayer layer];
+        [clearedLayer addAnimation:loop forKey:@"idle"];
+        [clearedLayer removeAllAnimations];
+        [CATransaction begin];
+        [CATransaction setAnimationDuration:3];
+        CABasicAnimation *implicitLoop = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        implicitLoop.repeatCount = HUGE_VALF;
+        [layer addAnimation:implicitLoop forKey:@"implicit"];
+        [CATransaction commit];
+        __weak CALayer *releasedLayer;
+        @autoreleasepool {
+            CALayer *temporaryLayer = [CALayer layer];
+            releasedLayer = temporaryLayer;
+            (void)animationForEnhancedPowerSavingOnLayer(temporaryLayer, loop, @"idle");
+        }
+        NSCAssert(releasedLayer == nil, @"saved animation retained its layer");
+        restoreAnimationsAfterEnhancedPowerSaving();
+        NSCAssert([layer animationForKey:@"idle"].repeatCount == 0, @"loop resumed while power saving was enabled");
+        layer.timeOffset = 200;
+        setEnhancedPowerSavingEnabled(false);
+        restoreAnimationsAfterEnhancedPowerSaving();
+        CABasicAnimation *restoredLoop = (CABasicAnimation *)[layer animationForKey:@"idle"];
+        NSCAssert(restoredLoop.repeatCount == HUGE_VALF && restoredLoop.duration == 2 && restoredLoop.autoreverses, @"existing loop did not resume");
+        CFTimeInterval elapsed = [layer convertTime:CACurrentMediaTime() fromLayer:nil] - restoredLoop.beginTime;
+        NSCAssert(fabs(elapsed - 0.5) < 0.000001, @"loop lost its playback phase");
+        NSCAssert([layer animationForKey:@"new"].repeatCount == HUGE_VALF, @"loop added during power saving did not resume");
+        NSCAssert([layer animationForKey:@"removed"] == nil, @"removed loop was resurrected");
+        NSCAssert([layer animationForKey:@"replaced"].repeatCount == 0, @"replaced loop was resurrected");
+        NSCAssert([((CABasicAnimation *)[layer animationForKey:@"updated"]).toValue isEqual:@0.6], @"stale loop replaced the latest animation");
+        NSCAssert([layer animationForKey:@"loopGroup"].repeatCount == FLT_MAX, @"animation group did not resume");
+        NSCAssert([layer animationForKey:@"implicit"].duration == 3, @"loop lost its implicit duration");
+        NSCAssert(clearedLayer.animationKeys.count == 0, @"removeAllAnimations was ignored");
+        [layer removeAnimationForKey:@"idle"];
+        restoreAnimationsAfterEnhancedPowerSaving();
+        NSCAssert([layer animationForKey:@"idle"] == nil, @"animation was restored more than once");
+        [layer removeAllAnimations];
+        loop.beginTime = 0;
+        for (int i = 0; i < 2; i++) {
+            [layer addAnimation:loop forKey:@"idle"];
+            setEnhancedPowerSavingEnabled(true);
+            [layer addAnimation:[layer animationForKey:@"idle"] forKey:@"idle"];
+            NSCAssert([layer animationForKey:@"idle"].repeatCount == 0, @"loop survived a repeated enable");
+            setEnhancedPowerSavingEnabled(false);
+            restoreAnimationsAfterEnhancedPowerSaving();
+            NSCAssert([layer animationForKey:@"idle"].repeatCount == HUGE_VALF, @"loop failed to resume on a repeated disable");
+        }
         NSLog(@"Animation timing, groups, completion delegates and final values passed.");
     }
     return 0;

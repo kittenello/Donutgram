@@ -33,7 +33,7 @@ public func updateEnhancedPowerSaving(_ enabled: Bool) {
             for key in layer.animationKeys() ?? [] {
                 if let animation = layer.animation(forKey: key) {
                     if animation.delegate == nil {
-                        layer.add(animationForEnhancedPowerSaving(animation), forKey: key)
+                        layer.add(animation, forKey: key)
                     }
                 }
             }
@@ -48,6 +48,8 @@ public func updateEnhancedPowerSaving(_ enabled: Bool) {
                 }
             }
         }
+    } else {
+        restoreAnimationsAfterEnhancedPowerSaving()
     }
     NotificationCenter.default.post(name: enhancedPowerSavingDidChangeNotification, object: nil)
 }

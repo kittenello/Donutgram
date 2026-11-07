@@ -4,6 +4,7 @@
 bool getEnhancedPowerSavingEnabled(void);
 void setEnhancedPowerSavingEnabled(bool enabled);
 CAAnimation * _Nonnull animationForEnhancedPowerSaving(CAAnimation * _Nonnull animation);
+void restoreAnimationsAfterEnhancedPowerSaving(void);
 
 typedef NS_OPTIONS(NSUInteger, UIResponderDisableAutomaticKeyboardHandling) {
     UIResponderDisableAutomaticKeyboardHandlingForward = 1 << 0,
