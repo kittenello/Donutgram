@@ -2,7 +2,7 @@
 
 `python3 Tests/power_saving/run.py` compiles extracted production settings, battery-threshold selection, composer measurement, sticker playback, Lottie playback and Core Animation normalization on macOS. It covers the battery boundary, always/never values, migration of older settings, preserving user preferences, clearing a tall rich composer, deferred completions, restoring sticker playback without replacing its timer with a static frame, cancelling delayed Lottie starts, and retaining final animation values and delegates.
 
-the native checks attach animations to a paused backing layer of a hidden AppKit window under a nonzero transaction duration. they cover restoring infinite loops with their playback phase, loops created during power saving, removal, replacement, weak layer ownership and repeated mode changes. the dedicated power-saving workflow checks this fixture without downloading the full app history and submodules.
+the native checks use real Core Animation objects and production policy functions with a deterministic layer animation store. they cover nonzero normalized durations under a nonzero transaction duration, restoring infinite loops with their playback phase, loops created during power saving, removal, replacement, weak layer ownership and repeated mode changes. these checks do not exercise the render server or prove visual timing. the dedicated power-saving workflow checks this fixture without downloading the full app history and submodules.
 
 `--source-only` checks extraction on hosts without Swift or the macOS SDK; it does not execute those behaviors.
 

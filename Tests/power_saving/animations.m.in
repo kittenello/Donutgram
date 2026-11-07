@@ -1,5 +1,4 @@
 #import <Foundation/Foundation.h>
-#import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 #import <float.h>
@@ -12,13 +11,47 @@ ANIMATION_IMPLEMENTATION
 
 ANIMATION_RESTORATION_IMPLEMENTATION
 
-@interface CALayer (PowerSavingTests)
+@interface TestLayer : CALayer
+@property (nonatomic, strong) NSMutableDictionary<NSString *, CAAnimation *> *storedAnimations;
+@end
+
+@implementation TestLayer
+- (instancetype)init {
+    self = [super init];
+    if (self != nil) {
+        self.storedAnimations = [[NSMutableDictionary alloc] init];
+    }
+    return self;
+}
+
+- (void)addAnimation:(CAAnimation *)animation forKey:(NSString *)key {
+    self.storedAnimations[key] = [animation copy];
+}
+
+- (CAAnimation *)animationForKey:(NSString *)key {
+    return [self.storedAnimations[key] copy];
+}
+
+- (NSArray<NSString *> *)animationKeys {
+    return self.storedAnimations.allKeys;
+}
+
+- (void)removeAnimationForKey:(NSString *)key {
+    [self.storedAnimations removeObjectForKey:key];
+}
+
+- (void)removeAllAnimations {
+    [self.storedAnimations removeAllObjects];
+}
+@end
+
+@interface TestLayer (PowerSavingTests)
 - (void)_65087dc8_addAnimation:(CAAnimation *)animation forKey:(NSString *)key;
 - (void)_65087dc8_removeAnimationForKey:(NSString *)key;
 - (void)_65087dc8_removeAllAnimations;
 @end
 
-@implementation CALayer (PowerSavingTests)
+@implementation TestLayer (PowerSavingTests)
 - (void)_65087dc8_addAnimation:(CAAnimation *)animation forKey:(NSString *)key {
     [self _65087dc8_addAnimation:animationForEnhancedPowerSavingOnLayer(self, animation, key) forKey:key];
 }
@@ -35,17 +68,12 @@ ANIMATION_REMOVE_ALL_IMPLEMENTATION
 
 int main(void) {
     @autoreleasepool {
-        [NSApplication sharedApplication];
-        NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 32, 32) styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:false];
-        window.releasedWhenClosed = false;
-        window.contentView.wantsLayer = true;
-        CALayer *layer = window.contentView.layer;
-        NSCAssert(layer != nil, @"test window has no backing layer");
+        TestLayer *layer = [[TestLayer alloc] init];
         layer.speed = 0;
         layer.timeOffset = 100;
-        method_exchangeImplementations(class_getInstanceMethod([CALayer class], @selector(addAnimation:forKey:)), class_getInstanceMethod([CALayer class], @selector(_65087dc8_addAnimation:forKey:)));
-        method_exchangeImplementations(class_getInstanceMethod([CALayer class], @selector(removeAnimationForKey:)), class_getInstanceMethod([CALayer class], @selector(_65087dc8_removeAnimationForKey:)));
-        method_exchangeImplementations(class_getInstanceMethod([CALayer class], @selector(removeAllAnimations)), class_getInstanceMethod([CALayer class], @selector(_65087dc8_removeAllAnimations)));
+        method_exchangeImplementations(class_getInstanceMethod([TestLayer class], @selector(addAnimation:forKey:)), class_getInstanceMethod([TestLayer class], @selector(_65087dc8_addAnimation:forKey:)));
+        method_exchangeImplementations(class_getInstanceMethod([TestLayer class], @selector(removeAnimationForKey:)), class_getInstanceMethod([TestLayer class], @selector(_65087dc8_removeAnimationForKey:)));
+        method_exchangeImplementations(class_getInstanceMethod([TestLayer class], @selector(removeAllAnimations)), class_getInstanceMethod([TestLayer class], @selector(_65087dc8_removeAllAnimations)));
         CABasicAnimation *source = [CABasicAnimation animationWithKeyPath:@"opacity"];
         source.fromValue = @0;
         source.toValue = @1;
@@ -114,7 +142,7 @@ int main(void) {
         loopGroup.duration = 3;
         loopGroup.repeatCount = FLT_MAX;
         [layer addAnimation:loopGroup forKey:@"loopGroup"];
-        CALayer *clearedLayer = [CALayer layer];
+        TestLayer *clearedLayer = [[TestLayer alloc] init];
         [clearedLayer addAnimation:loop forKey:@"idle"];
         [clearedLayer removeAllAnimations];
         [CATransaction begin];
@@ -161,7 +189,6 @@ int main(void) {
             NSCAssert([layer animationForKey:@"idle"].repeatCount == HUGE_VALF, @"loop failed to resume on a repeated disable");
         }
         NSLog(@"Animation timing, groups, completion delegates and final values passed.");
-        [window close];
     }
     return 0;
 }
