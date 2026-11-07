@@ -2243,7 +2243,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         var reactionCount = 0
-        for reaction in mergedMessageReactionsAndPeers(accountPeerId: context.account.peerId, accountPeer: nil, message: message).reactions {
+        for reaction in mergedMessageReactionsAndPeers(accountPeerId: context.account.peerId, accountPeer: nil, message: message).reactions where !reaction.isRemoved {
             reactionCount += Int(reaction.count)
         }
         if let reactionsAttribute = message.reactionsAttribute {
@@ -3591,7 +3591,7 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
         
         var reactionCount = 0
         var customEmojiFiles = Set<Int64>()
-        for reaction in mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions {
+        for reaction in mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions where !reaction.isRemoved {
             reactionCount += Int(reaction.count)
             
             if case let .custom(fileId) = reaction.value {
@@ -3777,7 +3777,7 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
         let textFont = Font.regular(self.presentationData.listsFontSize.baseDisplaySize)
         
         var reactionCount = 0
-        for reaction in mergedMessageReactionsAndPeers(accountPeerId: self.item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions {
+        for reaction in mergedMessageReactionsAndPeers(accountPeerId: self.item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions where !reaction.isRemoved {
             reactionCount += Int(reaction.count)
         }
         
@@ -4066,7 +4066,7 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
             }
         }
         var reactionCount = 0
-        for reaction in mergedMessageReactionsAndPeers(accountPeerId: self.item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions {
+        for reaction in mergedMessageReactionsAndPeers(accountPeerId: self.item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions where !reaction.isRemoved {
             reactionCount += Int(reaction.count)
         }
         if reactionCount >= 0 {

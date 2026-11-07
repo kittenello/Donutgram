@@ -351,6 +351,8 @@ private let dgEnglishStrings: [String: String] = [
     "Полупрозрачные удалённые": "Translucent Deleted Messages",
     "Свои удалённые — ваши сообщения, которые удалили на другом устройстве или удалил собеседник.": "My deleted messages are your messages deleted on another device or by the other person.",
     "Сохранять одноразовые медиа": "Save View-Once Media",
+    "Видеть убранные реакции": "Show Removed Reactions",
+    "Если собеседник уберёт реакцию с вашего сообщения, она останется в чате слегка затемнённой. Сохраняются только реакции, которые приложение успело получить при включённой функции. Ваши собственные снятые реакции не сохраняются. Видно только на этом устройстве.": "When someone removes a reaction from your message, it stays in the chat slightly dimmed. Only reactions received while this feature is enabled can be saved. Your own removed reactions are not saved. Visible on this device only.",
     "Видеть удалённые подарки": "Show Removed Gifts",
     "Оставлять чаты после бана": "Keep Chats After a Ban",
     "После бана чат остаётся в списке с прежней историей, только на этом устройстве. Писать в него нельзя.": "After a ban the chat stays in your list with its history, on this device only. You can't post in it.",

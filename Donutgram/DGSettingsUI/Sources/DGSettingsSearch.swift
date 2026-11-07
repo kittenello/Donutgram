@@ -98,6 +98,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("saveOwnDeleted", "Сохранять свои удалённые", "СООБЩЕНИЯ"),
         ("transparentDeleted", "Полупрозрачные удалённые", "СООБЩЕНИЯ"),
         ("saveEdits", "Сохранять историю правок", "СООБЩЕНИЯ"),
+        ("removedReactions", "Видеть убранные реакции", "СООБЩЕНИЯ"),
         ("saveBots", "Сохранять в чатах с ботами", "СООБЩЕНИЯ"),
         ("saveOnce", "Сохранять одноразовые медиа", "ДРУГОЕ"),
         ("keepBannedChats", "Оставлять чаты после бана", "ДРУГОЕ"),

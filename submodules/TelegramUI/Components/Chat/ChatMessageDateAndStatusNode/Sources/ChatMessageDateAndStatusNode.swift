@@ -882,7 +882,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             case let .trailingContent(contentWidth, reactionSettings):
                 if let reactionSettings = reactionSettings, !reactionSettings.displayInline {
                     var totalReactionCount: Int = 0
-                    for reaction in arguments.reactions {
+                    for reaction in arguments.reactions where !reaction.isRemoved {
                         totalReactionCount += Int(reaction.count)
                     }
                     
@@ -923,6 +923,9 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             }
                         }
                         
+                        if reaction.isRemoved {
+                            peers.removeAll()
+                        }
                         var title: String?
                         if arguments.areReactionsTags, let savedMessageTags = arguments.savedMessageTags {
                             for tag in savedMessageTags.tags {
@@ -937,7 +940,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                                 value: reaction.value,
                                 centerAnimation: centerAnimation,
                                 animationFileId: animationFileId,
-                                title: title
+                                title: title,
+                                isRemoved: reaction.isRemoved
                             ),
                             count: Int(reaction.count),
                             peers: arguments.areReactionsTags ? [] : peers,
@@ -1112,7 +1116,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             
                             let itemValue = item.value
                             let itemNode = item.node
-                            item.node.view.isGestureEnabled = true
+                            item.node.view.isGestureEnabled = !item.id.isRemoved
                             let canViewReactionList = arguments.canViewReactionList
                             item.node.view.activateAfterCompletion = !canViewReactionList
                             item.node.view.activated = { [weak itemNode] gesture, _ in
@@ -1565,7 +1569,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
     
     public func reactionView(value: MessageReaction.Reaction) -> UIView? {
         for (key, button) in self.reactionButtonsContainer.buttons {
-            if key == value {
+            if key.value == value && !key.isRemoved {
                 return button.view.iconView
             }
         }

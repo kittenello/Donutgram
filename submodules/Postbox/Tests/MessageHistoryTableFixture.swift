@@ -146,7 +146,7 @@ final class MessageHistoryTableFixture {
             chatMessagesNamespaces: [messageNamespace],
             getGlobalNotificationSettings: { _ in nil },
             defaultGlobalNotificationSettings: PostboxGlobalNotificationSettings(defaultIncludePeer: { _ in true }),
-            mergeMessageAttributes: { _, _ in },
+            mergeMessageAttributes: { _, _, _, _ in },
             decodeMessageThreadInfo: { _ in nil },
             decodeAutoremoveTimeout: { _ in nil },
             decodeDisplayPeerAsRegularChat: { _ in false },

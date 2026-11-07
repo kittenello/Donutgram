@@ -129,7 +129,8 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
         }
         result.append(contentsOf: [
             .toggle(13, 1, "transparentDeleted", "Полупрозрачные удалённые", s.semiTransparentDeletedMessages, true),
-            .toggle(14, 1, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true)
+            .toggle(14, 1, "saveEdits", "Сохранять историю правок", s.saveEditHistory, true),
+            .toggle(16, 1, "removedReactions", "Видеть убранные реакции", s.showRemovedReactions, true)
         ])
         // Bot chats are a filter of both: without deleted messages or edits there is nothing for it to keep.
         if s.saveDeletedMessages || s.saveEditHistory {
@@ -150,6 +151,7 @@ func dgSavingSettingsController(context: AccountContext, focusKey: String? = nil
         case "transparentDeleted": s.semiTransparentDeletedMessages = value
         case "saveEdits": s.saveEditHistory = value
         case "saveOnce": s.saveViewOnceMedia = value
+        case "removedReactions": s.showRemovedReactions = value
         case "disappearedGifts": s.showDisappearedGifts = value
         case "keepBannedChats": s.keepBannedChats = value
         default: break
@@ -1034,7 +1036,7 @@ private func dgMovedRowLocation(key: String) -> (DGSettingsPage, String) {
     switch key {
     case "ghost", "shadowBan":
         return (.root, key)
-    case "saveDeleted", "saveOwnDeleted", "transparentDeleted", "savedDeleted", "saveEdits", "saveOnce", "saveBots", "disappearedGifts", "keepBannedChats":
+    case "saveDeleted", "saveOwnDeleted", "transparentDeleted", "savedDeleted", "saveEdits", "saveOnce", "saveBots", "removedReactions", "disappearedGifts", "keepBannedChats":
         return (.saving, key)
     case "gifUnlock", "bypassForward", "protectedScreenshots", "saveProtectedStories":
         return (.bypass, key)

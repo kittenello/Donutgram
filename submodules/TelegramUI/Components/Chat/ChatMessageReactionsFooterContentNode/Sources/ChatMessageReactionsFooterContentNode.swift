@@ -35,7 +35,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
     private var bubbleBackgroundNode: WallpaperBubbleBackgroundNode?
     private let container: ReactionButtonsAsyncLayoutContainer
     private var backgroundMaskView: UIView?
-    private var backgroundMaskButtons: [MessageReaction.Reaction: UIView] = [:]
+    private var backgroundMaskButtons: [ReactionButtonsAsyncLayoutContainer.ReactionId: UIView] = [:]
     
     public var reactionSelected: ((MessageReaction.Reaction, ContextExtractedContentContainingView?) -> Void)?
     public var openReactionPreview: ((ContextGesture?, ContextExtractedContentContainingView, MessageReaction.Reaction) -> Void)?
@@ -158,7 +158,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
         }
         
         var totalReactionCount: Int = 0
-        for reaction in reactions.reactions {
+        for reaction in reactions.reactions where !reaction.isRemoved {
             totalReactionCount += Int(reaction.count)
         }
         
@@ -221,6 +221,9 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                 }
             }
             
+            if reaction.isRemoved {
+                peers.removeAll()
+            }
             var title: String?
             if isTag, let savedMessageTags {
                 for tag in savedMessageTags.tags {
@@ -235,7 +238,8 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                     value: reaction.value,
                     centerAnimation: centerAnimation,
                     animationFileId: animationFileId,
-                    title: title
+                    title: title,
+                    isRemoved: reaction.isRemoved
                 ),
                 count: Int(reaction.count),
                 peers: peers,
@@ -371,13 +375,17 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                     )
                 )
                 
-                var validIds = Set<MessageReaction.Reaction>()
+                var validIds = Set<ReactionButtonsAsyncLayoutContainer.ReactionId>()
                 
                 let layoutItem: (ReactionButtonsAsyncLayoutContainer.ApplyResult.Item, CGRect) -> Void = { item, itemFrame in
                     let itemMaskFrame = itemFrame.offsetBy(dx: backgroundInsets, dy: backgroundInsets)
                     
+                    let alternateId = ReactionButtonsAsyncLayoutContainer.ReactionId(value: item.value, isRemoved: !item.id.isRemoved)
+                    if strongSelf.backgroundMaskButtons[item.id] == nil, !reactionButtons.items.contains(where: { $0.id == alternateId }), let previous = strongSelf.backgroundMaskButtons.removeValue(forKey: alternateId) {
+                        strongSelf.backgroundMaskButtons[item.id] = previous
+                    }
                     let itemMaskView: UIView
-                    if let current = strongSelf.backgroundMaskButtons[item.value] {
+                    if let current = strongSelf.backgroundMaskButtons[item.id] {
                         itemMaskView = current
                     } else {
                         if isTag {
@@ -389,7 +397,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                             itemMaskView.clipsToBounds = true
                             itemMaskView.layer.cornerRadius = 15.0
                         }
-                        strongSelf.backgroundMaskButtons[item.value] = itemMaskView
+                        strongSelf.backgroundMaskButtons[item.id] = itemMaskView
                     }
                     
                     if item.node.view.superview != strongSelf.view {
@@ -406,7 +414,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                     
                     let itemValue = item.value
                     let itemNode = item.node
-                    item.node.view.isGestureEnabled = true
+                    item.node.view.isGestureEnabled = !item.id.isRemoved
                     let canViewReactionList = canViewMessageReactionList(message: message)
                     item.node.view.activateAfterCompletion = !canViewReactionList
                     item.node.view.activated = { [weak itemNode] gesture, _ in
@@ -439,7 +447,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                     var currentLineWidth: CGFloat = 0.0
 
                     for item in reactionButtons.items {
-                        validIds.insert(item.value)
+                        validIds.insert(item.id)
                         let itemWidth = item.size.width
 
                         if currentLineWidth + itemWidth + (currentLine.isEmpty ? 0 : itemSpacing) > boundingWidth + itemSpacing {
@@ -472,7 +480,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                     }
                 } else {
                     for item in reactionButtons.items {
-                        validIds.insert(item.value)
+                        validIds.insert(item.id)
                         
                         switch alignment {
                         case .left:
@@ -504,7 +512,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                     }
                 }
                 
-                var removeMaskIds: [MessageReaction.Reaction] = []
+                var removeMaskIds: [ReactionButtonsAsyncLayoutContainer.ReactionId] = []
                 for (id, view) in strongSelf.backgroundMaskButtons {
                     if !validIds.contains(id) {
                         removeMaskIds.append(id)
@@ -551,7 +559,7 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
     
     public func reactionTargetView(value: MessageReaction.Reaction) -> UIView? {
         for (key, button) in self.container.buttons {
-            if key == value {
+            if key.value == value && !key.isRemoved {
                 return button.view.iconView
             }
         }

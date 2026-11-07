@@ -852,6 +852,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private var donutgramShowChannelForwardCount = DGSimpleSettings.shared.showChannelForwardCount
     private var donutgramShowForwardDate = DGSimpleSettings.shared.showForwardDate
     private var donutgramWideChannelPosts = DGSimpleSettings.shared.wideChannelPosts
+    private var donutgramShowRemovedReactions = DGSimpleSettings.shared.showRemovedReactions
     private var donutgramHidePaidReactions = DGSimpleSettings.shared.hidePaidReactions
     private var donutgramHideViaBot = DGSimpleSettings.shared.hideViaBot
     private var donutgramHideAIFeatures = DGSimpleSettings.shared.hideAIFeatures
@@ -1403,23 +1404,25 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             let forwardCountChanged = self.donutgramShowChannelForwardCount != showChannelForwardCount
             let forwardDateChanged = self.donutgramShowForwardDate != DGSimpleSettings.shared.showForwardDate
             let wideChannelPostsChanged = self.donutgramWideChannelPosts != DGSimpleSettings.shared.wideChannelPosts
+            let removedReactionsChanged = self.donutgramShowRemovedReactions != DGSimpleSettings.shared.showRemovedReactions
             let hidePaidReactionsChanged = self.donutgramHidePaidReactions != DGSimpleSettings.shared.hidePaidReactions
             let hideViaBotChanged = self.donutgramHideViaBot != DGSimpleSettings.shared.hideViaBot
             let hideAIFeaturesChanged = self.donutgramHideAIFeatures != DGSimpleSettings.shared.hideAIFeatures
             let premiumReplyEmojiChanged = self.donutgramHidePremiumReplyEmoji != DGSimpleSettings.shared.hidePremiumReplyEmoji
             let mentionAvatarsChanged = self.donutgramMentionAvatars != DGSimpleSettings.shared.mentionAvatars
-            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || premiumReplyEmojiChanged || hideAIFeaturesChanged {
+            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || removedReactionsChanged || hidePaidReactionsChanged || hideViaBotChanged || premiumReplyEmojiChanged || hideAIFeaturesChanged {
                 self.donutgramTranscriptionBackend = transcriptionBackend
                 self.donutgramStickerAppearance = stickerAppearance
                 self.donutgramShowChannelForwardCount = showChannelForwardCount
                 self.donutgramShowForwardDate = DGSimpleSettings.shared.showForwardDate
                 self.donutgramWideChannelPosts = DGSimpleSettings.shared.wideChannelPosts
+                self.donutgramShowRemovedReactions = DGSimpleSettings.shared.showRemovedReactions
                 self.donutgramHidePaidReactions = DGSimpleSettings.shared.hidePaidReactions
                 self.donutgramHideViaBot = DGSimpleSettings.shared.hideViaBot
                 self.donutgramHideAIFeatures = DGSimpleSettings.shared.hideAIFeatures
                 self.donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
                 self.donutgramHidePremiumReplyEmoji = DGSimpleSettings.shared.hidePremiumReplyEmoji
-                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || hideAIFeaturesChanged || premiumReplyEmojiChanged)
+                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || removedReactionsChanged || hidePaidReactionsChanged || hideViaBotChanged || hideAIFeaturesChanged || premiumReplyEmojiChanged)
             }
         })
 

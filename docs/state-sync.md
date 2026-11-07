@@ -1124,3 +1124,15 @@ received deletions from history confirmation and reset cleanup follow the same s
 already saved deleted messages are excluded from confirmation candidates, reset tails and reopened holes, so a saved
 snapshot cannot cause the same history range to be fetched repeatedly. retained banned chats keep their local history,
 chat-list inclusion and pins across account resets. `DonutgramHistoryPreservationTests` pins the confirmation paths.
+
+## locally retained reactions
+
+`SeedConfiguration.mergeMessageAttributes` receives the stored message id and flags along with both attribute lists.
+`donutgramMergeRemovedReactions` keeps observed removals on outgoing cloud messages when “show removed reactions” is
+on, including updates from push, difference, view polls and message refreshes. `ReactionsMessageAttribute` stores the
+server results separately from local removed counts and known reactors. incoming messages, saved-message tags, paid
+reactions and changes with pending local reactions do not create removal records. incomplete recent-reactor lists
+are not treated as proof that a specific person removed a reaction. known reactors clear their saved copy when they
+react again; anonymous count decreases stay anonymous. an omitted reactions attribute preserves existing local
+history without treating the omission as a newly observed removal. local records do not enter unread-reaction tags,
+notifications or outgoing reaction requests. only the presentation helper adds the dimmed, noninteractive badges.

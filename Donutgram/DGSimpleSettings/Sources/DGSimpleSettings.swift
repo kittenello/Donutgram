@@ -186,6 +186,7 @@ public final class DGSimpleSettings {
         static let keepBannedChats = "donutgram.general.keepBannedChats"
         static let saveInBotChats = "donutgram.spy.saveInBotChats"
         static let saveOwnDeletedMessages = "donutgram.spy.saveOwnDeletedMessages"
+        static let showRemovedReactions = "donutgram.spy.showRemovedReactions"
         static let showDisappearedGifts = "donutgram.spy.showDisappearedGifts"
         static let approximateLastSeen = "donutgram.spy.approximateLastSeen"
         static let approximateLastSeenStartedAt = "donutgram.spy.approximateLastSeenStartedAt"
@@ -407,6 +408,16 @@ public final class DGSimpleSettings {
         set {
             self.defaults.set(newValue, forKey: Key.saveOwnDeletedMessages)
             self.preservationSettings?.saveOwnDeletedMessages = newValue
+        }
+    }
+
+    public var showRemovedReactions: Bool {
+        get { self.preservationSettings?.showRemovedReactions ?? bool(Key.showRemovedReactions) }
+        set {
+            guard self.showRemovedReactions != newValue else { return }
+            self.defaults.set(newValue, forKey: Key.showRemovedReactions)
+            self.preservationSettings?.showRemovedReactions = newValue
+            NotificationCenter.default.post(name: DGSimpleSettings.didChangeNotification, object: self)
         }
     }
 

@@ -7,13 +7,14 @@ public final class DGMessagePreservationSettings {
 
     private enum Key {
         static let deleted = "donutgram.spy.saveDeletedMessages"
+        static let removedReactions = "donutgram.spy.showRemovedReactions"
         static let edits = "donutgram.spy.saveEditHistory"
         static let viewOnce = "donutgram.spy.saveViewOnceMedia"
         static let bots = "donutgram.spy.saveInBotChats"
         static let removePings = "donutgram.chats.removePings"
         static let own = "donutgram.spy.saveOwnDeletedMessages"
         static let keepBannedChats = "donutgram.general.keepBannedChats"
-        static let all = [deleted, edits, viewOnce, bots, removePings, own, keepBannedChats]
+        static let all = [deleted, edits, viewOnce, bots, removePings, own, keepBannedChats, removedReactions]
     }
 
     public init(sharedDefaults: UserDefaults, legacyDefaults: UserDefaults, migrateLegacyValues: Bool) {
@@ -37,6 +38,11 @@ public final class DGMessagePreservationSettings {
     public var saveDeletedMessages: Bool {
         get { self.defaults.bool(forKey: Key.deleted) }
         set { self.set(newValue, forKey: Key.deleted) }
+    }
+
+    public var showRemovedReactions: Bool {
+        get { self.defaults.bool(forKey: Key.removedReactions) }
+        set { self.set(newValue, forKey: Key.removedReactions) }
     }
 
     public var saveEditHistory: Bool {
