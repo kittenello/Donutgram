@@ -158,6 +158,7 @@ open class ManagedAnimationNode: ASDisplayNode {
     
     private var previousTimestamp: Double?
     private var delta: Double?
+    private var powerSavingObserver: NSObjectProtocol?
     
     public var customColor: UIColor? {
         didSet {
@@ -205,6 +206,22 @@ open class ManagedAnimationNode: ASDisplayNode {
                 strongSelf.previousTimestamp = currentTimestamp
             }
         }
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            if isEnhancedPowerSavingEnabled {
+                self.updateAnimation()
+            } else if self.state?.item.loop == true || !self.trackStack.isEmpty {
+                self.previousTimestamp = nil
+                self.displayLink.isPaused = false
+            }
+        }
+    }
+
+    deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
+        self.displayLink.invalidate()
     }
     
     open func advanceState() {
@@ -266,7 +283,7 @@ open class ManagedAnimationNode: ASDisplayNode {
             duration = Double(state.frameCount) / fps
         }
         
-        var t = state.relativeTime / duration
+        var t = isEnhancedPowerSavingEnabled || duration <= 0.0 ? 1.0 : state.relativeTime / duration
         t = max(0.0, t)
         t = min(1.0, t)
         //print("\(t) \(state.item.name)")
@@ -297,11 +314,18 @@ open class ManagedAnimationNode: ASDisplayNode {
         var animationAdvancement: Double = self.delta ?? 1.0 / 60.0
         animationAdvancement *= Double(min(2, self.trackStack.count + 1))
         state.relativeTime += animationAdvancement
+        if isEnhancedPowerSavingEnabled {
+            state.relativeTime = duration
+        }
         
         if state.relativeTime >= duration && !self.didTryAdvancingState {
             if state.item.loop && self.trackStack.isEmpty {
-                state.frameIndex = nil
-                state.relativeTime = 0.0
+                if isEnhancedPowerSavingEnabled {
+                    self.displayLink.isPaused = true
+                } else {
+                    state.frameIndex = nil
+                    state.relativeTime = 0.0
+                }
             } else {
                 self.didTryAdvancingState = true
                 self.advanceState()

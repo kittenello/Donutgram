@@ -1524,7 +1524,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         var textFieldHeight: CGFloat
         var isOverflow = false
-        if let richTextInputNode = self.richTextInputNode {
+        if let richTextInputNode = self.richTextInputNode, !richTextInputNode.inputContentIsEmpty {
             let maxTextWidth = width - textFieldInsets.left - textFieldInsets.right - actualTextInputViewInternalInsets.left - actualTextInputViewInternalInsets.right
             let measuredHeight = richTextInputNode.textHeightForWidth(maxTextWidth, rightInset: textInputViewRealInsets.right)
             

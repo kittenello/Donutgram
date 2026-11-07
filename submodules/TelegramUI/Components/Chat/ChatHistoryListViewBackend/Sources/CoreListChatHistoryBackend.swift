@@ -1201,6 +1201,9 @@ final class CoreListChatHistoryBackend: ASDisplayNode, ChatHistoryListViewBacken
         } else if options.contains(.AnimateInsertion) {
             transition = .spring(duration: 0.4)
         }
+        if isEnhancedPowerSavingEnabled {
+            transition = .immediate
+        }
 
         // `additionalScrollDistance` displaces content by a caller-chosen delta in the same pass that
         // re-insets it — positive moves content DOWN, composing with the inset compensation rather

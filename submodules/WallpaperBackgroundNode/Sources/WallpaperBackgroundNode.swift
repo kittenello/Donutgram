@@ -1259,6 +1259,9 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     }
 
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         self.patternImageDisposable.dispose()
         self.wallpaperDisposable.dispose()
         self.imageDisposable.dispose()
@@ -1865,8 +1868,13 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
 
     private var isAnimating = false
     private var isLooping = false
+    private var powerSavingObserver: NSObjectProtocol?
     
     public func animateEvent(transition: ContainedViewLayoutTransition, extendAnimation: Bool) {
+        guard !isEnhancedPowerSavingEnabled else {
+            self.isAnimating = false
+            return
+        }
         guard !(self.isLooping && self.isAnimating) else {
             return
         }
@@ -1883,6 +1891,12 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     }
 
     public func updateIsLooping(_ isLooping: Bool) {
+        if self.powerSavingObserver == nil {
+            self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self, self.isLooping, !isEnhancedPowerSavingEnabled else { return }
+                self.animateEvent(transition: .animated(duration: 0.7, curve: .linear), extendAnimation: false)
+            }
+        }
         let wasLooping = self.isLooping
         self.isLooping = isLooping
         

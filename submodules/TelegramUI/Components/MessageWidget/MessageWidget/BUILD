@@ -8,6 +8,7 @@ swift_library(
     srcs = glob(["Sources/**/*.swift"]),
     copts = ["-warnings-as-errors"],
     deps = [
+        "//submodules/UIKitRuntimeUtils:UIKitRuntimeUtils",
         "//submodules/TelegramUI/Components/MessageWidget/MessageWidgetRendering",
         "//submodules/TelegramUI/Components/MessageWidget/WidgetRuntimeIOS",
         # Intl's locale data: widget-sandbox's iOS glue answers the runtime's `intl` requests.

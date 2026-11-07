@@ -287,7 +287,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return self._automaticMediaDownloadSettings.get()
     }
     
-    public private(set) var energyUsageSettings: EnergyUsageSettings
+    public private(set) var energyUsageSettings: EnergyUsageSettings {
+        didSet {
+            updateEnhancedPowerSaving(self.energyUsageSettings.enhancedPowerSaving)
+        }
+    }
     
     public let currentAutodownloadSettings: Atomic<AutodownloadSettings>
     private let _autodownloadSettings = Promise<AutodownloadSettings>()
@@ -381,7 +385,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             self.contactDataManager = nil
         }
         
-        self._currentPresentationData = Atomic(value: initialPresentationDataAndSettings.presentationData)
+        let initialEnergyUsageSettings = initialPresentationDataAndSettings.automaticMediaDownloadSettings.energyUsageSettings.resolved(powerSaving: automaticEnergyUsageShouldBeOnNow(settings: initialPresentationDataAndSettings.automaticMediaDownloadSettings))
+        self._currentPresentationData = Atomic(value: initialPresentationDataAndSettings.presentationData.withUpdated(reduceMotion: initialPresentationDataAndSettings.presentationData.reduceMotion || initialEnergyUsageSettings.enhancedPowerSaving))
         self.currentAutomaticMediaDownloadSettings = initialPresentationDataAndSettings.automaticMediaDownloadSettings
         self.currentAutodownloadSettings = Atomic(value: initialPresentationDataAndSettings.autodownloadSettings)
         self.currentMediaInputSettings = Atomic(value: initialPresentationDataAndSettings.mediaInputSettings)
@@ -390,16 +395,17 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.currentInAppNotificationSettings = Atomic(value: initialPresentationDataAndSettings.inAppNotificationSettings)
         self.currentChatSettings = Atomic(value: initialPresentationDataAndSettings.chatSettings)
         
-        if automaticEnergyUsageShouldBeOnNow(settings: self.currentAutomaticMediaDownloadSettings) {
-            self.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
-        } else {
-            self.energyUsageSettings = self.currentAutomaticMediaDownloadSettings.energyUsageSettings
-        }
+        self.energyUsageSettings = initialEnergyUsageSettings
+        updateEnhancedPowerSaving(self.energyUsageSettings.enhancedPowerSaving)
         
-        let presentationData: Signal<PresentationData, NoError> = .single(initialPresentationDataAndSettings.presentationData)
+        let basePresentationData: Signal<PresentationData, NoError> = .single(initialPresentationDataAndSettings.presentationData)
         |> then(
             updatedPresentationData(accountManager: self.accountManager, applicationInForeground: self.applicationBindings.applicationInForeground, systemUserInterfaceStyle: mainWindow?.systemUserInterfaceStyle ?? .single(.light))
         )
+        let presentationData = combineLatest(basePresentationData, enhancedPowerSavingState())
+        |> map { data, enabled in
+            return data.withUpdated(reduceMotion: data.reduceMotion || enabled)
+        }
         self._presentationData.set(presentationData)
         self._automaticMediaDownloadSettings.set(.single(initialPresentationDataAndSettings.automaticMediaDownloadSettings)
         |> then(accountManager.sharedData(keys: [SharedDataKeys.autodownloadSettings, ApplicationSpecificSharedDataKeys.automaticMediaDownloadSettings])
@@ -601,19 +607,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             if let strongSelf = self {
                 strongSelf.currentAutomaticMediaDownloadSettings = next
                 
-                if automaticEnergyUsageShouldBeOnNow(settings: next) {
-                    strongSelf.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
-                } else {
-                    strongSelf.energyUsageSettings = next.energyUsageSettings
-                }
+                strongSelf.energyUsageSettings = next.energyUsageSettings.resolved(powerSaving: automaticEnergyUsageShouldBeOnNow(settings: next))
                 strongSelf.energyUsageAutomaticDisposable.set((automaticEnergyUsageShouldBeOn(settings: next)
                 |> deliverOnMainQueue).start(next: { value in
                     if let strongSelf = self {
-                        if value {
-                            strongSelf.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
-                        } else {
-                            strongSelf.energyUsageSettings = next.energyUsageSettings
-                        }
+                        strongSelf.energyUsageSettings = next.energyUsageSettings.resolved(powerSaving: value)
                     }
                 }))
             }

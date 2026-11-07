@@ -19,6 +19,8 @@ public final class AnimationNode: ASDisplayNode {
     public var didPlay = false
     public var completion: (() -> Void)?
     private var internalCompletion: (() -> Void)?
+    private var powerSavingObserver: NSObjectProtocol?
+    private var resumeLoopAfterPowerSaving = false
     
     public var isPlaying: Bool {
         return self.animationView()?.isAnimationPlaying ?? false
@@ -31,6 +33,7 @@ public final class AnimationNode: ASDisplayNode {
         self.currentParams = (animationName, colors)
         
         super.init()
+        self.observePowerSaving()
         
         self.setViewBlock({ [weak self] in
             guard let self else {
@@ -74,6 +77,7 @@ public final class AnimationNode: ASDisplayNode {
         self.scale = scale
         
         super.init()
+        self.observePowerSaving()
         
         self.setViewBlock({
             if let json = try? JSONSerialization.jsonObject(with: animationData, options: []) as? [String: Any], let animation = try? Animation(dictionary: json) {
@@ -107,9 +111,11 @@ public final class AnimationNode: ASDisplayNode {
         }
         let animationNode = AnimationNode(animation: animation, colors: colors ?? currentColors, scale: 1.0)
         animationNode.animationView()?.currentProgress = progress ?? (self.animationView()?.currentProgress ?? 0.0)
-        animationNode.animationView()?.play(completion: { [weak animationNode] _ in
-            animationNode?.completion?()
-        })
+        if !isEnhancedPowerSavingEnabled {
+            animationNode.animationView()?.play(completion: { [weak animationNode] _ in
+                animationNode?.completion?()
+            })
+        }
         return animationNode
     }
     
@@ -122,6 +128,11 @@ public final class AnimationNode: ASDisplayNode {
     }
     
     public func animate(from: CGFloat, to: CGFloat, completion: @escaping () -> Void) {
+        if isEnhancedPowerSavingEnabled {
+            self.animationView()?.currentProgress = to
+            completion()
+            return
+        }
         self.animationView()?.play(fromProgress: from, toProgress: to, completion: { _ in
             completion()
         })
@@ -167,6 +178,14 @@ public final class AnimationNode: ASDisplayNode {
     }
     
     public func play() {
+        if isEnhancedPowerSavingEnabled {
+            if !self.didPlay {
+                self.didPlay = true
+                self.seekToEnd()
+                self.completion?()
+            }
+            return
+        }
         if let animationView = self.animationView(), !animationView.isAnimationPlaying && !self.didPlay {
             self.didPlay = true
             animationView.play { [weak self] _ in
@@ -176,6 +195,10 @@ public final class AnimationNode: ASDisplayNode {
     }
     
     public func playOnce() {
+        if isEnhancedPowerSavingEnabled {
+            self.seekToEnd()
+            return
+        }
         if let animationView = self.animationView(), !animationView.isAnimationPlaying && !self.didPlay {
             self.didPlay = true
             self.internalCompletion = { [weak self] in
@@ -194,7 +217,12 @@ public final class AnimationNode: ASDisplayNode {
             } else {
                 animationView.loopMode = .loop
             }
-            animationView.play()
+            if isEnhancedPowerSavingEnabled {
+                self.resumeLoopAfterPowerSaving = true
+                animationView.pause()
+            } else {
+                animationView.play()
+            }
         }
     }
     
@@ -210,6 +238,31 @@ public final class AnimationNode: ASDisplayNode {
             return CGSize(width: animation.size.width * self.scale, height: animation.size.height * self.scale)
         } else {
             return nil
+        }
+    }
+
+    deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
+    }
+
+    private func observePowerSaving() {
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.isNodeLoaded, let animationView = self.animationView() else { return }
+            if isEnhancedPowerSavingEnabled {
+                if animationView.isAnimationPlaying {
+                    animationView.pause()
+                    if case .playOnce = animationView.loopMode {
+                        animationView.currentProgress = 1.0
+                    } else {
+                        self.resumeLoopAfterPowerSaving = true
+                    }
+                }
+            } else if self.resumeLoopAfterPowerSaving && self.view.window != nil {
+                self.resumeLoopAfterPowerSaving = false
+                animationView.play()
+            }
         }
     }
 }

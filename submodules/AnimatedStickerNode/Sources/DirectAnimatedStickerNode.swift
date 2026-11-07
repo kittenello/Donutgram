@@ -81,14 +81,21 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
     private var frameImages: [Int: UIImage] = [:]
     private var loadFrameTasks: [Int: LoadFrameTask] = [:]
     private var nextFrameTimer: SwiftSignalKit.Timer?
+    private var powerSavingObserver: NSObjectProtocol?
     
 
     override public init() {
 
         super.init()
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.updatePlayback()
+        }
     }
     
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         self.sourceDisposable?.dispose()
         self.nextFrameTimer?.invalidate()
     }
@@ -135,7 +142,7 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
     }
     
     private func updatePlayback() {
-        let isPlaying = self.visibility && (self.lottieInstance != nil || self.videoSource != nil)
+        let isPlaying = self.visibility && !isEnhancedPowerSavingEnabled && (self.lottieInstance != nil || self.videoSource != nil)
         if self.isPlaying != isPlaying {
             self.isPlaying = isPlaying
             
@@ -152,6 +159,11 @@ public final class DirectAnimatedStickerNode: ASDisplayNode, AnimatedStickerNode
     }
     
     private func startNextFrameTimerIfNeeded() {
+        guard !isEnhancedPowerSavingEnabled else {
+            self.nextFrameTimer?.invalidate()
+            self.nextFrameTimer = nil
+            return
+        }
         var frameRate: Double?
         if let lottieInstance = self.lottieInstance {
             frameRate = Double(lottieInstance.frameRate)

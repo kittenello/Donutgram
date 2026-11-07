@@ -1,4 +1,5 @@
 import UIKit
+import UIKitRuntimeUtils
 
 /// The widget runtimes of one bubble. A runtime lives as long as its bubble: the bubble node
 /// calls `beginPass` with its message's stable id, and a different id destroys everything.
@@ -50,6 +51,7 @@ public final class MessageWidgetRegistry {
     private var ownerId: AnyHashable?
     private var theme: MessageWidgetInstance.Theme = .light
     private var visible = true
+    private var powerSavingObserver: NSObjectProtocol?
     private var instances: [Key: MessageWidgetInstance] = [:]
     private var usedInPass = Set<Key>()
     /// Keys whose widget could not start. Remembered so that a failing boot is not repeated, on main, by every layout pass.
@@ -64,9 +66,16 @@ public final class MessageWidgetRegistry {
             MessageWidgetInstance(source: source, theme: theme, stoppedLabel: label, maxMessageLength: max, locale: locale, storage: storage, context: context, state: state, startsStopped: startsStopped)
         }
         self.restartPolicy = restartPolicy
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: Notification.Name("donutgram.enhancedPowerSaving.didChange"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.setVisible(self.visible)
+        }
     }
 
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         for (key, instance) in self.instances {
             self.ended(key, instance)
             instance.destroy()
@@ -148,7 +157,7 @@ public final class MessageWidgetRegistry {
                     restartPolicy.noteStopped(restartKey)
                 }
             }
-            created.setVisible(self.visible)
+            created.setVisible(self.visible && !getEnhancedPowerSavingEnabled())
             self.instances[key] = created
             instance = created
         }
@@ -235,7 +244,7 @@ public final class MessageWidgetRegistry {
     public func setVisible(_ visible: Bool) {
         self.visible = visible
         for (_, instance) in self.instances {
-            instance.setVisible(visible)
+            instance.setVisible(visible && !getEnhancedPowerSavingEnabled())
         }
     }
 

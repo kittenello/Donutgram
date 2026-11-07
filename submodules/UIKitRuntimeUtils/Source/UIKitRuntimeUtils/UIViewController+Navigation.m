@@ -6,6 +6,36 @@
 #import "NSWeakReference.h"
 #import <UIKitRuntimeUtils/UIKitUtils.h>
 #import <dlfcn.h>
+#import <stdatomic.h>
+
+static atomic_bool enhancedPowerSavingEnabled = false;
+
+bool getEnhancedPowerSavingEnabled(void) {
+    return atomic_load(&enhancedPowerSavingEnabled);
+}
+
+void setEnhancedPowerSavingEnabled(bool enabled) {
+    atomic_store(&enhancedPowerSavingEnabled, enabled);
+}
+
+CAAnimation *animationForEnhancedPowerSaving(CAAnimation *animation) {
+    CAAnimation *result = [animation copy];
+    result.duration = 0.0;
+    result.beginTime = 0.0;
+    result.timeOffset = 0.0;
+    result.speed = 1.0;
+    result.repeatCount = 0.0;
+    result.repeatDuration = 0.0;
+    result.autoreverses = false;
+    if ([result isKindOfClass:[CAAnimationGroup class]]) {
+        NSMutableArray<CAAnimation *> *animations = [[NSMutableArray alloc] init];
+        for (CAAnimation *child in ((CAAnimationGroup *)result).animations) {
+            [animations addObject:animationForEnhancedPowerSaving(child)];
+        }
+        ((CAAnimationGroup *)result).animations = animations;
+    }
+    return result;
+}
 
 @interface UIViewControllerPresentingProxy : UIViewController
 
@@ -282,6 +312,9 @@ static NSMutableArray<CALayerSpringParametersOverride *> *currentSpringParameter
                 }
             }
         }
+    }
+    if (getEnhancedPowerSavingEnabled()) {
+        updatedAnimation = animationForEnhancedPowerSaving(updatedAnimation);
     }
     [self _65087dc8_addAnimation:updatedAnimation forKey:key];
 }

@@ -519,6 +519,7 @@ public final class GradientBackgroundNode: ASDisplayNode {
     }
 
     public func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition, extendAnimation: Bool, backwards: Bool, completion: @escaping () -> Void) {
+        let transition = isEnhancedPowerSavingEnabled ? .immediate : transition
         let sizeUpdated = self.validLayout != size
         self.validLayout = size
 
@@ -769,6 +770,10 @@ public final class GradientBackgroundNode: ASDisplayNode {
 
 
     public func animateEvent(transition: ContainedViewLayoutTransition, extendAnimation: Bool, backwards: Bool, completion: @escaping () -> Void) {
+        guard !isEnhancedPowerSavingEnabled else {
+            completion()
+            return
+        }
         guard case let .animated(duration, _) = transition, duration > 0.001 else {
             completion()
             return

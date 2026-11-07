@@ -9,8 +9,10 @@ import ItemListUI
 import PresentationDataUtils
 import AccountContext
 import UndoUI
+import DGSimpleSettings
 
 public enum EnergySavingItemType: CaseIterable {
+    case enhancedPowerSaving
     case autoplayVideo
     case autoplayGif
     case loopStickers
@@ -21,6 +23,8 @@ public enum EnergySavingItemType: CaseIterable {
     
     var settingsKeyPath: WritableKeyPath<EnergyUsageSettings, Bool> {
         switch self {
+        case .enhancedPowerSaving:
+            return \.enhancedPowerSaving
         case .autoplayVideo:
             return \.autoplayVideo
         case .autoplayGif:
@@ -40,6 +44,12 @@ public enum EnergySavingItemType: CaseIterable {
     
     func title(strings: PresentationStrings) -> (UIImage?, String, String) {
         switch self {
+        case .enhancedPowerSaving:
+            return (
+                PresentationResourcesSettings.powerSaving,
+                dgLocalized("Усиленное энергосбережение", languageCode: strings.primaryComponent.languageCode),
+                dgLocalized("Полностью отключает анимации, воспроизведение стикеров и эмодзи, автозапуск видео и GIF, эффекты и фоновые предзагрузки.", languageCode: strings.primaryComponent.languageCode)
+            )
         case .autoplayVideo:
             return (
                 PresentationResourcesSettings.videos,
@@ -254,7 +264,9 @@ private func energeSavingSettingsScreenEntries(
     
     entries.append(.itemsHeader)
     for type in EnergySavingItemType.allCases {
-        entries.append(.item(index: entries.count, type: type, value: settings.energyUsageSettings[keyPath: type.settingsKeyPath] && itemsEnabled, enabled: itemsEnabled))
+        let enabled = itemsEnabled && (type == .enhancedPowerSaving || !settings.energyUsageSettings.enhancedPowerSaving)
+        let value = type == .enhancedPowerSaving ? (!itemsEnabled || settings.energyUsageSettings.enhancedPowerSaving) : (settings.energyUsageSettings[keyPath: type.settingsKeyPath] && itemsEnabled)
+        entries.append(.item(index: entries.count, type: type, value: type == .enhancedPowerSaving ? value : value && enabled, enabled: enabled))
     }
     
     return entries
@@ -283,7 +295,10 @@ public func energySavingSettingsScreen(context: AccountContext, focusOnItemTag: 
         },
         displayDisabledTooltip: {
             let text: String
-            if context.sharedContext.currentAutomaticMediaDownloadSettings.energyUsageSettings.activationThreshold >= 96 {
+            if !automaticEnergyUsageShouldBeOnNow(settings: context.sharedContext.currentAutomaticMediaDownloadSettings), context.sharedContext.currentAutomaticMediaDownloadSettings.energyUsageSettings.enhancedPowerSaving {
+                let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
+                text = dgLocalized("Чтобы изменить эти настройки, выключите усиленное энергосбережение.", languageCode: strings.primaryComponent.languageCode)
+            } else if context.sharedContext.currentAutomaticMediaDownloadSettings.energyUsageSettings.activationThreshold >= 96 {
                 text = (context.sharedContext.currentPresentationData.with { $0 }).strings.PowerSavingScreen_OptionChangeAlertAlways
             } else {
                 text = (context.sharedContext.currentPresentationData.with { $0 }).strings.PowerSavingScreen_OptionChangeAlertConditional

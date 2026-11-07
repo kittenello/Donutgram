@@ -180,7 +180,11 @@ public struct ComponentTransition {
         case curve(duration: Double, curve: Curve)
     }
     
-    public var animation: Animation
+    private var storedAnimation: Animation
+    public var animation: Animation {
+        get { return isEnhancedPowerSavingEnabled ? .none : self.storedAnimation }
+        set { self.storedAnimation = newValue }
+    }
     private var _userData: [Any] = []
 
     public func userData<T>(_ type: T.Type) -> T? {
@@ -226,7 +230,7 @@ public struct ComponentTransition {
     }
 
     public init(animation: Animation) {
-        self.animation = animation
+        self.storedAnimation = animation
     }
     
     public func setFrame(view: UIView, frame: CGRect, completion: ((Bool) -> Void)? = nil) {

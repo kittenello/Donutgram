@@ -219,6 +219,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     public var isPlaying: Bool = false
     private var currentLoopCount: Int = 0
     private var canDisplayFirstFrame: Bool = false
+    private var powerSavingObserver: NSObjectProtocol?
     public var playbackMode: AnimatedStickerPlaybackMode = .loop
     
     public var stopAtNearestLoop: Bool = false
@@ -284,9 +285,15 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
             strongSelf.isDisplaying = value
         }
         self.addSubnode(self.eventsNode)
+        self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.updateIsPlaying()
+        }
     }
     
     deinit {
+        if let powerSavingObserver = self.powerSavingObserver {
+            NotificationCenter.default.removeObserver(powerSavingObserver)
+        }
         self.disposable.dispose()
         self.fetchDisposable.dispose()
         self.timer.swap(nil)?.invalidate()
@@ -416,6 +423,16 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     }
     
     private func updateIsPlaying() {
+        if isEnhancedPowerSavingEnabled {
+            self.pause()
+            self.isPlaying = false
+            self.isPlayingChanged(false)
+            self.canDisplayFirstFrame = self.isDisplaying || self.overrideVisibility
+            if self.canDisplayFirstFrame {
+                self.play(firstFrame: true, fromIndex: 0)
+            }
+            return
+        }
         if !self.autoplay {
             let isPlaying = self.visibility && (self.isDisplaying || self.overrideVisibility)
             if self.isPlaying != isPlaying {
@@ -457,6 +474,12 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     }
         
     public func play(firstFrame: Bool = false, fromIndex: Int? = nil) {
+        if isEnhancedPowerSavingEnabled && !firstFrame {
+            self.pause()
+            self.isPlaying = false
+            self.play(firstFrame: true, fromIndex: 0)
+            return
+        }
         if !firstFrame {
             switch self.playbackMode {
             case .once:
@@ -575,7 +598,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                     }
                 }
                 
-                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame, completion: {
+                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame && !isEnhancedPowerSavingEnabled, completion: {
                     timerEvent()
                 }, queue: queue)
                 let _ = timerHolder.swap(timer)
@@ -628,7 +651,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                 let duration: Double = frameSource.frameRate > 0 ? Double(frameSource.frameCount) / Double(frameSource.frameRate) : 0
                 let frameRate = frameSource.frameRate
                 
-                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame, completion: {
+                let timer = SwiftSignalKit.Timer(timeout: 1.0 / Double(frameRate), repeat: !firstFrame && !isEnhancedPowerSavingEnabled, completion: {
                     let frame = frameQueue.syncWith { frameQueue in
                         return frameQueue.take(draw: true)
                     }

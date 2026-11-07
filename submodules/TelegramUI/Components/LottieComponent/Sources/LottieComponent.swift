@@ -162,6 +162,7 @@ public final class LottieComponent: Component {
         private var isVisible: Bool = false
         
         private var displayLink: SharedDisplayLinkDriver.Link?
+        private var powerSavingObserver: NSObjectProtocol?
         
         private var currentTemplateFrameImage: UIImage?
         
@@ -176,6 +177,9 @@ public final class LottieComponent: Component {
         }
         
         var isEffectivelyVisible: Bool {
+            if isEnhancedPowerSavingEnabled {
+                return false
+            }
             if !self.isVisible {
                 return false
             }
@@ -197,6 +201,9 @@ public final class LottieComponent: Component {
         
         override init(frame: CGRect) {
             super.init(frame: frame)
+            self.powerSavingObserver = NotificationCenter.default.addObserver(forName: enhancedPowerSavingDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.visibilityUpdated()
+            }
             
             let hierarchyTrackingLayer = HierarchyTrackingLayer()
             self.hierarchyTrackingLayer = hierarchyTrackingLayer
@@ -227,12 +234,22 @@ public final class LottieComponent: Component {
         }
         
         deinit {
+            if let powerSavingObserver = self.powerSavingObserver {
+                NotificationCenter.default.removeObserver(powerSavingObserver)
+            }
+            self.displayLink?.invalidate()
             self.currentContentDisposable?.dispose()
         }
         
         private func visibilityUpdated() {
+            if isEnhancedPowerSavingEnabled {
+                let completion = self.playOnceCompletion
+                self.stop(at: .end)
+                completion?()
+                return
+            }
             if self.isEffectivelyVisible {
-                if self.scheduledPlayOnce {
+                if self.scheduledPlayOnce || (self.component?.loop == true && !self.isPlaying) {
                     self.playOnce()
                 } else {
                     self.displayLink?.isPaused = false
@@ -243,6 +260,11 @@ public final class LottieComponent: Component {
         }
         
         public func playOnce(delay: Double = 0.0, force: Bool = false, completion: (() -> Void)? = nil) {
+            if isEnhancedPowerSavingEnabled {
+                self.stop(at: .end)
+                completion?()
+                return
+            }
             self.playOnceCompletion = completion
             
             guard let _ = self.animationInstance, let animationFrameRange = self.animationFrameRange else {
@@ -269,6 +291,10 @@ public final class LottieComponent: Component {
                         return
                     }
                     self.isHidden = false
+                    if isEnhancedPowerSavingEnabled {
+                        self.stop(at: .end)
+                        return
+                    }
                     
                     self.currentFrameStartTime = CACurrentMediaTime()
                     if self.displayLink == nil {

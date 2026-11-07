@@ -184,6 +184,9 @@ public enum ContainedViewLayoutTransition {
     case animated(duration: Double, curve: ContainedViewLayoutTransitionCurve)
     
     public var isAnimated: Bool {
+        if isEnhancedPowerSavingEnabled {
+            return false
+        }
         if case .immediate = self {
             return false
         } else {

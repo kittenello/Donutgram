@@ -1,4 +1,5 @@
 - hide message read receipts, story views, online status, and typing indicators.
+- enhanced power saving follows the standard battery slider and stops animation playback, effects, autoplay and background preloading while preserving the configured settings.
 - automatically go offline and optionally get a ghost mode prompt when opening a story.
 - optionally mark a chat as read when sending a message.
 - send silently or use scheduled delivery.

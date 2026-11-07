@@ -1,0 +1,131 @@
+import Foundation
+import Darwin
+
+struct MediaAutoDownloadSettings {
+    var energyUsageSettings: EnergyUsageSettings
+}
+
+final class UIDevice {
+    static let current = UIDevice()
+    var batteryLevel: Float = 1.0
+}
+
+SETTINGS_IMPLEMENTATION
+
+struct UIEdgeInsets {
+    var top: CGFloat = 0
+    var left: CGFloat = 0
+    var bottom: CGFloat = 0
+    var right: CGFloat = 0
+}
+
+struct LayoutMetrics {}
+struct ChatPresentationInterfaceState {
+    var fontSize = 17
+    var sendAsPeers: [Int]? = nil
+    var editMessageState: Bool? = nil
+}
+
+func calclulateTextFieldMinHeight(_ state: ChatPresentationInterfaceState, metrics: LayoutMetrics) -> CGFloat {
+    return 35
+}
+
+func calculateTextFieldRealInsets(presentationInterfaceState: ChatPresentationInterfaceState, accessoryButtonsWidth: CGFloat, actionControlsWidth: CGFloat) -> UIEdgeInsets {
+    return UIEdgeInsets()
+}
+
+enum AccessoryItem {
+    case input
+    case other
+}
+
+struct Button {
+    var buttonWidth: CGFloat = 0
+}
+
+final class InputNode {
+    var inputContentIsEmpty = false
+    var measurements = 0
+    var reportedHeight: CGFloat = 160
+
+    func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat {
+        self.measurements += 1
+        return self.reportedHeight
+    }
+}
+
+final class Panel {
+    var richTextInputNode: InputNode? = InputNode()
+    let accessoryItemButtons: [(AccessoryItem, Button)] = []
+    let accessoryButtonInset: CGFloat = 0
+    let accessoryButtonSpacing: CGFloat = 0
+    let presentationInterfaceState: ChatPresentationInterfaceState? = ChatPresentationInterfaceState()
+    let isAgentLayout = false
+    let agentTextRightReserve: CGFloat = 0
+    let agentTextLeftOffset: CGFloat = 0
+    let textInputViewInternalInsets = UIEdgeInsets()
+
+    func textFieldInsets(metrics: LayoutMetrics, bottomInset: CGFloat) -> UIEdgeInsets {
+        return UIEdgeInsets()
+    }
+
+    func textFieldMaxHeight(_ maxHeight: CGFloat, metrics: LayoutMetrics, bottomInset: CGFloat) -> CGFloat {
+        return maxHeight
+    }
+
+    PANEL_IMPLEMENTATION
+
+    func measure() -> CGFloat {
+        return self.calculateTextFieldMetrics(width: 390, sendActionControlsWidth: 48, maxHeight: 400, metrics: LayoutMetrics(), bottomInset: 0, interfaceState: ChatPresentationInterfaceState()).textFieldHeight
+    }
+}
+
+var settings = EnergyUsageSettings.default
+settings.activationThreshold = 25
+let original = settings
+let bytes = try JSONEncoder().encode(settings)
+for level: Float in [1.0, 0.26, 0.25, 0.10, -1.0] {
+    UIDevice.current.batteryLevel = level
+    let active = automaticEnergyUsageShouldBeOnNow(settings: MediaAutoDownloadSettings(energyUsageSettings: settings))
+    let expected = level >= 0 && level <= 0.25
+    precondition(active == expected)
+    let effective = settings.resolved(powerSaving: active)
+    precondition(effective.enhancedPowerSaving == expected)
+    if expected {
+        precondition(!effective.autoplayVideo && !effective.autoplayGif)
+        precondition(!effective.loopStickers && !effective.loopEmoji)
+        precondition(!effective.fullTranslucency && !effective.extendBackgroundWork && !effective.autodownloadInBackground)
+    } else {
+        precondition(effective == original)
+    }
+}
+let unchangedBytes = try JSONEncoder().encode(settings)
+precondition(unchangedBytes == bytes)
+settings.activationThreshold = 4
+UIDevice.current.batteryLevel = 0.01
+precondition(!automaticEnergyUsageShouldBeOnNow(settings: MediaAutoDownloadSettings(energyUsageSettings: settings)))
+settings.activationThreshold = 96
+UIDevice.current.batteryLevel = 1
+precondition(automaticEnergyUsageShouldBeOnNow(settings: MediaAutoDownloadSettings(energyUsageSettings: settings)))
+settings = original
+settings.enhancedPowerSaving = true
+precondition(!settings.resolved(powerSaving: false).autoplayVideo)
+let encoded = try JSONEncoder().encode(settings)
+let decoded = try JSONDecoder().decode(EnergyUsageSettings.self, from: encoded)
+precondition(decoded == settings)
+var legacy = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+legacy.removeValue(forKey: "enhancedPowerSaving")
+let legacyBytes = try JSONSerialization.data(withJSONObject: legacy)
+let decodedLegacy = try JSONDecoder().decode(EnergyUsageSettings.self, from: legacyBytes)
+precondition(!decodedLegacy.enhancedPowerSaving)
+
+let panel = Panel()
+precondition(panel.measure() == 160)
+precondition(panel.richTextInputNode!.measurements == 1)
+panel.richTextInputNode!.inputContentIsEmpty = true
+precondition(panel.measure() == 35)
+precondition(panel.richTextInputNode!.measurements == 1)
+panel.richTextInputNode!.inputContentIsEmpty = false
+panel.richTextInputNode!.reportedHeight = 80
+precondition(panel.measure() == 80)
+print("Battery thresholds, persistence, settings restoration and empty rich composer height passed.")
