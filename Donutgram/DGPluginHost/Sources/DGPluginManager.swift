@@ -213,7 +213,7 @@ public final class DGPluginManager {
         coordinator.queue.async {
             guard self.coordinator.foreground != active else { return }
             self.coordinator.foreground = active
-            if !active { self.coordinator.stopAll() } else { self.reconcile() }
+            if !active { self.coordinator.stopAll() } else { for manager in Self.allManagers() { manager.reconcile() } }
             self.coordinator.publishAll()
         }
     }
@@ -224,7 +224,7 @@ public final class DGPluginManager {
             self.coordinator.powerSaving = enabled
             self.environment["lowPowerMode"] = .bool(enabled)
             self.coordinator.stopAll()
-            if !enabled { self.reconcile() }
+            if !enabled { for manager in Self.allManagers() { manager.reconcile() } }
             self.coordinator.publishAll()
         }
     }
@@ -365,7 +365,7 @@ public final class DGPluginManager {
             let previous = self.coordinator.state.globallyEnabled
             self.coordinator.state.globallyEnabled = enabled
             do { try self.coordinator.persist() } catch { self.coordinator.state.globallyEnabled = previous; return }
-            if enabled { self.reconcile() } else { self.coordinator.stopAll() }
+            if enabled { for manager in Self.allManagers() { manager.reconcile() } } else { self.coordinator.stopAll() }
             self.coordinator.publishAll()
         }
     }
