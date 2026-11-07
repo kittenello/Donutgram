@@ -1,40 +1,56 @@
 ---
-name: "\U0001F41E Bug Report"
-about: "Report a bug if something isn't working as expected in Telegram Messenger for iOS."
+name: "bug report"
+about: "report something that isn't working as expected in donutgram for ios."
 title: ""
 labels: bug
 assignees: ""
 ---
 
-<!-- Thanks for reporting issues of Telegram Messenger for iOS! 
-This is a bug report template. Please, be as descriptive as possible. Issues lacking detail, or for any other reason than to report a bug, may be closed without action.
+please report one bug per issue. you can write in english or russian.
 
-First, complete the checklist by replacing the empty checkboxes [] with checked ones [x]. -->
+### checklist
 
-### Checklist
-- [ ] I am reporting an issue in existing functionality that does not work as intended
-- [ ] I've searched for existing [GitHub issues](https://github.com/telegrammessenger/Telegram-iOS/issues)
+- [ ] i am reporting a bug in donutgram, not requesting a new feature
+- [ ] i have searched [existing issues](https://github.com/kittenello/Donutgram/issues) for duplicates
+- [ ] i have checked whether a newer donutgram version is available
 
-### Description
-Describe the issue that you are experiencing
+### description
 
-### Expected Behavior
-Tell us what should happen
+describe the problem and where it happens.
 
-### Actual Behavior
-Tell us what happens instead
+### steps to reproduce
 
-### Steps to Reproduce
-1. 
-2. 
-3. 
+1. open ...
+2. tap ...
+3. ...
 
-### Screenshots and Videos 
-Remove, if not applicable
+**how often does it happen?** always / sometimes / happened once
 
-### Environment
-**Device:** `iPhone/iPad X`
+### expected behavior
 
-**iOS version**: `13.X`
+describe what should happen.
 
-**App version:** `7.X`
+### actual behavior
+
+describe what happens instead, including any error message.
+
+### screenshots or screen recording
+
+attach screenshots or a recording if they help explain the problem. hide personal information.
+
+### environment
+
+**device model:**
+
+**ios / ipados version:**
+
+**donutgram version and build number:**
+
+**installation method:** release ipa / self-built / other (specify)
+
+### additional context
+
+- relevant donutgram settings, theme, or power saving options:
+- did this work in an earlier version? if so, which one?
+- does this also happen in the official telegram app? include its version if tested, or write "not tested".
+- for crashes, attach a crash report if available. remove personal information before uploading.
