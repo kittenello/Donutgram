@@ -935,7 +935,8 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
                 },
                 { [weak self] in
                     self?.sendWithTimer()
-                }
+                },
+                nil
             )
         }
 

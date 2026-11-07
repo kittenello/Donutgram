@@ -1887,7 +1887,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         } else {
             wideChannelPost = false
         }
-        var layoutConstants = layoutConstants
         layoutConstants.wideChannelPost = wideChannelPost
         
         /*let isInlinePage = false
@@ -3216,7 +3215,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 
                 let verificationIconWidth = ChatMessageAuthorVerificationIcon.leadingWidth(iconSize: authorVerificationIcon != nil ? ChatMessageAuthorVerificationIcon.size : nil)
                 
-                var nameMaximumWidth = maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right - verificationIconWidth - credibilityIconWidth - rankBadgeSizeAndApply.0.size.width - closeButtonWidth
+                var headerAvailableWidth: CGFloat = maximumNodeWidth
+                headerAvailableWidth -= layoutConstants.text.bubbleInsets.left + layoutConstants.text.bubbleInsets.right
+                headerAvailableWidth -= verificationIconWidth + credibilityIconWidth
+                headerAvailableWidth -= rankBadgeSizeAndApply.0.size.width + closeButtonWidth
+                var nameMaximumWidth = headerAvailableWidth
                 var bubblelessHeaderRunWidth: CGFloat = 0.0
                 if bubbleStyle.isBubbleless {
                     // Without a bubble the time leaves the corner and follows the name and its rank badge, on the name's
@@ -3257,7 +3260,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 })
 
                 if let viaSuffix {
-                    let (viaLayout, _) = viaMeasureLayout(TextNodeLayoutArguments(attributedString: viaSuffix, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: max(0, maximumNodeWidth - layoutConstants.text.bubbleInsets.left - layoutConstants.text.bubbleInsets.right - verificationIconWidth - credibilityIconWidth - rankBadgeSizeAndApply.0.size.width - closeButtonWidth), height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+                    let (viaLayout, _) = viaMeasureLayout(TextNodeLayoutArguments(attributedString: viaSuffix, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: max(0, headerAvailableWidth), height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
                     viaWidth = viaLayout.size.width + 3.0
                 }
                 
