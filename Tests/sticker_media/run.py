@@ -1,4 +1,5 @@
 import pathlib
+import platform
 import argparse
 import shutil
 import subprocess
@@ -80,7 +81,8 @@ with tempfile.TemporaryDirectory(prefix="donutgram-sticker-media-") as temporary
     writer = block(conversion, "private func donutgramStickerVideo(")
     video_main.write_text(video_fixture.replace("// PRODUCTION WRITER", writer), encoding="utf-8")
     video_executable = temporary / "video" / "checks"
-    subprocess.run([swift, "-warnings-as-errors", str(video_main), "-o", str(video_executable)], check=True)
+    video_target = f"{platform.machine()}-apple-macosx15.0"
+    subprocess.run([swift, "-target", video_target, "-warnings-as-errors", str(video_main), "-o", str(video_executable)], check=True)
     subprocess.run([str(video_executable)], check=True)
     # A Swift file the change deletes has nothing to parse.
     changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "origin/master...HEAD", "--", "*.swift"], cwd=root, text=True)
