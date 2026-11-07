@@ -26,7 +26,14 @@ int main(void) {
         TestDelegate *delegate = [[TestDelegate alloc] init];
         source.delegate = delegate;
         CABasicAnimation *result = (CABasicAnimation *)animationForEnhancedPowerSaving(source);
-        NSCAssert(result.duration == 0 && result.beginTime == 0 && result.timeOffset == 0, @"transition did not settle immediately");
+        CALayer *layer = [CALayer layer];
+        [CATransaction begin];
+        [CATransaction setAnimationDuration:3];
+        [layer addAnimation:result forKey:@"opacity"];
+        CAAnimation *attached = [layer animationForKey:@"opacity"];
+        NSCAssert(attached.duration > 0 && attached.duration < 0.001, @"transition inherited the transaction duration");
+        NSCAssert(result.beginTime == 0 && result.timeOffset == 0, @"transition retained its delay");
+        [CATransaction commit];
         NSCAssert(result.repeatCount == 0 && result.repeatDuration == 0 && !result.autoreverses && result.speed == 1, @"repeating animation was not stopped");
         NSCAssert(result.delegate == delegate && [result.toValue isEqual:@1], @"completion or resting value was lost");
         NSCAssert(!result.removedOnCompletion && [result.fillMode isEqual:kCAFillModeForwards], @"persistent final state was lost");
@@ -35,7 +42,13 @@ int main(void) {
         group.animations = @[source];
         group.duration = 5;
         CAAnimationGroup *resolved = (CAAnimationGroup *)animationForEnhancedPowerSaving(group);
-        NSCAssert(resolved.duration == 0 && resolved.animations.firstObject.duration == 0, @"group still animates");
+        [CATransaction begin];
+        [CATransaction setAnimationDuration:3];
+        [layer addAnimation:resolved forKey:@"group"];
+        CAAnimationGroup *attachedGroup = (CAAnimationGroup *)[layer animationForKey:@"group"];
+        NSCAssert(attachedGroup.duration > 0 && attachedGroup.duration < 0.001, @"group inherited the transaction duration");
+        NSCAssert(attachedGroup.animations.firstObject.duration > 0 && attachedGroup.animations.firstObject.duration < 0.001, @"group child still animates");
+        [CATransaction commit];
         NSLog(@"Animation timing, groups, completion delegates and final values passed.");
     }
     return 0;

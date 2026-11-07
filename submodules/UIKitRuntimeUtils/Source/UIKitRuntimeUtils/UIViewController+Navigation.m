@@ -20,7 +20,7 @@ void setEnhancedPowerSavingEnabled(bool enabled) {
 
 CAAnimation *animationForEnhancedPowerSaving(CAAnimation *animation) {
     CAAnimation *result = [animation copy];
-    result.duration = 0.0;
+    result.duration = 0.000001;
     result.beginTime = 0.0;
     result.timeOffset = 0.0;
     result.speed = 1.0;

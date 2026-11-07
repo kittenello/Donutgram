@@ -1,0 +1,175 @@
+import Dispatch
+
+var isEnhancedPowerSavingEnabled = true
+
+final class TestAnimationView {
+    var isAnimationPlaying = false
+
+    func play(completion: (Bool) -> Void) {
+        completion(true)
+    }
+}
+
+final class TestAnimationNode {
+    var didPlay = false
+    var completion: (() -> Void)?
+    let testView = TestAnimationView()
+    var endSeeks = 0
+
+    func animationView() -> TestAnimationView? {
+        return self.testView
+    }
+
+    func seekToEnd() {
+        self.endSeeks += 1
+    }
+
+    ANIMATION_PLAY_IMPLEMENTATION
+}
+
+let archive = TestAnimationNode()
+var archiveHidden = false
+var archiveCompletions = 0
+archive.completion = {
+    archiveHidden = false
+    archiveCompletions += 1
+}
+archive.play()
+archiveHidden = true
+archive.play()
+precondition(archiveHidden && archiveCompletions == 0 && archive.endSeeks == 1)
+
+let camera = TestAnimationNode()
+var cameraRemoved = false
+camera.play()
+camera.completion = { cameraRemoved = true }
+precondition(!cameraRemoved)
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+precondition(!archiveHidden && archiveCompletions == 1 && cameraRemoved)
+
+enum TestPlaybackPosition {
+    case start
+    case end
+}
+
+enum TestPlaybackMode {
+    case loop
+    case once
+    case count(Int)
+    case still(TestPlaybackPosition)
+}
+
+final class TestTimer {
+    func invalidate() {}
+}
+
+final class TestTimerHolder {
+    func swap(_ value: TestTimer?) -> TestTimer? {
+        return nil
+    }
+}
+
+final class TestStickerNode {
+    var resumePlaybackAfterPowerSaving = false
+    var isPlaying = false
+    var autoplay = true
+    var visibility = true
+    var isDisplaying = true
+    var overrideVisibility = false
+    var canDisplayFirstFrame = false
+    var automaticallyLoadLastFrame = false
+    var automaticallyLoadFirstFrame = false
+    var playbackMode: TestPlaybackMode = .loop
+    var currentLoopCount = 0
+    var isSetUpForPlayback = false
+    var reportedStarted = false
+    var playToCompletionOnStop = false
+    let timer = TestTimerHolder()
+    var starts = 0
+    var stillFrames = 0
+    var changes: [Bool] = []
+
+    func isPlayingChanged(_ value: Bool) {
+        self.changes.append(value)
+    }
+
+    STICKER_UPDATE_IMPLEMENTATION
+
+    STICKER_PLAY_IMPLEMENTATION
+        if firstFrame {
+            self.stillFrames += 1
+        } else {
+            self.starts += 1
+        }
+    }
+
+    STICKER_PAUSE_IMPLEMENTATION
+
+    STICKER_STOP_IMPLEMENTATION
+
+    STICKER_SEEK_IMPLEMENTATION
+    }
+}
+
+let autoplaySticker = TestStickerNode()
+autoplaySticker.isPlaying = true
+autoplaySticker.updateIsPlaying()
+autoplaySticker.updateIsPlaying()
+precondition(!autoplaySticker.isPlaying && autoplaySticker.starts == 0)
+isEnhancedPowerSavingEnabled = false
+autoplaySticker.updateIsPlaying()
+autoplaySticker.updateIsPlaying()
+precondition(autoplaySticker.isPlaying && autoplaySticker.starts == 1)
+precondition(autoplaySticker.changes.last == true)
+
+isEnhancedPowerSavingEnabled = true
+let newSticker = TestStickerNode()
+newSticker.play()
+precondition(!newSticker.isPlaying && newSticker.starts == 0 && newSticker.stillFrames == 1)
+isEnhancedPowerSavingEnabled = false
+newSticker.updateIsPlaying()
+precondition(newSticker.isPlaying && newSticker.starts == 1)
+
+isEnhancedPowerSavingEnabled = true
+let offscreenSticker = TestStickerNode()
+offscreenSticker.isPlaying = true
+offscreenSticker.updateIsPlaying()
+offscreenSticker.isDisplaying = false
+offscreenSticker.updateIsPlaying()
+isEnhancedPowerSavingEnabled = false
+offscreenSticker.updateIsPlaying()
+precondition(!offscreenSticker.isPlaying && offscreenSticker.starts == 0)
+offscreenSticker.isDisplaying = true
+offscreenSticker.updateIsPlaying()
+precondition(offscreenSticker.isPlaying && offscreenSticker.starts == 1)
+
+isEnhancedPowerSavingEnabled = true
+let pausedSticker = TestStickerNode()
+pausedSticker.play()
+pausedSticker.pause()
+let stoppedSticker = TestStickerNode()
+stoppedSticker.play()
+stoppedSticker.stop()
+let stillSticker = TestStickerNode()
+stillSticker.play()
+stillSticker.playbackMode = .still(.end)
+stillSticker.seekTo(.end)
+isEnhancedPowerSavingEnabled = false
+for sticker in [pausedSticker, stoppedSticker, stillSticker] {
+    sticker.updateIsPlaying()
+    precondition(!sticker.isPlaying && sticker.starts == 0)
+}
+
+isEnhancedPowerSavingEnabled = true
+let visibleSticker = TestStickerNode()
+visibleSticker.autoplay = false
+visibleSticker.isPlaying = true
+visibleSticker.updateIsPlaying()
+isEnhancedPowerSavingEnabled = false
+visibleSticker.visibility = false
+visibleSticker.updateIsPlaying()
+precondition(!visibleSticker.isPlaying && visibleSticker.starts == 0)
+visibleSticker.visibility = true
+visibleSticker.updateIsPlaying()
+precondition(visibleSticker.isPlaying && visibleSticker.starts == 1)
+print("Deferred completions and sticker playback restoration passed.")

@@ -30,6 +30,22 @@ def prepare():
     fixture = Path(__file__).with_name("fixtures.swift.in").read_text(encoding="utf-8")
     fixture = fixture.replace("SETTINGS_IMPLEMENTATION", (settings + "\n" + threshold).replace("public ", ""))
     fixture = fixture.replace("PANEL_IMPLEMENTATION", metrics)
+    animation_node = read("submodules/AnimationUI/Sources/AnimationNode.swift")
+    sticker_node = read("submodules/AnimatedStickerNode/Sources/AnimatedStickerNode.swift")
+    playback = Path(__file__).with_name("playback.swift.in").read_text(encoding="utf-8")
+    replacements = {
+        "ANIMATION_PLAY_IMPLEMENTATION": block(animation_node, "public func play()"),
+        "STICKER_UPDATE_IMPLEMENTATION": block(sticker_node, "private func updateIsPlaying()"),
+        "STICKER_PLAY_IMPLEMENTATION": block(sticker_node, "public func play(firstFrame: Bool = false,").split("        if self.isSetUpForPlayback {")[0],
+        "STICKER_PAUSE_IMPLEMENTATION": block(sticker_node, "public func pause()"),
+        "STICKER_STOP_IMPLEMENTATION": block(sticker_node, "public func stop()"),
+        "STICKER_SEEK_IMPLEMENTATION": block(sticker_node, "public func seekTo(_ position:").split("        let directData = self.directData")[0],
+    }
+    for marker, implementation in replacements.items():
+        assert marker in playback
+        playback = playback.replace(marker, implementation.replace("public ", "").replace("private ", ""))
+        assert marker not in playback
+    fixture += "\n" + playback
     native = read("submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m")
     animation = block(native, "CAAnimation *animationForEnhancedPowerSaving(")
     native_fixture = Path(__file__).with_name("animations.m.in").read_text(encoding="utf-8").replace("ANIMATION_IMPLEMENTATION", animation)

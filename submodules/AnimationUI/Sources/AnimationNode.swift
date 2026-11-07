@@ -182,7 +182,9 @@ public final class AnimationNode: ASDisplayNode {
             if !self.didPlay {
                 self.didPlay = true
                 self.seekToEnd()
-                self.completion?()
+                DispatchQueue.main.async { [weak self] in
+                    self?.completion?()
+                }
             }
             return
         }
