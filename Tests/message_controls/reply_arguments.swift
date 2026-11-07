@@ -33,7 +33,7 @@ for style in ChatMessageBubbleStyle.allCases {
             let result = sanitized(original)
             precondition(result.presentationData == 11 && result.strings == 12 && result.context == 13)
             precondition(result.parentMessage == 19 && result.associatedData == 22)
-            precondition(result.constrainedSize == original.constrainedSize)
+            precondition(result.constrainedSize.width == original.constrainedSize.width && result.constrainedSize.height == original.constrainedSize.height)
             precondition(result.animationCache == 20 && result.animationRenderer == 21)
             precondition(result.bubbleStyle == style && result.donutgramHidden == hidden)
             if hidden {
