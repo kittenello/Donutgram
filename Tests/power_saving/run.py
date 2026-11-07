@@ -103,7 +103,7 @@ def main():
         source = directory / "animations.m"
         source.write_text(native_fixture, encoding="utf-8")
         executable = directory / "animation-checks"
-        subprocess.run(["xcrun", "clang", "-fobjc-arc", "-Wall", "-Werror", "-framework", "Foundation", "-framework", "QuartzCore", str(source), "-o", str(executable)], check=True)
+        subprocess.run(["xcrun", "clang", "-fobjc-arc", "-Wall", "-Werror", "-framework", "Foundation", "-framework", "AppKit", "-framework", "QuartzCore", str(source), "-o", str(executable)], check=True)
         subprocess.run([str(executable)], check=True)
 
 
