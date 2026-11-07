@@ -22,6 +22,7 @@ struct StarGift: Codable {
     var _fromPeerId: Int?
     var text: String?
     var number: Int?
+    var pinnedToTop = false
 }
 
 struct DisappearedGift: Codable {
@@ -45,12 +46,12 @@ func expect(_ condition: Bool, _ message: String) {
 
 func gift(_ id: Int, reference: Bool = true) -> StarGift {
     // Ordinary bears share their catalog ID; date/sender distinguish instances.
-    let kind: Gift = id % 2 == 0 ? .generic(GenericGift(id: 1)) : .unique(UniqueGift(id: id, giftId: 1000 + id, slug: "gift-\(id)", attributes: []))
-    return StarGift(gift: kind, reference: reference ? id : nil, date: Int32(id), _fromPeerId: id, text: nil, number: nil)
+    let kind: Gift = .generic(GenericGift(id: 1))
+    return StarGift(gift: kind, reference: reference ? id : nil, date: 10000 - Int32(id), _fromPeerId: id, text: nil, number: nil)
 }
 
 func ids(_ history: [DisappearedGift]) -> [Int] {
-    return history.map { Int($0.gift.date) }
+    return history.map { $0.gift._fromPeerId! }
 }
 
 func snapshot(_ gifts: [StarGift]) -> [DisappearedGift] {
@@ -85,7 +86,7 @@ for referenceMode in 0..<3 {
         // The UI receives only missing entries, unlike the full persisted history.
         expect(ids(History.giftsWithDisappeared(current: current, history: history.filter { $0.isMissing })) == ids(history), "UI and cache order disagree")
         for removed in missing.reversed() {
-            let expected = ids(history).filter { $0 != Int(removed.date) }
+            let expected = ids(history).filter { $0 != removed._fromPeerId! }
             history = History.removingDisappearedGift(removed, current: current, history: history)!
             expect(ids(history) == expected, "deleting a gift reordered its survivors")
             checkPositions(history)
@@ -94,7 +95,9 @@ for referenceMode in 0..<3 {
             expect(ids(History.giftsWithDisappeared(current: current, history: history.filter { $0.isMissing })) == expected, "reopened UI changed the order")
         }
         expect(History.removingDisappearedGift(gift(99), current: current, history: history) == nil, "unknown deletion modified history")
-        let newCurrent = [gift(99)] + current
+        var newest = gift(99)
+        newest.date = 20000
+        let newCurrent = [newest] + current
         let withNewGift = History.giftsWithDisappeared(current: newCurrent, history: snapshot(original).enumerated().map {
             var entry = $0.element
             entry.isMissing = (mask & (1 << $0.offset)) != 0
@@ -122,7 +125,7 @@ for useNext in [false, true] {
     let missing = [2, 4].enumerated().map { index, id in
         DisappearedGift(gift: gift(id), position: Int32(index + 1), previousReference: useNext ? nil : 1, nextReference: useNext ? 1 : nil, lastSeen: 123, isMissing: true)
     }
-    expect(ids(History.giftsWithDisappeared(current: [anchor], history: missing)) == (useNext ? [2, 4, 1] : [1, 2, 4]), "shared anchor reversed missing bears")
+    expect(ids(History.giftsWithDisappeared(current: [anchor], history: missing)) == [1, 2, 4], "shared anchor reversed missing bears")
 }
 
 // Reappearance consumes a cached missing gift exactly once, including no-reference gifts.
@@ -154,7 +157,7 @@ func references(_ history: [DisappearedGift]) -> [StarGiftReference?] {
 // A bear upgraded to a collectible gets a new reference and continues the
 // bear's entry, whether or not the collectible keeps its original details.
 for (upgradedBear, label) in [
-    (collectible(500, reference: 70, date: 40, sender: 50, original: (sender: 2, date: 2)), "with details"),
+    (collectible(500, reference: 70, date: 40, sender: 50, original: (sender: 2, date: 9998)), "with details"),
     (collectible(500, reference: 70, date: 40, sender: 2, original: nil), "without details"),
 ] {
     let bear = gift(2)
@@ -171,21 +174,22 @@ for other in [
     collectible(502, giftId: 7, reference: 72, date: 40, sender: 2, original: nil),
 ] {
     let updated = History.updatedGiftHistory(current: [gift(1), other, gift(3)], history: snapshot([gift(1), gift(2), gift(3)]), previousCheck: 150, observedAt: 200, maxDisappearedCount: 10)
-    expect(updated.filter { $0.isMissing }.map { Int($0.gift.date) } == [2], "an unrelated collectible hid a bear")
+    expect(updated.filter { $0.isMissing }.map { $0.gift._fromPeerId! } == [2], "an unrelated collectible hid a bear")
 }
 
 // A collectible sold and bought back under a new reference is the same gift,
 // and an older missing copy of it is not shown next to it.
-let sold = History.updatedGiftHistory(current: [gift(1)], history: snapshot([gift(1), gift(3)]), previousCheck: 150, observedAt: 200, maxDisappearedCount: 10)
-expect(sold.filter { $0.isMissing }.map { $0.gift.reference } == [3], "a sold collectible is not missing")
-var boughtBack = gift(3)
+let originalCollectible = collectible(3, reference: 3, date: 9997, sender: 3, original: nil)
+let sold = History.updatedGiftHistory(current: [gift(1)], history: snapshot([gift(1), originalCollectible]), previousCheck: 150, observedAt: 200, maxDisappearedCount: 10)
+expect(references(sold) == [1], "a sold collectible was retained")
+var boughtBack = originalCollectible
 boughtBack.reference = 33
 boughtBack.date = 300
 let returnedHistory = History.updatedGiftHistory(current: [gift(1), boughtBack], history: sold, previousCheck: 200, observedAt: 300, maxDisappearedCount: 10)
 expect(!returnedHistory.contains(where: { $0.isMissing }) && references(returnedHistory) == [1, 33], "a collectible bought back is shown twice")
-let staleCopy = DisappearedGift(gift: gift(3), position: 0, previousReference: nil, nextReference: 33, lastSeen: 123, isMissing: true)
-expect(ids(History.giftsWithDisappeared(current: [boughtBack], history: [staleCopy])) == [300], "a stale copy of a live collectible is shown")
-expect(History.removingDisappearedGift(gift(3), current: [boughtBack], history: [staleCopy]) == nil, "a live collectible can be removed")
+let staleCopy = DisappearedGift(gift: originalCollectible, position: 0, previousReference: nil, nextReference: 33, lastSeen: 123, isMissing: true)
+expect(ids(History.giftsWithDisappeared(current: [boughtBack], history: [staleCopy])) == [3], "a stale copy of a live collectible is shown")
+expect(History.removingDisappearedGift(originalCollectible, current: [boughtBack], history: [staleCopy]) == nil, "a live collectible can be removed")
 
 // Until the list is loaded to its end, a missing gift is placed only next to a
 // loaded neighbour, never parked after the loaded part.
@@ -200,7 +204,7 @@ for referenceMode in 0..<2 {
         expect(ids(History.giftsWithDisappeared(current: current, history: missingOnly, isComplete: false)) == fromMissing, "a missing gift was parked after a partly loaded list")
         expect(ids(History.giftsWithDisappeared(current: current, history: stored, isComplete: false)) == fromStored, "a missing gift was placed by an unloaded neighbour")
     }
-    let live = original.filter { $0.date != 4 }
+    let live = original.filter { $0._fromPeerId != 4 }
     expect(ids(History.giftsWithDisappeared(current: live, history: missingOnly, isComplete: true)) == Array(1...6), "a complete list lost its missing gift")
 }
 
@@ -230,12 +234,58 @@ expect(ids(afterRemoval) == [1, 5, 7, 9, 11], "removal reordered the saved histo
 expect(ids(History.giftsWithDisappeared(current: [gift(1), gift(5), gift(7), gift(9)], history: afterRemoval)) == [1, 5, 7, 9, 11], "removal moved another missing gift")
 
 // A gift that arrives twice across a page boundary is counted once.
-expect(History.distinctGiftsForHistory([gift(1), gift(2), gift(2), gift(3)]).map { Int($0.date) } == [1, 2, 3], "a repeated gift was kept")
-expect(History.distinctGiftsForHistory([gift(2, reference: false), gift(4, reference: false)]).map { Int($0.date) } == [2, 4], "distinct bears were merged")
+expect(History.distinctGiftsForHistory([gift(1), gift(2), gift(2), gift(3)]).map { $0._fromPeerId! } == [1, 2, 3], "a repeated gift was kept")
+expect(History.distinctGiftsForHistory([gift(2, reference: false), gift(4, reference: false)]).map { $0._fromPeerId! } == [2, 4], "distinct bears were merged")
 
 // Matching goes through the keys, so a large profile is not compared pairwise.
 let large = (1...4000).map { gift($0) }
 let largeMatches = History.matchGiftHistory(current: large.reversed(), history: snapshot(large))
 expect(largeMatches == Array((0..<4000).reversed()), "large profile matched wrongly")
+
+var pinned = collectible(8, reference: 8, date: 9992, sender: 8, original: nil)
+pinned.pinnedToTop = true
+var secondPin = collectible(9, reference: 9, date: 9991, sender: 9, original: nil)
+secondPin.pinnedToTop = true
+let misplaced = [
+    DisappearedGift(gift: gift(6), position: 0, previousReference: nil, nextReference: 3, lastSeen: 123, isMissing: true),
+    DisappearedGift(gift: gift(2), position: 8, previousReference: 7, nextReference: 8, lastSeen: 123, isMissing: true)
+]
+let reorderedLive = [gift(3), gift(7), pinned, secondPin]
+let correctlyOrdered = History.giftsWithDisappeared(current: reorderedLive, history: misplaced)
+expect(ids(correctlyOrdered) == [8, 9, 2, 3, 6, 7], "pins or dated missing gifts are misplaced")
+expect(ids(History.giftsWithDisappeared(current: reorderedLive, history: [])) == [8, 9, 3, 7], "pins depend on having missing gifts")
+expect(ids(History.giftsWithDisappeared(current: [pinned], history: misplaced, isComplete: false)) == [8], "a pinned anchor exposed gifts before their page loaded")
+expect(ids(History.giftsWithDisappeared(current: [pinned], history: misplaced)) == [8, 2, 6], "missing gifts entered the pinned section")
+let reconciled = History.updatedGiftHistory(current: reorderedLive, history: misplaced, previousCheck: 150, observedAt: 200, maxDisappearedCount: 10)
+expect(ids(reconciled) == [8, 9, 2, 3, 6, 7], "reconciliation changed chronological order")
+expect(ids(History.giftsWithDisappeared(current: reorderedLive, history: roundTrip(reconciled).filter { $0.isMissing })) == ids(reconciled), "reopening moved the pins or missing gifts")
+checkPositions(reconciled)
+let withoutBear = History.removingDisappearedGift(gift(2), current: reorderedLive, history: reconciled)!
+expect(ids(History.giftsWithDisappeared(current: reorderedLive, history: withoutBear)) == [8, 9, 3, 6, 7], "removal moved pinned gifts")
+
+var sameDate = [gift(2), gift(4), gift(6)]
+for index in sameDate.indices { sameDate[index].date = 100 }
+var tiedHistory = snapshot(sameDate)
+tiedHistory[0].isMissing = true
+tiedHistory[1].isMissing = true
+expect(ids(History.giftsWithDisappeared(current: [sameDate[2], pinned], history: tiedHistory)) == [8, 2, 4, 6], "equal timestamps reversed missing gifts")
+
+let legacyCollectible = DisappearedGift(gift: originalCollectible, position: 0, previousReference: nil, nextReference: 2, lastSeen: 123, isMissing: true)
+let legacyHistory = [legacyCollectible] + misplaced
+expect(references(History.trackedGiftHistory(roundTrip(legacyHistory))) == [6, 2], "loading retained an old missing collectible")
+expect(ids(History.giftsWithDisappeared(current: reorderedLive, history: legacyHistory)) == [8, 9, 2, 3, 6, 7], "legacy collectible changed display order")
+let cleaned = History.updatedGiftHistory(current: reorderedLive, history: legacyHistory, previousCheck: 150, observedAt: 200, maxDisappearedCount: 10)
+expect(ids(cleaned) == [8, 9, 2, 3, 6, 7], "reconciliation retained an old missing collectible")
+expect(cleaned.filter { $0.isMissing }.count == 2, "a missing collectible consumed the history limit")
+checkPositions(cleaned)
+
+var mixedPin = collectible(20, reference: 20, date: 9980, sender: 20, original: nil)
+mixedPin.pinnedToTop = true
+let mixedLive = [3, 5, 7].map { collectible($0, reference: $0, date: 10000 - Int32($0), sender: $0, original: nil) }
+let mixedMissing = [4, 6, 8].enumerated().map { index, id in
+    DisappearedGift(gift: gift(id), position: Int32(index), previousReference: nil, nextReference: mixedPin.reference, lastSeen: 123, isMissing: true)
+}
+expect(ids(History.giftsWithDisappeared(current: mixedLive + [mixedPin], history: mixedMissing)) == [20, 3, 4, 5, 6, 7, 8], "mixed collectibles and bears were not ordered after the pin")
+expect(History.updatedGiftHistory(current: [], history: snapshot(mixedLive + [mixedPin]), previousCheck: 150, observedAt: 200, maxDisappearedCount: 10).isEmpty, "an all-collectible profile retained missing gifts")
 
 print("Profile gift history: \(checks) checks passed")

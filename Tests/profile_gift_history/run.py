@@ -14,6 +14,7 @@ HELPERS = (
     "giftWasUpgraded",
     "matchGiftHistory",
     "sortedGiftHistory",
+    "trackedGiftHistory",
     "distinctGiftsForHistory",
     "giftsWithDisappeared",
     "reindexGiftHistory",

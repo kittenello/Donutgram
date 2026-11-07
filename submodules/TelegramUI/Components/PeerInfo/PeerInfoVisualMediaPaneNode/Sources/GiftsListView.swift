@@ -202,7 +202,7 @@ final class GiftsListView: UIView {
             } else {
                 self.starsProducts = state.filteredGifts
                 self.pinnedReferences = Array(state.gifts.filter { $0.pinnedToTop }.compactMap { $0.reference })
-                if self.showingDisappearedGifts && !self.canSelect && self.profileGifts.collectionId == nil && self.peerId != self.context.account.peerId && state.filter == .All && state.sorting == .date && !state.disappearedGifts.isEmpty {
+                if self.showingDisappearedGifts && !self.canSelect && self.profileGifts.collectionId == nil && self.peerId != self.context.account.peerId && state.filter == .All && state.sorting == .date {
                     self.starsProducts = self.giftsWithDisappeared(current: state.filteredGifts, history: state.disappearedGifts, isComplete: state.hasAllGifts)
                 }
             }
