@@ -347,7 +347,7 @@ cc_test(
 
 cc_test(
     name = "content_negotiation_test",
-    srcs = ["tgcalls/tgcalls/v2/ContentNegotiationTest.cpp"],
+    srcs = ["tgcalls/Tests/ContentNegotiationTest.cpp"],
     copts = [
         "-I{}/tgcalls/tgcalls".format("submodules/TgVoipWebrtc"),
         "-Ithird-party/webrtc/webrtc",
@@ -371,7 +371,7 @@ cc_test(
 
 cc_test(
     name = "signaling_sctp_options_test",
-    srcs = ["tgcalls/tgcalls/v2/SignalingSctpOptionsTest.cpp"],
+    srcs = ["tgcalls/Tests/SignalingSctpOptionsTest.cpp"],
     copts = [
         "-I{}/tgcalls/tgcalls".format("submodules/TgVoipWebrtc"),
         "-Ithird-party/webrtc/webrtc",

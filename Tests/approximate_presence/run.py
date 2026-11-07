@@ -56,8 +56,8 @@ def main():
         for path in subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "origin/master", "--", "*.swift"], cwd=ROOT, text=True).splitlines():
             if not path.startswith(("Donutgram/", "submodules/")):
                 continue
-            subprocess.run([compiler, "-frontend", "-parse", str(ROOT / path)], check=True)
-        subprocess.run([compiler, "-frontend", "-parse", str(CORE / "Donutgram/DonutgramApproximatePresence.swift")], check=True)
+            subprocess.run([compiler, "-frontend", "-parse", "-enable-bare-slash-regex", str(ROOT / path)], check=True)
+        subprocess.run([compiler, "-frontend", "-parse", "-enable-bare-slash-regex", str(CORE / "Donutgram/DonutgramApproximatePresence.swift")], check=True)
 
 
 if __name__ == "__main__":

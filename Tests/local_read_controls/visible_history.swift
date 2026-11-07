@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 struct MessageId: Equatable { let id: Int32; let namespace: Int32 }
 struct MessageIndex: Comparable {

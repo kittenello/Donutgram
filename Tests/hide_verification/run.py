@@ -113,7 +113,7 @@ def main():
         changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "HEAD^1", "HEAD"], cwd=ROOT, text=True).splitlines()
         for file in changed:
             if file.endswith(".swift"):
-                subprocess.run([swift, "-frontend", "-parse", str(ROOT / file)], check=True)
+                subprocess.run([swift, "-frontend", "-parse", "-enable-bare-slash-regex", str(ROOT / file)], check=True)
         print("Changed Swift source parsing passed.")
 
 

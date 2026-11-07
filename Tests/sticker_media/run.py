@@ -85,4 +85,4 @@ with tempfile.TemporaryDirectory(prefix="donutgram-sticker-media-") as temporary
     # A Swift file the change deletes has nothing to parse.
     changed = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=d", "origin/master...HEAD", "--", "*.swift"], cwd=root, text=True)
     for path in changed.splitlines():
-        subprocess.run([swift, "-frontend", "-parse", str(root / path)], check=True)
+        subprocess.run([swift, "-frontend", "-parse", "-enable-bare-slash-regex", str(root / path)], check=True)
