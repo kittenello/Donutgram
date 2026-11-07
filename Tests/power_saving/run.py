@@ -47,6 +47,18 @@ def prepare():
         playback = playback.replace(marker, implementation.replace("public ", "").replace("private ", ""))
         assert marker not in playback
     fixture += "\n" + playback
+    lottie = read("submodules/TelegramUI/Components/LottieComponent/Sources/LottieComponent.swift")
+    lottie_fixture = Path(__file__).with_name("lottie.swift.in").read_text(encoding="utf-8")
+    lottie_replacements = {
+        "LOTTIE_PLAY_IMPLEMENTATION": block(lottie, "public func playOnce(delay:"),
+        "LOTTIE_STOP_IMPLEMENTATION": block(lottie, "public func stop(at position:"),
+        "LOTTIE_VISIBILITY_IMPLEMENTATION": block(lottie, "private func visibilityUpdated()"),
+    }
+    for marker, implementation in lottie_replacements.items():
+        assert marker in lottie_fixture
+        lottie_fixture = lottie_fixture.replace(marker, implementation.replace("public ", "").replace("private ", ""))
+        assert marker not in lottie_fixture
+    fixture += "\n" + lottie_fixture
     native = read("submodules/UIKitRuntimeUtils/Source/UIKitRuntimeUtils/UIViewController+Navigation.m")
     animation = block(native, "CAAnimation *animationForEnhancedPowerSaving(")
     native_fixture = Path(__file__).with_name("animations.m.in").read_text(encoding="utf-8").replace("ANIMATION_IMPLEMENTATION", animation)

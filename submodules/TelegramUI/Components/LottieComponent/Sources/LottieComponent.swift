@@ -163,6 +163,7 @@ public final class LottieComponent: Component {
         
         private var displayLink: SharedDisplayLinkDriver.Link?
         private var powerSavingObserver: NSObjectProtocol?
+        private var playOnceId = 0
         
         private var currentTemplateFrameImage: UIImage?
         
@@ -260,6 +261,8 @@ public final class LottieComponent: Component {
         }
         
         public func playOnce(delay: Double = 0.0, force: Bool = false, completion: (() -> Void)? = nil) {
+            self.playOnceId += 1
+            let playOnceId = self.playOnceId
             if isEnhancedPowerSavingEnabled {
                 self.stop(at: .end)
                 completion?()
@@ -278,6 +281,7 @@ public final class LottieComponent: Component {
             
             self.scheduledPlayOnce = false
             self.isPlaying = true
+            self.isHidden = false
             
             if self.currentFrame != animationFrameRange.lowerBound {
                 self.currentFrame = animationFrameRange.lowerBound
@@ -287,7 +291,7 @@ public final class LottieComponent: Component {
             if delay != 0.0 {
                 self.isHidden = true
                 DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + delay, execute: { [weak self] in
-                    guard let self else {
+                    guard let self, self.playOnceId == playOnceId, self.isPlaying else {
                         return
                     }
                     self.isHidden = false
@@ -320,6 +324,8 @@ public final class LottieComponent: Component {
         }
 
         public func stop(at position: StartingPosition? = nil) {
+            self.playOnceId += 1
+            self.isHidden = false
             self.scheduledPlayOnce = false
             self.playOnceCompletion = nil
             self.displayLink?.invalidate()

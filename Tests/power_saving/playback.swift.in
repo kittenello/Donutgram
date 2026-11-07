@@ -77,6 +77,7 @@ final class TestStickerNode {
     let timer = TestTimerHolder()
     var starts = 0
     var stillFrames = 0
+    var timerRepeats = false
     var changes: [Bool] = []
 
     func isPlayingChanged(_ value: Bool) {
@@ -86,6 +87,7 @@ final class TestStickerNode {
     STICKER_UPDATE_IMPLEMENTATION
 
     STICKER_PLAY_IMPLEMENTATION
+        self.timerRepeats = !firstFrame
         if firstFrame {
             self.stillFrames += 1
         } else {
@@ -123,6 +125,7 @@ precondition(newSticker.isPlaying && newSticker.starts == 1)
 isEnhancedPowerSavingEnabled = true
 let offscreenSticker = TestStickerNode()
 offscreenSticker.isPlaying = true
+offscreenSticker.automaticallyLoadFirstFrame = true
 offscreenSticker.updateIsPlaying()
 offscreenSticker.isDisplaying = false
 offscreenSticker.updateIsPlaying()
@@ -132,6 +135,7 @@ precondition(!offscreenSticker.isPlaying && offscreenSticker.starts == 0)
 offscreenSticker.isDisplaying = true
 offscreenSticker.updateIsPlaying()
 precondition(offscreenSticker.isPlaying && offscreenSticker.starts == 1)
+precondition(offscreenSticker.timerRepeats)
 
 isEnhancedPowerSavingEnabled = true
 let pausedSticker = TestStickerNode()

@@ -464,7 +464,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
             let canDisplayFirstFrame = self.automaticallyLoadFirstFrame && self.isDisplaying
             if self.canDisplayFirstFrame != canDisplayFirstFrame {
                 self.canDisplayFirstFrame = canDisplayFirstFrame
-                if canDisplayFirstFrame {
+                if canDisplayFirstFrame && !self.isPlaying {
                     self.play(firstFrame: true)
                 }
             }
