@@ -63,6 +63,15 @@ class CacheBazelDependenciesTests(unittest.TestCase):
         redirected = cache.ReleaseRedirectHandler().redirect_request(request, None, 302, "Found", {}, "https://release-assets.githubusercontent.com/archive")
         self.assertIsNone(redirected.get_header("Authorization"))
 
+    def test_identical_filenames_keep_both_versions(self):
+        other = b"second version"
+        other_digest = hashlib.sha256(other).hexdigest()
+        archives = self.archives + [("archive.tar.gz", other_digest, "https://example.test/other")]
+        with patch.object(cache, "open_archive", side_effect=[io.BytesIO(self.content), io.BytesIO(other)]):
+            cache.populate(self.directory, archives)
+        self.assertEqual((self.directory / self.digest / "archive.tar.gz").read_bytes(), self.content)
+        self.assertEqual((self.directory / other_digest / "archive.tar.gz").read_bytes(), other)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,15 @@ import urllib.parse
 import urllib.request
 
 
+EXTRA_ARCHIVES = [
+    ("cpython-3.11.14+20251014-aarch64-apple-darwin-install_only.tar.gz", "99d98bf73d9906d18a9184054a328288ede2cb4a2d245a05411a28e8d023aab6", "https://github.com/astral-sh/python-build-standalone/releases/download/20251014/cpython-3.11.14+20251014-aarch64-apple-darwin-install_only.tar.gz"),
+    ("index-import.tar.gz", "28c1ffa39d99e74ed70623899b207b41f79214c498c603915aef55972a851a15", "https://github.com/MobileNativeFoundation/index-import/releases/download/5.8.0.1/index-import.tar.gz"),
+    ("index-import.tar.gz", "9a54fc1674af6031125a9884480a1e31e1bcf48b8f558b3e8bcc6b6fcd6e8b61", "https://github.com/MobileNativeFoundation/index-import/releases/download/6.1.0.1/index-import.tar.gz"),
+    ("meson-1.6.0.tar.gz", "999b65f21c03541cf11365489c1fad22e2418bb0c3d50ca61139f2eec09d5496", "https://github.com/mesonbuild/meson/releases/download/1.6.0/meson-1.6.0.tar.gz"),
+    ("wasi-sdk-33.0-arm64-macos.tar.gz", "85c997a2665ead91673b5bb88b7d0df3fc8900df3bfa244f720d478187bbdc78", "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-33/wasi-sdk-33.0-arm64-macos.tar.gz"),
+]
+
+
 class ReleaseRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, new_url):
         redirected = super().redirect_request(request, response, code, message, headers, new_url)
@@ -65,7 +74,9 @@ def locked_archives(lock_path):
 def populate(directory, archives):
     directory.mkdir(parents=True, exist_ok=True)
     for name, expected, url in archives:
-        destination = directory / name
+        target = directory / expected if sum(item[0] == name for item in archives) > 1 else directory
+        target.mkdir(parents=True, exist_ok=True)
+        destination = target / name
         if destination.is_file() and hashlib.sha256(destination.read_bytes()).hexdigest() == expected:
             print("cached " + name, flush=True)
             continue
@@ -85,4 +96,4 @@ def populate(directory, archives):
 
 
 if __name__ == "__main__":
-    populate(Path(sys.argv[1]), locked_archives(Path(__file__).resolve().parents[2] / "MODULE.bazel.lock"))
+    populate(Path(sys.argv[1]), locked_archives(Path(__file__).resolve().parents[2] / "MODULE.bazel.lock") + EXTRA_ARCHIVES)

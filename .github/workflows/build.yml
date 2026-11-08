@@ -171,6 +171,9 @@ jobs:
           DISTDIR="$HOME/telegram-bazel-cache/distdir"
           python3 build-system/Make/CacheBazelDependencies.py "$DISTDIR"
           printf '\ncommon --distdir=%s\n' "$DISTDIR" >> .bazelrc
+          for archive_dir in "$DISTDIR"/*/; do
+            [ -d "$archive_dir" ] && printf 'common --distdir=%s\n' "$archive_dir" >> .bazelrc
+          done
 
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
