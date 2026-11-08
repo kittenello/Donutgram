@@ -64,6 +64,19 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertFalse(self.manager.interceptsOutgoingMessages)
     }
 
+    func testOutgoingPriorityComposesAndCancellationStopsTheChain() throws {
+        let permission = DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "ordered outgoing commands")
+        let earlier = try self.package(permissions: [permission], body: "await api.messages.beforeSend({id:'earlier',priority:-10},input=>input.text==='.cancel'?{cancel:true}:{text:'first'});")
+        let later = try self.package(permissions: [permission], body: "await api.messages.beforeSend({id:'later',priority:10},input=>{if(input.text!=='first')throw Error('wrong chain order');return {text:'second'}});")
+        let laterId = try self.install(later, permissions: [permission])
+        let earlierId = try self.install(earlier, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: laterId, enabled: true, completion: $0) }.get()
+        try self.result { self.manager.setEnabled(id: earlierId, enabled: true, completion: $0) }.get()
+        XCTAssertEqual(try self.result { self.manager.interceptOutgoingText("original", completion: $0) }.get(), "second")
+        XCTAssertNil(try self.result { self.manager.interceptOutgoingText(".cancel", completion: $0) }.get())
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == laterId })?.state, .running)
+    }
+
     func testDirectMessageMethodsNeedGrantsWithoutRequiringAPerMessageGesture() throws {
         let permissions = [("messages.send", "chosenRecipient"), ("messages.edit", "selectedMessages"), ("messages.delete", "selectedMessages")].map { DGPluginPermission(capability: $0.0, scope: $0.1, reason: "explicit message automation") }
         var calls: [String] = []

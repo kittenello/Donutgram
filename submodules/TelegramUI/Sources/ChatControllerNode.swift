@@ -5195,8 +5195,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
-        self.historyNode.justSentTextMessage = true
-        
         if let richTextInputNode = textInputPanelNode.richTextInputNode, richTextInputNode.isInputFirstResponder {
             richTextInputNode.applyAutocorrection()
         }
@@ -5206,6 +5204,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }, completion) {
             return
         }
+
+        self.historyNode.justSentTextMessage = true
         
         var effectivePresentationInterfaceState = self.chatPresentationInterfaceState
         
