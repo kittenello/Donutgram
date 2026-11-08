@@ -59,8 +59,10 @@ def prepare():
     assert 'state.searchQuery = value' in controller
     enum = block(links, "enum DGSettingsPage:")
     shown_row = block(features, "private func dgShownRow(").replace("DGSimpleSettings.shared", "testSettings")
+    current_row = block(features, "private func dgCurrentRowLocation(")
+    moved_row = block(features, "private func dgMovedRowLocation(")
     fixture = Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
-    return search.replace("import DGSimpleSettings\n", "") + "\n" + enum + "\n" + shown_row + "\n" + fixture
+    return search.replace("import DGSimpleSettings\n", "") + "\n" + enum + "\n" + shown_row + "\n" + current_row + "\n" + moved_row + "\n" + fixture
 
 
 def main():

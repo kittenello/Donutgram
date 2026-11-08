@@ -1025,7 +1025,7 @@ private func dgCurrentRowLocation(page: DGSettingsPage, key: String) -> (DGSetti
         return (.mainScreen, key)
     case .media where key == "rememberCamera":
         return (.media, "camera")
-    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .savedDeleted:
+    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .plugins, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .savedDeleted:
         return (page, key)
     }
 }
