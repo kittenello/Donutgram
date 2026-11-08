@@ -604,7 +604,7 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
     let context = page.context
     dgBindPluginAccount(context: context)
     let signal = combineLatest(context.sharedContext.presentationData, page.revision.get())
-    |> map { presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { [page] presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let data = ItemListPresentationData(presentationData)
         let close = ItemListNavigationButton(content: .text(page.tr("закрыть", "close")), style: .regular, enabled: !page.busy, action: { [weak page] in
             guard let controller = page?.controller else { return }
