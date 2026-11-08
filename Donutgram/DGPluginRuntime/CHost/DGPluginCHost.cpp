@@ -1,5 +1,6 @@
 #include "DGPluginCHost.h"
 #include "quickjs.h"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -39,6 +40,9 @@ struct DGJSHost {
     unsigned jobs = 0;
     std::chrono::steady_clock::time_point cpuWindowStart = std::chrono::steady_clock::now();
     uint64_t cpuWindowUsed = 0;
+    // Thread CPU time the current operation has used, and its budget (1 s activation, 250 ms callbacks).
+    uint64_t opCpuUsed = 0;
+    uint64_t opCpuBudget = 0;
     uint64_t cpuSliceStart = 0;
     unsigned cpuSliceDepth = 0;
     bool cpuClockAvailable = false;
@@ -86,7 +90,10 @@ struct ExecutionSlice {
     ~ExecutionSlice() {
         if (--host->cpuSliceDepth == 0 && host->cpuClockAvailable) {
             uint64_t now;
-            if (threadCPU(now) && now >= host->cpuSliceStart) host->cpuWindowUsed += now - host->cpuSliceStart;
+            if (threadCPU(now) && now >= host->cpuSliceStart) {
+                host->cpuWindowUsed += now - host->cpuSliceStart;
+                host->opCpuUsed += now - host->cpuSliceStart;
+            }
         }
     }
 };
@@ -97,8 +104,13 @@ static void fail(DGJSHost *h, const char *message) {
     JS_SetStopped(h->runtime);
 }
 
+// An operation's budget is thread CPU time, so a plugin is not stopped because the device was busy elsewhere and
+// its thread waited for a core. The wall-clock deadline stays as a far looser backstop (eight times the budget,
+// at least two seconds); native waits count against neither.
 static void beginOperation(DGJSHost *h, std::chrono::milliseconds budget) {
-    h->deadline = std::chrono::steady_clock::now() + budget;
+    h->opCpuUsed = 0;
+    h->opCpuBudget = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(budget).count());
+    h->deadline = std::chrono::steady_clock::now() + std::max(budget * 8, std::chrono::milliseconds(2000));
     h->nativeWaitUsed = std::chrono::steady_clock::duration::zero();
     h->waitingNative = false;
     h->busy = true;
@@ -121,9 +133,10 @@ static int interrupt(JSRuntime *, void *opaque) {
     if (h->stopped.load()) { if (!h->error) h->error = "cancelled"; JS_SetStopped(h->runtime); return 1; }
     if (JS_IsStopped(h->runtime)) { fail(h, "native_work_limit"); return 1; }
     uint64_t cpuNow;
-    if (h->cpuClockAvailable && threadCPU(cpuNow) && cpuNow >= h->cpuSliceStart && h->cpuWindowUsed + cpuNow - h->cpuSliceStart >= 2000000000) {
-        fail(h, "cpu_budget_exceeded");
-        return 1;
+    if (h->cpuClockAvailable && threadCPU(cpuNow) && cpuNow >= h->cpuSliceStart) {
+        uint64_t slice = cpuNow - h->cpuSliceStart;
+        if (h->cpuWindowUsed + slice >= 2000000000) { fail(h, "cpu_budget_exceeded"); return 1; }
+        if (h->opCpuBudget && h->opCpuUsed + slice >= h->opCpuBudget) { fail(h, "execution_timeout"); return 1; }
     }
     if (std::chrono::steady_clock::now() >= h->deadline) {
         fail(h, "execution_timeout");
@@ -352,7 +365,10 @@ extern "C" int dgjs_pump(DGJSHost *h) {
                 h->waitingNative = true;
                 return 2;
             }
-            return 1;
+            // Nothing can settle the operation any more: no job is queued, no native reply is outstanding, and plugins
+            // have no timers. Waiting for a deadline would only hold the runtime.
+            fail(h, "unresolved_promise");
+            return -1;
         }
         if (interrupt(h->runtime, h)) return -1;
     }

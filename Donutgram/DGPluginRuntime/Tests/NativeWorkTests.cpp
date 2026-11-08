@@ -15,6 +15,7 @@ struct Requests {
     std::vector<int64_t> ids;
     std::vector<std::string> envelopes;
     std::atomic<bool> began{false};
+    unsigned sleepMilliseconds = 0;
 };
 
 static void check(bool value, const char *message) {
@@ -28,6 +29,7 @@ static void request(void *opaque, const char *json) {
     state->ids.push_back(std::strtoll(id + 5, nullptr, 10));
     state->envelopes.push_back(json);
     state->began.store(true);
+    if (state->sleepMilliseconds) std::this_thread::sleep_for(std::chrono::milliseconds(state->sleepMilliseconds));
 }
 
 static void add(DGJSHost *host, const std::string &source) {
@@ -83,12 +85,21 @@ int main(int argc, char **argv) {
                 check(dgjs_pump(host) < 0 && dgjs_reply(host, requests.ids.front(), "{\"result\":null}") < 0, "stop invalidates wait and late native reply");
             }
         } else if (name == "cumulative_active") {
-            add(host, "definePlugin({async activate(api){await api.storage.get('a');let until=Date.now()+600;while(Date.now()<until){}await api.storage.get('b');until=Date.now()+600;while(Date.now()<until){}}})");
+            add(host, "definePlugin({async activate(api){await api.storage.get('a');let until=Date.now()+700;while(Date.now()<until){}await api.storage.get('b');until=Date.now()+700;while(Date.now()<until){}}})");
             check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "first native wait");
             check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0, "first reply");
             check(settle(host, dgjs_pump(host)) == 2, "second native wait");
             check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0, "second reply");
-            check(settle(host, dgjs_pump(host)) < 0 && std::strcmp(dgjs_error(host), "execution_timeout") == 0, "native waits do not reset accumulated active wall budget");
+            check(settle(host, dgjs_pump(host)) < 0 && std::strcmp(dgjs_error(host), "execution_timeout") == 0, "native waits do not reset the operation's accumulated cpu budget");
+        } else if (name == "descheduled") {
+            // The runtime thread waits 400 ms inside a host call, as when the device is busy and the thread gets no core.
+            // The 250 ms callback budget is thread CPU time, so the callback is not stopped.
+            add(host, "definePlugin({activate(api){api.ui.callback(async()=>{await api.storage.get('x')})}})");
+            check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 0, "descheduled fixture activated");
+            requests.sleepMilliseconds = 400;
+            check(settle(host, dgjs_dispatch(host, "ui", "{\"id\":\"callback.1\",\"value\":null}")) == 2, "a descheduled callback keeps its cpu budget");
+            requests.sleepMilliseconds = 0;
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "the descheduled callback completes");
         } else if (name == "cpu_window") {
             add(host, "definePlugin({activate(api){api.ui.callback(()=>{const until=Date.now()+90;while(Date.now()<until){}})}})");
             check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 0, "cpu window fixture started");
