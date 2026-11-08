@@ -31,10 +31,14 @@ final class DGPluginChatRenderedPage {
 }
 
 extension ChatControllerImpl {
-    func dgPluginInterceptOutgoingSend(resume: @escaping () -> Void, cancel: @escaping () -> Void) -> Bool {
+    /// Runs the outgoing-text interceptors and calls `resume` only when the draft may be sent, unchanged or
+    /// replaced. When a plugin cancels or fails, or the draft changes meanwhile, nothing is sent and the draft
+    /// stays. The caller's own completion must not run then: after a scheduled send it clears the composer and
+    /// opens the scheduled messages.
+    func dgPluginInterceptOutgoingSend(resume: @escaping () -> Void) -> Bool {
         let manager = DGPluginManager.shared(accountKey: String(self.context.account.id.int64))
         guard manager.interceptsOutgoingMessages, self.dgPluginSafeComposer(), let peerId = self.chatLocation.peerId else { return false }
-        if self.dgPluginChatState.outgoingSendPending { cancel(); return true }
+        if self.dgPluginChatState.outgoingSendPending { return true }
         let draft = self.chatDisplayNode.textInputPanelNode?.inputTextState ?? self.presentationInterfaceState.interfaceState.effectiveInputState
         let text = draft.content.plainText
         guard !text.isEmpty, text.utf16.count <= 4096, draft.content.isEntityExpressible(options: []) else { return false }
@@ -42,16 +46,16 @@ extension ChatControllerImpl {
         self.dgPluginChatState.outgoingSendPending = true
         self.dgBindChatPlugins()
         manager.interceptOutgoingText(text) { [weak self] result in
-            guard let self else { cancel(); return }
+            guard let self else { return }
             self.dgPluginChatState.outgoingSendPending = false
             guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
                   self.presentationInterfaceState.interfaceState.effectiveInputState == draft,
-                  self.chatDisplayNode.textInputPanelNode?.inputTextState == draft else { cancel(); return }
+                  self.chatDisplayNode.textInputPanelNode?.inputTextState == draft else { return }
             switch result {
             case let .failure(error):
                 self.present(textAlertController(context: self.context, title: "plugin", text: error.code + ": " + error.message, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-                cancel()
-            case .success(nil): cancel()
+            case .success(nil):
+                break
             case let .success(replacement?):
                 let expected = replacement == text ? draft : draft.replacingFlatRange(NSRange(location: 0, length: (text as NSString).length), with: replacement)
                 if replacement != text {
@@ -61,15 +65,15 @@ extension ChatControllerImpl {
                         applied = true
                         return (expected, mode)
                     }
-                    guard applied else { cancel(); return }
+                    guard applied else { return }
                 }
                 self.dgPluginChatState.outgoingSendPending = true
                 DispatchQueue.main.async { [weak self] in
-                    guard let self else { cancel(); return }
+                    guard let self else { return }
                     self.dgPluginChatState.outgoingSendPending = false
                     guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
                           self.presentationInterfaceState.interfaceState.effectiveInputState == expected,
-                          self.chatDisplayNode.textInputPanelNode?.inputTextState == expected else { cancel(); return }
+                          self.chatDisplayNode.textInputPanelNode?.inputTextState == expected else { return }
                     resume()
                 }
             }
