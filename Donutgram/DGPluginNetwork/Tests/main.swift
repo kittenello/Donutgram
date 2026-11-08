@@ -1,0 +1,8 @@
+let tests = DGPluginNetworkTests()
+tests.testPublicAddressClassificationRejectsSpecialAndAmbiguousForms()
+try tests.testExactGrantedOriginAndRestrictedRequestShape()
+try tests.testContentLengthAndIncrementalCompletion()
+try tests.testChunkedBodyAndClosureFraming()
+tests.testDeniesRedirectsAmbiguousHeadersAndUnboundedBodies()
+try tests.testHeadAndJsonBridgeBounds()
+print("network helper tests: 6 groups passed")

@@ -28,4 +28,32 @@ cc_test(
     deps = [":DGPluginCHost"],
     data = ["Sources/bootstrap.js"],
     copts = ["-std=c++17"],
+    timeout = "short",
+)
+
+native_work_cases = [
+    "join", "reverse", "sparse_sort", "regexp", "replace", "sort",
+    "typed_sort", "regexp_linear", "stringify", "parse", "repeat", "trim",
+    "bigint", "pending_storm", "pure_promise", "caught_join", "native_wait",
+    "wait_cancel", "cumulative_active", "cpu_window", "stop_join", "stop_regexp",
+    "compile", "wrappers", "default_policy",
+]
+
+[
+    cc_test(
+        name = "NativeWork_" + case,
+        srcs = ["Tests/NativeWorkTests.cpp"],
+        deps = [":DGPluginCHost"],
+        data = ["Sources/bootstrap.js"],
+        args = [case],
+        copts = ["-std=c++17"],
+        timeout = "short",
+    )
+    for case in native_work_cases
+]
+
+test_suite(
+    name = "DGPluginNativeWorkTests",
+    tests = [":NativeWork_" + case for case in native_work_cases],
+    visibility = ["//visibility:public"],
 )

@@ -4,8 +4,18 @@
 #include <chrono>
 #include <cstring>
 #include <map>
+#include <set>
+#include <cmath>
 #include <string>
 #include <vector>
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
+#include <pthread.h>
+#else
+#include <time.h>
+#endif
 
 struct DGJSHost {
     JSRuntime *runtime = nullptr;
@@ -22,6 +32,58 @@ struct DGJSHost {
     bool active = false;
     bool busy = false;
     unsigned jobs = 0;
+    std::chrono::steady_clock::time_point cpuWindowStart = std::chrono::steady_clock::now();
+    uint64_t cpuWindowUsed = 0;
+    uint64_t cpuSliceStart = 0;
+    unsigned cpuSliceDepth = 0;
+    bool cpuClockAvailable = false;
+    std::set<int64_t> pendingNative;
+    bool waitingNative = false;
+    std::chrono::steady_clock::duration activeRemaining{};
+    std::chrono::steady_clock::duration nativeWaitUsed{};
+    std::chrono::steady_clock::time_point nativeWaitStart;
+    std::chrono::steady_clock::time_point nativeWaitUntil;
+};
+
+static void fail(DGJSHost *h, const char *message);
+
+static bool threadCPU(uint64_t &result) {
+#if defined(_WIN32)
+    FILETIME created, exited, kernel, user;
+    if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) return false;
+    ULARGE_INTEGER k, u;
+    k.LowPart = kernel.dwLowDateTime; k.HighPart = kernel.dwHighDateTime;
+    u.LowPart = user.dwLowDateTime; u.HighPart = user.dwHighDateTime;
+    result = (k.QuadPart + u.QuadPart) * 100;
+#elif defined(__APPLE__)
+    thread_basic_info_data_t info;
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    if (thread_info(pthread_mach_thread_np(pthread_self()), THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&info), &count) != KERN_SUCCESS) return false;
+    result = uint64_t(info.user_time.seconds + info.system_time.seconds) * 1000000000 + uint64_t(info.user_time.microseconds + info.system_time.microseconds) * 1000;
+#else
+    struct timespec value;
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &value) != 0) return false;
+    result = uint64_t(value.tv_sec) * 1000000000 + uint64_t(value.tv_nsec);
+#endif
+    return true;
+}
+
+struct ExecutionSlice {
+    DGJSHost *host;
+    explicit ExecutionSlice(DGJSHost *h) : host(h) {
+        if (h->cpuSliceDepth++ == 0) {
+            auto now = std::chrono::steady_clock::now();
+            if (now - h->cpuWindowStart >= std::chrono::seconds(60)) { h->cpuWindowStart = now; h->cpuWindowUsed = 0; }
+            h->cpuClockAvailable = threadCPU(h->cpuSliceStart);
+            if (!h->cpuClockAvailable) fail(h, "cpu_clock_unavailable");
+        }
+    }
+    ~ExecutionSlice() {
+        if (--host->cpuSliceDepth == 0 && host->cpuClockAvailable) {
+            uint64_t now;
+            if (threadCPU(now) && now >= host->cpuSliceStart) host->cpuWindowUsed += now - host->cpuSliceStart;
+        }
+    }
 };
 
 static void fail(DGJSHost *h, const char *message) {
@@ -30,9 +92,34 @@ static void fail(DGJSHost *h, const char *message) {
     JS_SetStopped(h->runtime);
 }
 
+static void beginOperation(DGJSHost *h, std::chrono::milliseconds budget) {
+    h->deadline = std::chrono::steady_clock::now() + budget;
+    h->nativeWaitUsed = std::chrono::steady_clock::duration::zero();
+    h->waitingNative = false;
+    h->busy = true;
+    h->jobs = 0;
+    JS_SetNativeWorkLimit(h->runtime, 8000000);
+}
+
+static bool resumeNative(DGJSHost *h) {
+    if (!h->waitingNative) return true;
+    auto now = std::chrono::steady_clock::now();
+    if (now >= h->nativeWaitUntil) { fail(h, "native_wait_timeout"); return false; }
+    h->nativeWaitUsed += now - h->nativeWaitStart;
+    h->deadline = now + h->activeRemaining;
+    h->waitingNative = false;
+    return true;
+}
+
 static int interrupt(JSRuntime *, void *opaque) {
     auto *h = static_cast<DGJSHost *>(opaque);
-    if (h->stopped.load()) { JS_SetStopped(h->runtime); return 1; }
+    if (h->stopped.load()) { if (!h->error) h->error = "cancelled"; JS_SetStopped(h->runtime); return 1; }
+    if (JS_IsStopped(h->runtime)) { fail(h, "native_work_limit"); return 1; }
+    uint64_t cpuNow;
+    if (h->cpuClockAvailable && threadCPU(cpuNow) && cpuNow >= h->cpuSliceStart && h->cpuWindowUsed + cpuNow - h->cpuSliceStart >= 2000000000) {
+        fail(h, "cpu_budget_exceeded");
+        return 1;
+    }
     if (std::chrono::steady_clock::now() >= h->deadline) {
         fail(h, "execution_timeout");
         return 1;
@@ -91,6 +178,16 @@ static JSValue requestNative(JSContext *ctx, JSValueConst, int argc, JSValueCons
     const char *json = JS_ToCStringLen(ctx, &count, argv[0]);
     if (!json) return JS_EXCEPTION;
     if (count > 65536) { JS_FreeCString(ctx, json); return JS_ThrowRangeError(ctx, "request_limit"); }
+    JSValue envelope = JS_ParseJSON(ctx, json, count, "<request>");
+    if (JS_IsException(envelope)) { JS_FreeCString(ctx, json); return JS_EXCEPTION; }
+    JSValue idValue = JS_GetPropertyStr(ctx, envelope, "id");
+    double number = 0;
+    bool valid = JS_IsNumber(idValue) && JS_ToFloat64(ctx, &number, idValue) == 0 && std::isfinite(number) && number >= 1 && number <= 9007199254740991.0 && std::floor(number) == number;
+    JS_FreeValue(ctx, idValue); JS_FreeValue(ctx, envelope);
+    if (!valid || h->pendingNative.size() >= 64 || !h->pendingNative.insert(static_cast<int64_t>(number)).second) {
+        JS_FreeCString(ctx, json);
+        return JS_ThrowRangeError(ctx, "request_limit");
+    }
     h->request(h->opaque, json);
     JS_FreeCString(ctx, json);
     return JS_UNDEFINED;
@@ -99,7 +196,7 @@ static JSValue requestNative(JSContext *ctx, JSValueConst, int argc, JSValueCons
 static int capture(DGJSHost *h) {
     JSValue exception = JS_GetException(h->context);
     JS_FreeValue(h->context, exception);
-    fail(h, "javascript_error");
+    fail(h, JS_IsStopped(h->runtime) ? "native_work_limit" : "javascript_error");
     return -1;
 }
 
@@ -136,15 +233,17 @@ extern "C" DGJSHost *dgjs_create(DGJSRequest request, void *opaque) {
 
 extern "C" int dgjs_add_file(DGJSHost *h, const char *path, const uint8_t *bytes, size_t size) {
     if (h->active || h->files.size() >= 128 || !validPath(path) || size > 1024 * 1024 || size > 4 * 1024 * 1024 - h->total || h->files.count(path)) return -1;
-    h->files.emplace(path, std::string(reinterpret_cast<const char *>(bytes), size));
+    if (size && !bytes) return -1;
+    h->files.emplace(path, std::string(size ? reinterpret_cast<const char *>(bytes) : "", size));
     h->total += size;
     return 0;
 }
 
 extern "C" int dgjs_start(DGJSHost *h, const char *entry, const char *bootstrap, const char *environment) {
     if (h->active || h->stopped.load() || !h->files.count(entry) || strlen(environment) > 65536) return -1;
-    h->active = true; h->busy = true; h->jobs = 0;
-    h->deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    h->active = true;
+    ExecutionSlice slice(h);
+    beginOperation(h, std::chrono::milliseconds(1000));
     JS_UpdateStackTop(h->runtime);
     JSValue result = JS_Eval(h->context, bootstrap, strlen(bootstrap), "<bootstrap>", JS_EVAL_TYPE_GLOBAL);
     if (JS_IsException(result)) return capture(h);
@@ -163,7 +262,13 @@ extern "C" int dgjs_start(DGJSHost *h, const char *entry, const char *bootstrap,
 }
 
 extern "C" int dgjs_pump(DGJSHost *h) {
+    ExecutionSlice slice(h);
     JS_UpdateStackTop(h->runtime);
+    if (h->waitingNative) {
+        if (h->stopped.load() || JS_IsStopped(h->runtime)) return -1;
+        if (std::chrono::steady_clock::now() >= h->nativeWaitUntil) { fail(h, "native_wait_timeout"); return -1; }
+        return 2;
+    }
     if (interrupt(h->runtime, h)) return -1;
     for (unsigned slice = 0; slice < 256; ++slice) {
         if (++h->jobs > 4096) { fail(h, "microtask_limit"); return -1; }
@@ -182,15 +287,27 @@ extern "C" int dgjs_pump(DGJSHost *h) {
         JSContext *jobContext = nullptr;
         int status = JS_ExecutePendingJob(h->runtime, &jobContext);
         if (status < 0) return capture(h);
-        if (!status) return 1;
+        if (!status) {
+            if (!h->pendingNative.empty()) {
+                auto now = std::chrono::steady_clock::now();
+                if (now >= h->deadline) { fail(h, "execution_timeout"); return -1; }
+                h->activeRemaining = h->deadline - now;
+                h->nativeWaitStart = now;
+                h->nativeWaitUntil = now + (std::chrono::seconds(60) - h->nativeWaitUsed);
+                h->waitingNative = true;
+                return 2;
+            }
+            return 1;
+        }
         if (interrupt(h->runtime, h)) return -1;
     }
     return 1;
 }
 
 extern "C" int dgjs_dispatch(DGJSHost *h, const char *kind, const char *payload) {
-    if (!h->active || h->stopped.load() || strlen(payload) > 65536) return -1;
-    h->deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250); h->busy = true; h->jobs = 0;
+    if (!h->active || h->stopped.load() || h->busy || strlen(payload) > 65536) return -1;
+    ExecutionSlice slice(h);
+    beginOperation(h, std::chrono::milliseconds(250));
     JS_UpdateStackTop(h->runtime);
     JSValue args[2] = { JS_NewString(h->context, kind), JS_ParseJSON(h->context, payload, strlen(payload), "<event>") };
     if (JS_IsException(args[1])) { JS_FreeValue(h->context, args[0]); return capture(h); }
@@ -202,10 +319,11 @@ extern "C" int dgjs_dispatch(DGJSHost *h, const char *kind, const char *payload)
 
 extern "C" int dgjs_reply(DGJSHost *h, int64_t id, const char *json) {
     if (h->stopped.load() || strlen(json) > 65536) return -1;
+    if (h->pendingNative.erase(id) == 0) return 0;
+    ExecutionSlice slice(h);
+    if (!resumeNative(h)) return -1;
     if (!h->busy) {
-        h->deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
-        h->jobs = 0;
-        h->busy = true;
+        beginOperation(h, std::chrono::milliseconds(250));
     }
     JS_UpdateStackTop(h->runtime);
     if (interrupt(h->runtime, h)) return -1;

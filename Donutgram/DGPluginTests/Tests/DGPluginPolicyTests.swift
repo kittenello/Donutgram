@@ -26,10 +26,10 @@ final class DGPluginPolicyTests: XCTestCase {
     }
 
     func testUnavailableAdaptersFailClosed() {
-        for method in ["network.request", "messages.read", "peers.read", "chats.metadata", "messages.prepare", "messages.sendInteractive", "navigation.open", "files.read", "notifications.local", "translation.request"] {
+        for method in ["ui.transform", "theme.contribute"] {
             XCTAssertEqual(DGPluginPolicy.methods[method]?.available, false, method)
         }
-        for method in ["composer.getActiveDraft", "composer.replaceSelection", "selection.get"] {
+        for method in ["composer.getActiveDraft", "composer.replaceSelection", "selection.get", "messages.read", "peers.read", "chats.metadata", "messages.prepare", "messages.sendInteractive", "navigation.open", "files.pick", "files.read", "notifications.local", "translation.request"] {
             XCTAssertEqual(DGPluginPolicy.methods[method]?.requiresGesture, true, method)
         }
     }

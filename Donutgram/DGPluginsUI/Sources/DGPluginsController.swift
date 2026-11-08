@@ -12,8 +12,12 @@ import DGPluginModel
 import DGPluginInstaller
 import DGPluginHost
 
+private extension DGPluginJSON {
+    var uiNumberValue: Double? { if case let .number(value) = self { return value }; return nil }
+}
+
 private struct DGPluginRow: ItemListNodeEntry {
-    enum Kind: Equatable { case header, text, disclosure, toggle, input, action, destructive }
+    enum Kind: Equatable { case header, text, disclosure, toggle, input, multiline, markdown, card, slider, stepper, image, action, destructive }
     let stableId: Int32
     let section: ItemListSectionId
     let kind: Kind
@@ -23,24 +27,45 @@ private struct DGPluginRow: ItemListNodeEntry {
     var value: Bool = false
     var enabled: Bool = true
     var iconKey: String = ""
+    var number: Double = 0
+    var minimum: Double = 0
+    var maximum: Double = 1
+    var step: Double = 1
+    var epoch: Int = 0
+    var maxText: Int = 4096
 
     static func < (lhs: DGPluginRow, rhs: DGPluginRow) -> Bool { return lhs.stableId < rhs.stableId }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let page = arguments as! DGPluginPage
+        let action = { if page.accepts(self.epoch) { page.action(self.key) } }
+        let toggle: (Bool) -> Void = { if page.accepts(self.epoch) { page.toggle(self.key, $0) } }
+        let input: (String) -> Void = { if page.accepts(self.epoch) { page.input(self.key, $0) } }
+        let number: (Double) -> Void = { if page.accepts(self.epoch) { page.number(self.key, $0) } }
         switch self.kind {
         case .header:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: self.title, sectionId: self.section)
         case .text:
             return ItemListTextItem(presentationData: presentationData, text: .plain(self.title), sectionId: self.section)
         case .disclosure:
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: self.iconKey.isEmpty ? nil : page.icon(self.iconKey), title: self.title, label: self.detail, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { page.action(self.key) })
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: self.iconKey.isEmpty ? nil : page.icon(self.iconKey), title: self.title, label: self.detail, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: action)
         case .toggle:
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: self.title, value: self.value, enableInteractiveChanges: self.enabled, enabled: self.enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: { page.toggle(self.key, $0) })
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: self.title, value: self.value, enableInteractiveChanges: self.enabled, enabled: self.enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: toggle)
         case .input:
-            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: self.key == "search" ? "" : self.title), text: self.detail, placeholder: self.title, type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { page.input(self.key, $0) }, action: {})
+            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: self.key == "search" ? "" : self.title), text: self.detail, placeholder: self.title, type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: input, shouldUpdateText: { $0.utf16.count <= self.maxText }, action: {})
+        case .multiline:
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .multiline(self.title, self.detail, self.maxText), scale: presentationData.fontSize.itemListBaseFontSize / 17, textUpdated: input)
+        case .markdown:
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17)
+        case .card:
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .card(page.icon(self.iconKey, size: 96), self.title, self.detail, page.cardDescription()), scale: presentationData.fontSize.itemListBaseFontSize / 17)
+        case .slider, .stepper:
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .number(self.title, self.number, self.minimum, self.maximum, self.step, self.kind == .slider), scale: presentationData.fontSize.itemListBaseFontSize / 17, numberUpdated: number)
+        case .image:
+            if let image = page.renderedImages[self.iconKey] { return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .image(image, self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17) }
+            return ItemListTextItem(presentationData: presentationData, text: .plain(page.tr("изображение недоступно", "image unavailable")), sectionId: self.section)
         case .action, .destructive:
-            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: self.title, kind: self.kind == .destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { if self.enabled { page.action(self.key) } })
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: self.title, kind: self.kind == .destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { if self.enabled { action() } })
         }
     }
 }
@@ -56,107 +81,6 @@ private enum DGPluginPageMode {
     case rendered(DGPluginRenderedState)
 }
 
-private struct DGPluginRenderChoice {
-    let title: String
-    let value: DGPluginJSON
-}
-
-private struct DGPluginRenderNode {
-    let type: String
-    let id: String
-    let title: String
-    let text: String
-    let value: DGPluginJSON
-    let callbackId: String?
-    let options: [DGPluginRenderChoice]
-    let children: [DGPluginRenderNode]
-}
-
-private final class DGPluginRenderedState {
-    let title: String
-    let pluginName: String
-    let nodes: [DGPluginRenderNode]
-    let validity: () -> Bool
-    let callback: (String, DGPluginJSON) -> Void
-    var values: [String: DGPluginJSON] = [:]
-
-    init(page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, callback: @escaping (String, DGPluginJSON) -> Void) throws {
-        guard try JSONEncoder().encode(page).count <= 65536, let object = page.objectValue, Set(object.keys).isSubset(of: ["id", "title", "nodes"]), let id = object["id"]?.stringValue, Self.validId(id), let title = object["title"]?.stringValue, !title.isEmpty, Self.validText(title, multiline: false), title.utf16.count <= 200, case let .array(nodes)? = object["nodes"] else { throw DGPluginError(code: "invalid_argument", message: "invalid declarative page") }
-        var ids = Set<String>()
-        var count = 0
-        self.nodes = try Self.parse(nodes, depth: 0, count: &count, ids: &ids)
-        self.title = title
-        self.pluginName = pluginName
-        self.validity = validity
-        self.callback = callback
-    }
-
-    private static func validId(_ id: String) -> Bool {
-        return id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil
-    }
-
-    private static func validText(_ text: String, multiline: Bool) -> Bool {
-        return !text.unicodeScalars.contains { scalar in
-            if multiline && [9, 10, 13].contains(scalar.value) { return false }
-            return CharacterSet.controlCharacters.contains(scalar) || (0x202a ... 0x202e).contains(scalar.value) || (0x2066 ... 0x2069).contains(scalar.value)
-        }
-    }
-
-    private static func parse(_ nodes: [DGPluginJSON], depth: Int, count: inout Int, ids: inout Set<String>) throws -> [DGPluginRenderNode] {
-        guard depth <= 6, nodes.count <= 128 else { throw DGPluginError(code: "quota_exceeded", message: "page nesting or node limit exceeded") }
-        return try nodes.map { value in
-            count += 1
-            guard count <= 128, let node = value.objectValue, Set(node.keys).isSubset(of: ["type", "id", "title", "text", "value", "callbackId", "children", "options"]), let type = node["type"]?.stringValue, let id = node["id"]?.stringValue, Self.validId(id), ids.insert(id).inserted else { throw DGPluginError(code: "invalid_argument", message: "invalid or duplicate page node") }
-            guard ["section", "text", "list", "button", "toggle", "input", "select"].contains(type) else { throw DGPluginError(code: "feature_unavailable", message: "unsupported declarative node: " + type) }
-            let title = node["title"]?.stringValue ?? ""
-            let text = node["text"]?.stringValue ?? ""
-            guard (node["title"] == nil || node["title"]?.stringValue != nil), (node["text"] == nil || node["text"]?.stringValue != nil), title.utf16.count <= 200, text.utf16.count <= 4096, Self.validText(title, multiline: false), Self.validText(text, multiline: true) else { throw DGPluginError(code: "invalid_argument", message: "invalid page text") }
-            let callbackId = node["callbackId"]?.stringValue
-            guard node["callbackId"] == nil || callbackId != nil, node["options"] == nil || type == "select" else { throw DGPluginError(code: "invalid_argument", message: "invalid node options or callback") }
-            if ["button", "toggle", "input", "select"].contains(type) {
-                guard let callbackId, Self.validId(callbackId) else { throw DGPluginError(code: "invalid_argument", message: "interactive nodes require callbackId") }
-            } else if callbackId != nil { throw DGPluginError(code: "invalid_argument", message: "noninteractive nodes cannot receive callbacks") }
-            let inputValue = node["value"] ?? .null
-            if type == "toggle", case .bool = inputValue {} else if type == "toggle" { throw DGPluginError(code: "invalid_argument", message: "toggle value must be boolean") }
-            if type == "input" { guard let string = inputValue.stringValue, string.utf16.count <= 4096 else { throw DGPluginError(code: "invalid_argument", message: "input value must be bounded text") } }
-            var options: [DGPluginRenderChoice] = []
-            if type == "select" {
-                guard case let .array(choices)? = node["options"], !choices.isEmpty, choices.count <= 32 else { throw DGPluginError(code: "invalid_argument", message: "select requires bounded options") }
-                for option in choices {
-                    guard let choice = option.objectValue, Set(choice.keys) == ["title", "value"], let title = choice["title"]?.stringValue, !title.isEmpty, title.utf16.count <= 200, Self.validText(title, multiline: false), let value = choice["value"] else { throw DGPluginError(code: "invalid_argument", message: "invalid select option") }
-                    switch value {
-                    case let .string(string): guard string.utf16.count <= 4096 else { throw DGPluginError(code: "quota_exceeded", message: "invalid select option value") }
-                    case .bool, .number, .null: break
-                    default: throw DGPluginError(code: "invalid_argument", message: "select options must be scalar values")
-                    }
-                    options.append(DGPluginRenderChoice(title: title, value: value))
-                }
-                guard options.contains(where: { $0.value == inputValue }) else { throw DGPluginError(code: "invalid_argument", message: "select value is not an option") }
-            }
-            var children: [DGPluginRenderNode] = []
-            if let childValue = node["children"] {
-                guard ["section", "list"].contains(type), case let .array(childNodes) = childValue else { throw DGPluginError(code: "invalid_argument", message: "only containers may have children") }
-                children = try Self.parse(childNodes, depth: depth + 1, count: &count, ids: &ids)
-            }
-            return DGPluginRenderNode(type: type, id: id, title: title, text: text, value: inputValue, callbackId: callbackId, options: options, children: children)
-        }
-    }
-
-    func node(_ id: String) -> DGPluginRenderNode? {
-        func find(_ nodes: [DGPluginRenderNode]) -> DGPluginRenderNode? {
-            for node in nodes { if node.id == id { return node }; if let child = find(node.children) { return child } }
-            return nil
-        }
-        return find(self.nodes)
-    }
-
-    func invoke(_ node: DGPluginRenderNode, value: DGPluginJSON) {
-        guard self.validity(), let callbackId = node.callbackId else { return }
-        self.values[node.id] = value
-        self.callback(callbackId, value)
-    }
-}
-
 private final class DGPluginPage {
     let context: AccountContext
     let manager: DGPluginManager
@@ -169,6 +93,9 @@ private final class DGPluginPage {
     var observer: UUID?
     var resourceDisposable: Disposable?
     private var sequence = 0
+    var notice: String?
+    var renderedImages: [String: UIImage] = [:]
+    private var pendingRemoval: DGPluginInstallation?
 
     init(context: AccountContext, mode: DGPluginPageMode) {
         self.context = context
@@ -178,6 +105,7 @@ private final class DGPluginPage {
     }
 
     deinit {
+        if case let .rendered(state) = self.mode { state.close() }
         if let observer = self.observer { self.manager.removeObserver(observer) }
         self.resourceDisposable?.dispose()
     }
@@ -190,6 +118,8 @@ private final class DGPluginPage {
         self.sequence += 1
         self.revision.set(self.sequence)
     }
+
+    func accepts(_ epoch: Int) -> Bool { return epoch == self.sequence && !self.busy }
 
     func installation(_ id: String) -> DGPluginInstallation? {
         return self.manager.installations.first(where: { $0.id == id })
@@ -215,6 +145,8 @@ private final class DGPluginPage {
         }
         switch self.mode {
         case .list:
+            if let notice = self.notice { add(0, .text, "", notice) }
+            if let error = self.manager.persistenceError { add(0, .text, "", self.tr("выполнение остановлено: ", "execution stopped: ") + error) }
             add(0, .toggle, "global", self.tr("разрешить выполнение плагинов", "allow plugins to run"), value: self.manager.globallyEnabled)
             add(0, .text, "", self.tr("выключение немедленно останавливает все плагины и их задачи.", "turning this off immediately stops all plugins and their tasks."))
             add(1, .input, "search", self.tr("поиск", "search"), detail: self.query)
@@ -248,7 +180,7 @@ private final class DGPluginPage {
             add(4, .toggle, "afterInstall", self.tr("включить после установки", "enable after installation"), value: self.enableAfterInstall)
             add(4, .text, "", self.tr("установка не выдаёт разрешения и не запускает код. подпись подтверждает происхождение, а не безопасность кода.", "installing grants no permissions and runs no code. a signature proves origin, not code safety."))
         case let .details(id):
-            guard let item = self.installation(id) else { add(0, .text, "", self.tr("этот плагин удалён.", "this plugin has been removed.")); break }
+            guard let item = self.installation(id) ?? (self.pendingRemoval?.id == id ? self.pendingRemoval : nil) else { add(0, .text, "", self.tr("этот плагин удалён.", "this plugin has been removed.")); break }
             self.appendCard(manifest: item.manifest, trust: item.trust, digest: item.digest, iconKey: id, add: add)
             add(4, .toggle, "enabled:" + id, self.tr("включён", "enabled"), value: item.enabled)
             add(4, .text, "", self.stateText(item))
@@ -260,7 +192,16 @@ private final class DGPluginPage {
                 add(6, .action, "command:" + command.id, command.title)
             }
             add(7, .text, "", self.tr("для обновления откройте новый файл плагина в сообщении telegram. автоматической загрузки кода нет.", "to update, open the new plugin document in a telegram message. code is never downloaded automatically."))
-            add(8, .destructive, "remove:" + id, self.tr("удалить плагин", "remove plugin"))
+            if self.manager.canRollback(id: id) { add(7, .action, "rollback:" + id, self.tr("вернуться к предыдущей версии", "restore previous version")) }
+            if let publisher = self.manager.publisherIdentity(id: id), publisher.hasPrefix("ed25519:") {
+                add(7, .action, "publisher:" + id, item.trust == "revoked" ? self.tr("разблокировать издателя", "unblock publisher") : self.tr("заблокировать издателя", "block publisher"))
+            }
+            let diagnostics = self.manager.diagnostics(id: id)
+            if !diagnostics.isEmpty {
+                add(8, .header, "", self.tr("журнал ошибок", "error history"))
+                for entry in diagnostics.prefix(20) { add(8, .text, "", String(entry.prefix(512))) }
+            }
+            add(9, .destructive, "remove:" + id, self.tr("удалить плагин", "remove plugin"))
         case let .permissions(id):
             guard let item = self.installation(id) else { break }
             add(0, .text, "", self.tr("каждое разрешение выдаётся отдельно. отзыв немедленно отменяет связанные действия. обязательные права нужны для включения.", "grant each permission separately. revoking immediately cancels related work. required permissions are needed to enable the plugin."))
@@ -286,8 +227,18 @@ private final class DGPluginPage {
                 switch schema["type"]?.stringValue {
                 case "boolean":
                     add(section, .toggle, "setting:" + key, title, value: value == .bool(true))
-                case "string", "number", "integer":
-                    add(section, .input, "setting:" + key, title, detail: self.settingText(value))
+                case "string":
+                    let limit = Int(min(4096, max(0, schema["maxLength"]?.uiNumberValue ?? 4096)))
+                    rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: .multiline, key: "setting:" + key, title: title, detail: self.settingText(value), maxText: limit))
+                case "number", "integer":
+                    let integer = schema["type"]?.stringValue == "integer"
+                    let minimum = integer ? ceil(schema["minimum"]?.uiNumberValue ?? -1000000) : (schema["minimum"]?.uiNumberValue ?? -1000000)
+                    let maximum = integer ? floor(schema["maximum"]?.uiNumberValue ?? 1000000) : (schema["maximum"]?.uiNumberValue ?? 1000000)
+                    let number = value.uiNumberValue ?? max(minimum, min(maximum, 0))
+                    let step = integer ? 1.0 : 0.1
+                    if minimum.isFinite, maximum.isFinite, abs(minimum) <= 1e9, abs(maximum) <= 1e9, minimum < maximum, maximum - minimum >= step, number >= minimum, number <= maximum {
+                        rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: .stepper, key: "setting:" + key, title: title, number: number, minimum: minimum, maximum: maximum, step: step))
+                    } else { add(section, .input, "setting:" + key, title, detail: self.settingText(value)) }
                 default:
                     add(section, .text, "", title + ": " + self.tr("этот тип настройки пока недоступен", "this setting type is unavailable"))
                 }
@@ -309,9 +260,14 @@ private final class DGPluginPage {
                         append(node.children)
                         section += 1
                     case "text": add(section, .text, "", node.text.isEmpty ? node.title : node.text)
+                    case "markdown": add(section, .markdown, "", node.text)
                     case "button": add(section, .action, key, node.title)
                     case "toggle": add(section, .toggle, key, node.title, value: value == .bool(true))
                     case "input": add(section, .input, key, node.title, detail: self.settingText(value))
+                    case "multiline": add(section, .multiline, key, node.title, detail: self.settingText(value))
+                    case "slider", "stepper":
+                        rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: node.type == "slider" ? .slider : .stepper, key: key, title: node.title, number: value.uiNumberValue ?? node.minimum, minimum: node.minimum, maximum: node.maximum, step: node.step))
+                    case "image": add(section, .image, "", node.title, icon: node.asset ?? "")
                     case "select": add(section, .disclosure, key, node.title, detail: node.options.first(where: { $0.value == value })?.title ?? self.settingText(value))
                     default: break
                     }
@@ -319,14 +275,12 @@ private final class DGPluginPage {
             }
             append(state.nodes)
         }
-        return rows
+        return rows.map { row in var row = row; row.epoch = self.sequence; return row }
     }
 
     private func appendCard(manifest: DGPluginManifest, trust: String, digest: String, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
-        add(0, .disclosure, "", manifest.name, manifest.version, false, true, iconKey)
-        add(0, .text, "", manifest.description, "", false, true, "")
         let author = manifest.author.map { $0.name + ($0.username.map { " (@\($0))" } ?? "") } ?? self.tr("не указан", "not specified")
-        add(0, .text, "", self.tr("заявленный автор: ", "claimed author: ") + author + "\n" + manifest.id, "", false, true, "")
+        add(0, .card, "", manifest.name, manifest.version + "\n" + self.tr("заявленный автор: ", "claimed author: ") + author + "\n" + manifest.id, false, true, iconKey)
         add(1, .text, "", self.tr("доверие: ", "trust: ") + self.trustText(trust) + "\n" + self.tr("профиль: ", "profile: ") + manifest.profile + "\nsha256: " + digest, "", false, true, "")
         add(3, .header, "", self.tr("запрашиваемые разрешения", "requested permissions"), "", false, true, "")
         let permissions = manifest.permissions.map { self.tr("обязательное: ", "required: ") + self.permissionText($0) } + manifest.optionalPermissions.map { self.tr("необязательное: ", "optional: ") + self.permissionText($0) }
@@ -391,24 +345,36 @@ private final class DGPluginPage {
         }
     }
 
-    func icon(_ key: String) -> UIImage {
+    func cardDescription() -> String {
+        switch self.mode {
+        case let .install(package): return package.manifest.description
+        case let .details(id): return self.installation(id)?.manifest.description ?? self.pendingRemoval?.manifest.description ?? ""
+        default: return ""
+        }
+    }
+
+    func icon(_ key: String, size: CGFloat = 40) -> UIImage {
         let manifest: DGPluginManifest?
         let data: Data?
         if key == "preview", case let .install(package) = self.mode {
             manifest = package.manifest
             data = package.iconData
         } else {
-            manifest = self.installation(key)?.manifest
+            manifest = self.installation(key)?.manifest ?? self.pendingRemoval?.manifest
             data = self.manager.iconData(id: key)
         }
-        return dgPluginIcon(data: data, id: manifest?.id ?? key, name: manifest?.name ?? "dg")
+        return dgPluginIcon(data: data, id: manifest?.id ?? key, name: manifest?.name ?? "dg", size: size)
     }
 
     func action(_ key: String) {
         guard !self.busy else { return }
         if key.hasPrefix("render:"), case let .rendered(state) = self.mode, let node = state.node(String(key.dropFirst(7))), state.validity() {
             if node.type == "select" {
-                let actions = node.options.map { option in TextAlertAction(type: .genericAction, title: option.title, action: { [weak self, weak state] in state?.invoke(node, value: option.value); self?.refresh() }) } + [TextAlertAction(type: .defaultAction, title: self.tr("отмена", "cancel"), action: {})]
+                let actions = node.options.map { option in TextAlertAction(type: .genericAction, title: option.title, action: { [weak self, weak state] in
+                    guard let self, let state, case let .rendered(current) = self.mode, current === state else { return }
+                    state.invoke(node, value: option.value)
+                    self.refresh()
+                }) } + [TextAlertAction(type: .defaultAction, title: self.tr("отмена", "cancel"), action: {})]
                 self.controller?.present(textAlertController(context: self.context, title: node.title, text: "", actions: actions), in: .window(.root))
             } else { state.invoke(node, value: .null) }
             return
@@ -439,12 +405,35 @@ private final class DGPluginPage {
             let id = String(key.dropFirst(7))
             self.confirm(title: self.tr("удалить плагин «", "remove plugin “") + (self.installation(id)?.manifest.name ?? "") + self.tr("»?", "”?"), text: self.tr("код и данные этого плагина для всех аккаунтов на устройстве будут удалены. это действие нельзя отменить.", "this plugin's code and data for every account on this device will be removed. this cannot be undone."), destructive: true) { [weak self] in
                 guard let self else { return }
-                self.manager.remove(id: id) { [weak self] result in self?.complete(result) }
+                self.pendingRemoval = self.installation(id)
+                self.busy = true
+                self.refresh()
+                self.manager.remove(id: id) { [weak self] result in
+                    guard let self else { return }
+                    self.busy = false
+                    self.pendingRemoval = nil
+                    switch result {
+                    case .success: self.returnToListAfterRemoval()
+                    case .failure: self.complete(result)
+                    }
+                }
             }
         } else if key.hasPrefix("reset:") {
             let id = String(key.dropFirst(6))
             self.confirm(title: self.tr("сбросить данные плагина?", "reset plugin data?"), text: self.tr("настройки и локальные данные плагина для текущего аккаунта будут удалены. плагин будет остановлен.", "the plugin's settings and local data for this account will be removed. the plugin will stop."), destructive: true) { [weak self] in
                 self?.manager.resetData(id: id) { [weak self] result in self?.complete(result) }
+            }
+        } else if key.hasPrefix("rollback:") {
+            let id = String(key.dropFirst(9))
+            self.confirm(title: self.tr("вернуться к предыдущей версии?", "restore previous version?"), text: self.tr("плагин будет остановлен. проверьте разрешения перед повторным включением.", "the plugin will stop. review permissions before enabling it again."), destructive: false) { [weak self] in
+                self?.manager.rollback(id: id) { [weak self] result in self?.complete(result) }
+            }
+        } else if key.hasPrefix("publisher:") {
+            let id = String(key.dropFirst(10))
+            guard let identity = self.manager.publisherIdentity(id: id), identity.hasPrefix("ed25519:") else { return }
+            let revoked = self.installation(id)?.trust != "revoked"
+            self.confirm(title: revoked ? self.tr("заблокировать издателя?", "block publisher?") : self.tr("разблокировать издателя?", "unblock publisher?"), text: self.tr("это изменит доверие ко всем плагинам этого ключа на устройстве. блокировка немедленно остановит их.", "this changes trust for every plugin signed by this key on this device. blocking stops them immediately."), destructive: revoked) { [weak self] in
+                self?.manager.setPublisherRevoked(identity, revoked: revoked) { [weak self] result in self?.complete(result) }
             }
         } else if key.hasPrefix("command:"), case let .details(id) = self.mode {
             self.manager.runCommand(installationId: id, commandId: String(key.dropFirst(8)), input: .null) { [weak self] result in self?.complete(result) }
@@ -495,7 +484,7 @@ private final class DGPluginPage {
     }
 
     func input(_ key: String, _ value: String) {
-        if key.hasPrefix("render:"), case let .rendered(state) = self.mode, let node = state.node(String(key.dropFirst(7))), node.type == "input" { state.invoke(node, value: .string(String(value.prefix(4096)))); return }
+        if key.hasPrefix("render:"), case let .rendered(state) = self.mode, let node = state.node(String(key.dropFirst(7))), node.type == "input" || node.type == "multiline" { state.invoke(node, value: .string(String(value.prefix(4096)))); return }
         if key == "search" { self.query = String(value.prefix(128)); self.refresh(); return }
         guard key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) else { return }
         let setting = String(key.dropFirst(8))
@@ -509,6 +498,34 @@ private final class DGPluginPage {
         default: values[setting] = .string(String(value.prefix(4096)))
         }
         self.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
+    }
+
+    func number(_ key: String, _ value: Double) {
+        guard value.isFinite else { return }
+        if key.hasPrefix("render:"), case let .rendered(state) = self.mode, let node = state.node(String(key.dropFirst(7))), node.type == "slider" || node.type == "stepper", value >= node.minimum, value <= node.maximum {
+            state.invoke(node, value: .number(value))
+            self.refresh()
+        } else if key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) {
+            var values = item.settings
+            values[String(key.dropFirst(8))] = .number(value)
+            self.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
+        }
+    }
+
+    private func returnToListAfterRemoval() {
+        let notice = self.tr("плагин удалён", "plugin removed")
+        if let navigation = self.controller?.navigationController as? NavigationController {
+            for (index, candidate) in navigation.viewControllers.enumerated().reversed() {
+                guard let candidate = candidate as? ViewController, let page = dgPluginPages.object(forKey: candidate), case .list = page.mode else { continue }
+                page.notice = notice
+                page.refresh()
+                navigation.setViewControllers(Array(navigation.viewControllers.prefix(index + 1)), animated: true)
+                return
+            }
+        }
+        self.mode = .list
+        self.notice = notice
+        self.refresh()
     }
 
     private func complete(_ result: Result<Void, DGPluginError>) {
@@ -530,6 +547,8 @@ private final class DGPluginPage {
     }
 }
 
+private let dgPluginPages = NSMapTable<ViewController, DGPluginPage>.weakToWeakObjects()
+
 private func dgMakePluginPage(context: AccountContext, mode: DGPluginPageMode) -> ItemListController {
     let page = DGPluginPage(context: context, mode: mode)
     return dgMakePluginPage(page: page)
@@ -544,6 +563,7 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
         let close = ItemListNavigationButton(content: .text(page.tr("закрыть", "close")), style: .regular, enabled: !page.busy, action: { [weak page] in
             guard let controller = page?.controller else { return }
             page?.resourceDisposable?.dispose()
+            if case let .rendered(state)? = page?.mode { state.close() }
             if let navigation = controller.navigationController as? NavigationController { let _ = navigation.popViewController(animated: true) }
             else { controller.dismiss() }
         })
@@ -553,6 +573,12 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
     let controller = ItemListController(context: context, state: signal)
     controller.alwaysSynchronous = true
     page.controller = controller
+    dgPluginPages.setObject(page, forKey: controller)
+    controller.didDisappear = { [weak page, weak controller] _ in
+        guard let page, let controller, case let .rendered(state) = page.mode else { return }
+        if let navigation = controller.navigationController, navigation.viewControllers.contains(where: { $0 === controller }) { return }
+        state.close()
+    }
     return controller
 }
 
@@ -564,10 +590,41 @@ public func dgPluginInstallController(context: AccountContext, package: DGVerifi
     return dgMakePluginPage(context: context, mode: .install(package))
 }
 
-public func dgPluginRenderedController(context: AccountContext, page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, onCallback: @escaping (String, DGPluginJSON) -> Void) throws -> ViewController {
+public func dgPluginRenderedController(context: AccountContext, page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, onCallback: @escaping (String, DGPluginJSON) -> Void, assetProvider: @escaping (String) -> Data? = { _ in nil }, onClose: (() -> Void)? = nil) throws -> ViewController {
     guard validity() else { throw DGPluginError(code: "cancelled", message: "plugin page is no longer current") }
-    let state = try DGPluginRenderedState(page: page, pluginName: pluginName, validity: validity, callback: onCallback)
-    return dgMakePluginPage(context: context, mode: .rendered(state))
+    let state = try DGPluginRenderedState(page: page, pluginName: pluginName, validity: validity, assetProvider: assetProvider, onClose: onClose, callback: onCallback)
+    let session = DGPluginPage(context: context, mode: .rendered(state))
+    session.renderedImages = try dgPluginResolveImages(state)
+    return dgMakePluginPage(page: session)
+}
+
+public func dgUpdatePluginRenderedController(_ controller: ViewController, page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, onCallback: @escaping (String, DGPluginJSON) -> Void, assetProvider: @escaping (String) -> Data? = { _ in nil }, onClose: (() -> Void)? = nil) throws -> Bool {
+    guard validity(), let session = dgPluginPages.object(forKey: controller), case let .rendered(oldState) = session.mode else { return false }
+    let state = try DGPluginRenderedState(page: page, pluginName: pluginName, validity: validity, assetProvider: assetProvider, onClose: onClose, callback: onCallback)
+    let images = try dgPluginResolveImages(state)
+    guard validity() else { return false }
+    oldState.supersede()
+    session.mode = .rendered(state)
+    session.renderedImages = images
+    session.refresh()
+    return true
+}
+
+private func dgPluginResolveImages(_ state: DGPluginRenderedState) throws -> [String: UIImage] {
+    var images: [String: UIImage] = [:]
+    func visit(_ nodes: [DGPluginRenderNode]) throws {
+        for node in nodes {
+            if let handle = node.asset {
+                if images[handle] != nil { continue }
+                guard images.count < 8 else { throw DGPluginError(code: "quota_exceeded", message: "too many local images") }
+                guard state.validity(), let data = state.assetProvider(handle), let image = dgPluginRasterImage(data: data, maximumPixelSize: 512) else { throw DGPluginError(code: "stale_handle", message: "local image asset is unavailable") }
+                images[handle] = image
+            }
+            try visit(node.children)
+        }
+    }
+    try visit(state.nodes)
+    return images
 }
 
 private var dgPluginAccountBindings: [String: Disposable] = [:]
@@ -663,25 +720,33 @@ public func dgPluginDocumentIcon(context: AccountContext, file: TelegramMediaFil
     }
 }
 
-public func dgPluginIcon(data: Data?, id: String, name: String) -> UIImage {
-    if let data, data.count <= 262144, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) == 1,
+private func dgPluginRasterImage(data: Data, maximumPixelSize: Int) -> UIImage? {
+    if data.count <= 262144, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) == 1,
        let type = CGImageSourceGetType(source) as String?, ["public.png", "public.jpeg"].contains(type),
        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
        let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
        width > 0, height > 0, width <= 1024, height <= 1024,
-       let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 96, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) {
-        return UIImage(cgImage: image, scale: CGFloat(max(image.width, image.height)) / 40.0, orientation: .up)
+       let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) {
+        return UIImage(cgImage: image)
+    }
+    return nil
+}
+
+public func dgPluginIcon(data: Data?, id: String, name: String, size: CGFloat = 40) -> UIImage {
+    let dimension = min(96, max(20, size))
+    if let data, let image = dgPluginRasterImage(data: data, maximumPixelSize: Int(dimension * 3)), let bitmap = image.cgImage {
+        return UIImage(cgImage: bitmap, scale: CGFloat(max(bitmap.width, bitmap.height)) / dimension, orientation: .up)
     }
     var hash: UInt32 = 2166136261
     for byte in id.utf8 { hash = (hash ^ UInt32(byte)) &* 16777619 }
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40))
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: dimension, height: dimension))
     return renderer.image { _ in
         UIColor(hue: CGFloat(hash % 360) / 360, saturation: 0.45, brightness: 0.65, alpha: 1).setFill()
-        UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 40, height: 40), cornerRadius: 9).fill()
+        UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: dimension, height: dimension), cornerRadius: dimension * 0.225).fill()
         let initials = name.split(whereSeparator: { $0.isWhitespace }).prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
         let text = initials.isEmpty ? "DG" : initials
-        let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 16, weight: .semibold), .foregroundColor: UIColor.white]
+        let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: dimension * 0.4, weight: .semibold), .foregroundColor: UIColor.white]
         let size = (text as NSString).size(withAttributes: attributes)
-        (text as NSString).draw(at: CGPoint(x: (40 - size.width) / 2, y: (40 - size.height) / 2), withAttributes: attributes)
+        (text as NSString).draw(at: CGPoint(x: (dimension - size.width) / 2, y: (dimension - size.height) / 2), withAttributes: attributes)
     }
 }

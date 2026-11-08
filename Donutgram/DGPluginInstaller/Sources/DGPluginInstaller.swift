@@ -1,7 +1,14 @@
 import Foundation
+#if canImport(CryptoKit)
 import CryptoKit
+#endif
+#if canImport(ImageIO)
 import ImageIO
+#endif
 import DGPluginModel
+#if os(Windows)
+import DGPluginArchiveC
+#endif
 
 public struct DGVerifiedPluginPackage {
     public let manifest: DGPluginManifest
@@ -16,7 +23,16 @@ public struct DGVerifiedPluginPackage {
 
 public enum DGPluginInstaller {
     public static func digest(_ data: Data) -> String {
+        #if canImport(CryptoKit)
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        #elseif os(Windows)
+        var output = [UInt8](repeating: 0, count: 32)
+        let success = data.withUnsafeBytes { dg_plugin_sha256($0.bindMemory(to: UInt8.self).baseAddress, data.count, &output) }
+        precondition(success == 1, "system sha256 unavailable")
+        return output.map { String(format: "%02x", $0) }.joined()
+        #else
+        preconditionFailure("sha256 requires a supported native crypto provider")
+        #endif
     }
 
     public static func preview(data: Data, fileName: String) throws -> DGVerifiedPluginPackage {
@@ -199,12 +215,19 @@ public enum DGPluginInstaller {
             let content = path == "manifest.json" ? canonicalManifest : files[path]!
             payload.append(Data("\(path.utf8.count):\(path):\(self.digest(content))\n".utf8))
         }
+        #if canImport(CryptoKit)
         let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: keyData)
         guard publicKey.isValidSignature(signature, for: payload) else { throw self.error("signature_mismatch", "plugin signature does not match content") }
         return ("ed25519:" + self.digest(keyData), "signatureVerified")
+        #else
+        throw self.error("feature_unavailable", "this platform cannot verify signed plugin packages")
+        #endif
     }
 
+    public static func rasterAsset(_ data: Data) -> Data? { return self.safeIcon(data) }
+
     private static func safeIcon(_ data: Data) -> Data? {
+        #if canImport(ImageIO)
         guard !data.isEmpty, data.count <= 1024 * 1024,
               let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) == 1,
@@ -219,6 +242,9 @@ public enum DGPluginInstaller {
         CGImageDestinationAddImage(destination, image, nil)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return output as Data
+        #else
+        return nil
+        #endif
     }
 
     private static func semver(_ value: String) -> Bool {

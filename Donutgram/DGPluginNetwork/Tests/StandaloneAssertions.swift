@@ -1,0 +1,8 @@
+import Foundation
+class XCTestCase {}
+func XCTAssertTrue(_ value: @autoclosure () throws -> Bool, _ message: @autoclosure () -> String = "", file: StaticString = #file, line: UInt = #line) { do { if try !value() { fatalError(message(), file: file, line: line) } } catch { fatalError(String(describing:error), file:file,line:line) } }
+func XCTAssertFalse(_ value: @autoclosure () throws -> Bool, _ message: @autoclosure () -> String = "", file: StaticString = #file, line: UInt = #line) { do { if try value() { fatalError(message(), file:file,line:line) } } catch { fatalError(String(describing:error),file:file,line:line) } }
+func XCTAssertEqual<T: Equatable>(_ left: @autoclosure () throws -> T, _ right: @autoclosure () throws -> T, _ message: @autoclosure () -> String = "", file: StaticString = #file, line: UInt = #line) { do { if try left() != right() { fatalError(message(),file:file,line:line) } } catch { fatalError(String(describing:error),file:file,line:line) } }
+func XCTAssertNil<T>(_ value: @autoclosure () throws -> T?, _ message: @autoclosure () -> String = "", file: StaticString = #file, line: UInt = #line) { do { if try value() != nil { fatalError(message(),file:file,line:line) } } catch { fatalError(String(describing:error),file:file,line:line) } }
+func XCTAssertThrowsError<T>(_ value: @autoclosure () throws -> T, _ message: @autoclosure () -> String = "", file: StaticString = #file, line: UInt = #line) { do { _ = try value() } catch { return }; fatalError("expected error: " + message(),file:file,line:line) }
+func XCTUnwrap<T>(_ value: T?, file: StaticString = #file, line: UInt = #line) throws -> T { guard let value else { fatalError("unexpected nil",file:file,line:line) }; return value }

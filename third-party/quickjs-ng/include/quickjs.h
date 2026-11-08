@@ -587,6 +587,8 @@ JS_EXTERN void JS_SetMemoryLimitFunc(JSRuntime *rt, JSMemoryLimitFunc *func, voi
    once. It cannot be undone. It allocates nothing, so a host may call it from its interrupt handler or its
    memory-limit hook. JS_IsUncatchableError, which sees only a value, still answers for the value alone. */
 JS_EXTERN void JS_SetStopped(JSRuntime *rt);
+JS_EXTERN bool JS_IsStopped(JSRuntime *rt);
+JS_EXTERN void JS_SetNativeWorkLimit(JSRuntime *rt, uint64_t limit);
 
 JS_EXTERN JSValue JS_GetFunctionProto(JSContext *ctx);
 

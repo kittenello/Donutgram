@@ -1,5 +1,6 @@
 import Foundation
 import DGPluginModel
+import DGPluginNetwork
 
 public struct DGPluginMethodRule {
     public let capability: String?
@@ -21,22 +22,23 @@ public enum DGPluginPolicy {
         add(["storage.get", "storage.set", "storage.remove", "storage.keys"], "storage.local", "pluginAccount")
         add(["ui.command.register", "ui.command.unregister", "ui.toast"], "ui.contribute", nil)
         add(["ui.render", "ui.dispose"], "ui.contribute", "settings")
+        add(["assets.image"], "ui.contribute", "settings")
         add(["events.subscribe", "events.unsubscribe"], nil, nil)
         add(["theme.get"], "theme.read", "currentTheme")
         add(["theme.contribute"], "theme.contribute", "localTokens", available: false)
         add(["composer.getActiveDraft"], "composer.read", "activeComposer", gesture: true)
         add(["composer.replaceSelection"], "composer.transform", "activeComposer", gesture: true)
         add(["selection.get"], "messages.selection.read", "activeSelection", gesture: true)
-        add(["messages.read"], "messages.read", "selectedChats", gesture: true, available: false)
-        add(["chats.metadata"], "chats.metadata.read", "selectedChats", gesture: true, available: false)
-        add(["peers.read"], "peers.read", "selectedPeers", gesture: true, available: false)
-        add(["network.request"], "network.public", "declaredOrigins", available: false)
-        add(["translation.request"], "translation.request", "selectedText", gesture: true, available: false)
-        add(["navigation.open"], "navigation.open", "safeScreens", gesture: true, available: false)
-        add(["notifications.local"], "notifications.local", "pluginAccount", gesture: true, available: false)
-        add(["files.read"], "files.userSelected", "selectedFile", gesture: true, available: false)
-        add(["messages.compose"], "messages.compose", "chosenRecipient", gesture: true, available: false)
-        add(["messages.prepare", "messages.sendInteractive"], "messages.sendInteractive", "chosenRecipient", gesture: true, available: false)
+        add(["messages.read"], "messages.read", "selectedChats", gesture: true)
+        add(["chats.metadata"], "chats.metadata.read", "selectedChats", gesture: true)
+        add(["peers.read"], "peers.read", "selectedPeers", gesture: true)
+        add(["network.request"], "network.public", "declaredOrigins", available: DGPluginPublicNetwork.isAvailable)
+        add(["translation.request"], "translation.request", "selectedText", gesture: true)
+        add(["navigation.open"], "navigation.open", "safeScreens", gesture: true)
+        add(["notifications.local"], "notifications.local", "pluginAccount", gesture: true)
+        add(["files.pick", "files.read"], "files.userSelected", "selectedFile", gesture: true)
+        add(["messages.compose"], "messages.compose", "chosenRecipient", gesture: true)
+        add(["messages.prepare", "messages.sendInteractive"], "messages.sendInteractive", "chosenRecipient", gesture: true)
         add(["ui.transform"], "ui.transform", nil, available: false)
         return result
     }()
@@ -47,9 +49,9 @@ public enum DGPluginPolicy {
 
     public static func validateProfile(_ manifest: DGPluginManifest) throws {
         let permissions = manifest.permissions + manifest.optionalPermissions
-        let privateCapabilities: Set<String> = ["composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "messages.compose", "messages.sendInteractive", "files.userSelected"]
+        let privateCapabilities: Set<String> = ["composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "messages.compose", "messages.sendInteractive", "files.userSelected", "translation.request", "ui.transform"]
         if manifest.profile == "localPrivate" {
-            guard !permissions.contains(where: { $0.capability == "network.public" }) else {
+            guard !permissions.contains(where: { $0.capability == "network.public" || $0.capability == "notifications.local" }) else {
                 throw DGPluginError(code: "permission_denied", message: "private plugins cannot request public network access")
             }
         } else if manifest.profile == "publicNetwork" {

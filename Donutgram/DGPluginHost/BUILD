@@ -10,6 +10,7 @@ swift_library(
         "//Donutgram/DGPluginModel",
         "//Donutgram/DGPluginInstaller",
         "//Donutgram/DGPluginRuntime",
+        "//Donutgram/DGPluginNetwork",
     ],
     visibility = ["//visibility:public"],
 )

@@ -2,10 +2,10 @@
   "engine": "quickjs-ng",
   "upstreamVersion": "0.17.0",
   "sourceOrigin": "widget-sandbox 862eec8",
-  "policyVersion": 1,
+  "policyVersion": 2,
   "files": {
     "third-party/quickjs-ng/include/qjs_shim.h": "5abfb2eadd7e92664e8d5a31617f63723cad63926aeee61806d9484ec5dfa3b6",
-    "third-party/quickjs-ng/include/quickjs.h": "20720dd794f2ca4bd688e9f6edc2e1586d5d7ff1cd5e215f4fbaa60d2b99075b",
+    "third-party/quickjs-ng/include/quickjs.h": "ad8955aadccce193433c22aca817c3070d853285b0c41ffb1440fbfaab4fb9e0",
     "third-party/quickjs-ng/quickjs/builtin-array-fromasync.h": "f41eb2eb028832cff9a5f8d8d2cb438c27771a9d7d85c30dfd16aa78f34fe6de",
     "third-party/quickjs-ng/quickjs/builtin-iterator-zip-keyed.h": "24446c6157a043cfeb0b0255c7892f5146809bd3098c70028bfa1ee5311b91f4",
     "third-party/quickjs-ng/quickjs/builtin-iterator-zip.h": "fdaef760ecce82c1f8b62dca8d0d424ae05ef88a0037e32221858ab7ac8994c9",
@@ -22,7 +22,7 @@
     "third-party/quickjs-ng/quickjs/quickjs-atom.h": "66654ae6533d15073ea527979c453709d7ed83162142c656095a10dcef737a60",
     "third-party/quickjs-ng/quickjs/quickjs-c-atomics.h": "29883c742a5c512278fce54d19b1b9af949006e1d7dfc9ffa2e0946b184d8c5c",
     "third-party/quickjs-ng/quickjs/quickjs-opcode.h": "0054b0c45fd091afa308c3fb93b5862e0b071235918d3d73e413d23fce388bbc",
-    "third-party/quickjs-ng/quickjs/quickjs.c": "e540fb67efec929bc835d57a3c73bb844f1fafc64bdc3af99dae0c120e303278",
+    "third-party/quickjs-ng/quickjs/quickjs.c": "08c18749de2d684afacb1c55b4709fabf1675baa4d331f0439b55570ceb679c4",
     "third-party/quickjs-ng/shim/qjs_shim.c": "d739776f544d7030151485a1b04ef16fb5a90dafcecc5fd7356c4899c2322fbb"
   },
   "normalization": "crlf-to-lf"

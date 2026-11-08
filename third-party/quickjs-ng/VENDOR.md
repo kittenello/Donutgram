@@ -1,5 +1,9 @@
 # quickjs-ng (our fork)
 
+plugin-specific policy added 2026-11-08: `JS_SetNativeWorkLimit(runtime, limit)` opts a runtime into bounded native work; zero is the unchanged default used by widgets. resetting the allowance never clears the stop latch. `JS_IsStopped` exposes the existing latch to the owning native host. the plugin host enables eight million units per active operation, direct native-call entry polls and checks every 1024 charged units. array length/property traversal, string buffer writes, bounded sort comparisons, search, trim, bigint multiplication/division/conversion, source/json tokenization and regexp timeout callbacks charge work. sparse enormous array lengths and quadratic estimates can be denied before the native operation. these are explicit plugin quotas rather than restored global widget work accounting.
+
+the stock interpreter interrupt counter and widget runtime policy remain unchanged. the plugin regression fixture `default_policy` executes a generic join above the plugin allowance on a default runtime. `DGPluginRuntime/Tests/NativeWorkTests.cpp` runs hostile inputs in separate externally timed processes, including native cancellation, parser interruption, real-thread cpu windows and native-await budget suspension. native algorithm cleanup and uninstrumented helper calls are not preemptive; see `docs/plugins/runtime-hardening.md` for the measured coverage and limitations.
+
 **This is our fork of quickjs-ng (the user, 2026-10-16), not a pristine vendor copy.** Engine-level features
 the message-widget runtime needs go here directly, each recorded below as a numbered change with what it does, why,
 and the test that pins it. It started from quickjs-ng v0.17.0 plus a 40-line C shim (`shim/qjs_shim.c`,

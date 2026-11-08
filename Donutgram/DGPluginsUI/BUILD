@@ -1,4 +1,4 @@
-load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
 
 swift_library(
     name = "DGPluginsUI",
@@ -6,6 +6,7 @@ swift_library(
     srcs = glob(["Sources/**/*.swift"]),
     copts = ["-warnings-as-errors"],
     deps = [
+        "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//Donutgram/DGPluginModel:DGPluginModel",
         "//Donutgram/DGPluginInstaller:DGPluginInstaller",
         "//Donutgram/DGPluginHost:DGPluginHost",
@@ -18,4 +19,11 @@ swift_library(
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
     ],
     visibility = ["//visibility:public"],
+)
+
+swift_binary(
+    name = "DGPluginPageSchemaChecks",
+    testonly = True,
+    srcs = ["Sources/DGPluginPageSchema.swift", "Tests/SchemaMain.swift"],
+    deps = ["//Donutgram/DGPluginModel:DGPluginModel"],
 )

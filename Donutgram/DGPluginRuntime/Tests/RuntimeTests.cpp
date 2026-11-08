@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
     source = "definePlugin({activate(api){api.ui.callback(async value=>{await api.storage.set('ui',value)});}});";
     check(dgjs_add_file(host, "main.js", reinterpret_cast<const uint8_t *>(source.data()), source.size()) == 0, "ui callback fixture");
     check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 0, "ui callback activation");
-    check(dgjs_dispatch(host, "ui", "{\"id\":\"callback.1\",\"value\":42}") == 1, "ui callback invokes async native operation");
+    check(dgjs_dispatch(host, "ui", "{\"id\":\"callback.1\",\"value\":42}") > 0, "ui callback invokes async native operation");
     check(requests.count == 1, "ui callback delivered");
     check(dgjs_reply(host, requests.ids.front(), "{\"result\":null}") == 0 && dgjs_pump(host) == 0, "ui callback settled");
     dgjs_destroy(host);

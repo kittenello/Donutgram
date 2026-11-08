@@ -68,6 +68,19 @@
     selection: Object.freeze({get: () => request('selection.get')}),
     theme: Object.freeze({get: () => request('theme.get')}),
     network: Object.freeze({request: method('network.request')}),
+    messages: Object.freeze({read: method('messages.read')}),
+    chats: Object.freeze({metadata: method('chats.metadata')}),
+    peers: Object.freeze({read: method('peers.read')}),
+    navigation: Object.freeze({open: method('navigation.open')}),
+    notifications: Object.freeze({local: method('notifications.local')}),
+    files: Object.freeze({pick: () => request('files.pick'), read: method('files.read')}),
+    assets: Object.freeze({image: method('assets.image')}),
+    translation: Object.freeze({request: method('translation.request')}),
+    actions: Object.freeze({messages: Object.freeze({
+      prepare: method('messages.prepare'),
+      sendInteractive: method('messages.sendInteractive'),
+      compose: method('messages.compose')
+    })}),
     ui: Object.freeze({
       callback(handler) {
         if (typeof handler !== 'function' || callbacks.size >= 128 || nextCallbackId >= Number.MAX_SAFE_INTEGER) throw error('callback_limit');

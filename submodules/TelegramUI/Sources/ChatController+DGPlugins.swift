@@ -11,6 +11,7 @@ import DGPluginsUI
 
 struct DGPluginDraftSnapshot {
     let owner: String
+    let runtimeScope: String
     let revision: String
     let state: ChatTextInputState
     let expires: TimeInterval
@@ -19,6 +20,13 @@ struct DGPluginDraftSnapshot {
 final class DGPluginChatState {
     var drafts: [String: DGPluginDraftSnapshot] = [:]
     var selectedMessages: [String: EngineMessage] = [:]
+    var renderedPages: [String: DGPluginChatRenderedPage] = [:]
+}
+
+final class DGPluginChatRenderedPage {
+    weak var controller: ViewController?
+    let token: UUID
+    init(controller: ViewController, token: UUID) { self.controller = controller; self.token = token }
 }
 
 extension ChatControllerImpl {
@@ -30,25 +38,46 @@ extension ChatControllerImpl {
             guard let self else { completion(.failure(DGPluginError(code: "cancelled", message: "chat is no longer available"))); return }
             self.dgHandlePluginRequest(installationId: installationId, method: method, params: params, validity: validity, completion: completion)
         }
-        manager.nativeRender = { [weak self] page, pluginName, validity, callback in
+        manager.nativeRender = { [weak self] installationId, page, pluginName, validity, assets, callback, onClose in
             guard let self, self.isNodeLoaded, self.view.window != nil, validity() else { return .failure(DGPluginError(code: "cancelled", message: "chat is not visible")) }
             do {
-                let controller = try dgPluginRenderedController(context: self.context, page: page, pluginName: pluginName, validity: validity, onCallback: callback)
+                guard let pageId = page.objectValue?["id"]?.stringValue else { throw DGPluginError(code: "invalid_argument", message: "page id is missing") }
+                let key = installationId + ":" + pageId
+                let token = UUID()
+                let closed = { [weak self] in
+                    if self?.dgPluginChatState.renderedPages[key]?.token == token { self?.dgPluginChatState.renderedPages.removeValue(forKey: key) }
+                    onClose()
+                }
+                let controller: ViewController
+                if let existing = self.dgPluginChatState.renderedPages[key]?.controller,
+                   try dgUpdatePluginRenderedController(existing, page: page, pluginName: pluginName, validity: validity, onCallback: callback, assetProvider: assets, onClose: closed) {
+                    controller = existing
+                } else {
+                    controller = try dgPluginRenderedController(context: self.context, page: page, pluginName: pluginName, validity: validity, onCallback: callback, assetProvider: assets, onClose: closed)
+                    guard validity() else { return .failure(DGPluginError(code: "cancelled", message: "plugin page cancelled")) }
+                    self.present(controller, in: .window(.root))
+                }
                 guard validity() else { return .failure(DGPluginError(code: "cancelled", message: "plugin page cancelled")) }
-                self.present(controller, in: .window(.root))
-                return .success({ [weak controller] in controller?.dismiss() })
+                self.dgPluginChatState.renderedPages[key] = DGPluginChatRenderedPage(controller: controller, token: token)
+                return .success({ [weak self, weak controller] in
+                    if let self {
+                        guard self.dgPluginChatState.renderedPages[key]?.token == token else { return }
+                        self.dgPluginChatState.renderedPages.removeValue(forKey: key)
+                    }
+                    controller?.dismiss()
+                })
             } catch let error as DGPluginError { return .failure(error) }
             catch { return .failure(DGPluginError(code: "invalid_argument", message: "invalid plugin page")) }
         }
     }
 
-    private func dgPluginSafeComposer() -> Bool {
+    func dgPluginSafeComposer() -> Bool {
         guard self.isNodeLoaded, self.view.window != nil, self.presentationInterfaceState.interfaceState.editMessage == nil,
               let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer, !EnginePeer(peer).isService else { return false }
         return true
     }
 
-    private func dgPluginSafeMessage(_ message: EngineMessage) -> Bool {
+    func dgPluginSafeMessage(_ message: EngineMessage) -> Bool {
         guard !self.presentationInterfaceState.copyProtectionEnabled, !self.presentationInterfaceState.myCopyProtectionEnabled,
               message.id.peerId.namespace != Namespaces.Peer.SecretChat,
               !message._asMessage().isCopyProtectedIgnoringDonutgramSetting(), message.text.utf16.count <= 16384,
@@ -72,13 +101,15 @@ extension ChatControllerImpl {
                 guard self.dgPluginChatState.drafts.count < 16 else { throw DGPluginError(code: "quota_exceeded", message: "too many draft snapshots") }
                 let handle = UUID().uuidString.lowercased()
                 let revision = UUID().uuidString.lowercased()
-                self.dgPluginChatState.drafts[handle] = DGPluginDraftSnapshot(owner: installationId, revision: revision, state: state, expires: now + 30)
+                guard let scope = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).nativeScope(installationId: installationId) else { throw DGPluginError(code: "cancelled", message: "plugin runtime stopped") }
+                self.dgPluginChatState.drafts[handle] = DGPluginDraftSnapshot(owner: installationId, runtimeScope: scope, revision: revision, state: state, expires: now + 30)
                 completion(.success(.object(["handle": .string(handle), "revision": .string(revision), "text": .string(text), "selection": .object(["start": .number(Double(state.selectionRange.lowerBound)), "end": .number(Double(state.selectionRange.upperBound))]), "entities": .array([]), "entitiesComplete": .bool(false), "plainTextComplete": .bool(false)])))
             case "composer.replaceSelection":
                 guard Set(arguments.keys).isSubset(of: ["composer", "handle", "expectedRevision", "text", "range"]), self.dgPluginSafeComposer(), let handle = arguments["composer"]?.stringValue ?? arguments["handle"]?.stringValue,
                       (arguments["composer"] == nil || arguments["handle"] == nil || arguments["composer"] == arguments["handle"]),
                       let revision = arguments["expectedRevision"]?.stringValue, let text = arguments["text"]?.stringValue, text.utf16.count <= 4096,
                       let snapshot = self.dgPluginChatState.drafts[handle], snapshot.owner == installationId, snapshot.revision == revision,
+                      DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).nativeScope(installationId: installationId) == snapshot.runtimeScope,
                       snapshot.expires >= ProcessInfo.processInfo.systemUptime else { throw DGPluginError(code: "stale_handle", message: "draft handle expired or does not match this plugin") }
                 self.dgPluginChatState.drafts.removeValue(forKey: handle)
                 let originalText = snapshot.state.content.plainText as NSString
@@ -122,6 +153,7 @@ extension ChatControllerImpl {
                 self.present(textAlertController(context: self.context, title: "plugin", text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                 completion(.success(.null))
             default:
+                if self.dgHandleAdditionalPluginRequest(installationId: installationId, method: method, params: params, validity: validity, completion: completion) { return }
                 throw DGPluginError(code: "feature_unavailable", message: "this native adapter is unavailable")
             }
         } catch let error as DGPluginError { completion(.failure(error)) }
@@ -137,7 +169,8 @@ extension ChatControllerImpl {
         guard self.dgPluginSafeComposer(), message.map(self.dgPluginSafeMessage) ?? true else { return [] }
         let manager = DGPluginManager.shared(accountKey: String(self.context.account.id.int64))
         return manager.commands.filter { placements.contains($0.placement) }.prefix(32).map { command in
-            .action(ContextMenuActionItem(text: command.title, icon: { _ in nil }, action: { [weak self] _, dismiss in
+            let pluginName = manager.installations.first(where: { $0.id == command.installationId })?.manifest.name ?? "plugin"
+            return .action(ContextMenuActionItem(text: command.title + " · " + pluginName, icon: { _ in nil }, action: { [weak self] _, dismiss in
                 dismiss(.default)
                 guard let self else { return }
                 self.dgBindChatPlugins()

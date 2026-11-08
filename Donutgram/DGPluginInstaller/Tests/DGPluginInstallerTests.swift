@@ -1,6 +1,8 @@
 import Foundation
 import XCTest
+#if canImport(CryptoKit)
 import CryptoKit
+#endif
 import DGPluginModel
 @testable import DGPluginInstaller
 
@@ -9,6 +11,11 @@ final class DGPluginInstallerTests: XCTestCase {
 
     private func source(_ metadata: String? = nil, suffix: String = "throw new Error('preview must never run');") -> Data {
         return Data(("const _plugin = \"donutgram\";\nconst manifest = " + (metadata ?? self.metadata) + ";\n" + suffix).utf8)
+    }
+
+    func testNativeSHA256KnownVectors() {
+        XCTAssertEqual(DGPluginInstaller.digest(Data()), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        XCTAssertEqual(DGPluginInstaller.digest(Data("abc".utf8)), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
     }
 
     func testStaticPreviewDoesNotRunTopLevelCode() throws {
@@ -98,6 +105,7 @@ final class DGPluginInstallerTests: XCTestCase {
     }
 
     func testUntrustedSignatureAndModifiedCodeRejected() throws {
+        #if canImport(CryptoKit)
         let key = Curve25519.Signing.PrivateKey()
         let main = self.source()
         var parser = DGStaticJSONParser(Data(self.metadata.utf8))
@@ -119,6 +127,14 @@ final class DGPluginInstallerTests: XCTestCase {
         XCTAssertThrowsError(try DGPluginInstaller.preview(data: modified, fileName: "example.dgplugin"))
         let invalidEnvelope = self.zip([("manifest.json", Data(self.metadata.utf8)), ("main.js", main), ("signature.json", Data("{}".utf8))])
         XCTAssertThrowsError(try DGPluginInstaller.preview(data: invalidEnvelope, fileName: "example.dgplugin"))
+        #else
+        let envelope: DGPluginJSON = .object(["algorithm": .string("Ed25519"), "publicKey": .string(Data(repeating: 0, count: 32).base64EncodedString()), "signature": .string(Data(repeating: 0, count: 64).base64EncodedString())])
+        let archive = self.zip([("manifest.json", Data(self.metadata.utf8)), ("main.js", self.source()), ("signature.json", try JSONEncoder().encode(envelope))])
+        do {
+            _ = try DGPluginInstaller.preview(data: archive, fileName: "example.dgplugin")
+            XCTFail("signed package must not bypass unavailable native verification")
+        } catch let error as DGPluginError { XCTAssertEqual(error.code, "feature_unavailable") }
+        #endif
     }
 
     func testSizeAndMetadataNestingLimits() {

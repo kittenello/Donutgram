@@ -30,8 +30,12 @@ try {
     $command = 'call "' + $vc + '" >nul && "' + $clang + '" -std=c++17 -O2 -DQUICKJS_NG_BUILD -IDonutgram/DGPluginRuntime/CHost/include -Ithird-party/quickjs-ng/include Donutgram/DGPluginRuntime/CHost/DGPluginCHost.cpp Donutgram/DGPluginRuntime/Tests/RuntimeTests.cpp ' + ($objects -join ' ') + ' -o "' + $executable + '"'
     cmd /c $command
     if ($LASTEXITCODE -ne 0) { throw 'link failed' }
-    & $executable
-    if ($LASTEXITCODE -ne 0) { throw 'runtime tests failed' }
+    $nativeExecutable = Join-Path $BuildPath 'native-work-tests.exe'
+    $command = 'call "' + $vc + '" >nul && "' + $clang + '" -std=c++17 -O2 -DQUICKJS_NG_BUILD -IDonutgram/DGPluginRuntime/CHost/include -Ithird-party/quickjs-ng/include Donutgram/DGPluginRuntime/CHost/DGPluginCHost.cpp Donutgram/DGPluginRuntime/Tests/NativeWorkTests.cpp ' + ($objects -join ' ') + ' -o "' + $nativeExecutable + '"'
+    cmd /c $command
+    if ($LASTEXITCODE -ne 0) { throw 'native-work link failed' }
+    python (Join-Path $PSScriptRoot 'Tests/run_watchdog.py') --regression $executable --native $nativeExecutable --bootstrap (Join-Path $PSScriptRoot 'Sources/bootstrap.js')
+    if ($LASTEXITCODE -ne 0) { throw 'runtime watchdog tests failed' }
 } finally {
     Pop-Location
 }
