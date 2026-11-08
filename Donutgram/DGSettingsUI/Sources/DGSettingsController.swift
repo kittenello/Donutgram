@@ -447,7 +447,10 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         entries.append(.rootRow(21, 2, "media", "Запись и воспроизведение", "", "Microphone", 0xFF453A))
         entries.append(.rootRow(22, 2, "downloads", "Загрузки и сеть", acceleration, "Download", 0x34C759))
         entries.append(.header(25, 3, "РАСШИРЕНИЯ"))
-        let pluginStatus = pluginManager.globallyEnabled ? "\(pluginManager.installations.filter { $0.state == .running }.count) работает" : "Все остановлены"
+        // «2 из 3» plugins running, «Выкл» when execution is stopped for all, nothing when none is installed
+        // (dgLocalized translates both forms).
+        let installedPlugins = pluginManager.installations
+        let pluginStatus = installedPlugins.isEmpty ? "" : (pluginManager.globallyEnabled ? "\(installedPlugins.filter { $0.state == .running }.count) из \(installedPlugins.count)" : "Выкл")
         entries.append(.rootRow(26, 3, "plugins", "Плагины", pluginStatus, "Bots", 0x5E5CE6))
         entries.append(.header(30, 4, "ПРОЧЕЕ"))
         entries.append(.rootRow(31, 4, "adsAndGifts", "Реклама и подарки", "", "Gift", 0xAF52DE))
