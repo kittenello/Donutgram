@@ -56,7 +56,8 @@ extension ChatControllerImpl {
                   self.chatDisplayNode.textInputPanelNode?.inputTextState == draft else { return }
             switch result {
             case let .failure(error):
-                self.present(textAlertController(context: self.context, title: "plugin", text: error.code + ": " + error.message, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                let text = self.dgPluginText("Сообщение не отправлено, текст остался в поле ввода.", "The message was not sent; its text stays in the input field.") + "\n" + dgPluginErrorDescription(error, russian: self.dgPluginRussian)
+                self.present(textAlertController(context: self.context, title: self.dgPluginText("Плагин", "Plugin"), text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             case .success(nil):
                 break
             case let .success(replacement?):
@@ -123,6 +124,14 @@ extension ChatControllerImpl {
             } catch let error as DGPluginError { return .failure(error) }
             catch { return .failure(DGPluginError(code: "invalid_argument", message: "invalid plugin page")) }
         }
+    }
+
+    var dgPluginRussian: Bool {
+        return self.presentationData.strings.primaryComponent.languageCode.hasPrefix("ru")
+    }
+
+    func dgPluginText(_ ru: String, _ en: String) -> String {
+        return self.dgPluginRussian ? ru : en
     }
 
     /// A plugin notice is a toast, never a modal alert: it does not block the chat, and a newer one replaces it.
@@ -241,7 +250,7 @@ extension ChatControllerImpl {
             }
             return true
         }.prefix(32).map { command in
-            let pluginName = manager.installations.first(where: { $0.id == command.installationId })?.manifest.name ?? "plugin"
+            let pluginName = manager.installations.first(where: { $0.id == command.installationId })?.manifest.name ?? self.dgPluginText("Плагин", "Plugin")
             return .action(ContextMenuActionItem(text: command.title + " · " + pluginName, icon: { _ in nil }, action: { [weak self] _, dismiss in
                 dismiss(.default)
                 guard let self else { return }
@@ -253,7 +262,7 @@ extension ChatControllerImpl {
                     self.dgPluginChatState.selectedMessages.removeValue(forKey: command.installationId)
                     self.dgPluginChatState.drafts = self.dgPluginChatState.drafts.filter { $0.value.owner != command.installationId }
                     if case let .failure(error) = result, error.code != "cancelled" {
-                        self.present(textAlertController(context: self.context, title: "plugin", text: error.code + ": " + error.message, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        self.present(textAlertController(context: self.context, title: pluginName, text: dgPluginErrorDescription(error, russian: self.dgPluginRussian), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                     }
                 }
             }))

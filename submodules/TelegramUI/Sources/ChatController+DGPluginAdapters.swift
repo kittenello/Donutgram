@@ -102,7 +102,7 @@ extension ChatControllerImpl {
         let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
         guard let scope = manager.nativeScope(installationId: installationId), validity(), isNodeLoaded, view.window != nil else { completion(.failure(DGPluginError(code: "cancelled", message: "native context is no longer active"))); return true }
         let arguments = params.objectValue ?? [:]
-        let pluginName = manager.installations.first(where: { $0.id == installationId })?.manifest.name ?? "plugin"
+        let pluginName = manager.installations.first(where: { $0.id == installationId })?.manifest.name ?? dgPluginText("Плагин", "Plugin")
         if !dgAdditionalPluginState.ownedScopes.contains(scope) {
             guard manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { [weak self] in
                 guard let self else { return }
@@ -169,7 +169,7 @@ extension ChatControllerImpl {
                 try dgPluginDirectMessageAction(installationId: installationId, scope: scope, method: method, arguments: arguments, validity: validity, completion: completion)
             case "translation.request":
                 guard Set(arguments.keys).isSubset(of: ["targetLanguage", "text"]), let language = arguments["targetLanguage"]?.stringValue, language.range(of: "^[A-Za-z]{2,3}(-[A-Za-z]{2,8})?$", options: .regularExpression) != nil, let text = dgPluginSelectedText(installationId: installationId), !text.isEmpty, text.utf16.count <= 4096, arguments["text"] == nil || arguments["text"] == .string(text) else { throw DGPluginError(code: "scope_denied", message: "translation requires the exact native text selection") }
-                dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: "telegram translation · " + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
+                dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: dgPluginText("Перевести через Telegram · ", "Translate with Telegram · ") + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
                     guard let self, confirmationCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "translation cancelled"))); return }
                     let disposable = (self.context.engine.messages.translate(text: text, toLang: language) |> take(1) |> deliverOnMainQueue).start(next: { translated in
                         guard confirmationCurrent(), let translated else { finish(.failure(DGPluginError(code: "cancelled", message: "translation is unavailable or was cancelled"))); return }
@@ -318,8 +318,8 @@ extension ChatControllerImpl {
         // The identity the user confirms is the one the message is sent with: captured now, not re-read later.
         let sendAsPeerId = presentationInterfaceState.currentSendAsPeerId
         let identity = sendAsPeerId.flatMap { id in id == context.account.peerId ? nil : presentationInterfaceState.sendAsPeers?.first(where: { $0.peer.id == id })?.peer.compactDisplayTitle }
-        let action = method == "messages.compose" ? "prepare draft" : "send ordinary message"
-        let identityText = method == "messages.compose" ? "" : identity.map { " · as " + String($0.prefix(128)) } ?? ""
+        let action = method == "messages.compose" ? dgPluginText("Вставить в поле ввода", "Insert into the input field") : dgPluginText("Отправить сообщение", "Send message")
+        let identityText = method == "messages.compose" ? "" : identity.map { dgPluginText(" · от имени ", " · as ") + String($0.prefix(128)) } ?? ""
         dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + identityText + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
             guard let self, confirmationCurrent(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.dgPluginSafeComposer(), self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "cancelled", message: "recipient, price or account changed"))); return }
             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.SendPaidMessageStars(id: peerId)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] price in
