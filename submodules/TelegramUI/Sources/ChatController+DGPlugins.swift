@@ -224,7 +224,7 @@ extension ChatControllerImpl {
                 completion(.success(.object(["text": .string(text), "source": .string(source), "entities": .array([]), "entitiesComplete": .bool(false)])))
             case "ui.toast":
                 guard Set(arguments.keys) == ["text"], let text = arguments["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512, validity() else { throw DGPluginError(code: "invalid_argument", message: "invalid plugin notice") }
-                let name = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).installations.first(where: { $0.id == installationId })?.manifest.name ?? "Plugin"
+                let name = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).installations.first(where: { $0.id == installationId })?.manifest.name ?? self.dgPluginText("Плагин", "Plugin")
                 self.dgPresentPluginNotice(title: name, text: text)
                 completion(.success(.null))
             default:
