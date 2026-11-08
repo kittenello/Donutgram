@@ -6,6 +6,50 @@ func wait(_ semaphore: DispatchSemaphore, _ message: String) {
     check(semaphore.wait(timeout: .now() + 2) == .success, message)
 }
 
+func pluginRowsReplaceIncompatibleNodes() {
+    let loading = DGPluginRow(index: 0, section: 0, kind: .text, key: "", title: "preparing")
+    let card = DGPluginRow(index: 0, section: 0, kind: .card, key: "", title: "message tools")
+    let old = mergeListsStableWithUpdates(leftList: [loading], rightList: [card], isLess: { $0.index < $1.index }, isEqual: { $0 == $1 }, getId: { AnyHashable($0.index) })
+    check(old.0.isEmpty && old.1.isEmpty && old.2.count == 1, "old positional identity reuses the text node for a card and stalls updateNode")
+    let fixed = mergeListsStableWithUpdates(leftList: [loading], rightList: [card], isLess: { $0 < $1 }, isEqual: { $0 == $1 }, getId: { AnyHashable($0.stableId) })
+    check(fixed.0 == [0] && fixed.1.count == 1 && fixed.2.isEmpty, "card must get a new node, not update the loading text node")
+    var updated = card
+    updated.epoch = 1
+    let contentUpdate = mergeListsStableWithUpdates(leftList: [card], rightList: [updated], isLess: { $0 < $1 }, isEqual: { $0 == $1 }, getId: { AnyHashable($0.stableId) })
+    check(contentUpdate.0.isEmpty && contentUpdate.1.isEmpty && contentUpdate.2.count == 1, "same-kind content refresh should retain its node")
+    var rows: [DGPluginRow] = []
+    for index in 0 ..< 8 {
+        var kind: Int32 = 0
+        while let value = DGPluginRow.Kind(rawValue: kind) {
+            rows.append(DGPluginRow(index: Int32(index), section: 0, kind: value, key: "", title: ""))
+            kind += 1
+        }
+    }
+    check(Set(rows.map { $0.stableId }).count == rows.count, "different row positions and node kinds must have unique identities")
+    check(rows == rows.sorted(), "row identity must preserve display order")
+    print("reproduced: positional identity reuses incompatible list nodes; production identity replaces them")
+}
+
+func documentOperationFinishesOnce() {
+    var events: [String] = []
+    let operation = DGPluginDocumentOperation<String> { result in
+        if let result, case .success = result { events.append("show card") }
+        else { events.append("dismiss") }
+    }
+    operation.disposable.set(ActionDisposable { events.append("dispose fetch") })
+    operation.finish(nil)
+    operation.finish(.success("late result"))
+    check(events == ["dispose fetch", "dismiss"], "cancellation must dismiss once, dispose the fetch and reject late cards")
+    let synchronous = DGPluginDocumentOperation<String> { _ in events.append("ready") }
+    synchronous.finish(.success("cached attachment"))
+    synchronous.disposable.set(ActionDisposable { events.append("dispose synchronous subscription") })
+    synchronous.finish(nil)
+    check(events.suffix(2) == ["ready", "dispose synchronous subscription"], "synchronous result must not leak its subsequently assigned disposable")
+}
+
+pluginRowsReplaceIncompatibleNodes()
+documentOperationFinishesOnce()
+
 func oldConcurrentDeliveryDropsValidatedData() {
     let entered = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
@@ -109,4 +153,4 @@ cancelledRelease.signal()
 wait(cancelledDone, "cancelled validator released")
 Thread.sleep(forTimeInterval: 0.02)
 check(lateResults.with { $0 == ["validation_timeout"] }, "late validation output must remain rejected after the worker drains")
-print("plugin document ordering, validation/download deadlines, errors and cancellation passed")
+print("plugin document node transitions, operation lifetime, ordering, validation/download deadlines, errors and cancellation passed")

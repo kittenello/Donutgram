@@ -8,6 +8,7 @@ import TelegramCore
 import TelegramPresentationData
 import ItemListUI
 import PresentationDataUtils
+import OverlayStatusController
 import DGPluginModel
 import DGPluginInstaller
 import DGPluginHost
@@ -17,8 +18,9 @@ private extension DGPluginJSON {
 }
 
 private struct DGPluginRow: ItemListNodeEntry {
-    enum Kind: Equatable { case header, text, disclosure, toggle, input, multiline, markdown, card, slider, stepper, image, action, destructive }
-    let stableId: Int32
+    enum Kind: Int32 { case header, text, disclosure, toggle, input, multiline, markdown, card, slider, stepper, image, action, destructive }
+    let index: Int32
+    var stableId: Int32 { return self.index * 16 + self.kind.rawValue }
     let section: ItemListSectionId
     let kind: Kind
     let key: String
@@ -63,7 +65,7 @@ private struct DGPluginRow: ItemListNodeEntry {
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .number(self.title, self.number, self.minimum, self.maximum, self.step, self.kind == .slider), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, numberUpdated: number)
         case .image:
             if let image = page.renderedImages[self.iconKey] { return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .image(image, self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17) }
-            return ItemListTextItem(presentationData: presentationData, text: .plain(page.tr("изображение недоступно", "image unavailable")), sectionId: self.section)
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(page.tr("изображение недоступно", "image unavailable")), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .action, .destructive:
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: self.title, kind: self.kind == .destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { if self.enabled { action() } })
         }
@@ -72,12 +74,10 @@ private struct DGPluginRow: ItemListNodeEntry {
 
 private enum DGPluginPageMode {
     case list
-    case loading
     case install(DGVerifiedPluginPackage)
     case details(String)
     case permissions(String)
     case settings(String)
-    case failure(String)
     case rendered(DGPluginRenderedState)
 }
 
@@ -97,7 +97,6 @@ private final class DGPluginPage {
     var busy = false
     var enableAfterInstall = false
     var observer: UUID?
-    var resourceDisposable: Disposable?
     private var sequence = 0
     var notice: String?
     var renderedImages: [String: UIImage] = [:]
@@ -115,7 +114,6 @@ private final class DGPluginPage {
     deinit {
         if case let .rendered(state) = self.mode { state.close() }
         if let observer = self.observer { self.manager.removeObserver(observer) }
-        self.resourceDisposable?.dispose()
     }
 
     func tr(_ ru: String, _ en: String) -> String {
@@ -177,8 +175,6 @@ private final class DGPluginPage {
         case .settings: return self.tr("настройки плагина", "plugin settings")
         case .install: return self.tr("установка плагина", "install plugin")
         case let .details(id): return self.installation(id)?.manifest.name ?? self.tr("плагин удалён", "plugin removed")
-        case .loading: return self.tr("проверка файла", "checking file")
-        case .failure: return self.tr("файл не установлен", "file not installed")
         case let .rendered(state): return state.title
         }
     }
@@ -186,7 +182,7 @@ private final class DGPluginPage {
     func rows() -> [DGPluginRow] {
         var rows: [DGPluginRow] = []
         func add(_ section: Int32, _ kind: DGPluginRow.Kind, _ key: String, _ title: String, detail: String = "", value: Bool = false, enabled: Bool = true, icon: String = "") {
-            rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: kind, key: key, title: title, detail: detail, value: value, enabled: enabled && !self.busy, iconKey: icon))
+            rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: kind, key: key, title: title, detail: detail, value: value, enabled: enabled && !self.busy, iconKey: icon))
         }
         switch self.mode {
         case .list:
@@ -205,10 +201,6 @@ private final class DGPluginPage {
                 add(section, .disclosure, "details:" + item.id, item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("автор не указан", "author not specified")) + " · " + item.manifest.version + " · " + self.stateText(item), icon: item.id)
                 add(section, .toggle, "enabled:" + item.id, self.tr("включён", "enabled"), value: item.enabled)
             }
-        case .loading:
-            add(0, .text, "", self.tr("подготавливаем плагин…", "preparing plugin…"))
-        case let .failure(message):
-            add(0, .text, "", message)
         case let .install(package):
             self.appendCard(manifest: package.manifest, trust: package.trust, digest: package.digest, iconKey: "preview", add: add)
             if let old = self.manager.installations.first(where: { $0.manifest.id == package.manifest.id }) {
@@ -274,7 +266,7 @@ private final class DGPluginPage {
                     add(section, .toggle, "setting:" + key, title, value: value == .bool(true))
                 case "string":
                     let limit = Int(min(4096, max(0, schema["maxLength"]?.uiNumberValue ?? 4096)))
-                    rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: .multiline, key: "setting:" + key, title: title, detail: self.settingText(value), maxText: limit))
+                    rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .multiline, key: "setting:" + key, title: title, detail: self.settingText(value), maxText: limit))
                 case "number", "integer":
                     let integer = schema["type"]?.stringValue == "integer"
                     let minimum = integer ? ceil(schema["minimum"]?.uiNumberValue ?? -1000000) : (schema["minimum"]?.uiNumberValue ?? -1000000)
@@ -282,7 +274,7 @@ private final class DGPluginPage {
                     let number = value.uiNumberValue ?? max(minimum, min(maximum, 0))
                     let step = integer ? 1.0 : 0.1
                     if minimum.isFinite, maximum.isFinite, abs(minimum) <= 1e9, abs(maximum) <= 1e9, minimum < maximum, maximum - minimum >= step, number >= minimum, number <= maximum {
-                        rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: .stepper, key: "setting:" + key, title: title, number: number, minimum: minimum, maximum: maximum, step: step))
+                        rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .stepper, key: "setting:" + key, title: title, number: number, minimum: minimum, maximum: maximum, step: step))
                     } else { add(section, .input, "setting:" + key, title, detail: self.settingText(value)) }
                 default:
                     add(section, .text, "", title + ": " + self.tr("этот тип настройки пока недоступен", "this setting type is unavailable"))
@@ -311,7 +303,7 @@ private final class DGPluginPage {
                     case "input": add(section, .input, key, node.title, detail: self.settingText(value))
                     case "multiline": add(section, .multiline, key, node.title, detail: self.settingText(value))
                     case "slider", "stepper":
-                        rows.append(DGPluginRow(stableId: Int32(rows.count), section: section, kind: node.type == "slider" ? .slider : .stepper, key: key, title: node.title, number: value.uiNumberValue ?? node.minimum, minimum: node.minimum, maximum: node.maximum, step: node.step))
+                        rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: node.type == "slider" ? .slider : .stepper, key: key, title: node.title, number: value.uiNumberValue ?? node.minimum, minimum: node.minimum, maximum: node.maximum, step: node.step))
                     case "image": add(section, .image, "", node.title, icon: node.asset ?? "")
                     case "select": add(section, .disclosure, key, node.title, detail: node.options.first(where: { $0.value == value })?.title ?? self.settingText(value))
                     default: break
@@ -612,7 +604,6 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
         let data = ItemListPresentationData(presentationData)
         let close = ItemListNavigationButton(content: .text(page.tr("закрыть", "close")), style: .regular, enabled: !page.busy, action: { [weak page] in
             guard let controller = page?.controller else { return }
-            page?.resourceDisposable?.dispose()
             if case let .rendered(state)? = page?.mode { state.close() }
             if let navigation = controller.navigationController as? NavigationController { let _ = navigation.popViewController(animated: true) }
             else { controller.dismiss() }
@@ -703,18 +694,40 @@ public func dgBindPluginAccount(context: AccountContext) {
     })
 }
 
-public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReference, present: (ViewController) -> Void) -> Bool {
+private var dgPluginDocumentImports: [String: DGPluginDocumentOperation<DGVerifiedPluginPackage>] = [:]
+
+public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReference, present: @escaping (ViewController) -> Void, presentOverlay: @escaping (ViewController) -> Void) -> Bool {
     let fileName = file.media.fileName ?? ""
     guard fileName.lowercased().hasSuffix(".donut.js") || fileName.lowercased().hasSuffix(".dgplugin") else { return false }
-    let page = DGPluginPage(context: context, mode: .loading)
-    let controller = dgMakePluginPage(page: page)
-    present(controller)
+    precondition(Thread.isMainThread)
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let russian = presentationData.strings.primaryComponent.languageCode.hasPrefix("ru")
+    let showError: (String) -> Void = { text in
+        presentOverlay(textAlertController(context: context, title: russian ? "не удалось открыть плагин" : "unable to open plugin", text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
+    }
+    let key = String(context.account.id.int64)
+    dgPluginDocumentImports[key]?.finish(nil)
     let limit = 8 * 1024 * 1024
     if let size = file.media.size, size > Int64(limit) {
-        page.mode = .failure(page.tr("файл плагина превышает 8 миб", "plugin document exceeds 8 mib"))
-        page.refresh()
+        showError(russian ? "файл плагина превышает 8 миб" : "plugin document exceeds 8 mib")
         return true
     }
+    var cancel: (() -> Void)?
+    let overlay = OverlayStatusController(style: presentationData.theme.overallDarkAppearance ? .dark : .light, type: .loading(cancelled: { cancel?() }))
+    let operation = DGPluginDocumentOperation<DGVerifiedPluginPackage> { [weak overlay] result in
+        dgPluginDocumentImports.removeValue(forKey: key)
+        overlay?.dismiss()
+        guard let result else { return }
+        switch result {
+        case let .success(package):
+            present(dgMakePluginPage(context: context, mode: .install(package)))
+        case let .failure(error):
+            showError(error.code == "validation_timeout" ? (russian ? "не удалось подготовить плагин за 30 секунд. откройте документ снова." : "unable to prepare the plugin within 30 seconds. reopen the document to retry.") : error.code + ": " + error.message)
+        }
+    }
+    cancel = { [weak operation] in operation?.finish(nil) }
+    dgPluginDocumentImports[key] = operation
+    presentOverlay(overlay)
     let resource = file.media.resource
     let source = Signal<EngineMediaResource.ResourceData?, NoError> { subscriber in
         let read = (context.engine.resources.data(resource: EngineMediaResource(resource))
@@ -723,7 +736,7 @@ public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReferen
         let fetch = context.engine.resources.fetch(reference: file.abstract.resourceReference(resource), userLocation: .other, userContentType: .file).start(error: { _ in subscriber.putNext(nil); subscriber.putCompletion() })
         return ActionDisposable { read.dispose(); fetch.dispose() }
     }
-    page.resourceDisposable = (dgPluginValidateDocument(source: source, validate: { resourceData -> DGVerifiedPluginPackage in
+    operation.disposable.set((dgPluginValidateDocument(source: source, validate: { resourceData -> DGVerifiedPluginPackage in
         guard let resourceData else { throw DGPluginError(code: "download_failed", message: "unable to download plugin document") }
         let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: resourceData.path))
         defer { try? handle.close() }
@@ -731,17 +744,7 @@ public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReferen
         guard data.count <= limit else { throw DGPluginError(code: "package_too_large", message: "plugin document exceeds 8 mib") }
         return try DGPluginInstaller.preview(data: data, fileName: fileName)
     })
-    |> deliverOnMainQueue).start(next: { [weak page] result in
-        guard let page else { return }
-        switch result {
-        case let .success(package): page.mode = .install(package)
-        case let .failure(error):
-            if error.code == "validation_timeout" {
-                page.mode = .failure(page.tr("не удалось подготовить плагин за 30 секунд. закройте этот экран и откройте документ снова.", "unable to prepare the plugin within 30 seconds. close this screen and reopen the document."))
-            } else { page.mode = .failure(error.code + ": " + error.message) }
-        }
-        page.refresh()
-    })
+    |> deliverOnMainQueue).start(next: { [weak operation] result in operation?.finish(result) }))
     return true
 }
 

@@ -7,6 +7,8 @@ on:
       - 'Donutgram/DGPluginsUI/**'
       - 'Donutgram/DGPluginModel/**'
       - 'submodules/SSignalKit/SwiftSignalKit/Source/**'
+      - 'submodules/MergeLists/Sources/**'
+      - 'submodules/TelegramUI/Sources/OpenChatMessage.swift'
       - 'Tests/plugin_document_import/**'
       - '.github/workflows/plugin-document-tests.yml'
   workflow_dispatch:
@@ -20,5 +22,5 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - name: Check attachment validation ordering and deadlines
+      - name: Check attachment validation, cancellation and list node transitions
         run: python3 Tests/plugin_document_import/run.py

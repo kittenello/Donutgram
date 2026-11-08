@@ -13,6 +13,7 @@ swift_library(
         "//submodules/AccountContext:AccountContext",
         "//submodules/Display:Display",
         "//submodules/ItemListUI:ItemListUI",
+        "//submodules/OverlayStatusController:OverlayStatusController",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/TelegramCore:TelegramCore",
         "//submodules/TelegramPresentationData:TelegramPresentationData",

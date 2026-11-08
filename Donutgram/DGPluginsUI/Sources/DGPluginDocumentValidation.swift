@@ -2,6 +2,24 @@ import Foundation
 import SwiftSignalKit
 import DGPluginModel
 
+final class DGPluginDocumentOperation<Output> {
+    let disposable = MetaDisposable()
+    private var completion: ((Result<Output, DGPluginError>?) -> Void)?
+
+    init(completion: @escaping (Result<Output, DGPluginError>?) -> Void) {
+        self.completion = completion
+    }
+
+    func finish(_ result: Result<Output, DGPluginError>?) {
+        guard let completion = self.completion else { return }
+        self.completion = nil
+        self.disposable.dispose()
+        completion(result)
+    }
+
+    deinit { self.disposable.dispose() }
+}
+
 private let dgPluginDocumentDeadlineQueue = Queue(name: "donutgram.plugin.document-deadline", qos: .userInitiated)
 
 func dgPluginValidateDocument<Input, Output>(source: Signal<Input, NoError>, timeout seconds: Double = 30, validate: @escaping (Input) throws -> Output) -> Signal<Result<Output, DGPluginError>, NoError> {
