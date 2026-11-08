@@ -72,6 +72,26 @@ class CacheBazelDependenciesTests(unittest.TestCase):
         self.assertEqual((self.directory / self.digest / "archive.tar.gz").read_bytes(), self.content)
         self.assertEqual((self.directory / other_digest / "archive.tar.gz").read_bytes(), other)
 
+    def test_best_effort_skips_a_failing_archive_and_keeps_the_rest(self):
+        good = b"good archive"
+        archives = [("broken.tar.gz", self.digest, "https://example.test/broken"), ("good.tar.gz", hashlib.sha256(good).hexdigest(), "https://example.test/good")]
+        with patch.object(cache, "open_archive", side_effect=[cache.urllib.error.URLError("offline"), io.BytesIO(good)]):
+            cache.populate(self.directory, archives, strict=False)
+        self.assertFalse((self.directory / "broken.tar.gz").exists())
+        self.assertEqual((self.directory / "good.tar.gz").read_bytes(), good)
+        self.assertFalse(list(self.directory.glob("*.part")))
+
+    def test_best_effort_never_publishes_a_checksum_mismatch(self):
+        with patch.object(cache, "open_archive", return_value=io.BytesIO(b"wrong archive")):
+            cache.populate(self.directory, self.archives, strict=False)
+        self.assertFalse(list(self.directory.iterdir()))
+
+    def test_best_effort_skips_unreachable_registry_metadata(self):
+        lock = self.directory / "MODULE.bazel.lock"
+        lock.write_text(json.dumps({"registryFileHashes": {"https://example.test/source.json": self.digest}}), encoding="utf-8")
+        with patch.object(cache, "open_url", side_effect=cache.urllib.error.URLError("offline")):
+            self.assertEqual(cache.locked_archives(lock, strict=False), [])
+
     def test_declared_host_tools_keep_repository_checksums(self):
         root = Path(__file__).resolve().parents[3]
         archives = cache.declared_archives(root / "MODULE.bazel")

@@ -48,10 +48,23 @@ def open_archive(url):
         return open_url(asset["url"])
 
 
-def locked_archives(lock_path):
+def warn(message):
+    print("::warning::" + message, flush=True)
+
+
+def locked_archives(lock_path, strict=True):
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
 
     def resolve(item):
+        if strict:
+            return resolve_source(item)
+        try:
+            return resolve_source(item)
+        except Exception as error:
+            warn("skipped registry metadata " + item[0] + ": " + str(error))
+            return None
+
+    def resolve_source(item):
         url, expected = item
         with open_url(url) as response:
             content = response.read()
@@ -83,30 +96,50 @@ def declared_archives(module_path):
     return archives
 
 
-def populate(directory, archives):
+def populate(directory, archives, strict=True):
+    """Stores verified archives. With strict=False an archive that cannot be fetched or does not match its checksum
+    is skipped with a warning: Bazel downloads it itself, so the cache spares downloads and never fails a build."""
     directory.mkdir(parents=True, exist_ok=True)
     for name, expected, url in archives:
         target = directory / expected if sum(item[0] == name for item in archives) > 1 else directory
-        target.mkdir(parents=True, exist_ok=True)
-        destination = target / name
-        if destination.is_file() and hashlib.sha256(destination.read_bytes()).hexdigest() == expected:
-            print("cached " + name, flush=True)
-            continue
-        temporary = destination.with_suffix(destination.suffix + ".part")
         try:
-            digest = hashlib.sha256()
-            with open_archive(url) as response, temporary.open("wb") as output:
-                while chunk := response.read(1024 * 1024):
-                    digest.update(chunk)
-                    output.write(chunk)
-            if digest.hexdigest() != expected:
-                raise ValueError("archive checksum mismatch: " + name)
-            os.replace(temporary, destination)
-            print("cached " + name, flush=True)
-        finally:
-            temporary.unlink(missing_ok=True)
+            store(target, name, expected, url)
+        except Exception as error:
+            if strict:
+                raise
+            warn("skipped " + name + ": " + str(error))
+
+
+def store(target, name, expected, url):
+    target.mkdir(parents=True, exist_ok=True)
+    destination = target / name
+    if destination.is_file() and hashlib.sha256(destination.read_bytes()).hexdigest() == expected:
+        print("cached " + name, flush=True)
+        return
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    try:
+        digest = hashlib.sha256()
+        with open_archive(url) as response, temporary.open("wb") as output:
+            while chunk := response.read(1024 * 1024):
+                digest.update(chunk)
+                output.write(chunk)
+        if digest.hexdigest() != expected:
+            raise ValueError("archive checksum mismatch: " + name)
+        os.replace(temporary, destination)
+        print("cached " + name, flush=True)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
+    arguments = [argument for argument in sys.argv[1:] if argument != "--best-effort"]
+    strict = len(arguments) == len(sys.argv) - 1
     root = Path(__file__).resolve().parents[2]
-    populate(Path(sys.argv[1]), locked_archives(root / "MODULE.bazel.lock") + declared_archives(root / "MODULE.bazel") + EXTRA_ARCHIVES)
+    try:
+        archives = locked_archives(root / "MODULE.bazel.lock", strict=strict) + declared_archives(root / "MODULE.bazel") + EXTRA_ARCHIVES
+    except Exception as error:
+        if strict:
+            raise
+        warn("dependency prefetch skipped: " + str(error))
+        sys.exit(0)
+    populate(Path(arguments[0]), archives, strict=strict)
