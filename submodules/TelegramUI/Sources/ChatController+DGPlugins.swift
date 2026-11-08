@@ -5,9 +5,12 @@ import AccountContext
 import TelegramCore
 import ContextUI
 import PresentationDataUtils
+import UndoUI
 import DGPluginModel
 import DGPluginHost
 import DGPluginsUI
+
+private let dgPluginNoticeTag = "donutgram.plugin.notice"
 
 struct DGPluginDraftSnapshot {
     let owner: String
@@ -122,6 +125,17 @@ extension ChatControllerImpl {
         }
     }
 
+    /// A plugin notice is a toast, never a modal alert: it does not block the chat, and a newer one replaces it.
+    func dgPresentPluginNotice(title: String, text: String) {
+        self.forEachController { controller in
+            if let controller = controller as? UndoOverlayController, controller.tag as? String == dgPluginNoticeTag { controller.dismiss() }
+            return true
+        }
+        let controller = UndoOverlayController(presentationData: self.presentationData, content: .info(title: String(title.prefix(64)), text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false })
+        controller.tag = dgPluginNoticeTag
+        self.present(controller, in: .current)
+    }
+
     func dgPluginSafeComposer() -> Bool {
         guard self.isNodeLoaded, self.view.window != nil, self.presentationInterfaceState.interfaceState.editMessage == nil,
               let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer, !EnginePeer(peer).isService else { return false }
@@ -201,7 +215,8 @@ extension ChatControllerImpl {
                 completion(.success(.object(["text": .string(text), "source": .string(source), "entities": .array([]), "entitiesComplete": .bool(false)])))
             case "ui.toast":
                 guard Set(arguments.keys) == ["text"], let text = arguments["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512, validity() else { throw DGPluginError(code: "invalid_argument", message: "invalid plugin notice") }
-                self.present(textAlertController(context: self.context, title: "plugin", text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                let name = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).installations.first(where: { $0.id == installationId })?.manifest.name ?? "Plugin"
+                self.dgPresentPluginNotice(title: name, text: text)
                 completion(.success(.null))
             default:
                 if self.dgHandleAdditionalPluginRequest(installationId: installationId, method: method, params: params, validity: validity, completion: completion) { return }

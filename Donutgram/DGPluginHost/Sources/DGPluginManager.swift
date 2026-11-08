@@ -68,6 +68,9 @@ private final class DGPluginExecution {
     var events: [(String, DGPluginJSON)] = []
     var eventFailures = 0
     var themeTokens: DGPluginJSON = .object([:])
+    /// Uptimes of the last minute's direct message actions (send, edit, delete), for their rate limit.
+    var messageActionTimes: [TimeInterval] = []
+    var noticeTimes: [TimeInterval] = []
 }
 
 private struct DGPluginRegisteredTransform {
@@ -1053,6 +1056,19 @@ public final class DGPluginManager {
             let account = self.account(record)
             try authorize(rule, record: record, account: account, execution: execution)
             guard rule.available else { throw DGPluginError(code: "feature_unavailable", message: "this adapter is not available in this client") }
+            if ["messages.send", "messages.edit", "messages.delete"].contains(method) {
+                // They need no per-message gesture, so a loop or a buggy handler could flood the open chat and get the
+                // account limited: at most five in ten seconds and twenty a minute, whatever the adapter answers.
+                execution.messageActionTimes.removeAll { now - $0 >= 60 }
+                guard execution.messageActionTimes.count < 20, execution.messageActionTimes.filter({ now - $0 < 10 }).count < 5 else {
+                    throw DGPluginError(code: "rate_limited", message: "plugins may send, edit or delete at most five messages in ten seconds and twenty a minute")
+                }
+                execution.messageActionTimes.append(now)
+            } else if method == "ui.toast" {
+                execution.noticeTimes.removeAll { now - $0 >= 10 }
+                guard execution.noticeTimes.count < 5 else { throw DGPluginError(code: "rate_limited", message: "plugins may show at most five notices in ten seconds") }
+                execution.noticeTimes.append(now)
+            }
             if let result = try local(method: method, params: params, index: index, execution: execution) { respond(.success(result), reply); return }
             let epoch = execution.commandEpoch
             let waitsForUser = ["messages.sendInteractive", "messages.compose", "translation.request", "files.pick", "notifications.local"].contains(method)

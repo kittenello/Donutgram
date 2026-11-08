@@ -9,6 +9,7 @@ import TelegramPresentationData
 import ItemListUI
 import PresentationDataUtils
 import OverlayStatusController
+import UndoUI
 import DGPluginModel
 import DGPluginInstaller
 import DGPluginHost
@@ -135,7 +136,8 @@ private final class DGPluginPage {
             guard let values = params.objectValue, Set(values.keys) == ["text"], let text = values["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { completion(.failure(DGPluginError(code: "invalid_argument", message: "invalid plugin notice"))); return }
             let name = self.installation(installationId)?.manifest.name ?? "plugin"
             guard validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))); return }
-            controller.present(textAlertController(context: self.context, title: "plugin · " + name, text: text, actions: [TextAlertAction(type: .defaultAction, title: self.tr("закрыть", "close"), action: {})]), in: .window(.root))
+            // A toast, not a modal alert: notices never block the screen.
+            controller.present(UndoOverlayController(presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, content: .info(title: String(name.prefix(64)), text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
             completion(.success(.null))
         }
         self.manager.nativeRender = { [weak self] installationId, page, pluginName, validity, assets, callback, onClose in
