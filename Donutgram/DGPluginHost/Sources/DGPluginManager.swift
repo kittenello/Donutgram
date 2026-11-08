@@ -264,6 +264,25 @@ private final class DGPluginCoordinator {
     }
 }
 
+/// Whether any running plugin transforms a local view model, and the revision of the cached results.
+/// Screens compare it to decide when they need to rebuild; it changes only when a transform appears,
+/// disappears or its cached results are invalidated.
+public struct DGPluginViewTransformState: Equatable {
+    public let active: Bool
+    public let revision: UInt64
+
+    public init(active: Bool, revision: UInt64) {
+        self.active = active
+        self.revision = revision
+    }
+
+    /// True when a screen showing `previous` has to rebuild to show `self`.
+    public func requiresUpdate(from previous: DGPluginViewTransformState?) -> Bool {
+        guard let previous else { return self.active }
+        return self.active != previous.active || (self.active && self.revision != previous.revision)
+    }
+}
+
 public final class DGPluginManager {
     private static let registryLock = NSLock()
     private static var registry: [String: DGPluginManager] = [:]
@@ -276,6 +295,8 @@ public final class DGPluginManager {
     private var snapshotEnabled = true
     private var snapshotRollbackIds = Set<String>()
     private var snapshotPersistenceError: String?
+    private var snapshotTransformSlots = Set<String>()
+    private var snapshotViewRevision: UInt64 = 0
     private var viewModelCache: [String: DGPluginJSON] = [:]
     private var viewModelRevision: UInt64 = 0
     private var pendingViewModels = Set<String>()
@@ -428,6 +449,12 @@ public final class DGPluginManager {
     public func iconData(id: String) -> Data? { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotIcons[id] }
     public func canRollback(id: String) -> Bool { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotRollbackIds.contains(id) }
     public var persistenceError: String? { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotPersistenceError }
+
+    /// Read from any thread without waiting for the plugin queue.
+    public func viewTransformState(slot: String) -> DGPluginViewTransformState {
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return DGPluginViewTransformState(active: snapshotTransformSlots.contains(slot), revision: snapshotViewRevision)
+    }
 
     public func publisherIdentity(id: String) -> String? {
         return coordinator.queue.sync { self.coordinator.state.installations.first(where: { $0.id == id })?.publisherIdentity }
@@ -641,7 +668,16 @@ public final class DGPluginManager {
             return DGPluginInstallation(id: record.id, manifest: record.manifest, digest: record.digest, trust: trust, enabled: account.enabled, state: state, grants: account.grants, settings: account.settings, lastError: account.lastError ?? coordinator.startupError?.message)
         }
         let commands = executions.values.filter { $0.state == .running }.flatMap { $0.commands }.sorted { ($0.installationId, $0.id) < ($1.installationId, $1.id) }
+        var transformSlots = Set<String>()
+        for (id, execution) in executions where execution.state == .running && current(id, execution.generation) {
+            guard let record = coordinator.state.installations.first(where: { $0.id == id }), record.manifest.profile == "localPrivate" else { continue }
+            let grants = account(record).grants
+            for transform in execution.transforms.values where transform.slot != "outgoing" && grants.contains(where: { $0.capability == "ui.transform" && $0.scope == transform.slot }) {
+                transformSlots.insert(transform.slot)
+            }
+        }
         snapshotLock.lock()
+        snapshotTransformSlots = transformSlots; snapshotViewRevision = viewModelRevision
         snapshotInstallations = values; snapshotCommands = commands; snapshotIcons = icons; snapshotEnabled = coordinator.state.globallyEnabled
         snapshotRollbackIds = Set(coordinator.state.installations.filter { $0.previous != nil && !$0.removing }.map { $0.id })
         snapshotPersistenceError = coordinator.persistenceError

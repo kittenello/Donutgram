@@ -312,6 +312,8 @@ public struct ChatListNodeState: Equatable {
     public var selectedPeerMap: [EnginePeer.Id: EnginePeer]
     public var selectedThreadIds: Set<Int64>
     public var archiveStoryState: StoryState?
+    /// Donutgram: bumped when a plugin's chat-list transform needs the entries rebuilt.
+    public var pluginTransformRevision: Int = 0
     
     public init(
         presentationData: ChatListPresentationData,
@@ -347,6 +349,9 @@ public struct ChatListNodeState: Equatable {
     
     public static func ==(lhs: ChatListNodeState, rhs: ChatListNodeState) -> Bool {
         if lhs.presentationData !== rhs.presentationData {
+            return false
+        }
+        if lhs.pluginTransformRevision != rhs.pluginTransformRevision {
             return false
         }
         if lhs.editing != rhs.editing {
@@ -1460,12 +1465,12 @@ public final class ChatListNode: ListViewImpl {
         self.scrollHeightTopInset = ChatListNavigationBar.searchScrollHeight
         
         super.init()
+        // A new revision re-runs the entries pipeline with the same presentation data, so rows the plugin did not
+        // move stay equal and are not re-laid out (a new ChatListPresentationData made every row an update).
         self.pluginViewAdapter.didChange = { [weak self] in
-            guard let self else { return }
-            self.updateState { state in
+            self?.updateState { state in
                 var state = state
-                let data = state.presentationData
-                state.presentationData = ChatListPresentationData(theme: data.theme, fontSize: data.fontSize, strings: data.strings, dateTimeFormat: data.dateTimeFormat, nameSortOrder: data.nameSortOrder, nameDisplayOrder: data.nameDisplayOrder, disableAnimations: data.disableAnimations)
+                state.pluginTransformRevision &+= 1
                 return state
             }
         }

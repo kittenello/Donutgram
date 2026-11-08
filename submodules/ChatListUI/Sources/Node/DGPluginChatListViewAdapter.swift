@@ -12,11 +12,23 @@ final class DGPluginChatListViewAdapter {
     private var window = Set<EnginePeer.Id>()
     private var handles: [EnginePeer.Id: String] = [:]
     private var observer: UUID?
+    private var transformState: DGPluginViewTransformState?
+    /// Asks the list to rebuild its entries. Called only when a chat-list transform appears, disappears, changes
+    /// its cached results or answers asynchronously, never for unrelated plugin updates or plain scrolling.
     var didChange: (() -> Void)?
 
     init(accountKey: String) {
         self.manager = DGPluginManager.shared(accountKey: accountKey)
-        self.observer = self.manager.observe { [weak self] in self?.didChange?() }
+        self.observer = self.manager.observe { [weak self] in self?.managerDidUpdate() }
+    }
+
+    private func managerDidUpdate() {
+        let state = self.manager.viewTransformState(slot: "chatList")
+        self.lock.lock()
+        let changed = state.requiresUpdate(from: self.transformState)
+        self.transformState = state
+        self.lock.unlock()
+        if changed { self.didChange?() }
     }
 
     deinit { if let observer = self.observer { self.manager.removeObserver(observer) } }
@@ -38,10 +50,12 @@ final class DGPluginChatListViewAdapter {
         let changed = self.visible != ids
         self.visible = ids
         self.lock.unlock()
-        if changed { self.didChange?() }
+        // The visible window only matters to an active transform; without one, scrolling must not rebuild the list.
+        if changed && self.manager.viewTransformState(slot: "chatList").active { self.didChange?() }
     }
 
     func apply(_ entries: [ChatListNodeEntry]) -> [ChatListNodeEntry] {
+        guard self.manager.viewTransformState(slot: "chatList").active else { return entries }
         self.lock.lock()
         let visible = self.visible
         let retained = self.window

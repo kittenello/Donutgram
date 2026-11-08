@@ -387,6 +387,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     var canDeleteReaction = false
     var dataDisposable: Disposable?
     private var pluginViewObserver: UUID?
+    private var pluginProfileTransformState: DGPluginViewTransformState?
     private var donutgramSettingsObserver: NSObjectProtocol?
     
     let activeActionDisposable = MetaDisposable()
@@ -2588,8 +2589,14 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             reactionSourceMessage = .single(nil)
         }
 
+        // Rebuild only when a profile transform appears, disappears or its cached results change,
+        // not on every plugin-manager update.
         self.pluginViewObserver = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).observe { [weak self] in
-            guard let self, let data = self.data else { return }
+            guard let self else { return }
+            let state = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).viewTransformState(slot: "profile")
+            let changed = state.requiresUpdate(from: self.pluginProfileTransformState)
+            self.pluginProfileTransformState = state
+            guard changed, let data = self.data else { return }
             self.updateData(data)
         }
         self.dataDisposable = combineLatest(
