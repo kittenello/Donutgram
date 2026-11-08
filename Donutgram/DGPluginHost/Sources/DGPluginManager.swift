@@ -89,12 +89,22 @@ private final class DGPluginPendingTransform {
     init(registrationId: String, slot: String, input: DGPluginJSON) { self.registrationId = registrationId; self.slot = slot; self.input = input }
 }
 
+/// One plugin runtime that is executing for one account. The set of them is kept on disk while they run, so
+/// a launch after a crash can tell which plugins were running and turn them off instead of starting them
+/// again (a plugin that crashes the app in `activate` would otherwise crash every launch).
+private struct DGPluginRunningMarker: Codable, Hashable {
+    let account: String
+    let installation: String
+}
+
 private final class DGPluginCoordinator {
     static let shared = DGPluginCoordinator()
+    static let interruptedMessage = "the app closed unexpectedly while this plugin was running, so it was turned off"
     let queue = DispatchQueue(label: "donutgram.plugins.host")
     let root: URL
     var state = DGPluginDeviceState()
     var packages: [String: DGVerifiedPluginPackage] = [:]
+    var runningMarkers = Set<DGPluginRunningMarker>()
     var activeAccountKey: String?
     var foreground = true
     var powerSaving = false
@@ -140,6 +150,7 @@ private final class DGPluginCoordinator {
                     try cleanupFiles(record)
                 }
                 state.installations.removeAll(where: { $0.removing })
+                recoverInterruptedRuns()
                 try persist()
             }
         } catch {
@@ -154,6 +165,43 @@ private final class DGPluginCoordinator {
         let data = try JSONEncoder().encode(state)
         guard data.count <= 32 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin state exceeds its limit") }
         try data.write(to: root.appendingPathComponent("state.json"), options: .atomic)
+    }
+
+    var runningMarkersURL: URL { return root.appendingPathComponent("running.json") }
+
+    /// Turns off every plugin that was executing when the previous process ended without stopping it.
+    func recoverInterruptedRuns() {
+        let url = runningMarkersURL
+        guard let data = try? Data(contentsOf: url) else { return }
+        try? FileManager.default.removeItem(at: url)
+        guard data.count <= 65536, let markers = try? JSONDecoder().decode([DGPluginRunningMarker].self, from: data) else { return }
+        let entry = ISO8601DateFormatter().string(from: Date()) + " " + Self.interruptedMessage
+        for marker in markers {
+            guard let index = state.installations.firstIndex(where: { $0.id == marker.installation }),
+                  var account = state.installations[index].accounts[marker.account], account.enabled else { continue }
+            account.enabled = false
+            account.failures += 1
+            account.lastError = Self.interruptedMessage
+            account.diagnostics = Array(((account.diagnostics ?? []) + [entry]).suffix(20))
+            state.installations[index].accounts[marker.account] = account
+        }
+    }
+
+    func markRunning(_ marker: DGPluginRunningMarker) {
+        guard runningMarkers.insert(marker).inserted else { return }
+        writeRunningMarkers()
+    }
+
+    func clearRunning(_ marker: DGPluginRunningMarker) {
+        guard runningMarkers.remove(marker) != nil else { return }
+        writeRunningMarkers()
+    }
+
+    private func writeRunningMarkers() {
+        let url = runningMarkersURL
+        guard !runningMarkers.isEmpty else { try? FileManager.default.removeItem(at: url); return }
+        let markers = runningMarkers.sorted { ($0.account, $0.installation) < ($1.account, $1.installation) }
+        if let data = try? JSONEncoder().encode(markers) { try? data.write(to: url, options: .atomic) }
     }
 
     func packageURL(_ record: DGPluginStoredRecord) -> URL {
@@ -822,6 +870,7 @@ public final class DGPluginManager {
 
     fileprivate func stop(id: String) {
         guard let execution = executions.removeValue(forKey: id) else { return }
+        coordinator.clearRunning(DGPluginRunningMarker(account: accountKey, installation: id))
         invalidateViewModels()
         execution.state = .stopping
         execution.commands.removeAll(); execution.contributions.removeAll(); execution.subscriptions.removeAll()
@@ -862,6 +911,7 @@ public final class DGPluginManager {
             let package = try coordinator.package(record)
             let execution = DGPluginExecution()
             executions[id] = execution
+            coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id))
             let environmentJSON = String(data: try JSONEncoder().encode(DGPluginJSON.object(environment)), encoding: .utf8) ?? "{}"
             let runtime = try DGPluginRuntime(files: package.files, entry: package.manifest.entry, environmentJSON: environmentJSON, request: { [weak self, weak execution] request, reply in
                 guard let self = self, let execution = execution else { reply("{\"error\":{\"code\":\"plugin_disabled\",\"message\":\"plugin stopped\"}}"); return }
