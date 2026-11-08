@@ -72,6 +72,14 @@ class CacheBazelDependenciesTests(unittest.TestCase):
         self.assertEqual((self.directory / self.digest / "archive.tar.gz").read_bytes(), self.content)
         self.assertEqual((self.directory / other_digest / "archive.tar.gz").read_bytes(), other)
 
+    def test_declared_host_tools_keep_repository_checksums(self):
+        root = Path(__file__).resolve().parents[3]
+        archives = cache.declared_archives(root / "MODULE.bazel")
+        tools = {name: digest for name, digest, _ in archives}
+        self.assertEqual(tools["ninja-mac.zip"], "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9")
+        self.assertIn("cmake-4.1.2-macos-universal.tar.gz", tools)
+        self.assertFalse(any("linux" in name for name in tools))
+
 
 if __name__ == "__main__":
     unittest.main()
