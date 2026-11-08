@@ -29,7 +29,9 @@ SCOPES = {
 }
 PRIVATE = {"composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "files.userSelected", "messages.compose", "messages.sendInteractive", "translation.request", "ui.transform"}
 FIELDS = {"kind", "schemaVersion", "id", "name", "version", "description", "author", "apiVersion", "minClientVersion", "entry", "icon", "permissions", "optionalPermissions", "settingsSchema", "profile", "changelog"}
-AVAILABLE = ["commands", "events", "storage", "settings", "capabilities", "environment", "composer", "selection", "theme", "ui.toast"]
+AVAILABLE = ["commands", "events", "storage", "settings", "capabilities", "environment", "composer", "selection", "theme", "ui", "network", "messages", "chats", "peers", "navigation", "notifications", "files", "translation", "assets", "actions.messages", "transforms"]
+UI_TYPES = {"section", "text", "markdown", "list", "button", "toggle", "input", "multiline", "select", "slider", "stepper", "image"}
+UI_INTERACTIVE = {"button", "toggle", "input", "multiline", "select", "slider", "stepper"}
 
 class ValidationError(ValueError):
     pass
@@ -99,6 +101,7 @@ def safe_path(name):
     parts = name.split("/")
     require(len(parts) <= 8 and all(part and part not in {".", ".."} and not part.endswith((".", " ")) for part in parts), "invalid package path")
     require(not any(ord(char) < 32 or ord(char) == 127 or 0x202a <= ord(char) <= 0x202e or 0x2066 <= ord(char) <= 0x2069 for char in name), "invalid path characters")
+    require(re.fullmatch(r"[A-Za-z0-9._/-]+", name), "package paths must use supported ascii characters")
     return name
 
 def semver(value):
@@ -109,6 +112,84 @@ def semver(value):
 def string(value, maximum, minimum=0):
     require(isinstance(value, str) and minimum <= len(value) <= maximum, "invalid text field")
 
+def display_text(value, multiline=False):
+    require(not any((ord(char) < 32 and not (multiline and char in "\t\r\n")) or 127 <= ord(char) <= 159 or 0x202a <= ord(char) <= 0x202e or 0x2066 <= ord(char) <= 0x2069 for char in value), "invalid display metadata")
+
+def ui_text(value, maximum, multiline=False, minimum=0):
+    require(isinstance(value, str) and minimum <= len(value.encode("utf-16-le")) // 2 <= maximum, "invalid ui text length")
+    require(not any((unicodedata.category(char) in {"Cc", "Cf"} and not (multiline and char in "\t\r\n")) or 0x202a <= ord(char) <= 0x202e or 0x2066 <= ord(char) <= 0x2069 for char in value), "invalid ui control character")
+
+def ui_identifier(value):
+    require(isinstance(value, str) and re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}", value), "invalid ui id")
+
+def ui_scalar(value):
+    require(value is None or type(value) in {bool, int, float, str}, "ui value must be scalar")
+    if isinstance(value, str):
+        require(len(value.encode("utf-16-le")) // 2 <= 4096, "ui scalar text limit")
+    if type(value) in {float, int}:
+        require(math.isfinite(value), "ui number must be finite")
+
+def ui_page(value):
+    require(isinstance(value, dict) and set(value) == {"id", "title", "nodes"}, "invalid ui page fields")
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("/", "\\/").encode("utf-8")
+    except (ValueError, RecursionError) as error:
+        raise ValidationError("ui page contains nonfinite or recursive data") from error
+    require(len(encoded) <= 65536, "ui page json limit")
+    ui_identifier(value["id"])
+    ui_text(value["title"], 200, minimum=1)
+    seen = set()
+    total = [0]
+    def nodes(items, depth):
+        require(isinstance(items, list) and len(items) <= 128 and depth <= 6, "ui nesting or list limit")
+        for node in items:
+            total[0] += 1
+            require(total[0] <= 128, "ui node limit")
+            require(isinstance(node, dict) and {"type", "id"} <= set(node) <= {"type", "id", "title", "text", "value", "callbackId", "children", "options", "minimum", "maximum", "step", "asset"}, "invalid ui node fields")
+            kind = node["type"]
+            require(isinstance(kind, str) and kind in UI_TYPES, "unsupported ui node")
+            ui_identifier(node["id"])
+            require(node["id"] not in seen, "duplicate ui node id")
+            seen.add(node["id"])
+            ui_text(node.get("title", ""), 200)
+            ui_text(node.get("text", ""), 4096, multiline=True)
+            if kind in UI_INTERACTIVE:
+                ui_identifier(node.get("callbackId"))
+            else:
+                require("callbackId" not in node, "noninteractive ui node has callback")
+            current = node.get("value")
+            if kind == "toggle":
+                require(type(current) is bool, "toggle requires boolean value")
+            if kind in {"input", "multiline"}:
+                require(isinstance(current, str) and len(current.encode("utf-16-le")) // 2 <= 4096, "input requires bounded text value")
+            if kind in {"slider", "stepper"}:
+                require(all(type(node.get(key)) in {int, float} and math.isfinite(node[key]) for key in ["minimum", "maximum", "step", "value"]), "numeric ui control needs finite bounds and value")
+                lower, upper, step = node["minimum"], node["maximum"], node["step"]
+                require(abs(lower) <= 1e9 and abs(upper) <= 1e9 and lower < upper and 0 < step <= upper - lower and lower <= current <= upper, "invalid numeric ui control bounds")
+                require((upper - lower) / step <= 1e6 and abs(round((current - lower) / step) - ((current - lower) / step)) <= 1e-6, "numeric ui value must align to a bounded step")
+            else:
+                require(not ({"minimum", "maximum", "step"} & set(node)), "bounds require numeric ui control")
+            if kind == "image":
+                require(isinstance(node.get("asset"), str) and 1 <= len(node["asset"].encode("utf-8")) <= 128 and re.fullmatch(r"[a-zA-Z0-9._-]+", node["asset"]), "image requires opaque local asset handle")
+            else:
+                require("asset" not in node, "asset requires image node")
+            if kind == "select":
+                choices = node.get("options")
+                require(isinstance(choices, list) and 1 <= len(choices) <= 32, "select requires bounded options")
+                for choice in choices:
+                    require(isinstance(choice, dict) and set(choice) == {"title", "value"}, "invalid select option")
+                    ui_text(choice["title"], 200, minimum=1)
+                    ui_scalar(choice["value"])
+                ui_scalar(current)
+                require(any(type(choice["value"]) is type(current) and choice["value"] == current or type(choice["value"]) in {int, float} and type(current) in {int, float} and choice["value"] == current for choice in choices), "select value is not an option")
+            else:
+                require("options" not in node, "options require select node")
+            if "children" in node:
+                require(kind in {"section", "list"}, "only container nodes have children")
+                nodes(node["children"], depth + 1)
+    nodes(value["nodes"], 0)
+    return value
+
 def manifest(value):
     require(isinstance(value, dict) and set(value) <= FIELDS, "unknown manifest field")
     require(value.get("kind") == "donutgram.plugin" and type(value.get("schemaVersion")) is int and value["schemaVersion"] == 1, "unsupported schema")
@@ -116,6 +197,8 @@ def manifest(value):
     string(value.get("name"), 80, 1)
     require(value["name"].strip(), "empty name")
     string(value.get("description"), 4096)
+    display_text(value["name"])
+    display_text(value["description"], multiline=True)
     semver(value.get("version"))
     require(value.get("apiVersion") in {"^1.0.0", "1.0.0"}, "unsupported api")
     client = value.get("minClientVersion", "13.2")
@@ -130,11 +213,14 @@ def manifest(value):
     if "author" in value:
         author = value["author"]
         require(isinstance(author, dict) and set(author) <= {"name", "username"}, "invalid author")
-        string(author.get("name"), 128)
+        string(author.get("name"), 128, 1)
+        display_text(author["name"])
         if "username" in author:
             string(author["username"], 64)
+            display_text(author["username"])
     if "changelog" in value:
         string(value["changelog"], 8192)
+        display_text(value["changelog"], multiline=True)
     seen = set()
     for key in ["permissions", "optionalPermissions"]:
         permissions = value.get(key, [] if key == "optionalPermissions" else None)
@@ -165,9 +251,26 @@ def manifest(value):
             require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", key) and isinstance(field, dict) and set(field) <= {"type", "title", "description", "default", "minimum", "maximum", "maxLength", "enum"}, "invalid settings field")
             require(field.get("type") in {"boolean", "string", "number", "integer"}, "unsupported setting type")
             string(field.get("title"), 128, 1)
+            display_text(field["title"])
+            if "description" in field:
+                string(field["description"], 512)
+                display_text(field["description"], multiline=True)
+            kind = field["type"]
+            for bound in ["minimum", "maximum"]:
+                if bound in field:
+                    require(kind in {"number", "integer"} and type(field[bound]) in {int, float} and math.isfinite(field[bound]), "invalid setting numeric bound")
+            minimum, maximum = field.get("minimum", -sys.float_info.max), field.get("maximum", sys.float_info.max)
+            require(minimum <= maximum, "inverted setting bounds")
+            max_length = field.get("maxLength", 4096)
+            if "maxLength" in field:
+                require(kind == "string" and type(max_length) in {int, float} and math.isfinite(max_length) and int(max_length) == max_length and 1 <= max_length <= 4096, "invalid setting length bound")
+            def valid_setting(item):
+                return (kind == "boolean" and type(item) is bool) or (kind == "string" and isinstance(item, str) and len(item) <= max_length) or (kind in {"number", "integer"} and type(item) in {int, float} and math.isfinite(item) and minimum <= item <= maximum and (kind != "integer" or int(item) == item))
+            if "enum" in field:
+                require(isinstance(field["enum"], list) and 1 <= len(field["enum"]) <= 32 and all(valid_setting(item) for item in field["enum"]), "invalid setting choices")
             if "default" in field:
-                default, kind = field["default"], field["type"]
-                require((kind == "boolean" and type(default) is bool) or (kind == "string" and isinstance(default, str) and len(default) <= 4096) or (kind in {"number", "integer"} and type(default) in {int, float} and math.isfinite(default) and (kind != "integer" or int(default) == default)), "invalid setting default")
+                default = field["default"]
+                require(valid_setting(default) and ("enum" not in field or default in field["enum"]), "invalid setting default")
     return value
 
 def validate_files(files, metadata):
@@ -178,6 +281,7 @@ def validate_files(files, metadata):
         require(name.lower() not in names, "case-colliding package paths")
         names.add(name.lower())
         require(len(data) <= 1024 * 1024 and Path(name).suffix.lower() in {".js", ".json", ".png", ".jpg", ".jpeg", ".webp"}, "unsupported or oversized resource")
+        require(not data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"\x1f\x8b", b"7z\xbc\xaf\x27\x1c", b"Rar!", b"\xfd7zXZ\x00", b"BZh")), "nested archives are unsupported")
         if name.endswith(".js"):
             try:
                 text = data.decode("utf-8")
@@ -274,7 +378,7 @@ def mock_test(source, fixture):
     metadata, files = read_package(source)
     with tempfile.TemporaryDirectory(prefix="dgplugin-mock-") as directory:
         snapshot = Path(directory) / "package.json"
-        snapshot.write_text(json.dumps({"manifest": metadata, "files": {key: value.decode("utf-8") for key, value in files.items() if key.endswith(".js")}}), encoding="utf-8")
+        snapshot.write_text(json.dumps({"manifest": metadata, "files": {key: value.decode("utf-8") for key, value in files.items() if key.endswith(".js")}, "resources": {key: True for key in files if Path(key).suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}}}), encoding="utf-8")
         process = subprocess.run(["node", "--experimental-vm-modules", str(ROOT / "tools/mock-host.mjs"), str(snapshot), str(Path(fixture).resolve())], timeout=5, capture_output=True, text=True)
         require(process.returncode == 0, process.stderr.strip() or "mock host failed")
         return json.loads(process.stdout)
@@ -294,9 +398,20 @@ def main():
     child = commands.add_parser("test")
     child.add_argument("source")
     child.add_argument("fixture")
+    child = commands.add_parser("validate-ui")
+    child.add_argument("source")
     args = parser.parse_args()
     try:
-        if args.command == "create":
+        if args.command == "validate-ui":
+            if args.source == "-":
+                raw = sys.stdin.read(65537)
+            else:
+                require(Path(args.source).stat().st_size <= 65536, "ui input limit")
+                raw = Path(args.source).read_text(encoding="utf-8")
+            require(len(raw.encode("utf-8")) <= 65536, "ui input limit")
+            page = ui_page(decode_json(raw)[0])
+            result = {"id": page["id"], "valid": True, "nativeValidationRequired": True}
+        elif args.command == "create":
             create(args.destination, args.id)
             result = {"created": args.destination}
         elif args.command == "pack":
@@ -308,7 +423,7 @@ def main():
             metadata, files = read_package(args.source)
             result = {"id": metadata["id"], "version": metadata["version"], "files": len(files), "apiVersion": "1.0.0"}
             if args.command == "compatibility":
-                result.update({"minimumClient": metadata.get("minClientVersion", "13.2"), "profile": metadata.get("profile", "localPrivate"), "sdkFamilies": AVAILABLE, "requiresRuntimeAvailabilityCheck": True, "iosVisualVerification": False})
+                result.update({"minimumClient": metadata.get("minClientVersion", "13.2"), "profile": metadata.get("profile", "localPrivate"), "bootstrapFamilies": AVAILABLE, "declaredCapabilities": [{"capability": item["capability"], "scope": item["scope"]} for item in metadata["permissions"] + metadata.get("optionalPermissions", [])], "availabilitySource": "native capabilities.list at runtime", "requiresRuntimeAvailabilityCheck": True, "iosVisualVerification": False})
             result["signatureVerification"] = "native_installer_required"
         print(json.dumps(result, ensure_ascii=False))
     except (ValidationError, OSError, UnicodeError, zipfile.BadZipFile, subprocess.SubprocessError, KeyError, TypeError, OverflowError, RuntimeError, struct.error) as error:

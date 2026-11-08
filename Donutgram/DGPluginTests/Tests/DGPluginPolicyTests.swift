@@ -26,9 +26,7 @@ final class DGPluginPolicyTests: XCTestCase {
     }
 
     func testUnavailableAdaptersFailClosed() {
-        for method in ["ui.transform", "theme.contribute"] {
-            XCTAssertEqual(DGPluginPolicy.methods[method]?.available, false, method)
-        }
+        XCTAssertNil(DGPluginPolicy.methods["ui.transform"])
         for method in ["composer.getActiveDraft", "composer.replaceSelection", "selection.get", "messages.read", "peers.read", "chats.metadata", "messages.prepare", "messages.sendInteractive", "navigation.open", "files.pick", "files.read", "notifications.local", "translation.request"] {
             XCTAssertEqual(DGPluginPolicy.methods[method]?.requiresGesture, true, method)
         }
@@ -72,5 +70,42 @@ final class DGPluginPolicyTests: XCTestCase {
         }
         XCTAssertEqual(DGPluginPolicy.settingsDefaults(manifest), ["count": .number(2), "label": .string("safe"), "enabled": .bool(true)])
         XCTAssertThrowsError(try DGPluginPolicy.validateSettings(["unknown": .bool(true)], manifest: self.manifest()))
+    }
+
+    func testLocalTransformsCannotHideNonemptyOrPinnedContent() throws {
+        let profile: DGPluginJSON = .object(["panes": .array([
+            .object(["id": .string("media"), "empty": .bool(true)]),
+            .object(["id": .string("files"), "empty": .bool(false)])
+        ])])
+        let expected: DGPluginJSON = .object(["panes": .array([.object(["id": .string("files"), "empty": .bool(false)])])])
+        XCTAssertEqual(try DGPluginViewTransform.apply(slot: "profile", input: profile, patch: .object(["hide": .array([.string("media")])])), expected)
+        for ids in [["files"], ["unknown"], ["media", "media"]] {
+            XCTAssertThrowsError(try DGPluginViewTransform.apply(slot: "profile", input: profile, patch: .object(["hide": .array(ids.map(DGPluginJSON.string))])))
+        }
+        let items: [DGPluginJSON] = [
+            .object(["handle": .string("p1"), "title": .string("first pinned"), "unread": .number(0), "pinned": .bool(true)]),
+            .object(["handle": .string("p2"), "title": .string("second pinned"), "unread": .number(1), "pinned": .bool(true)]),
+            .object(["handle": .string("u1"), "title": .string("one"), "unread": .number(2), "pinned": .bool(false)]),
+            .object(["handle": .string("u2"), "title": .string("two"), "unread": .number(3), "pinned": .bool(false)])
+        ]
+        let chats: DGPluginJSON = .object(["items": .array(items)])
+        XCTAssertEqual(try DGPluginViewTransform.apply(slot: "chatList", input: chats, patch: .object(["order": .array([.string("u2")])])), .object(["items": .array([items[0], items[1], items[3], items[2]])]))
+        let invalidPatches: [DGPluginJSON] = [.object(["hidden": .array([.string("p1")])]), .object(["order": .array([.string("p2")])]), .object(["order": .array([.string("unknown")])]), .object(["hidden": .array([.string("u1"), .string("u1")])])]
+        for patch in invalidPatches {
+            XCTAssertThrowsError(try DGPluginViewTransform.apply(slot: "chatList", input: chats, patch: patch))
+        }
+    }
+
+    func testDisplayLinkTransformsKeepDestinationsAndRejectControls() throws {
+        let input: DGPluginJSON = .object(["items": .array([.object(["handle": .string("link1"), "title": .string("original"), "url": .string("https://example.org/unchanged")])])])
+        let patch: DGPluginJSON = .object(["labels": .array([.object(["handle": .string("link1"), "text": .string("clean label")])])])
+        let result = try DGPluginViewTransform.apply(slot: "displayLinks", input: input, patch: patch)
+        XCTAssertEqual(result, .object(["items": .array([.object(["handle": .string("link1"), "title": .string("clean label"), "url": .string("https://example.org/unchanged")])])]))
+        let destinationPatch: DGPluginJSON = .object(["labels": .array([.object(["handle": .string("link1"), "text": .string("label"), "url": .string("https://attacker.example")])])])
+        XCTAssertThrowsError(try DGPluginViewTransform.apply(slot: "displayLinks", input: input, patch: destinationPatch))
+        for text in ["line\nbreak", "bad\u{007f}", "bad\u{0085}", "bad\u{202e}", "bad\u{2066}"] {
+            let controlPatch: DGPluginJSON = .object(["labels": .array([.object(["handle": .string("link1"), "text": .string(text)])])])
+            XCTAssertThrowsError(try DGPluginViewTransform.apply(slot: "displayLinks", input: input, patch: controlPatch))
+        }
     }
 }

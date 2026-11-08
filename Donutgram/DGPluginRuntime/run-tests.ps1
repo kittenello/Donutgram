@@ -34,7 +34,14 @@ try {
     $command = 'call "' + $vc + '" >nul && "' + $clang + '" -std=c++17 -O2 -DQUICKJS_NG_BUILD -IDonutgram/DGPluginRuntime/CHost/include -Ithird-party/quickjs-ng/include Donutgram/DGPluginRuntime/CHost/DGPluginCHost.cpp Donutgram/DGPluginRuntime/Tests/NativeWorkTests.cpp ' + ($objects -join ' ') + ' -o "' + $nativeExecutable + '"'
     cmd /c $command
     if ($LASTEXITCODE -ne 0) { throw 'native-work link failed' }
-    python (Join-Path $PSScriptRoot 'Tests/run_watchdog.py') --regression $executable --native $nativeExecutable --bootstrap (Join-Path $PSScriptRoot 'Sources/bootstrap.js')
+    foreach ($suite in @('smoke', 'host')) {
+        $shim = if ($suite -eq 'smoke') { 'third-party/quickjs-ng/shim/qjs_shim.c ' } else { '' }
+        $defaultExecutable = Join-Path $BuildPath ('quickjs-' + $suite + '-tests.exe')
+        $command = 'call "' + $vc + '" >nul && "' + $clang + '" -O2 -DQUICKJS_NG_BUILD -Wno-deprecated-declarations -Ithird-party/quickjs-ng/include -Ithird-party/quickjs-ng/quickjs third-party/quickjs-ng/tests/quickjs_' + $suite + '_test.c ' + $shim + ($objects -join ' ') + ' -Xlinker /stack:8388608 -o "' + $defaultExecutable + '"'
+        cmd /c $command
+        if ($LASTEXITCODE -ne 0) { throw ('default engine link failed: ' + $suite) }
+    }
+    python (Join-Path $PSScriptRoot 'Tests/run_watchdog.py') --regression $executable --native $nativeExecutable --bootstrap (Join-Path $PSScriptRoot 'Sources/bootstrap.js') --default-smoke (Join-Path $BuildPath 'quickjs-smoke-tests.exe') --default-host (Join-Path $BuildPath 'quickjs-host-tests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'runtime watchdog tests failed' }
 } finally {
     Pop-Location

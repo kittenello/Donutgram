@@ -20,6 +20,7 @@ def main():
         'func report(_ text: String) { FileHandle.standardOutput.write(Data((text + "\\n").utf8)) }',
         "DispatchQueue.global().async {",
         "do {",
+        'if let mode = ProcessInfo.processInfo.environment["DG_PLUGIN_RESTART_MODE"] { try runRestartChild(mode: mode); ExitProcess(0) }',
     ]
     for source, classname, name in suites:
         text = (args.repository / source).read_text(encoding="utf-8")
@@ -33,6 +34,8 @@ def main():
     lines.extend([
         "try runNativeActionTests()",
         "try runSemanticVersionTests()",
+        "try runPersistenceFaultTests()",
+        "try runDurableRemovalRestartTests()",
         "try runGeneratedArchiveTests(directory: URL(fileURLWithPath: CommandLine.arguments[1]))",
         'report("all portable production checks passed")',
         "ExitProcess(0)",

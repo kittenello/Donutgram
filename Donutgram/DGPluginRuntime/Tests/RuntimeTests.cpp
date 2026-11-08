@@ -79,11 +79,12 @@ int main(int argc, char **argv) {
     host = dgjs_create(request, &requests);
     source = "definePlugin({activate(api){api.storage.get('x').then(()=>api.storage.set('reply',42));}});";
     check(dgjs_add_file(host, "main.js", reinterpret_cast<const uint8_t *>(source.data()), source.size()) == 0, "idle reply fixture");
-    check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 0, "detached operation activation");
+    check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 2, "detached operation remains in its activation wait");
     check(requests.count == 1, "detached request");
     std::this_thread::sleep_for(std::chrono::milliseconds(1100));
     check(dgjs_reply(host, requests.ids.front(), "{\"result\":null}") == 0, "idle reply starts fresh bounded slice");
-    check(dgjs_pump(host) == 0 && requests.count == 2, "idle continuation runs without dispatch");
+    check(dgjs_pump(host) == 2 && requests.count == 2, "detached continuation runs in originating activation without dispatch");
+    check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && dgjs_pump(host) == 0, "activation completes after detached work drains");
     dgjs_destroy(host);
     requests = Requests{};
     host = dgjs_create(request, &requests);

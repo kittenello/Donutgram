@@ -282,7 +282,7 @@ extern "C" int dgjs_pump(DGJSHost *h) {
                 h->modulePhase = false;
                 continue;
             }
-            if (!JS_IsJobPending(h->runtime)) { h->busy = false; return 0; }
+            if (!JS_IsJobPending(h->runtime) && h->pendingNative.empty()) { h->busy = false; return 0; }
         }
         JSContext *jobContext = nullptr;
         int status = JS_ExecutePendingJob(h->runtime, &jobContext);

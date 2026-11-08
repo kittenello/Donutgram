@@ -2105,6 +2105,7 @@ extension ChatControllerImpl {
                 if !strongSelf.presentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
                     strongSelf.silentPostTooltipController?.dismiss()
                 }
+                strongSelf.dgPluginComposerChanged()
             }
         }, updateInputModeAndDismissedButtonKeyboardMessageId: { [weak self] f in
             if let strongSelf = self {

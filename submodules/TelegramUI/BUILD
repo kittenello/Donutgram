@@ -215,6 +215,7 @@ swift_library(
         "//Donutgram/DGPluginsUI:DGPluginsUI",
         "//Donutgram/DGPluginHost:DGPluginHost",
         "//Donutgram/DGPluginModel:DGPluginModel",
+        "//Donutgram/DGPluginViewAdapters:DGPluginViewAdapters",
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//Donutgram/DGSnowEffect:DGSnowEffect",
         "//submodules/UrlHandling:UrlHandling",

@@ -1,0 +1,18 @@
+{
+  "commands": ["show-controls"],
+  "uiEvents": [
+    {"page": "controls", "node": "enabled", "value": false},
+    {"page": "controls", "node": "label", "value": "новая подпись"},
+    {"page": "controls", "node": "note", "value": "новая\nзаметка"},
+    {"page": "controls", "node": "level", "value": 0.8},
+    {"page": "controls", "node": "count", "value": 4},
+    {"page": "controls", "node": "mode", "value": "comfortable"},
+    {"page": "controls", "node": "accent", "value": "orange"},
+    {"page": "controls", "node": "notice", "value": null}
+  ],
+  "expectedSettings": {"enabled": false, "label": "новая подпись", "note": "новая\nзаметка", "level": 0.8, "count": 4, "mode": "comfortable", "accent": "orange"},
+  "expectedTheme": {"accent": "orange"},
+  "expectedToasts": ["значения сохранены в настройках плагина"],
+  "expectedPages": ["controls"],
+  "expectedPageNodes": {"saved": "подпись: новая подпись"}
+}

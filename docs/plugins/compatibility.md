@@ -7,9 +7,12 @@ runtime uses the vendored quickjs-ng fork. the lock hashes its actual source fil
 | area | verification available in this environment |
 |---|---|
 | interpreter limits and callbacks | compiled native c/c++ fixtures against the real vendored quickjs engine on windows |
-| static authoring tools | python tests for parser, manifest/profile policy, zip paths/links/header mismatches, quotas and deterministic packaging |
-| example logic | node development mock fixtures for quiet-links, templates and selected-text |
-| swift modules and full ios app | not verified on windows; requires xcode/full bazel app build |
+| static authoring tools | 26 python tests for parser, manifest/profile policy, zip paths/links/header mismatches, quotas, canonical vectors, deterministic packaging, wrappers, unavailable contracts and examples |
+| example logic | seven packaged examples exercised through node development fixtures, including native controls, public-response parsing and local transform patches |
+| pure model/installer/runtime/host | actual production Windows libraries and portable workflows compiled/executed; no types-only installer/runtime stub in those checks |
+| native page schema | actual Foundation-only schema compiled on Windows and passed 35 shared fixtures; sdk validator checks the same cases; UIKit rendering remains separate |
+| Apple CryptoKit/ImageIO and native TLS | Apple platform branches require separate Apple-host compilation and integration; Windows signed packages fail explicitly when verification is unavailable |
+| full ios app | requires xcode/full bazel app build; not confirmed by portable production tests |
 | native screens and animations | not verified; requires simulator recordings and labelled frame evaluation |
 | real accounts, settings and updates | pending native/device acceptance scenarios |
 
@@ -17,4 +20,8 @@ mock tests and static checks are not evidence that a screen rendered or a native
 
 app-store builds do not opt into `DG_PLUGINS_SIDELOAD`; external-plugin execution is disabled there. sideload builds can opt into the interpreter, with the same broker restrictions. this configuration is not a claim of app-store approval. current distribution requirements and entitlements remain part of release review.
 
-network requests, public-service translation, messages/history/peer snapshots, interactive sends, notifications, selected-file handles, arbitrary profile/chat-list transforms, theme decorations, slider and image nodes are not advertised as working examples. implement native adapters, capability/scopes and negative tests before exposing those features as available. the broader original task remains incomplete while required adapters or ios acceptance checks are missing.
+bootstrap/native source now includes public requests, exact-selected-message/current-chat/selected-author snapshots, selected utf8 files, telegram translation consent, interactive ordinary-message previews, local notifications and enumerated plugin-management navigation. each method still checks platform/screen context, current grants, scopes and generation; capability discovery is advisory and unavailable operations reject. this is bounded context access, not history export or arbitrary account/peer lookup.
+
+local transform adapters expose profile empty-pane hiding and nonpinned chat-list ordering/filtering. displayLinks is a reserved type/pure-validator contract only; registration rejects feature_unavailable until a native renderer exists. client adapters are independently subject to native screen validation. native page schema supports markdown, multiline, slider, stepper and opaque raster image nodes as well as the original controls. examples and authoring types use those contracts; mock fixture success does not establish that UIKit drew them.
+
+theme contributions select one of four fixed native accents for the plugin's own pages only, under localTokens scope; native painting remains visually unverified. bootstrap/type event names do not establish an active native publisher, and unsupported subscriptions must reject; plugin.deactivating is not advertised. other unimplemented controls/events/routes must remain absent or explicitly unavailable. the broader original task remains incomplete while required implementation work, Apple tests or recorded-frame acceptance checks are missing.

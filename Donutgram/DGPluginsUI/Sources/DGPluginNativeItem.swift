@@ -18,14 +18,16 @@ final class DGPluginNativeItem: ListViewItem, ItemListItem {
     let sectionId: ItemListSectionId
     let content: Content
     let scale: CGFloat
+    let accentColor: UIColor?
     let numberUpdated: (Double) -> Void
     let textUpdated: (String) -> Void
 
-    init(theme: PresentationTheme, sectionId: ItemListSectionId, content: Content, scale: CGFloat = 1, numberUpdated: @escaping (Double) -> Void = { _ in }, textUpdated: @escaping (String) -> Void = { _ in }) {
+    init(theme: PresentationTheme, sectionId: ItemListSectionId, content: Content, scale: CGFloat = 1, accentColor: UIColor? = nil, numberUpdated: @escaping (Double) -> Void = { _ in }, textUpdated: @escaping (String) -> Void = { _ in }) {
         self.theme = theme
         self.sectionId = sectionId
         self.content = content
         self.scale = min(2, max(0.8, scale))
+        self.accentColor = accentColor
         self.numberUpdated = numberUpdated
         self.textUpdated = textUpdated
     }
@@ -182,7 +184,7 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
                 self.slider.maximumValue = 1
                 self.slider.stepSize = Float(step / (maximum - minimum))
                 self.slider.value = Float((value - minimum) / (maximum - minimum))
-                self.slider.minimumTrackTintColor = item.theme.list.itemAccentColor
+                self.slider.minimumTrackTintColor = item.accentColor ?? item.theme.list.itemAccentColor
                 self.slider.frame = CGRect(x: 16, y: valueEnd + 8, width: inner, height: 34)
                 self.slider.accessibilityLabel = title
                 self.slider.accessibilityValue = String(format: "%g", value)
@@ -192,7 +194,7 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
                 self.stepper.maximumValue = maximum
                 self.stepper.stepValue = step
                 self.stepper.value = value
-                self.stepper.tintColor = item.theme.list.itemAccentColor
+                self.stepper.tintColor = item.accentColor ?? item.theme.list.itemAccentColor
                 self.stepper.frame = CGRect(x: width - 110, y: 16, width: 94, height: 32)
                 self.stepper.accessibilityLabel = title
                 self.stepper.accessibilityValue = String(format: "%g", value)
@@ -201,6 +203,7 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
             let titleEnd = label(self.titleLabel, title, y: 12)
             self.textView.isHidden = false
             self.textView.textColor = item.theme.list.itemPrimaryTextColor
+            self.textView.tintColor = item.accentColor ?? item.theme.list.itemAccentColor
             self.textView.backgroundColor = .clear
             self.textView.accessibilityLabel = title
             self.textView.font = .systemFont(ofSize: 16 * item.scale)

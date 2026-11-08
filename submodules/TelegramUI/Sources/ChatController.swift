@@ -8113,6 +8113,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         self.dgBindChatPlugins()
+        self.dgPluginChatOpened()
         self.forwardSideListAppearance(.didAppear, animated: animated)
         
         self.didAppear = true
@@ -8561,6 +8562,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        self.dgPluginChatClosed()
         self.forwardSideListAppearance(.didDisappear, animated: animated)
     }
     

@@ -18,7 +18,8 @@
     "title": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 128
+      "maxLength": 200,
+      "x-nativeLength": "utf16"
     },
     "nodes": {
       "type": "array",
@@ -41,11 +42,16 @@
           "enum": [
             "section",
             "text",
+            "markdown",
             "list",
             "button",
             "toggle",
             "input",
-            "select"
+            "multiline",
+            "select",
+            "slider",
+            "stepper",
+            "image"
           ]
         },
         "id": {
@@ -56,13 +62,13 @@
         },
         "title": {
           "type": "string",
-          "minLength": 0,
-          "maxLength": 128
+          "maxLength": 200,
+          "x-nativeLength": "utf16"
         },
         "text": {
           "type": "string",
-          "minLength": 0,
-          "maxLength": 4096
+          "maxLength": 4096,
+          "x-nativeLength": "utf16"
         },
         "value": {},
         "callbackId": {
@@ -80,6 +86,7 @@
         },
         "options": {
           "type": "array",
+          "minItems": 1,
           "maxItems": 32,
           "items": {
             "type": "object",
@@ -92,7 +99,8 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 128
+                "maxLength": 200,
+                "x-nativeLength": "utf16"
               },
               "value": {
                 "type": [
@@ -100,11 +108,31 @@
                   "number",
                   "boolean",
                   "null"
-                ]
+                ],
+                "maxLength": 4096
               }
             }
-          },
-          "minItems": 1
+          }
+        },
+        "minimum": {
+          "type": "number",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0
+        },
+        "maximum": {
+          "type": "number",
+          "minimum": -1000000000.0,
+          "maximum": 1000000000.0
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "asset": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9._-]+$"
         }
       },
       "allOf": [
@@ -112,74 +140,15 @@
           "if": {
             "properties": {
               "type": {
-                "const": "toggle"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "value",
-              "callbackId"
-            ],
-            "properties": {
-              "value": {
-                "type": "boolean"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
-                "const": "input"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "value",
-              "callbackId"
-            ],
-            "properties": {
-              "value": {
-                "type": "string",
-                "maxLength": 4096
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
-                "const": "select"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "value",
-              "options",
-              "callbackId"
-            ],
-            "properties": {
-              "value": {
-                "type": [
-                  "string",
-                  "number",
-                  "boolean",
-                  "null"
+                "enum": [
+                  "button",
+                  "toggle",
+                  "input",
+                  "multiline",
+                  "select",
+                  "slider",
+                  "stepper"
                 ]
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
-                "const": "button"
               }
             }
           },
@@ -196,7 +165,9 @@
                 "enum": [
                   "section",
                   "text",
-                  "list"
+                  "markdown",
+                  "list",
+                  "image"
                 ]
               }
             }
@@ -214,11 +185,129 @@
             "properties": {
               "type": {
                 "enum": [
+                  "toggle"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "input",
+                  "multiline"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string",
+                "maxLength": 4096,
+                "x-nativeLength": "utf16"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "select"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "options"
+            ],
+            "properties": {
+              "value": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ],
+                "maxLength": 4096
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "slider",
+                  "stepper"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "value",
+              "minimum",
+              "maximum",
+              "step"
+            ],
+            "properties": {
+              "value": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "image"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "asset"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
                   "text",
+                  "markdown",
                   "button",
                   "toggle",
                   "input",
-                  "select"
+                  "multiline",
+                  "select",
+                  "slider",
+                  "stepper",
+                  "image"
                 ]
               }
             }
@@ -230,9 +319,158 @@
               ]
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "section",
+                  "text",
+                  "markdown",
+                  "list",
+                  "button",
+                  "toggle",
+                  "input",
+                  "multiline",
+                  "slider",
+                  "stepper",
+                  "image"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "options"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "section",
+                  "text",
+                  "markdown",
+                  "list",
+                  "button",
+                  "toggle",
+                  "input",
+                  "multiline",
+                  "select",
+                  "slider",
+                  "stepper"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "asset"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "section",
+                  "text",
+                  "markdown",
+                  "list",
+                  "button",
+                  "toggle",
+                  "input",
+                  "multiline",
+                  "select",
+                  "image"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minimum"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "section",
+                  "text",
+                  "markdown",
+                  "list",
+                  "button",
+                  "toggle",
+                  "input",
+                  "multiline",
+                  "select",
+                  "image"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "maximum"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "section",
+                  "text",
+                  "markdown",
+                  "list",
+                  "button",
+                  "toggle",
+                  "input",
+                  "multiline",
+                  "select",
+                  "image"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "step"
+              ]
+            }
+          }
         }
       ]
     }
   },
-  "description": "native renderer additionally enforces 64 kib JSON, depth <=6, <=128 total nodes and generation-bound callbacks; unsupported node types fail explicitly"
+  "x-nativeConstraints": {
+    "encodedJSONBytes": 65536,
+    "maximumNodeDepth": 6,
+    "rootNodeDepth": 0,
+    "maximumTotalNodes": 128,
+    "uniqueNodeIds": true,
+    "noControlOrBidiDisplayText": true,
+    "stringLengths": "utf16 code units; standard JSON Schema maxLength counts code points",
+    "numericControl": "minimum < maximum; step <= maximum-minimum; <=1e6 steps; value in bounds and aligned within1e-6",
+    "select": "value equals one typed scalar option; omitted value means null",
+    "image": "opaque generation-owned installed raster handle, no URL/path"
+  },
+  "description": "run dgplugin validate-ui for relational, UTF16, total-node, id, depth and encoded-size constraints; native validation remains authoritative"
 }

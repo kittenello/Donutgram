@@ -138,4 +138,174 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertEqual(toasts, 0)
         XCTAssertTrue(self.manager.commands.filter { $0.installationId == id }.isEmpty)
     }
+
+    func testTwoPluginTransformsComposeByPriorityAndStopClearsCache() throws {
+        let permission = DGPluginPermission(capability: "ui.transform", scope: "profile", reason: "hide empty panes")
+        let later = try self.package(permissions: [permission], body: "await api.transforms.register({id:'later',slot:'profile',priority:10},input=>{if(input.panes.some(p=>p.id==='media'))throw Error('wrong transform order');return {hide:['files']}});")
+        let laterId = try self.install(later, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: laterId, enabled: true, completion: $0) }.get()
+        let earlier = try self.package(permissions: [permission], body: "await api.transforms.register({id:'earlier',slot:'profile',priority:-10},()=>({hide:['media']}));")
+        let earlierId = try self.install(earlier, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: earlierId, enabled: true, completion: $0) }.get()
+        let input: DGPluginJSON = .object(["panes": .array([
+            .object(["id": .string("media"), "empty": .bool(true)]),
+            .object(["id": .string("files"), "empty": .bool(true)]),
+            .object(["id": .string("voice"), "empty": .bool(false)])
+        ])])
+        let output: DGPluginJSON = .object(["panes": .array([.object(["id": .string("voice"), "empty": .bool(false)])])])
+        let updated = self.expectation(description: "composed transform cached")
+        var updates = 0
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { updates += 1; if updates == 1 { updated.fulfill() } }), input)
+        self.wait(for: [updated], timeout: 3)
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { XCTFail("cache hit unexpectedly scheduled work") }), output)
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: {}), output)
+        XCTAssertEqual(updates, 1)
+        try self.result { self.manager.setEnabled(id: earlierId, enabled: false, completion: $0) }.get()
+        try self.result { self.manager.setEnabled(id: laterId, enabled: false, completion: $0) }.get()
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { XCTFail("stopped transforms changed native input") }), input)
+    }
+
+    func testTransformRegistrationCannotWidenExactScope() throws {
+        let permission = DGPluginPermission(capability: "ui.transform", scope: "profile", reason: "profile only")
+        let package = try self.package(permissions: [permission], body: "let denied=false;try{await api.transforms.register({id:'wrong-slot',slot:'chatList'},()=>({hidden:[]}))}catch(e){denied=e.code==='scope_denied'}if(!denied)throw Error('transform scope widened');")
+        let id = try self.install(package, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let input: DGPluginJSON = .object(["items": .array([])])
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "chatList", input: input, update: { XCTFail("ungranted slot produced a patch") }), input)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
+    }
+
+    func testRevocationRejectsLateTransformPatchAndCache() throws {
+        let transform = DGPluginPermission(capability: "ui.transform", scope: "profile", reason: "profile transform")
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "delayed native response")
+        let package = try self.package(permissions: [transform, ui], body: "await api.transforms.register({id:'delayed',slot:'profile'},async()=>{await api.ui.toast('wait');return {hide:['media']}});")
+        let id = try self.install(package, permissions: [transform, ui])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let requested = self.expectation(description: "transform awaits native callback")
+        var reply: ((Result<DGPluginJSON, DGPluginError>) -> Void)?
+        var validity: (() -> Bool)?
+        self.manager.nativeRequest = { _, method, _, valid, completion in
+            guard method == "ui.toast" else { XCTFail("unexpected transform adapter"); completion(.failure(DGPluginError(code: "feature_unavailable", message: "unavailable"))); return }
+            reply = completion; validity = valid; requested.fulfill()
+        }
+        let input: DGPluginJSON = .object(["panes": .array([.object(["id": .string("media"), "empty": .bool(true)])])])
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { XCTFail("revoked transform posted stale output") }), input)
+        self.wait(for: [requested], timeout: 2)
+        try self.result { self.manager.setGrants(id: id, permissions: [], completion: $0) }.get()
+        XCTAssertEqual(validity?(), false)
+        reply?(.success(.null))
+        try self.result { self.manager.setEnabled(id: id, enabled: false, completion: $0) }.get()
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { XCTFail("stale transform repopulated cache") }), input)
+    }
+
+    func testFailedUpdatedActivationRestoresPreviousCodeAndDataDisabled() throws {
+        let pluginId = "dev.example.rollback-" + UUID().uuidString.lowercased()
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "persistent state")
+        let v1 = try self.package(id: pluginId, permissions: [storage], body: "const value=await api.storage.get('version');if(value===null)await api.storage.set('version','v1');else if(value!=='v1')throw Error('previous data not restored');")
+        let id = try self.install(v1, permissions: [storage])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let v2 = try self.package(id: pluginId, version: "2.0.0", permissions: [storage], body: "await api.storage.set('version','v2');throw Error('new activation failed');")
+        XCTAssertEqual(try self.result { self.manager.install(v2, completion: $0) }.get(), id)
+        XCTAssertThrowsError(try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get())
+        let restored = try XCTUnwrap(self.manager.installations.first(where: { $0.id == id }))
+        XCTAssertEqual(restored.manifest.version, "1.0.0")
+        XCTAssertEqual(restored.digest, v1.digest)
+        XCTAssertFalse(restored.enabled)
+        XCTAssertNil(self.manager.nativeScope(installationId: id))
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
+    }
+
+    func testRollbackCannotResurrectRevokedGrants() throws {
+        let pluginId = "dev.example.revoke-" + UUID().uuidString.lowercased()
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "persistent state")
+        let v1 = try self.package(id: pluginId, permissions: [storage], body: "await api.storage.set('private','old');")
+        let id = try self.install(v1, permissions: [storage])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let v2 = try self.package(id: pluginId, version: "2.0.0", permissions: [storage], body: "")
+        _ = try self.result { self.manager.install(v2, completion: $0) }.get()
+        try self.result { self.manager.setGrants(id: id, permissions: [], completion: $0) }.get()
+        try self.result { self.manager.rollback(id: id, completion: $0) }.get()
+        let restored = try XCTUnwrap(self.manager.installations.first(where: { $0.id == id }))
+        XCTAssertTrue(restored.grants.isEmpty)
+        XCTAssertFalse(restored.enabled)
+        XCTAssertThrowsError(try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get())
+    }
+
+    func testEqualSemverBuildMetadataCannotReplaceReviewedVersion() throws {
+        let pluginId = "dev.example.metadata-" + UUID().uuidString.lowercased()
+        let first = try self.package(id: pluginId, version: "1.0.0+first", body: "")
+        let id = try self.install(first)
+        let equal = try self.package(id: pluginId, version: "1.0.0+second", body: "throw Error('unreviewed');")
+        XCTAssertThrowsError(try self.result { self.manager.install(equal, completion: $0) }.get())
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.digest, first.digest)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.manifest.version, "1.0.0+first")
+    }
+
+    func testResetDataCannotResurrectPrivateStateThroughRollback() throws {
+        let pluginId = "dev.example.reset-" + UUID().uuidString.lowercased()
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "persistent state")
+        let first = try self.package(id: pluginId, permissions: [storage], body: "await api.storage.set('private','secret');")
+        let id = try self.install(first, permissions: [storage])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let update = try self.package(id: pluginId, version: "2.0.0", permissions: [storage], body: "if(await api.storage.get('private')!==null)throw Error('deleted private state resurrected');")
+        _ = try self.result { self.manager.install(update, completion: $0) }.get()
+        try self.result { self.manager.resetData(id: id, completion: $0) }.get()
+        XCTAssertFalse(self.manager.canRollback(id: id))
+        XCTAssertThrowsError(try self.result { self.manager.rollback(id: id, completion: $0) }.get())
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+    }
+
+    func testDetachedActivationRepliesCannotBorrowLaterGesture() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "activation notice")
+        let composer = DGPluginPermission(capability: "composer.read", scope: "activeComposer", reason: "gesture-bound draft")
+        let package = try self.package(permissions: [ui, composer], body: "api.ui.toast('hold').then(async()=>{let denied=false;try{await api.composer.getActiveDraft()}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('detached activation borrowed a gesture')});")
+        let id = try self.install(package, permissions: [ui, composer])
+        let requested = self.expectation(description: "detached activation native wait")
+        let activated = self.expectation(description: "activation drains detached native replies")
+        var delayed: ((Result<DGPluginJSON, DGPluginError>) -> Void)?
+        var composerCalls = 0
+        self.manager.nativeRequest = { _, method, _, _, completion in
+            if method == "ui.toast" { delayed = completion; requested.fulfill() }
+            else { composerCalls += 1; completion(.success(.null)) }
+        }
+        self.manager.setEnabled(id: id, enabled: true) { result in
+            if case let .failure(error) = result { XCTFail("activation failed: " + error.code) }
+            activated.fulfill()
+        }
+        self.wait(for: [requested], timeout: 2)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .starting)
+        delayed?(.success(.null))
+        self.wait(for: [activated], timeout: 3)
+        XCTAssertEqual(composerCalls, 0)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
+    }
+
+    func testEventsRequireTheirOwnExactGrantAndNeverCreateGesture() throws {
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "event counters")
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "event check command")
+        let theme = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "theme event")
+        let composer = DGPluginPermission(capability: "composer.read", scope: "activeComposer", reason: "gesture-bound draft")
+        let delivered = self.expectation(description: "granted event delivered")
+        let gestureDenied = self.expectation(description: "event cannot create native gesture")
+        var composerCalls = 0
+        self.manager.nativeRequest = { _, method, params, _, completion in
+            if method == "composer.getActiveDraft" { composerCalls += 1 }
+            if params.objectValue?["text"] == .string("theme delivered") { delivered.fulfill() }
+            if params.objectValue?["text"] == .string("gesture denied") { gestureDenied.fulfill() }
+            completion(.success(.null))
+        }
+        let granted = try self.package(permissions: [storage, ui, theme, composer], body: "await api.events.on('theme.changed',async event=>{if(event.version!==1||typeof event.id!=='string'||event.data.appearance!=='dark')throw Error('invalid event envelope');await api.storage.set('theme',true);await api.ui.toast('theme delivered')});await api.events.on('locale.changed',async()=>{let denied=false;try{await api.composer.getActiveDraft()}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('event acquired gesture');await api.ui.toast('gesture denied')});")
+        let grantedId = try self.install(granted, permissions: [storage, ui, theme, composer])
+        try self.result { self.manager.setEnabled(id: grantedId, enabled: true, completion: $0) }.get()
+        let denied = try self.package(permissions: [storage, ui], body: "await api.events.on('theme.changed',async()=>{await api.storage.set('leak',true)});await api.commands.register({id:'assert',title:'assert',placement:'settings',async run(){if(await api.storage.get('leak')!==null)throw Error('theme event delivered without grant')}});")
+        let deniedId = try self.install(denied, permissions: [storage, ui])
+        try self.result { self.manager.setEnabled(id: deniedId, enabled: true, completion: $0) }.get()
+        self.manager.emitNativeEvent(name: "theme.changed", payload: .object(["appearance": .string("dark")]))
+        self.wait(for: [delivered], timeout: 3)
+        self.manager.emitNativeEvent(name: "locale.changed", payload: .object(["locale": .string("ru")]), installationId: grantedId)
+        self.wait(for: [gestureDenied], timeout: 3)
+        try self.result { self.manager.runCommand(installationId: deniedId, commandId: "assert", completion: $0) }.get()
+        XCTAssertEqual(composerCalls, 0)
+    }
 }

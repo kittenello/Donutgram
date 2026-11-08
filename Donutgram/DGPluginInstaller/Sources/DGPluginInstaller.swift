@@ -202,14 +202,12 @@ public enum DGPluginInstaller {
         guard data.count <= 8192 else { throw self.error("invalid_signature", "invalid signature envelope") }
         var parser = DGStaticJSONParser(data)
         guard let envelope = try parser.complete().objectValue else { throw self.error("invalid_signature", "invalid signature envelope") }
-        try self.keys(envelope, allowed: ["algorithm", "publicKey", "signature"])
-        guard envelope["algorithm"] == .string("Ed25519"), let keyString = envelope["publicKey"]?.stringValue,
+        try self.keys(envelope, allowed: ["algorithm", "canonicalization", "publicKey", "signature"])
+        guard envelope["algorithm"] == .string("Ed25519"), envelope["canonicalization"] == .string(DGPluginCanonicalJSON.format), let keyString = envelope["publicKey"]?.stringValue,
               let keyData = Data(base64Encoded: keyString), keyData.count == 32,
               let signatureString = envelope["signature"]?.stringValue,
               let signature = Data(base64Encoded: signatureString), signature.count == 64 else { throw self.error("invalid_signature", "invalid signature envelope") }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let canonicalManifest = try encoder.encode(manifest)
+        let canonicalManifest = try DGPluginCanonicalJSON.encode(manifest)
         var payload = Data("donutgram.plugin.signature.v1\n".utf8)
         for path in files.keys.filter({ $0 != "signature.json" }).sorted() {
             let content = path == "manifest.json" ? canonicalManifest : files[path]!

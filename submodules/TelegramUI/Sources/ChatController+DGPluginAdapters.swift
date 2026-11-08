@@ -11,6 +11,7 @@ import PresentationDataUtils
 import DGPluginModel
 import DGPluginHost
 import DGPluginsUI
+import DGPluginViewAdapters
 
 private var dgAdditionalPluginStateKey: UInt8 = 0
 
@@ -40,19 +41,43 @@ private final class DGPluginTextPicker: NSObject, UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard urls.count == 1, let url = urls.first, validity() else { finish(.failure(DGPluginError(code: "cancelled", message: "file selection is no longer current"))); return }
         let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        do {
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            let data = try handle.read(upToCount: 49153) ?? Data()
-            guard data.count <= 49152, let text = String(data: data, encoding: .utf8), validity() else { throw DGPluginError(code: "invalid_argument", message: "selected file must be bounded utf8 text") }
-            finish(.success((String(url.lastPathComponent.prefix(128)), text)))
-        } catch let error as DGPluginError { finish(.failure(error)) }
-        catch { finish(.failure(DGPluginError(code: "invalid_argument", message: "unable to read selected text file"))) }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            let result: Result<(String, String), DGPluginError>
+            do {
+                let metadata = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                guard metadata.isRegularFile == true, let size = metadata.fileSize, size <= 49152 else { throw DGPluginError(code: "invalid_argument", message: "selected file must be bounded regular utf8 text") }
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { try? handle.close() }
+                let data = try handle.read(upToCount: 49153) ?? Data()
+                guard data.count <= 49152, let text = String(data: data, encoding: .utf8) else { throw DGPluginError(code: "invalid_argument", message: "selected file must be bounded utf8 text") }
+                result = .success((String(url.lastPathComponent.prefix(128)), text))
+            } catch let error as DGPluginError { result = .failure(error) }
+            catch { result = .failure(DGPluginError(code: "invalid_argument", message: "unable to read selected text file")) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard self.validity() else { self.finish(.failure(DGPluginError(code: "cancelled", message: "file selection is no longer current"))); return }
+                self.finish(result)
+            }
+        }
     }
 }
 
 extension ChatControllerImpl {
+    func dgPluginChatOpened() {
+        guard dgPluginSafeComposer() else { return }
+        DGPluginManager.shared(accountKey: String(context.account.id.int64)).emitNativeEvent(name: "chat.opened", payload: .object(["hasActiveChat": .bool(true)]))
+    }
+
+    func dgPluginChatClosed() {
+        DGPluginManager.shared(accountKey: String(context.account.id.int64)).emitNativeEvent(name: "chat.closed", payload: .object(["hasActiveChat": .bool(false)]))
+    }
+
+    func dgPluginComposerChanged() {
+        guard dgPluginSafeComposer() else { return }
+        DGPluginManager.shared(accountKey: String(context.account.id.int64)).emitNativeEvent(name: "composer.changed", payload: .object(["metadataOnly": .bool(true)]))
+    }
+
     private var dgAdditionalPluginState: DGPluginAdditionalState {
         if let state = objc_getAssociatedObject(self, &dgAdditionalPluginStateKey) as? DGPluginAdditionalState { return state }
         let state = DGPluginAdditionalState()
@@ -90,7 +115,9 @@ extension ChatControllerImpl {
             switch method {
             case "messages.read":
                 guard arguments.isEmpty, let message = dgPluginChatState.selectedMessages[installationId], dgPluginSafeMessage(message) else { throw DGPluginError(code: "scope_denied", message: "choose one eligible message using its native plugin action") }
-                completion(.success(.array([.object(["handle": .string(UUID().uuidString.lowercased()), "text": .string(message.text), "timestamp": .number(Double(message.timestamp)), "entities": .array([]), "entitiesComplete": .bool(false), "mediaComplete": .bool(false)])])))
+                let snapshot = DGPluginJSON.object(["handle": .string(UUID().uuidString.lowercased()), "text": .string(message.text), "timestamp": .number(Double(message.timestamp)), "entities": .array([]), "entitiesComplete": .bool(false), "mediaComplete": .bool(false)])
+                manager.emitNativeEvent(name: "message.observed", payload: snapshot, installationId: installationId)
+                completion(.success(.array([snapshot])))
             case "chats.metadata":
                 guard arguments.isEmpty, dgPluginSafeComposer(), let peer = presentationInterfaceState.renderedPeer?.chatMainPeer else { throw DGPluginError(code: "scope_denied", message: "no eligible selected chat") }
                 completion(.success(.object(["handle": .string(UUID().uuidString.lowercased()), "title": .string(String(peer.debugDisplayTitle.prefix(128))), "scope": .string("currentNativeChat") ])))
@@ -98,8 +125,8 @@ extension ChatControllerImpl {
                 guard arguments.isEmpty, let message = dgPluginChatState.selectedMessages[installationId], dgPluginSafeMessage(message), let author = message.author, !author.isService else { throw DGPluginError(code: "scope_denied", message: "no eligible author selected by a native message action") }
                 completion(.success(.array([.object(["handle": .string(UUID().uuidString.lowercased()), "title": .string(String(author.debugDisplayTitle.prefix(128)))])])))
             case "navigation.open":
-                guard Set(arguments.keys) == ["screen"], arguments["screen"] == .string("plugins"), validity() else { throw DGPluginError(code: "scope_denied", message: "only the native plugin-management route is supported") }
-                navigationController?.pushViewController(dgPluginsController(context: context))
+                guard Set(arguments.keys) == ["screen"], arguments["screen"] == .string("plugins"), validity(), let navigationController else { throw DGPluginError(code: "scope_denied", message: "only an available native plugin-management route is supported") }
+                navigationController.pushViewController(dgPluginsController(context: context))
                 completion(.success(.null))
             case "files.pick":
                 guard arguments.isEmpty, dgAdditionalPluginState.picker == nil else { throw DGPluginError(code: "conflict", message: "a text-file chooser is already open") }
@@ -133,13 +160,17 @@ extension ChatControllerImpl {
                 try dgPluginMessageAction(installationId: installationId, scope: scope, method: method, arguments: arguments, pluginName: pluginName, validity: validity, completion: completion)
             case "translation.request":
                 guard Set(arguments.keys).isSubset(of: ["targetLanguage", "text"]), let language = arguments["targetLanguage"]?.stringValue, language.range(of: "^[A-Za-z]{2,3}(-[A-Za-z]{2,8})?$", options: .regularExpression) != nil, let text = dgPluginSelectedText(installationId: installationId), !text.isEmpty, text.utf16.count <= 4096, arguments["text"] == nil || arguments["text"] == .string(text) else { throw DGPluginError(code: "scope_denied", message: "translation requires the exact native text selection") }
-                dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: "telegram translation · " + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish in
-                    guard let self, validity() else { finish(.failure(DGPluginError(code: "cancelled", message: "translation cancelled"))); return }
+                dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: "telegram translation · " + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
+                    guard let self, confirmationCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "translation cancelled"))); return }
                     let disposable = (self.context.engine.messages.translate(text: text, toLang: language) |> take(1) |> deliverOnMainQueue).start(next: { translated in
-                        guard validity(), let translated else { finish(.failure(DGPluginError(code: "cancelled", message: "translation is unavailable or was cancelled"))); return }
+                        guard confirmationCurrent(), let translated else { finish(.failure(DGPluginError(code: "cancelled", message: "translation is unavailable or was cancelled"))); return }
                         finish(.success(.object(["text": .string(translated.0), "service": .string("telegram"), "targetLanguage": .string(language)])))
                     }, error: { _ in finish(.failure(DGPluginError(code: "service_error", message: "telegram translation failed"))) })
-                    _ = manager.ownNativeResource(installationId: installationId, scope: scope) { disposable.dispose() }
+                    guard manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { disposable.dispose() }) != nil else {
+                        disposable.dispose()
+                        finish(.failure(DGPluginError(code: "quota_exceeded", message: "translation resource limit reached")))
+                        return
+                    }
                 }
             case "notifications.local":
                 guard Set(arguments.keys) == ["text"], let text = arguments["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { throw DGPluginError(code: "invalid_argument", message: "invalid local notification text") }
@@ -151,7 +182,11 @@ extension ChatControllerImpl {
                         guard granted, validity() else { completion(.failure(DGPluginError(code: "permission_denied", message: "local notifications are not authorized"))); return }
                         let content = UNMutableNotificationContent(); content.title = pluginName; content.body = text
                         center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))) { error in
-                            DispatchQueue.main.async { completion(error == nil && validity() ? .success(.null) : .failure(DGPluginError(code: "cancelled", message: "notification was not scheduled"))) }
+                            DispatchQueue.main.async {
+                                let current = validity()
+                                if !current { center.removePendingNotificationRequests(withIdentifiers: [identifier]); center.removeDeliveredNotifications(withIdentifiers: [identifier]) }
+                                completion(error == nil && current ? .success(.null) : .failure(DGPluginError(code: "cancelled", message: "notification was not scheduled")))
+                            }
                         }
                     }
                 }
@@ -162,20 +197,21 @@ extension ChatControllerImpl {
         return true
     }
 
-    private func dgPluginConfirm(installationId: String, scope: String, title: String, text: String, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void, accepted: @escaping (@escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void) {
+    private func dgPluginConfirm(installationId: String, scope: String, title: String, text: String, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void, accepted: @escaping (@escaping (Result<DGPluginJSON, DGPluginError>) -> Void, @escaping () -> Bool) -> Void) {
         let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
-        var completed = false
+        let state = DGPluginConfirmationState()
         var token: UUID?
         var alert: ViewController?
         let finish: (Result<DGPluginJSON, DGPluginError>) -> Void = { result in
-            guard !completed else { return }; completed = true
+            guard state.finish() else { return }
             if let token { manager.releaseNativeResource(installationId: installationId, token: token) }
             alert?.dismiss(); alert = nil; completion(result)
         }
+        let confirmationCurrent = { state.isCurrent() && validity() }
         let controller = textAlertController(context: context, title: title, text: text, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: { finish(.failure(DGPluginError(code: "cancelled", message: "native action cancelled"))) }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {
-            guard validity() else { finish(.failure(DGPluginError(code: "cancelled", message: "native action is no longer current"))); return }
-            accepted(finish)
-        })])
+            guard state.accept(), confirmationCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "native action is no longer current"))); return }
+            accepted(finish, confirmationCurrent)
+        })], dismissOnOutsideTap: false)
         alert = controller
         token = manager.ownNativeResource(installationId: installationId, scope: scope) { finish(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))) }
         guard token != nil else { finish(.failure(DGPluginError(code: "quota_exceeded", message: "native action resource limit reached"))); return }
@@ -205,22 +241,25 @@ extension ChatControllerImpl {
         let draft = presentationInterfaceState.interfaceState.effectiveInputState
         let threadId = chatLocation.threadId
         let action = method == "messages.compose" ? "prepare draft" : "send ordinary message"
-        dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish in
-            guard let self, validity(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.dgPluginSafeComposer(), self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "cancelled", message: "recipient, price or account changed"))); return }
+        dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
+            guard let self, confirmationCurrent(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.dgPluginSafeComposer(), self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "cancelled", message: "recipient, price or account changed"))); return }
             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.SendPaidMessageStars(id: peerId)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] price in
-                guard let self, validity(), price == nil, self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "permission_denied", message: "paid or stale recipient is not allowed"))); return }
+                guard let self, confirmationCurrent(), price == nil, self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "permission_denied", message: "paid or stale recipient is not allowed"))); return }
                 do {
                     let approvedText = try store.consume(handle: handle, scope: scope, recipient: recipient, paidRecipient: price != nil)
                     if method == "messages.compose" {
                         guard self.presentationInterfaceState.interfaceState.effectiveInputState == draft, let interaction = self.interfaceInteraction else { throw DGPluginError(code: "conflict", message: "draft changed during native preview") }
+                        var applied = false
                         interaction.updateTextInputStateAndMode { current, mode in
-                            guard validity(), current == draft else { return (current, mode) }
+                            guard confirmationCurrent(), current == draft, self.presentationInterfaceState.interfaceState.editMessage == nil else { return (current, mode) }
                             let range = current.selectionRange
+                            applied = true
                             return (current.replacingFlatRange(NSRange(location: range.lowerBound, length: range.count), with: approvedText), mode)
                         }
+                        guard applied else { throw DGPluginError(code: "conflict", message: "draft was not changed because the native confirmation became stale") }
                         finish(.success(.object(["status": .string("draftPrepared")])))
                     } else {
-                        let _ = (self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, isCurrent: validity) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+                        let _ = (self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                             finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "ordinary unpaid message was not queued")))
                         })
                     }

@@ -33,6 +33,8 @@ manifest fields: kind, schemaVersion, id, name, version, description, author, ap
 
 DGPluginJSON is a Codable, Equatable enum (null, bool, number, string, array, object). DGPluginPermission is Codable and Hashable (capability: String, scope: String, reason: String, origins: [String]). DGPluginManifest is Codable and Equatable. DGVerifiedPluginPackage is an immutable value containing manifest, files: [String: Data], digest: String, publisherIdentity: String, trust: String and originalData: Data. DGPluginInstaller.preview(data:fileName:) throws returns this value. package files and original bytes are verified once and reused on install.
 
+signed packages require Ed25519 and canonicalization dg-canonical-v1 in signature.json. DGPluginCanonicalJSON emits tagged binary manifest bytes with binary64 numbers, UTF8 byte-counted strings and UTF8-sorted object keys; the signature payload hashes those bytes for manifest.json and exact bytes for every other installed file. missing/unknown canonicalization fails before cryptographic verification. authoring.md defines the normative grammar and cross-tool fixture; the format replaces the unreleased platform-dependent JSONEncoder signature path.
+
 installation records contain an opaque uuid, manifest, digest, publisher, code version and durable removal state. account records contain enabled, exact grants, settings and storage. adding permissions/origins/profile requires new consent. unsigned replacements require explicit review; matching id/username is never publisher proof. removing is persisted before any cleanup; restart resumes cleanup and never activates removing records. writes use same-volume atomic replacement and rollback keeps the previous compatible record.
 
 ## runtime contract
@@ -47,23 +49,29 @@ heap 16 mib, stack initially 512 kib, source/package limits before allocation, a
 
 DGPluginManager is serialized and publishes immutable DGPluginInstallation snapshots on the main queue through `observe(_:) -> UUID`, `removeObserver(_:)`. factory `shared(accountKey: String)`. public snapshot properties `installations: [DGPluginInstallation]`, `globallyEnabled: Bool`; actions `install(_:completion:)`, `setEnabled(id:enabled:completion:)`, `setGloballyEnabled(_:)`, `setGrants(id:permissions:completion:)`, `updateSettings(id:values:completion:)`, `remove(id:completion:)`, `runCommand(installationId:commandId:input:completion:)`. completions use Result<Void, DGPluginError>, except install returns Result<String, DGPluginError> with installation id. `commands` contains host-validated descriptors with installationId, id, title, placement. id and generation are host-bound.
 
-DGPluginInstallation fields: id: String, manifest: DGPluginManifest, digest: String, trust: String, enabled: Bool, state: DGPluginState, grants: [DGPluginPermission], settings: [String: DGPluginJSON], lastError: String?. manager `nativeRequest: ((String, DGPluginJSON, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)?` is an app-owned adapter; every completion is rechecked before effects. no adapter means explicit unavailability. settings persist without executing code.
+DGPluginInstallation exposes the installation identity, manifest/digest/trust, enabled/state, grants/settings and lastError, together with native diagnostics/rollback state. manager `nativeRequest: ((String, String, DGPluginJSON, @escaping () -> Bool, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)?` receives installationId, method, params, validity and completion. the app owns the adapter; identity never comes from javascript. every completion is checked again and adapters must check validity immediately before side effects. no adapter means explicit unavailability. settings persist without executing code.
 
-ui belongs to DGPluginsUI: `dgPluginsController(context:) -> ViewController`, `dgPluginInstallController(context:package:) -> ViewController`, `dgOpenPluginDocument(context:file:present:) -> Bool` (resource data through TelegramEngine.Resources; no new postbox imports). shared card is used for install and installed details. install is disabled by default; permissions are explicit; uninstall requires native confirmation and warns that all account-local data for this installation is removed. no url importer or file picker. the settings row is in the extensions group and includes running count/global-stop status.
+manager `nativeRender: ((String, DGPluginJSON, String, @escaping () -> Bool, @escaping (String) -> Data?, @escaping (String, DGPluginJSON) -> Void, @escaping () -> Void) -> Result<() -> Void, DGPluginError>)?` receives installationId, page, pluginName, validity, assetProvider, callback and onClosed. success returns the native cleanup closure. one owned page may be open per runtime; replacements use a fresh token, and a rejected replacement preserves the previous page's token. closure/disposal/stop invalidates callbacks and runs cleanup. assets.image returns an opaque handle for a verified installed raster; only the host's assetProvider resolves it. theme.contribute stores one of four accent names and overwrites the reserved __dgThemeTokens page field before rendering; author-supplied tokens have no authority.
+
+native events carry `{id,timestamp,version:1,data}` with timestamp in seconds and bounded/coalesced pending delivery. only currently produced names are subscribable: plugin.activated, account.contextChanged, app.foreground, theme.changed, locale.changed, chat.opened, chat.closed, composer.changed and message.observed. payload-specific grants and current generations are checked before delivery. background/power-saving/deactivation final-event delivery and edited/deleted/selection/reachability publishers are not advertised.
+
+profile and chatList transforms receive bounded snapshots and return typed patches; native cache/validation never waits synchronously for javascript. priority is deterministic, every composition revalidates the patch, pinned chats and nonempty panes remain protected, and stop/revocation invalidates cached results. displayLinks has a reserved schema and pure validator but no current native renderer; registration is explicitly unavailable.
+
+ui belongs to DGPluginsUI: `dgPluginsController(context:) -> ViewController`, `dgPluginInstallController(context:package:) -> ViewController`, `dgOpenPluginDocument(context:file:present:) -> Bool` (resource data through TelegramEngine.Resources; no new postbox imports). shared card is used for install and installed details. install is disabled by default; permissions are explicit; uninstall requires native confirmation and warns that all account-local data for this installation is removed. installation has no url importer or file-picker route; the separately granted files API only selects text data. the settings row is in the extensions group and includes running count/global-stop status.
 
 ## capability registry
 
 | family | scope | initial policy |
 |---|---|---|
 | ui.contribute | settings, composer, selection, messageMenu, chatToolbar | bounded owned contributions |
-| ui.transform | profile, chatList, displayLinks | typed models only; unavailable until adapter exists |
-| theme.read / theme.contribute | currentTheme / localTokens | safe theme snapshot / validated tokens |
+| ui.transform | profile, chatList; reserved displayLinks | typed local models; displayLinks registration unavailable |
+| theme.read / theme.contribute | currentTheme / localTokens | safe snapshot / fixed accent for owned plugin pages |
 | composer.read / composer.transform | activeComposer | native gesture, handle and revision compare-and-set |
 | messages.selection.read | activeSelection | native gesture, excludes protected/service sources |
 | messages.read | selectedChats | bounded approved snapshots; no history export |
 | chats.metadata.read / peers.read | selectedChats / selectedPeers | bounded display dto |
 | storage.local | pluginAccount | 5 mib, no paths |
-| network.public | declaredOrigins | publicNetwork only; exact origins and safe dns/redirect enforcement |
+| network.public | declaredOrigins | publicNetwork only; exact origins, numeric DNS pinning, original TLS hostname, redirects denied |
 | translation.request | selectedText | named-service confirmation |
 | navigation.open | safeScreens | enumerated native screens, no arbitrary url |
 | notifications.local | pluginAccount | explicit native consent; no private payload |
@@ -76,7 +84,7 @@ the registry advertises implementation availability per method. no capability ca
 
 settings: Donutgram/DGSettingsUI/Sources/DGSettingsController.swift, DGSettingsSearch.swift, DGSettingLinks.swift. document tap: submodules/TelegramUI/Sources/OpenChatMessage.swift (.document after immediateShare handling). resource reads: TelegramEngine/Resources/TelegramEngineResources.swift. composer undo-aware seam: TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift updateTextInputStateAndMode. selected text: ChatMessageActionOptions.swift performTextSelectionAction. thumbnail: ChatMessageInteractiveFileNode.swift. framework exports: Telegram/BUILD.
 
-schema changes require a new schemaVersion; additive api uses semver feature availability. no automatic grants or startup on migration. incompatible records remain disabled. manual update preserves previous code/data until reviewed atomic commit; failed activation is visible and never silently reports running.
+schema changes require a new schemaVersion; additive api uses semver feature availability. no automatic grants or startup on migration. incompatible records remain disabled. manual update preserves previous code/data until reviewed atomic commit; failed activation is visible and never silently reports running. rollback restores one eligible prior package/account snapshot while disabled and intersects grants with those still retained; reset discards that snapshot so rollback cannot resurrect erased data. profile changes require removal and a fresh installation. general versioned data migration is not implemented.
 
 implementation order: static model/installer; bounded runtime; broker/manager; ui and document integration; useful composer/selection/profile adapters; sdk/tooling/fixtures; independent review and fixes. file ownership is disjoint per agent. the primary agent integrates and reviews all changes.
 

@@ -54,13 +54,13 @@ private struct DGPluginRow: ItemListNodeEntry {
         case .input:
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: self.key == "search" ? "" : self.title), text: self.detail, placeholder: self.title, type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: input, shouldUpdateText: { $0.utf16.count <= self.maxText }, action: {})
         case .multiline:
-            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .multiline(self.title, self.detail, self.maxText), scale: presentationData.fontSize.itemListBaseFontSize / 17, textUpdated: input)
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .multiline(self.title, self.detail, self.maxText), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, textUpdated: input)
         case .markdown:
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .card:
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .card(page.icon(self.iconKey, size: 96), self.title, self.detail, page.cardDescription()), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .slider, .stepper:
-            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .number(self.title, self.number, self.minimum, self.maximum, self.step, self.kind == .slider), scale: presentationData.fontSize.itemListBaseFontSize / 17, numberUpdated: number)
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .number(self.title, self.number, self.minimum, self.maximum, self.step, self.kind == .slider), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, numberUpdated: number)
         case .image:
             if let image = page.renderedImages[self.iconKey] { return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .image(image, self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17) }
             return ItemListTextItem(presentationData: presentationData, text: .plain(page.tr("изображение недоступно", "image unavailable")), sectionId: self.section)
@@ -81,6 +81,12 @@ private enum DGPluginPageMode {
     case rendered(DGPluginRenderedState)
 }
 
+private final class DGPluginPresentedPage {
+    weak var controller: ViewController?
+    let token: UUID
+    init(controller: ViewController, token: UUID) { self.controller = controller; self.token = token }
+}
+
 private final class DGPluginPage {
     let context: AccountContext
     let manager: DGPluginManager
@@ -95,6 +101,8 @@ private final class DGPluginPage {
     private var sequence = 0
     var notice: String?
     var renderedImages: [String: UIImage] = [:]
+    var renderedAccent: UIColor?
+    private var presentedPages: [String: DGPluginPresentedPage] = [:]
     private var pendingRemoval: DGPluginInstallation?
 
     init(context: AccountContext, mode: DGPluginPageMode) {
@@ -120,6 +128,43 @@ private final class DGPluginPage {
     }
 
     func accepts(_ epoch: Int) -> Bool { return epoch == self.sequence && !self.busy }
+
+    func bindNativeHost() {
+        if case .rendered = self.mode { return }
+        self.manager.nativeRequest = { [weak self] installationId, method, params, validity, completion in
+            guard let self, let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil, validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin management screen is not active"))); return }
+            guard method == "ui.toast" else { completion(.failure(DGPluginError(code: "feature_unavailable", message: "this adapter requires an active chat"))); return }
+            guard let values = params.objectValue, Set(values.keys) == ["text"], let text = values["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { completion(.failure(DGPluginError(code: "invalid_argument", message: "invalid plugin notice"))); return }
+            let name = self.installation(installationId)?.manifest.name ?? "plugin"
+            guard validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))); return }
+            controller.present(textAlertController(context: self.context, title: "plugin · " + name, text: text, actions: [TextAlertAction(type: .defaultAction, title: self.tr("закрыть", "close"), action: {})]), in: .window(.root))
+            completion(.success(.null))
+        }
+        self.manager.nativeRender = { [weak self] installationId, page, pluginName, validity, assets, callback, onClose in
+            guard let self, let owner = self.controller, owner.isNodeLoaded, owner.view.window != nil, validity(), let pageId = page.objectValue?["id"]?.stringValue else { return .failure(DGPluginError(code: "cancelled", message: "plugin management screen is not active")) }
+            do {
+                let key = installationId + ":" + pageId
+                let token = UUID()
+                let closed = { [weak self] in
+                    if self?.presentedPages[key]?.token == token { self?.presentedPages.removeValue(forKey: key) }
+                    onClose()
+                }
+                let rendered: ViewController
+                if let existing = self.presentedPages[key]?.controller, try dgUpdatePluginRenderedController(existing, page: page, pluginName: pluginName, validity: validity, onCallback: callback, assetProvider: assets, onClose: closed) { rendered = existing }
+                else {
+                    rendered = try dgPluginRenderedController(context: self.context, page: page, pluginName: pluginName, validity: validity, onCallback: callback, assetProvider: assets, onClose: closed)
+                    guard validity() else { return .failure(DGPluginError(code: "cancelled", message: "plugin page cancelled")) }
+                    owner.present(rendered, in: .window(.root))
+                }
+                self.presentedPages[key] = DGPluginPresentedPage(controller: rendered, token: token)
+                return .success({ [weak self, weak rendered] in
+                    if let self { guard self.presentedPages[key]?.token == token else { return }; self.presentedPages.removeValue(forKey: key) }
+                    rendered?.dismiss()
+                })
+            } catch let error as DGPluginError { return .failure(error) }
+            catch { return .failure(DGPluginError(code: "invalid_argument", message: "invalid plugin page")) }
+        }
+    }
 
     func installation(_ id: String) -> DGPluginInstallation? {
         return self.manager.installations.first(where: { $0.id == id })
@@ -436,6 +481,7 @@ private final class DGPluginPage {
                 self?.manager.setPublisherRevoked(identity, revoked: revoked) { [weak self] result in self?.complete(result) }
             }
         } else if key.hasPrefix("command:"), case let .details(id) = self.mode {
+            self.bindNativeHost()
             self.manager.runCommand(installationId: id, commandId: String(key.dropFirst(8)), input: .null) { [weak self] result in self?.complete(result) }
         } else if key.hasPrefix("enum:"), case let .settings(id) = self.mode, let item = self.installation(id) {
             let setting = String(key.dropFirst(5))
@@ -573,6 +619,7 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
     let controller = ItemListController(context: context, state: signal)
     controller.alwaysSynchronous = true
     page.controller = controller
+    controller.didAppear = { [weak page] _ in page?.bindNativeHost() }
     dgPluginPages.setObject(page, forKey: controller)
     controller.didDisappear = { [weak page, weak controller] _ in
         guard let page, let controller, case let .rendered(state) = page.mode else { return }
@@ -592,22 +639,30 @@ public func dgPluginInstallController(context: AccountContext, package: DGVerifi
 
 public func dgPluginRenderedController(context: AccountContext, page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, onCallback: @escaping (String, DGPluginJSON) -> Void, assetProvider: @escaping (String) -> Data? = { _ in nil }, onClose: (() -> Void)? = nil) throws -> ViewController {
     guard validity() else { throw DGPluginError(code: "cancelled", message: "plugin page is no longer current") }
-    let state = try DGPluginRenderedState(page: page, pluginName: pluginName, validity: validity, assetProvider: assetProvider, onClose: onClose, callback: onCallback)
+    let envelope = dgPluginNativePageEnvelope(page)
+    let state = try DGPluginRenderedState(page: envelope.page, pluginName: pluginName, validity: validity, assetProvider: assetProvider, onClose: onClose, callback: onCallback)
     let session = DGPluginPage(context: context, mode: .rendered(state))
+    session.renderedAccent = dgPluginAccent(envelope.accent)
     session.renderedImages = try dgPluginResolveImages(state)
     return dgMakePluginPage(page: session)
 }
 
 public func dgUpdatePluginRenderedController(_ controller: ViewController, page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, onCallback: @escaping (String, DGPluginJSON) -> Void, assetProvider: @escaping (String) -> Data? = { _ in nil }, onClose: (() -> Void)? = nil) throws -> Bool {
     guard validity(), let session = dgPluginPages.object(forKey: controller), case let .rendered(oldState) = session.mode else { return false }
-    let state = try DGPluginRenderedState(page: page, pluginName: pluginName, validity: validity, assetProvider: assetProvider, onClose: onClose, callback: onCallback)
+    let envelope = dgPluginNativePageEnvelope(page)
+    let state = try DGPluginRenderedState(page: envelope.page, pluginName: pluginName, validity: validity, assetProvider: assetProvider, onClose: onClose, callback: onCallback)
     let images = try dgPluginResolveImages(state)
     guard validity() else { return false }
     oldState.supersede()
     session.mode = .rendered(state)
     session.renderedImages = images
+    session.renderedAccent = dgPluginAccent(envelope.accent)
     session.refresh()
     return true
+}
+
+private func dgPluginAccent(_ name: String?) -> UIColor? {
+    switch name { case "blue": return .systemBlue; case "green": return .systemGreen; case "purple": return .systemPurple; case "orange": return .systemOrange; default: return nil }
 }
 
 private func dgPluginResolveImages(_ state: DGPluginRenderedState) throws -> [String: UIImage] {

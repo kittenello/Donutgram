@@ -5,6 +5,7 @@
   const commands = new Map();
   const listeners = new Map();
   const callbacks = new Map();
+  const transforms = new Map();
   const pending = new Map();
   let nextId = 1;
   let nextCallbackId = 1;
@@ -66,7 +67,7 @@
     environment: Object.freeze({get: () => Promise.resolve(environment)}),
     composer: Object.freeze({getActiveDraft: () => request('composer.getActiveDraft'), replaceSelection: method('composer.replaceSelection')}),
     selection: Object.freeze({get: () => request('selection.get')}),
-    theme: Object.freeze({get: () => request('theme.get')}),
+    theme: Object.freeze({get: () => request('theme.get'), contribute: method('theme.contribute'), clear: () => request('theme.clear')}),
     network: Object.freeze({request: method('network.request')}),
     messages: Object.freeze({read: method('messages.read')}),
     chats: Object.freeze({metadata: method('chats.metadata')}),
@@ -81,6 +82,26 @@
       sendInteractive: method('messages.sendInteractive'),
       compose: method('messages.compose')
     })}),
+    transforms: Object.freeze({
+      async register(descriptor, handler) {
+        if (!descriptor || typeof descriptor.id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(descriptor.id) || !['profile', 'chatList', 'displayLinks'].includes(descriptor.slot) || typeof handler !== 'function') throw error('invalid_transform');
+        const priority = descriptor.priority === undefined ? 0 : descriptor.priority;
+        if (!Number.isInteger(priority) || priority < -100 || priority > 100) throw error('invalid_transform');
+        if (transforms.size >= 8 || transforms.has(descriptor.id)) throw error('transform_limit');
+        const value = {id: descriptor.id, slot: descriptor.slot, priority};
+        const registration = {handler};
+        transforms.set(value.id, registration);
+        try { await request('ui.transform.register', value); }
+        catch (failure) { if (transforms.get(value.id) === registration) transforms.delete(value.id); throw failure; }
+        let disposed = false;
+        return Object.freeze({dispose: async () => {
+          if (disposed) return;
+          disposed = true;
+          if (transforms.get(value.id) === registration) transforms.delete(value.id);
+          await request('ui.transform.unregister', {id: value.id});
+        }});
+      }
+    }),
     ui: Object.freeze({
       callback(handler) {
         if (typeof handler !== 'function' || callbacks.size >= 128 || nextCallbackId >= Number.MAX_SAFE_INTEGER) throw error('callback_limit');
@@ -124,6 +145,11 @@
       const handler = callbacks.get(payload.id);
       if (!handler) throw error('callback_not_found');
       await handler(payload.value);
+    } else if (kind === 'transform') {
+      const registration = transforms.get(payload.id);
+      if (!registration) throw error('transform_not_found');
+      const value = await registration.handler(payload.input);
+      await request('ui.transform.result', {requestId: payload.requestId, value});
     } else if (kind === 'event') {
       const handlers = listeners.get(payload.name);
       if (handlers) for (const handler of handlers) await handler(payload.payload);

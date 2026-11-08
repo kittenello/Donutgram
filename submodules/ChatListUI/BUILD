@@ -12,6 +12,9 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGPluginModel:DGPluginModel",
+        "//Donutgram/DGPluginHost:DGPluginHost",
+        "//Donutgram/DGPluginViewAdapters:DGPluginViewAdapters",
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//Donutgram/DGSnowEffect:DGSnowEffect",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",

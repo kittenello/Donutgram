@@ -1,0 +1,12 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.profile-empty",
+  "name": "пустые вкладки профиля",
+  "version": "1.0.0",
+  "description": "локально убирает только те вкладки профиля, которые нативный интерфейс пометил пустыми",
+  "apiVersion": "^1.0.0",
+  "entry": "main.js",
+  "profile": "localPrivate",
+  "permissions": [{"capability": "ui.transform", "scope": "profile", "reason": "скрыть известные пустые вкладки профиля"}]
+}

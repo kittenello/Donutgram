@@ -9,14 +9,27 @@ all grants belong to an installation and account. declaration is not consent. re
 | storage | storage.local / pluginAccount | own installation/account, bounded keys, 5 mib total and bounded json structure |
 | commands | ui.contribute / exact placement | settings, composer, selection, messageMenu or chatToolbar; slot scope checked again |
 | theme snapshot | theme.read / currentTheme | appearance facts only |
+| own-page accent | theme.contribute / localTokens | four fixed native palettes; only this plugin's next page render |
 | composer read/replace | composer.read or composer.transform / activeComposer | native user action, opaque current-screen handle and revision checks in adapter |
 | selection | messages.selection.read / activeSelection | native user action, protected/service sources filtered before data delivery |
-| network, history, peers, chat metadata | declared capabilities | feature_unavailable until bounded native adapter exists |
-| navigation, files, notifications, translation, sends | declared capabilities | feature_unavailable until route, disclosure, paid-action and confirmation policies exist |
-| ui transforms, theme contributions | declared capabilities | feature_unavailable until typed renderer/adapter exists |
+| selected messages | messages.read / selectedChats | native user action; bounded explicitly selected snapshots, no history enumeration |
+| current chat / selected authors | chats.metadata.read / selectedChats; peers.read / selectedPeers | native user action; active context only, no arbitrary identifiers |
+| public requests | network.public / declaredOrigins | publicNetwork; exact granted HTTPS origin, public pinned endpoint, GET/HEAD and passive bounded data; Apple transport only |
+| navigation | navigation.open / safeScreens | native user action; only screen plugins, no arbitrary URLs |
+| selected text file | files.userSelected / selectedFile | native picker/user action; owned expiring utf8 handle, no paths/uploads |
+| local notification | notifications.local / pluginAccount | publicNetwork only; native user action and explicit native consent |
+| translation | translation.request / selectedText | native user action; exact current selection and named Telegram service consent |
+| compose draft | messages.compose / chosenRecipient | native user action; review in the ordinary composer, no send |
+| prepare/send interactively | messages.sendInteractive / chosenRecipient | native user action; immutable native content/recipient preview, one-use scoped token; paid recipients denied |
+| native page / raster | ui.contribute / settings | one owned active page, generation-bound callbacks and installed raster handles; no URLs/HTML |
+| local transforms | ui.transform / profile or chatList | localPrivate; validated empty-pane/nonpinned models, cached patches, generation invalidation |
+| display-link transform | ui.transform / displayLinks | reserved schema/validator contract; registration unavailable until a native renderer is attached |
+| events | method-specific payload grants | bounded known native event envelopes, no event grants new authority |
 
 localPrivate plugins cannot request generic public network. publicNetwork plugins cannot request private composer, selection, message, contact or file data. these restrictions apply to optional declarations as well. a selected-text external integration needs its own native confirmed-disclosure action; granting network access is not that confirmation.
 
 javascript request envelopes carry id, method and params. extra pluginId, accountId, publisher, permissions or userConfirmed fields are not authority. raw protocol requests, selectors, native references, keychain, authorization, session management, paid operations, asset transfer, message deletion and moderation have no registry entry.
 
-the capabilities registry reports availability rather than returning invented success. screen-dependent methods may still return unavailable or null when the required native screen is absent. an app-owned adapter receives a cancellation/validity closure; it must recheck immediately before side effects. javascript cannot create that closure or extend its lifetime. a successfully returned promise does not grant future access.
+the capabilities registry reports implementation availability rather than returning invented success. the result is advisory and does not replace consent or per-call checks. screen-dependent methods may still return unavailable or null when the required native screen is absent. an app-owned adapter receives a cancellation/validity closure; it must recheck immediately before side effects. javascript cannot create that closure or extend its lifetime. a successfully returned promise does not grant future access.
+
+advertised events are plugin.activated, account.contextChanged, app.foreground, theme.changed, locale.changed, chat.opened, chat.closed, composer.changed and message.observed. theme/chat/composer/message payloads require their corresponding read grant. app.background, powerSaving.changed, plugin.deactivating, message.edited, message.deleted, selection.changed and network.reachabilityChanged remain unavailable; stopping a runtime is not reliable delivery of a final event.

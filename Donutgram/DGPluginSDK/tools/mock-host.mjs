@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
 
 const snapshot = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const fixture = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
@@ -12,6 +13,14 @@ const grants = snapshot.manifest.permissions;
 const registered = new Map();
 const storage = new Map();
 const toasts = [];
+const pages = new Map();
+const networkCalls = [];
+const assets = new Map();
+const nativeCalls = [];
+const transformRegistrations = new Map();
+const transformReplies = new Map();
+const eventNames = new Set(['plugin.activated', 'account.contextChanged', 'app.foreground', 'theme.changed', 'locale.changed', 'chat.opened', 'chat.closed', 'composer.changed', 'message.observed']);
+let themeTokens = null;
 let gesture = false;
 let draft = structuredClone(fixture.draft || null);
 let revision = 0;
@@ -25,13 +34,35 @@ const rules = {
   'storage.set': ['storage.local', 'pluginAccount'],
   'storage.keys': ['storage.local', 'pluginAccount'],
   'storage.remove': ['storage.local', 'pluginAccount'],
-  'theme.get': ['theme.read', 'currentTheme']
+  'theme.get': ['theme.read', 'currentTheme'],
+  'theme.contribute': ['theme.contribute', 'localTokens'],
+  'theme.clear': ['theme.contribute', 'localTokens'],
+  'ui.render': ['ui.contribute', 'settings'],
+  'ui.dispose': ['ui.contribute', 'settings'],
+  'assets.image': ['ui.contribute', 'settings'],
+  'network.request': ['network.public', 'declaredOrigins'],
+  'messages.read': ['messages.read', 'selectedChats', true],
+  'chats.metadata': ['chats.metadata.read', 'selectedChats', true],
+  'peers.read': ['peers.read', 'selectedPeers', true],
+  'navigation.open': ['navigation.open', 'safeScreens', true],
+  'notifications.local': ['notifications.local', 'pluginAccount', true],
+  'files.pick': ['files.userSelected', 'selectedFile', true],
+  'files.read': ['files.userSelected', 'selectedFile', true],
+  'translation.request': ['translation.request', 'selectedText', true],
+  'messages.prepare': ['messages.sendInteractive', 'chosenRecipient', true],
+  'messages.sendInteractive': ['messages.sendInteractive', 'chosenRecipient', true],
+  'messages.compose': ['messages.compose', 'chosenRecipient', true]
 };
+function requireHost(condition, code) { if (!condition) throw Object.assign(new Error(code), {code}); }
+function validatePage(page) {
+  const validated = spawnSync(process.env.PYTHON || 'python', [path.join(root, 'dgplugin.py'), 'validate-ui', '-'], {input: JSON.stringify(page), encoding: 'utf8', timeout: 1000, maxBuffer: 65536});
+  requireHost(validated.status === 0, 'invalid_argument');
+}
 function host(method, params) {
   const rule = rules[method];
   if (rule) {
-    assert(grants.some((grant) => grant.capability === rule[0] && grant.scope === rule[1]), 'permission_denied');
-    if (rule[2]) assert(gesture, 'gesture_required');
+    requireHost(grants.some((grant) => grant.capability === rule[0] && grant.scope === rule[1]), 'permission_denied');
+    if (rule[2]) requireHost(gesture, 'permission_denied');
   }
   if (method === 'ui.command.register') {
     assert(grants.some((grant) => grant.capability === 'ui.contribute' && grant.scope === params.placement), 'scope_denied');
@@ -43,6 +74,48 @@ function host(method, params) {
   if (method === 'ui.toast') {
     assert(grants.some((grant) => grant.capability === 'ui.contribute'), 'permission_denied');
     toasts.push(params.text); return null;
+  }
+  if (method === 'ui.render') {
+    validatePage(params);
+    for (const node of walkNodes(params.nodes)) if (node.type === 'image') requireHost(assets.has(node.asset), 'stale_handle');
+    pages.set(params.id, structuredClone(params));
+    return params.id;
+  }
+  if (method === 'ui.dispose') { pages.delete(params.id); return null; }
+  if (method === 'theme.contribute') {
+    requireHost(Object.keys(params).length === 1 && ['blue', 'green', 'purple', 'orange'].includes(params.accent), 'invalid_argument');
+    themeTokens = {accent: params.accent};
+    return themeTokens;
+  }
+  if (method === 'theme.clear') { requireHost(Object.keys(params).length === 0, 'invalid_argument'); themeTokens = null; return null; }
+  if (method === 'assets.image') {
+    requireHost(typeof params.path === 'string' && params.path.startsWith('assets/') && snapshot.resources?.[params.path] === true, 'invalid_argument');
+    const handle = 'asset.' + assets.size;
+    assets.set(handle, params.path);
+    return handle;
+  }
+  if (method === 'ui.transform.register') {
+    requireHost(params.slot !== 'displayLinks', 'feature_unavailable');
+    requireHost(grants.some((grant) => grant.capability === 'ui.transform' && grant.scope === params.slot), 'scope_denied');
+    requireHost((snapshot.manifest.profile || 'localPrivate') === 'localPrivate' && !transformRegistrations.has(params.id), 'permission_denied');
+    transformRegistrations.set(params.id, params);
+    return params.id;
+  }
+  if (method === 'ui.transform.unregister') { transformRegistrations.delete(params.id); return null; }
+  if (method === 'ui.transform.result') { transformReplies.set(params.requestId, params.value); return null; }
+  if (method === 'network.request') {
+    requireHost(snapshot.manifest.profile === 'publicNetwork', 'permission_denied');
+    requireHost(Object.keys(params).every((key) => ['url', 'method'].includes(key)) && ['GET', 'HEAD'].includes(params.method || 'GET'), 'invalid_argument');
+    const url = new URL(params.url);
+    requireHost(url.protocol === 'https:' && !url.username && !url.password && !url.hash && !url.port && grants.some((grant) => grant.capability === 'network.public' && grant.origins?.includes(url.origin)), 'scope_denied');
+    requireHost(Object.hasOwn(fixture.responses || {}, params.url), 'mock_response_missing');
+    networkCalls.push({url: params.url, method: params.method || 'GET'});
+    return structuredClone(fixture.responses[params.url]);
+  }
+  if (['messages.read', 'chats.metadata', 'peers.read', 'navigation.open', 'notifications.local', 'files.pick', 'files.read', 'translation.request', 'messages.prepare', 'messages.sendInteractive', 'messages.compose'].includes(method)) {
+    requireHost(Object.hasOwn(fixture.nativeResults || {}, method), 'feature_unavailable');
+    nativeCalls.push({method, params});
+    return structuredClone(fixture.nativeResults[method]);
   }
   if (method === 'composer.getActiveDraft') return draft;
   if (method === 'composer.replaceSelection') {
@@ -62,12 +135,14 @@ function host(method, params) {
   if (method === 'storage.set') { storage.set(params.key, params.value); return null; }
   if (method === 'storage.remove') { storage.delete(params.key); return null; }
   if (method === 'storage.keys') return [...storage.keys()];
-  if (method === 'capabilities.has') return grants.some((grant) => grant.capability === params.capability);
-  if (method === 'capabilities.list') return Object.keys(rules);
+  if (method === 'capabilities.has') return grants.some((grant) => grant.capability === params.capability && (grant.capability !== 'ui.transform' || ['profile', 'chatList'].includes(grant.scope)));
+  if (method === 'capabilities.list') return Object.fromEntries(Object.keys(rules).map((name) => [name, !(fixture.unavailable || []).includes(name)]));
   if (method === 'theme.get') return {appearance: 'light'};
-  if (method === 'events.subscribe' || method === 'events.unsubscribe') return null;
+  if (method === 'events.subscribe') { requireHost(eventNames.has(params.name), 'feature_unavailable'); return null; }
+  if (method === 'events.unsubscribe') return null;
   throw Object.assign(new Error('feature_unavailable'), {code: 'feature_unavailable'});
 }
+function* walkNodes(nodes) { for (const node of nodes) { yield node; if (node.children) yield* walkNodes(node.children); } }
 context.__dgNative = (json) => {
   const envelope = JSON.parse(json);
   let response;
@@ -77,7 +152,7 @@ context.__dgNative = (json) => {
   vm.runInContext(`__dgReply(${JSON.stringify(envelope.id)}, JSON.parse(${JSON.stringify(responseJSON)}))`, context, {timeout: 250});
 };
 vm.runInContext(bootstrap, context, {timeout: 250});
-vm.runInContext('__dgConfigure({apiVersion:"1.0.0",appearance:"light"})', context, {timeout: 250});
+vm.runInContext('__dgConfigure({clientVersion:"13.2",locale:"en",appearance:"light",lowPowerMode:false})', context, {timeout: 250});
 const modules = new Map();
 async function load(name) {
   assert(typeof name === 'string' && !name.startsWith('/') && !name.split('/').includes('..') && Object.hasOwn(snapshot.files, name), 'module_not_found');
@@ -100,6 +175,26 @@ for (const command of fixture.commands || []) {
   try { await vm.runInContext(`__dgDispatch("command", ${JSON.stringify({id: command})})`, context, {timeout: 250}); }
   finally { gesture = false; }
 }
+for (const event of fixture.uiEvents || []) {
+  const page = pages.get(event.page);
+  const node = page && [...walkNodes(page.nodes)].find((item) => item.id === event.node);
+  assert(node?.callbackId, 'callback_not_registered');
+  gesture = true;
+  try { await vm.runInContext(`__dgDispatch("ui", ${JSON.stringify({id: node.callbackId, value: event.value})})`, context, {timeout: 250}); }
+  finally { gesture = false; }
+}
+for (const [index, transform] of (fixture.transforms || []).entries()) {
+  assert(transformRegistrations.has(transform.id), 'transform_not_registered');
+  const requestId = 'mock-transform-' + index;
+  await vm.runInContext(`__dgDispatch("transform", ${JSON.stringify({id: transform.id, input: transform.input, requestId})})`, context, {timeout: 250});
+  assert.deepEqual(transformReplies.get(requestId), transform.expectedPatch);
+}
 if ('expectedText' in fixture) assert.equal(draft?.text, fixture.expectedText);
 if ('expectedToasts' in fixture) assert.deepEqual(toasts, fixture.expectedToasts);
-process.stdout.write(JSON.stringify({passed: true, commands: [...registered.keys()], draft, toasts}));
+if ('expectedNetworkCalls' in fixture) assert.deepEqual(networkCalls, fixture.expectedNetworkCalls);
+if ('expectedNativeCalls' in fixture) assert.deepEqual(nativeCalls, fixture.expectedNativeCalls);
+if ('expectedSettings' in fixture) assert.deepEqual(settings, fixture.expectedSettings);
+if ('expectedPages' in fixture) assert.deepEqual([...pages.keys()], fixture.expectedPages);
+if ('expectedTheme' in fixture) assert.deepEqual(themeTokens, fixture.expectedTheme);
+if ('expectedPageNodes' in fixture) for (const [id, text] of Object.entries(fixture.expectedPageNodes)) assert.equal([...pages.values()].flatMap((page) => [...walkNodes(page.nodes)]).find((node) => node.id === id)?.text, text);
+process.stdout.write(JSON.stringify({passed: true, commands: [...registered.keys()], transforms: [...transformRegistrations.keys()], draft, toasts, pages: [...pages.values()], networkCalls, nativeCalls}));

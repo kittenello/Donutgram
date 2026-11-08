@@ -1,6 +1,13 @@
 import Foundation
 import DGPluginModel
 
+func dgPluginNativePageEnvelope(_ value: DGPluginJSON) -> (page: DGPluginJSON, accent: String?) {
+    guard var object = value.objectValue else { return (value, nil) }
+    let tokens = object.removeValue(forKey: "__dgThemeTokens")?.objectValue
+    let accent = tokens?["accent"]?.stringValue
+    return (.object(object), accent.flatMap { ["blue", "green", "purple", "orange"].contains($0) ? $0 : nil })
+}
+
 enum DGPluginMarkdownStyle { case body, bold, italic, code, heading }
 struct DGPluginMarkdownRun {
     var text: String
@@ -190,4 +197,3 @@ final class DGPluginRenderedState {
 
     func supersede() { self.active = false; self.onClose = nil }
 }
-

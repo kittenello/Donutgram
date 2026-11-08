@@ -6,9 +6,9 @@ import sys
 CASES = [
     "join", "reverse", "sparse_sort", "regexp", "replace", "sort",
     "typed_sort", "regexp_linear", "stringify", "parse", "repeat", "trim", "bigint", "pending_storm",
-    "pure_promise", "caught_join", "native_wait", "wait_cancel",
+    "pure_promise", "caught_join", "native_wait", "wait_cancel", "detached_wait",
     "cumulative_active", "cpu_window", "stop_join", "stop_regexp",
-    "compile", "wrappers", "default_policy",
+    "compile", "wrappers", "transforms", "transform_limit", "transform_error", "transform_denial", "default_policy",
 ]
 
 
@@ -30,10 +30,15 @@ def main():
     parser.add_argument("--regression", required=True)
     parser.add_argument("--native", required=True)
     parser.add_argument("--bootstrap", required=True)
+    parser.add_argument("--default-smoke")
+    parser.add_argument("--default-host")
     args = parser.parse_args()
     run([args.regression, args.bootstrap], 20)
     for case in CASES:
         run([args.native, case, args.bootstrap], 10)
+    for executable in [args.default_smoke, args.default_host]:
+        if executable:
+            run([executable], 15)
     print(f"passed regression process and {len(CASES)} isolated native-work scenarios")
 
 

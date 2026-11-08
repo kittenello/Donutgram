@@ -102,6 +102,14 @@ struct DGPluginPageSchemaTests {
         let bounded = dgPluginMarkdownRuns(String(repeating: "[", count: 20000)).map { $0.text }.joined()
         guard bounded.utf16.count == 4096 else { throw DGPluginError(code: "test_failure", message: "markdown input was not bounded") }
         passed += 1
+        let themed = page([], extra: ["__dgThemeTokens": .object(["accent": .string("green")])])
+        try rejects("public schema rejects reserved native theme envelope", themed)
+        let envelope = dgPluginNativePageEnvelope(themed)
+        guard envelope.accent == "green", envelope.page == page([]) else { throw DGPluginError(code: "test_failure", message: "native theme envelope was not separated") }
+        passed += 1
+        let unsupported = dgPluginNativePageEnvelope(page([], extra: ["__dgThemeTokens": .object(["accent": .string("#00ff00")])]))
+        guard unsupported.accent == nil, unsupported.page == page([]) else { throw DGPluginError(code: "test_failure", message: "arbitrary theme color was accepted") }
+        passed += 1
         print("passed \(passed) real declarative schema checks")
     }
 }

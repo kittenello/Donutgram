@@ -62,6 +62,26 @@ private final class DGPluginExecution {
     var networkRequests: [UUID: () -> Void] = [:]
     var networkCount = 0
     var nativeCleanup: [UUID: () -> Void] = [:]
+    var transforms: [String: DGPluginRegisteredTransform] = [:]
+    var pendingTransforms: [String: DGPluginPendingTransform] = [:]
+    var transformFailures = 0
+    var events: [(String, DGPluginJSON)] = []
+    var eventFailures = 0
+    var themeTokens: DGPluginJSON = .object([:])
+}
+
+private struct DGPluginRegisteredTransform {
+    let id: String
+    let slot: String
+    let priority: Int
+}
+
+private final class DGPluginPendingTransform {
+    let registrationId: String
+    let slot: String
+    let input: DGPluginJSON
+    var result: DGPluginJSON?
+    init(registrationId: String, slot: String, input: DGPluginJSON) { self.registrationId = registrationId; self.slot = slot; self.input = input }
 }
 
 private final class DGPluginCoordinator {
@@ -75,6 +95,9 @@ private final class DGPluginCoordinator {
     var powerSaving = false
     var startupError: DGPluginError?
     var persistenceError: String?
+    #if DG_PLUGIN_TESTS
+    var testIOFailure: String?
+    #endif
 
     private init() {
         #if DG_PLUGIN_TESTS
@@ -122,6 +145,7 @@ private final class DGPluginCoordinator {
 
     func persist() throws {
         guard startupError == nil else { throw startupError! }
+        try testFailure("persist")
         let data = try JSONEncoder().encode(state)
         guard data.count <= 32 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin state exceeds its limit") }
         try data.write(to: root.appendingPathComponent("state.json"), options: .atomic)
@@ -147,6 +171,7 @@ private final class DGPluginCoordinator {
     }
 
     func cleanupFiles(_ record: DGPluginStoredRecord) throws {
+        try testFailure("cleanup")
         let directory = root.appendingPathComponent(record.id, isDirectory: true).standardizedFileURL
         guard UUID(uuidString: record.id) != nil, directory.deletingLastPathComponent() == root.standardizedFileURL else {
             throw DGPluginError(code: "invalid_argument", message: "invalid package removal path")
@@ -170,6 +195,15 @@ private final class DGPluginCoordinator {
         for manager in DGPluginManager.allManagers() { manager.publish() }
     }
 
+    func testFailure(_ operation: String) throws {
+        #if DG_PLUGIN_TESTS
+        if testIOFailure == operation {
+            testIOFailure = nil
+            throw DGPluginError(code: "storage_error", message: "injected plugin storage failure")
+        }
+        #endif
+    }
+
     func stopAll(id: String? = nil) {
         for manager in DGPluginManager.allManagers() {
             if let id = id { manager.stop(id: id) } else { manager.stopAll() }
@@ -189,6 +223,10 @@ public final class DGPluginManager {
     private var snapshotEnabled = true
     private var snapshotRollbackIds = Set<String>()
     private var snapshotPersistenceError: String?
+    private var viewModelCache: [String: DGPluginJSON] = [:]
+    private var viewModelRevision: UInt64 = 0
+    private var pendingViewModels = Set<String>()
+    private var deferredViewUpdates: [String: () -> Void] = [:]
     private var observers: [UUID: () -> Void] = [:]
     private var executions: [String: DGPluginExecution] = [:]
     private var adapter: ((String, String, DGPluginJSON, @escaping () -> Bool, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)?
@@ -212,6 +250,13 @@ public final class DGPluginManager {
         return false
         #endif
     }
+
+    #if DG_PLUGIN_TESTS
+    public static func setTestIOFailure(_ operation: String?, completion: @escaping () -> Void) {
+        let coordinator = DGPluginCoordinator.shared
+        coordinator.queue.async { coordinator.testIOFailure = operation; DispatchQueue.main.async(execute: completion) }
+    }
+    #endif
 
     public static func shared(accountKey: String) -> DGPluginManager {
         registryLock.lock()
@@ -270,8 +315,57 @@ public final class DGPluginManager {
 
     public func updateEnvironment(locale: String, appearance: String) {
         coordinator.queue.async {
+            let previousLocale = self.environment["locale"]
+            let previousAppearance = self.environment["appearance"]
             self.environment["locale"] = .string(String(locale.prefix(64)))
             self.environment["appearance"] = .string(appearance == "dark" ? "dark" : "light")
+            if previousLocale != self.environment["locale"] { self.emitNativeEvent(name: "locale.changed", payload: .object(["locale": self.environment["locale"] ?? .string("en")])) }
+            if previousAppearance != self.environment["appearance"] { self.emitNativeEvent(name: "theme.changed", payload: .object(["appearance": self.environment["appearance"] ?? .string("light")])) }
+        }
+    }
+
+    public func emitNativeEvent(name: String, payload: DGPluginJSON, installationId: String? = nil) {
+        let rules: [String: (String?, String?)] = [
+            "plugin.activated": (nil, nil), "app.foreground": (nil, nil),
+            "account.contextChanged": (nil, nil), "theme.changed": ("theme.read", "currentTheme"), "locale.changed": (nil, nil),
+            "chat.opened": ("chats.metadata.read", "selectedChats"), "chat.closed": ("chats.metadata.read", "selectedChats"),
+            "message.observed": ("messages.read", "selectedChats"),
+            "composer.changed": ("composer.read", "activeComposer")
+        ]
+        guard let rule = rules[name], (try? payload.validateLimits(maximumDepth: 8, maximumNodes: 1024)) != nil, let encoded = try? JSONEncoder().encode(payload), encoded.count <= 16384 else { return }
+        coordinator.queue.async {
+            for (id, execution) in self.executions where installationId == nil || id == installationId {
+                guard execution.state == .running, self.current(id, execution.generation), execution.subscriptions.contains(name), let record = self.coordinator.state.installations.first(where: { $0.id == id }) else { continue }
+                if let capability = rule.0, !self.account(record).grants.contains(where: { $0.capability == capability && (rule.1 == nil || $0.scope == rule.1!) }) { continue }
+                let event = DGPluginJSON.object(["id": .string(UUID().uuidString.lowercased()), "timestamp": .number(Date().timeIntervalSince1970), "version": .number(1), "data": payload])
+                execution.events.removeAll { $0.0 == name }
+                if execution.events.count < 16 { execution.events.append((name, event)) }
+                self.drainEvents(id: id)
+            }
+        }
+    }
+
+    private func drainEvents(id: String) {
+        guard let execution = executions[id], execution.state == .running, !execution.busy, !execution.events.isEmpty, current(id, execution.generation) else { return }
+        let (name, event) = execution.events.removeFirst()
+        guard execution.subscriptions.contains(name) else { drainEvents(id: id); return }
+        execution.busy = true
+        execution.gestureUntil = 0
+        let payload = DGPluginJSON.object(["name": .string(name), "payload": event])
+        guard let bytes = try? JSONEncoder().encode(payload), let json = String(data: bytes, encoding: .utf8) else { execution.busy = false; return }
+        execution.runtime?.dispatch(kind: "event", payloadJSON: json) { outcome in
+            self.coordinator.queue.async {
+                guard self.current(id, execution.generation) else { return }
+                execution.busy = false
+                switch outcome {
+                case .success: execution.eventFailures = 0
+                case let .failure(error):
+                    if error.code == "runtime_busy" { execution.events.insert((name, event), at: 0); return }
+                    self.fail(id: id, message: "plugin event handler failed or exceeded its budget")
+                    return
+                }
+                self.refreshDeferredViewModels(); self.drainEvents(id: id)
+            }
         }
     }
 
@@ -309,6 +403,87 @@ public final class DGPluginManager {
 
     public func releaseNativeResource(installationId: String, token: UUID) {
         coordinator.queue.async { self.executions[installationId]?.nativeCleanup.removeValue(forKey: token) }
+    }
+
+    public func transformedViewModel(slot: String, input: DGPluginJSON, update: @escaping () -> Void) -> DGPluginJSON {
+        guard (try? DGPluginViewTransform.validateInput(slot: slot, input: input)) != nil else { return input }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        guard let encoded = try? encoder.encode(input) else { return input }
+        let key = slot + ":" + DGPluginInstaller.digest(encoded)
+        snapshotLock.lock(); let cached = viewModelCache[key]; snapshotLock.unlock()
+        if let cached { return cached }
+        coordinator.queue.async {
+            guard !self.pendingViewModels.contains(key), self.pendingViewModels.count < 8 else { return }
+            self.pendingViewModels.insert(key)
+            let revision = self.viewModelRevision
+            let registrations = self.executions.flatMap { id, execution -> [(String, DGPluginExecution, DGPluginRegisteredTransform)] in
+                guard execution.state == .running, self.current(id, execution.generation), let record = self.coordinator.state.installations.first(where: { $0.id == id }), record.manifest.profile == "localPrivate", self.account(record).grants.contains(where: { $0.capability == "ui.transform" && $0.scope == slot }) else { return [] }
+                return execution.transforms.values.filter { $0.slot == slot }.map { (id, execution, $0) }
+            }.sorted { lhs, rhs in
+                if lhs.2.priority != rhs.2.priority { return lhs.2.priority < rhs.2.priority }
+                return (lhs.0, lhs.2.id) < (rhs.0, rhs.2.id)
+            }
+            self.applyViewTransforms(registrations, index: 0, slot: slot, input: input, revision: revision) { result, deferred in
+                self.pendingViewModels.remove(key)
+                guard revision == self.viewModelRevision else { return }
+                if deferred {
+                    if self.deferredViewUpdates.count < 16 { self.deferredViewUpdates[key] = update }
+                    return
+                }
+                self.snapshotLock.lock()
+                if self.viewModelCache.count >= 32 { self.viewModelCache.removeAll() }
+                self.viewModelCache[key] = result
+                self.snapshotLock.unlock()
+                if result != input { DispatchQueue.main.async(execute: update) }
+            }
+        }
+        return input
+    }
+
+    private func applyViewTransforms(_ registrations: [(String, DGPluginExecution, DGPluginRegisteredTransform)], index: Int, slot: String, input: DGPluginJSON, revision: UInt64, completion: @escaping (DGPluginJSON, Bool) -> Void) {
+        guard revision == viewModelRevision, index < registrations.count else { completion(input, false); return }
+        let (id, execution, registration) = registrations[index]
+        guard current(id, execution.generation), execution.transforms[registration.id] != nil else { applyViewTransforms(registrations, index: index + 1, slot: slot, input: input, revision: revision, completion: completion); return }
+        guard !execution.busy else { completion(input, true); return }
+        let requestId = UUID().uuidString.lowercased()
+        let pending = DGPluginPendingTransform(registrationId: registration.id, slot: slot, input: input)
+        execution.pendingTransforms[requestId] = pending
+        execution.busy = true
+        let payload = DGPluginJSON.object(["id": .string(registration.id), "requestId": .string(requestId), "input": input])
+        guard let bytes = try? JSONEncoder().encode(payload), let json = String(data: bytes, encoding: .utf8) else { execution.busy = false; execution.pendingTransforms.removeValue(forKey: requestId); completion(input, false); return }
+        execution.runtime?.dispatch(kind: "transform", payloadJSON: json) { outcome in
+            self.coordinator.queue.async {
+                execution.busy = false
+                execution.pendingTransforms.removeValue(forKey: requestId)
+                guard revision == self.viewModelRevision, self.current(id, execution.generation), execution.transforms[registration.id] != nil else { completion(input, false); return }
+                let output: DGPluginJSON
+                if case .success = outcome, let result = pending.result {
+                    execution.transformFailures = 0; output = result
+                } else if case let .failure(error) = outcome {
+                    if error.code == "runtime_busy" { completion(input, true); return }
+                    self.fail(id: id, message: "plugin view-model transform failed or exceeded its budget")
+                    completion(input, false)
+                    return
+                } else {
+                    execution.transformFailures += 1; output = input
+                    if execution.transformFailures >= 3 { self.fail(id: id, message: "plugin view-model transforms repeatedly failed") }
+                }
+                self.refreshDeferredViewModels()
+                self.applyViewTransforms(registrations, index: index + 1, slot: slot, input: output, revision: revision, completion: completion)
+                self.drainEvents(id: id)
+            }
+        }
+    }
+
+    private func invalidateViewModels() {
+        viewModelRevision &+= 1
+        snapshotLock.lock(); viewModelCache.removeAll(); snapshotLock.unlock()
+        refreshDeferredViewModels()
+    }
+
+    private func refreshDeferredViewModels() {
+        let callbacks = Array(deferredViewUpdates.values); deferredViewUpdates.removeAll()
+        if !callbacks.isEmpty { DispatchQueue.main.async { callbacks.forEach { $0() } } }
     }
 
     @discardableResult public func observe(_ callback: @escaping () -> Void) -> UUID {
@@ -387,6 +562,7 @@ public final class DGPluginManager {
                     record.accounts[self.accountKey] = DGPluginAccountRecord(settings: DGPluginPolicy.settingsDefaults(package.manifest))
                 }
                 let destination = self.coordinator.packageURL(record)
+                try self.coordinator.testFailure("packageWrite")
                 try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try package.originalData.write(to: destination, options: .atomic)
                 self.coordinator.state.installations.removeAll { $0.id == record.id }
@@ -397,7 +573,7 @@ public final class DGPluginManager {
                 self.coordinator.publishAll()
                 let installationId = record.id
                 DispatchQueue.main.async { completion(.success(installationId)) }
-            } catch { self.complete(completion, error: error) }
+            } catch { self.reconcile(); self.coordinator.publishAll(); self.complete(completion, error: error) }
         }
     }
 
@@ -468,7 +644,7 @@ public final class DGPluginManager {
     }
 
     public func resetData(id: String, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
-        mutate(id: id, completion: completion) { record, account in
+        mutate(id: id, clearPrevious: true, completion: completion) { record, account in
             account.storage = [:]; account.settings = DGPluginPolicy.settingsDefaults(record.manifest); account.enabled = false; account.diagnostics = nil
         }
     }
@@ -525,7 +701,7 @@ public final class DGPluginManager {
         }
     }
 
-    private func mutate(id: String, stop: Bool = true, completion: @escaping (Result<Void, DGPluginError>) -> Void, action: @escaping (DGPluginStoredRecord, inout DGPluginAccountRecord) throws -> Void) {
+    private func mutate(id: String, stop: Bool = true, clearPrevious: Bool = false, completion: @escaping (Result<Void, DGPluginError>) -> Void, action: @escaping (DGPluginStoredRecord, inout DGPluginAccountRecord) throws -> Void) {
         coordinator.queue.async {
             do {
                 guard let index = self.coordinator.state.installations.firstIndex(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is unavailable") }
@@ -534,6 +710,7 @@ public final class DGPluginManager {
                 try action(record, &account)
                 if stop { self.stop(id: id) }
                 self.coordinator.state.installations[index].accounts[self.accountKey] = account
+                if clearPrevious { self.coordinator.state.installations[index].previous = nil }
                 do { try self.coordinator.persist() } catch {
                     if !stop { self.coordinator.state.installations[index] = record }
                     self.coordinator.publishAll()
@@ -567,6 +744,7 @@ public final class DGPluginManager {
 
     fileprivate func stop(id: String) {
         guard let execution = executions.removeValue(forKey: id) else { return }
+        invalidateViewModels()
         execution.state = .stopping
         execution.commands.removeAll(); execution.contributions.removeAll(); execution.subscriptions.removeAll()
         execution.runtime?.stop()
@@ -619,6 +797,10 @@ public final class DGPluginManager {
                     switch result {
                     case .success:
                         execution.state = .running
+                        self.invalidateViewModels()
+                        self.emitNativeEvent(name: "plugin.activated", payload: .object([:]), installationId: id)
+                        self.emitNativeEvent(name: "account.contextChanged", payload: .object(["active": .bool(true)]), installationId: id)
+                        self.emitNativeEvent(name: "app.foreground", payload: .object(["active": .bool(true)]), installationId: id)
                         self.coordinator.publishAll()
                         DispatchQueue.main.async { completion(.success(())) }
                     case .failure:
@@ -661,6 +843,8 @@ public final class DGPluginManager {
                         guard self.current(installationId, execution.generation), execution.commandEpoch == epoch else { self.complete(completion, error: DGPluginError(code: "cancelled", message: "command was cancelled")); return }
                         execution.gestureUntil = 0
                         execution.busy = false
+                        self.refreshDeferredViewModels()
+                        self.drainEvents(id: installationId)
                         switch result {
                         case .success: DispatchQueue.main.async { completion(.success(())) }
                         case let .failure(error):
@@ -717,6 +901,9 @@ public final class DGPluginManager {
                 execution.pagesPending.insert(pageId)
                 execution.contributions[pageId] = .null
                 let pluginName = record.manifest.name
+                var renderedPage = page
+                renderedPage["__dgThemeTokens"] = execution.themeTokens
+                let nativePage = DGPluginJSON.object(renderedPage)
                 let assetProvider = { [weak self] (handle: String) -> Data? in
                     guard let self = self else { return nil }
                     return self.coordinator.queue.sync {
@@ -735,7 +922,7 @@ public final class DGPluginManager {
                 }
                 DispatchQueue.main.async {
                     guard validity() else { self.respond(.failure(DGPluginError(code: "cancelled", message: "page cancelled")), reply); return }
-                    let result = renderer(installationId, params, pluginName, validity, assetProvider, { [weak self] callbackId, value in
+                    let result = renderer(installationId, nativePage, pluginName, validity, assetProvider, { [weak self] callbackId, value in
                         self?.dispatchUICallback(installationId: installationId, generation: generation, callbackId: callbackId, value: value)
                     }, closed)
                     self.coordinator.queue.async {
@@ -797,10 +984,10 @@ public final class DGPluginManager {
             account.settings = values
         case "capabilities.has":
             guard let name = arguments["capability"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected capability") }
-            return .bool(account.grants.contains { $0.capability == name } && DGPluginPolicy.methods.values.contains { $0.capability == name && $0.available })
+            return .bool(account.grants.contains { $0.capability == name && (name != "ui.transform" || ["profile", "chatList"].contains($0.scope)) } && DGPluginPolicy.methods.values.contains { $0.capability == name && $0.available })
         case "capabilities.list":
             return .object(Dictionary(uniqueKeysWithValues: DGPluginPolicy.methods.map { name, rule in
-                (name, .bool(rule.available && (rule.capability == nil || account.grants.contains { $0.capability == rule.capability })))
+                (name, .bool(rule.available && (rule.capability == nil || account.grants.contains { $0.capability == rule.capability && (rule.capability != "ui.transform" || ["profile", "chatList"].contains($0.scope)) })))
             }))
         case "storage.keys": return .array(account.storage.keys.sorted().map(DGPluginJSON.string))
         case "storage.get", "storage.set", "storage.remove":
@@ -823,12 +1010,32 @@ public final class DGPluginManager {
         case "ui.command.unregister":
             guard let id = arguments["id"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected command id") }
             execution.commands.removeAll { $0.id == id }; coordinator.publishAll(); return .null
+        case "ui.transform.register":
+            guard Set(arguments.keys).isSubset(of: ["id", "slot", "priority"]), let id = arguments["id"]?.dgString, id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil, let slot = arguments["slot"]?.dgString, ["profile", "chatList", "displayLinks"].contains(slot), account.grants.contains(where: { $0.capability == "ui.transform" && $0.scope == slot }), execution.transforms.count < 8 || execution.transforms[id] != nil else { throw DGPluginError(code: "scope_denied", message: "invalid or ungranted local transform slot") }
+            guard slot != "displayLinks" else { throw DGPluginError(code: "feature_unavailable", message: "displayed-link transforms have no native screen adapter in this client") }
+            let priority = arguments["priority"]?.dgNumber ?? 0
+            guard priority.isFinite, priority.rounded() == priority, abs(priority) <= 100, arguments["priority"] == nil || arguments["priority"]?.dgNumber != nil else { throw DGPluginError(code: "invalid_argument", message: "invalid transform priority") }
+            execution.transforms[id] = DGPluginRegisteredTransform(id: id, slot: slot, priority: Int(priority))
+            invalidateViewModels(); coordinator.publishAll(); return .string(id)
+        case "ui.transform.unregister":
+            guard Set(arguments.keys) == ["id"], let id = arguments["id"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected transform id") }
+            execution.transforms.removeValue(forKey: id)
+            invalidateViewModels(); coordinator.publishAll(); return .null
+        case "ui.transform.result":
+            guard Set(arguments.keys) == ["requestId", "value"], let id = arguments["requestId"]?.dgString, let pending = execution.pendingTransforms[id], pending.result == nil, execution.transforms[pending.registrationId] != nil, account.grants.contains(where: { $0.capability == "ui.transform" && $0.scope == pending.slot }), let patch = arguments["value"] else { throw DGPluginError(code: "stale_handle", message: "transform request is no longer current") }
+            pending.result = try DGPluginViewTransform.apply(slot: pending.slot, input: pending.input, patch: patch)
+            return .null
         case "events.subscribe":
-            guard let name = arguments["name"]?.dgString, ["plugin.activated", "plugin.deactivating", "app.foreground", "app.background", "theme.changed", "locale.changed", "powerSaving.changed"].contains(name), execution.subscriptions.count < 16 else { throw DGPluginError(code: "feature_unavailable", message: "event is not available") }
+            guard let name = arguments["name"]?.dgString, ["plugin.activated", "app.foreground", "account.contextChanged", "theme.changed", "locale.changed", "chat.opened", "chat.closed", "message.observed", "composer.changed"].contains(name), execution.subscriptions.count < 16 else { throw DGPluginError(code: "feature_unavailable", message: "event is not available") }
             execution.subscriptions.insert(name); return .null
         case "events.unsubscribe":
-            if let name = arguments["name"]?.dgString { execution.subscriptions.remove(name) }; return .null
+            if let name = arguments["name"]?.dgString { execution.subscriptions.remove(name); execution.events.removeAll { $0.0 == name } }; return .null
         case "theme.get": return .object(["appearance": environment["appearance"] ?? .string("light")])
+        case "theme.contribute":
+            guard Set(arguments.keys) == ["accent"], let accent = arguments["accent"]?.dgString, ["blue", "green", "purple", "orange"].contains(accent) else { throw DGPluginError(code: "invalid_argument", message: "unknown native plugin-page accent") }
+            execution.themeTokens = .object(["accent": .string(accent)])
+            return execution.themeTokens
+        case "theme.clear": execution.themeTokens = .object([:]); return .null
         case "assets.image":
             guard let path = arguments["path"]?.dgString, path.hasPrefix("assets/"), execution.assets.count < 16, let data = try coordinator.package(record).files[path], let raster = DGPluginInstaller.rasterAsset(data), raster.count <= 262144 else { throw DGPluginError(code: "invalid_argument", message: "invalid or excessive installed raster asset") }
             let handle = UUID().uuidString.lowercased()
@@ -870,6 +1077,8 @@ public final class DGPluginManager {
                 self.coordinator.queue.async {
                     guard self.current(installationId, generation) else { return }
                     execution.busy = false; execution.gestureUntil = 0
+                    self.refreshDeferredViewModels()
+                    self.drainEvents(id: installationId)
                     if case let .failure(error) = result, error.code != "runtime_busy" { self.fail(id: installationId, message: "plugin interface callback failed") }
                 }
             }

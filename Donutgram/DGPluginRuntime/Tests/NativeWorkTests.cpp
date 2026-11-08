@@ -13,6 +13,7 @@
 
 struct Requests {
     std::vector<int64_t> ids;
+    std::vector<std::string> envelopes;
     std::atomic<bool> began{false};
 };
 
@@ -25,6 +26,7 @@ static void request(void *opaque, const char *json) {
     const char *id = std::strstr(json, "\"id\":");
     check(id != nullptr, "request id");
     state->ids.push_back(std::strtoll(id + 5, nullptr, 10));
+    state->envelopes.push_back(json);
     state->began.store(true);
 }
 
@@ -59,7 +61,15 @@ int main(int argc, char **argv) {
         Requests requests;
         DGJSHost *host = dgjs_create(request, &requests);
         check(host != nullptr, "create production runtime");
-        if (name == "native_wait" || name == "wait_cancel") {
+        if (name == "detached_wait") {
+            add(host, "definePlugin({activate(api){api.storage.get('old').then(async()=>{await api.storage.set('done',true)})}})");
+            check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "detached native promises keep their originating operation pending");
+            check(requests.ids.size() == 1, "one detached originating request");
+            check(dgjs_dispatch(host, "event", "{\"name\":\"theme.changed\",\"payload\":{}}") < 0, "new dispatch cannot create gesture while old callbacks remain");
+            check(dgjs_reply(host, requests.ids.front(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 2, "detached continuation stays in the original bounded operation");
+            check(requests.ids.size() == 2 && dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "operation completes after every native reply and microtask drains");
+            check(dgjs_dispatch(host, "event", "{\"name\":\"theme.changed\",\"payload\":{}}") == 0, "fresh dispatch begins only after old callbacks finish");
+        } else if (name == "native_wait" || name == "wait_cancel") {
             add(host, "definePlugin({async activate(api){await api.storage.get('wait');}})");
             check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "waiting only on a real native request");
             check(requests.ids.size() == 1, "one pending native request");
@@ -109,6 +119,35 @@ int main(int argc, char **argv) {
             check(JS_IsException(result) && JS_IsStopped(runtime) && polls >= 5, "module compilation polls native policy before execution");
             JS_FreeValue(context, JS_GetException(context));
             JS_FreeValue(context, result); JS_FreeContext(context); JS_FreeRuntime(runtime);
+        } else if (name == "transforms") {
+            add(host, "definePlugin({async activate(api){const registration=await api.transforms.register({id:'empty-panes',slot:'profile',priority:-5},async input=>{await Promise.resolve();return {hide:input.panes.filter(x=>x.empty).map(x=>x.id)}});await api.commands.register({id:'dispose-transform',title:'dispose',placement:'settings',async run(){await registration.dispose();await registration.dispose()}})}})");
+            check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "transform registration awaits native broker");
+            check(requests.envelopes.back().find("\"method\":\"ui.transform.register\"") != std::string::npos && requests.envelopes.back().find("\"priority\":-5") != std::string::npos, "transform descriptor crosses typed bridge");
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 2, "register disposable command");
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "transform fixture activated");
+            const char *payload = "{\"id\":\"empty-panes\",\"requestId\":\"r1\",\"input\":{\"panes\":[{\"id\":\"media\",\"empty\":true},{\"id\":\"files\",\"empty\":false}]}}";
+            check(settle(host, dgjs_dispatch(host, "transform", payload)) == 2, "async transform result awaits host validation");
+            check(requests.envelopes.back().find("\"method\":\"ui.transform.result\"") != std::string::npos && requests.envelopes.back().find("\"requestId\":\"r1\"") != std::string::npos && requests.envelopes.back().find("\"value\":{\"hide\":[\"media\"]}") != std::string::npos, "immutable input produces exact patch dto roundtrip");
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "native patch acknowledgement completes dispatch");
+            check(settle(host, dgjs_dispatch(host, "command", "{\"id\":\"dispose-transform\"}")) == 2, "dispose unregisters native ownership");
+            check(requests.envelopes.back().find("\"method\":\"ui.transform.unregister\"") != std::string::npos, "unregister method");
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0 && requests.envelopes.size() == 4, "dispose is idempotent");
+            check(settle(host, dgjs_dispatch(host, "transform", payload)) < 0 && requests.envelopes.size() == 4, "disposed transform rejects without sending a stale patch");
+        } else if (name == "transform_error") {
+            add(host, "definePlugin({async activate(api){await api.transforms.register({id:'throws',slot:'profile'},async()=>{throw Error('hostile transform')})}})");
+            check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "throwing transform registration");
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "throwing fixture activated");
+            check(settle(host, dgjs_dispatch(host, "transform", "{\"id\":\"throws\",\"requestId\":\"r1\",\"input\":{}}")) < 0 && requests.envelopes.size() == 1, "handler rejection fails dispatch without posting a fake patch");
+        } else if (name == "transform_denial") {
+            add(host, "definePlugin({async activate(api){let denied=false;try{await api.transforms.register({id:'retry',slot:'profile'},()=>({hide:[]}))}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('denial lost');await api.transforms.register({id:'retry',slot:'profile'},()=>({hide:[]}))}})");
+            check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "first registration awaiting native permission");
+            check(dgjs_reply(host, requests.ids.back(), "{\"error\":{\"code\":\"permission_denied\",\"message\":\"denied\"}}") == 0 && settle(host, dgjs_pump(host)) == 2 && requests.ids.size() == 2, "native denial rolls back local registration reservation");
+            check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "registration can retry after explicit native denial");
+        } else if (name == "transform_limit") {
+            add(host, "definePlugin({async activate(api){const registrations=[];for(let i=0;i<8;i++)registrations.push(api.transforms.register({id:'t'+i,slot:'profile'},()=>({hide:[]})));let denied=false;try{await api.transforms.register({id:'overflow',slot:'profile'},()=>({hide:[]}))}catch(e){denied=e.code==='transform_limit'}if(!denied)throw Error('transform quota bypass');await Promise.all(registrations)}})");
+            check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2 && requests.ids.size() == 8, "in-flight registrations reserve the eight-transform quota");
+            for (auto id : requests.ids) check(dgjs_reply(host, id, "{\"result\":null}") == 0, "native registration response");
+            check(settle(host, dgjs_pump(host)) == 0, "bounded concurrent registrations settle");
         } else if (name == "wrappers") {
             add(host, "definePlugin({async activate(api){for(const call of [()=>api.messages.read({}),()=>api.chats.metadata({}),()=>api.peers.read({}),()=>api.navigation.open({screen:'plugins'}),()=>api.notifications.local({text:'x'}),()=>api.files.pick(),()=>api.files.read({handle:'x'}),()=>api.actions.messages.prepare({text:'x'}),()=>api.actions.messages.sendInteractive({handle:'x'}),()=>api.actions.messages.compose({text:'x'}),()=>api.translation.request({text:'x',targetLanguage:'en'})]){let denied=false;try{await call()}catch(e){denied=e.code==='feature_unavailable'}if(!denied)throw Error('fake adapter success')}}})");
             int status = dgjs_start(host, "main.js", bootstrap.c_str(), "{}");

@@ -25,7 +25,7 @@ public enum DGPluginPolicy {
         add(["assets.image"], "ui.contribute", "settings")
         add(["events.subscribe", "events.unsubscribe"], nil, nil)
         add(["theme.get"], "theme.read", "currentTheme")
-        add(["theme.contribute"], "theme.contribute", "localTokens", available: false)
+        add(["theme.contribute", "theme.clear"], "theme.contribute", "localTokens")
         add(["composer.getActiveDraft"], "composer.read", "activeComposer", gesture: true)
         add(["composer.replaceSelection"], "composer.transform", "activeComposer", gesture: true)
         add(["selection.get"], "messages.selection.read", "activeSelection", gesture: true)
@@ -39,7 +39,7 @@ public enum DGPluginPolicy {
         add(["files.pick", "files.read"], "files.userSelected", "selectedFile", gesture: true)
         add(["messages.compose"], "messages.compose", "chosenRecipient", gesture: true)
         add(["messages.prepare", "messages.sendInteractive"], "messages.sendInteractive", "chosenRecipient", gesture: true)
-        add(["ui.transform"], "ui.transform", nil, available: false)
+        add(["ui.transform.register", "ui.transform.unregister", "ui.transform.result"], "ui.transform", nil)
         return result
     }()
 
