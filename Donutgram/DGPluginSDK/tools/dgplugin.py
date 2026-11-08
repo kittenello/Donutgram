@@ -15,6 +15,18 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def current_client_version():
+    """The app version a package may require, from the repository's versions.json (13.2 outside the repository)."""
+    try:
+        app = json.loads((Path(__file__).resolve().parents[3] / "versions.json").read_text(encoding="utf-8"))["app"]
+        return tuple((list(map(int, app.split("."))) + [0, 0])[:3])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return (13, 2, 0)
+
+
+CLIENT_VERSION = current_client_version()
 SCOPES = {
     "ui.contribute": ["settings", "composer", "selection", "messageMenu", "chatToolbar"],
     "ui.transform": ["profile", "chatList", "displayLinks"],
@@ -204,7 +216,7 @@ def manifest(value):
     require(value.get("apiVersion") in {"^1.0.0", "1.0.0"}, "unsupported api")
     client = value.get("minClientVersion", "13.2")
     require(isinstance(client, str) and re.fullmatch(r"[0-9]{1,3}\.[0-9]{1,3}(\.[0-9]{1,3})?", client), "invalid minimum client")
-    require(tuple((list(map(int, client.split("."))) + [0])[:3]) <= (13, 2, 0), "newer client required")
+    require(tuple((list(map(int, client.split("."))) + [0, 0])[:3]) <= CLIENT_VERSION, "newer client required")
     entry = safe_path(value.get("entry", "main.js"))
     require(entry.endswith(".js"), "source entry required")
     profile = value.get("profile", "localPrivate")

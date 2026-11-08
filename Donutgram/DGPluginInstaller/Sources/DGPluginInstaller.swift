@@ -104,8 +104,7 @@ public enum DGPluginInstaller {
               manifest.author?.name.count ?? 0 <= 128, manifest.author?.username?.count ?? 0 <= 64 else { throw self.error("invalid_manifest", "plugin metadata exceeds limits") }
         guard self.displayText(manifest.name), self.displayText(manifest.description, multiline: true), self.displayText(manifest.changelog ?? "", multiline: true), self.displayText(manifest.author?.name ?? ""), self.displayText(manifest.author?.username ?? ""), manifest.author == nil || !(manifest.author?.name.isEmpty ?? true) else { throw self.error("invalid_manifest", "invalid display metadata") }
         guard self.semver(manifest.version), manifest.apiVersion == "^1.0.0" || manifest.apiVersion == "1.0.0" else { throw self.error("incompatible", "unsupported plugin api version") }
-        guard manifest.minClientVersion.range(of: "^[0-9]{1,3}\\.[0-9]{1,3}(\\.[0-9]{1,3})?$", options: .regularExpression) != nil,
-              manifest.minClientVersion.compare("13.2.0", options: .numeric) != .orderedDescending else { throw self.error("incompatible", "plugin needs a newer client") }
+        guard DGPluginClientVersion.satisfies(manifest.minClientVersion) else { throw self.error("incompatible", "plugin needs a newer client") }
         guard manifest.profile == "localPrivate" || manifest.profile == "publicNetwork" else { throw self.error("invalid_profile", "unsupported plugin profile") }
         try self.validatePath(manifest.entry)
         guard manifest.entry.hasSuffix(".js") else { throw self.error("invalid_entry", "plugin entry must be javascript source") }

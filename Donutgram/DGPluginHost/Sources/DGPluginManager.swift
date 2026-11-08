@@ -350,7 +350,7 @@ public final class DGPluginManager {
     private var executions: [String: DGPluginExecution] = [:]
     private var adapter: ((String, String, DGPluginJSON, @escaping () -> Bool, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)?
     private var renderAdapter: ((String, DGPluginJSON, String, @escaping () -> Bool, @escaping (String) -> Data?, @escaping (String, DGPluginJSON) -> Void, @escaping () -> Void) -> Result<() -> Void, DGPluginError>)?
-    private var environment: [String: DGPluginJSON] = ["clientVersion": .string("13.2"), "locale": .string("en"), "appearance": .string("light"), "lowPowerMode": .bool(false)]
+    private var environment: [String: DGPluginJSON] = ["clientVersion": .string(DGPluginClientVersion.current), "locale": .string("en"), "appearance": .string("light"), "lowPowerMode": .bool(false)]
 
     public var nativeRequest: ((String, String, DGPluginJSON, @escaping () -> Bool, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)? {
         get { snapshotLock.lock(); defer { snapshotLock.unlock() }; return adapter }
