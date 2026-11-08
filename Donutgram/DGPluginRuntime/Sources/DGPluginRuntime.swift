@@ -52,7 +52,8 @@ private final class DGPluginEngineHandle: @unchecked Sendable {
 }
 
 public final class DGPluginRuntime {
-    private let queue = DispatchQueue(label: "donutgram.plugin.runtime", qos: .utility)
+    /// Every engine call runs here; see `DGPluginRuntimeThread` for why it is not a dispatch queue.
+    private let thread: DGPluginRuntimeThread
     private let lock = NSLock()
     private let context: DGPluginRequestContext
     private var host: DGPluginEngineHandle?
@@ -71,34 +72,35 @@ public final class DGPluginRuntime {
         self.context = DGPluginRequestContext(request: request)
         self.entry = entry
         self.environmentJSON = environmentJSON
+        // Created only after validation: from here on a throw runs `deinit`, which ends the thread.
+        self.thread = DGPluginRuntimeThread(name: "donutgram.plugin.runtime")
         let callbackContext = self.context
-        var created: OpaquePointer?
-        self.queue.sync {
-            created = dgjs_create({ opaque, json in
+        let created: OpaquePointer? = self.thread.sync {
+            dgjs_create({ opaque, json in
                 guard let opaque, let json else { return }
                 Unmanaged<DGPluginRequestContext>.fromOpaque(opaque).takeUnretainedValue().receive(String(cString: json))
             }, Unmanaged.passUnretained(callbackContext).toOpaque())
         }
         guard let created else { throw DGPluginRuntimeError("runtime_unavailable") }
         self.host = DGPluginEngineHandle(created)
-        var valid = true
-        self.queue.sync {
+        let valid = self.thread.sync { () -> Bool in
             for (path, data) in files {
-                if path.utf8.contains(0) { valid = false; break }
+                if path.utf8.contains(0) { return false }
                 let result = data.withUnsafeBytes { bytes in
                     dgjs_add_file(created, path, bytes.bindMemory(to: UInt8.self).baseAddress, data.count)
                 }
-                if result != 0 { valid = false; break }
+                if result != 0 { return false }
             }
+            return true
         }
         if !valid {
             self.host = nil
-            self.queue.sync { dgjs_destroy(created) }
+            self.thread.sync { dgjs_destroy(created) }
             throw DGPluginRuntimeError("invalid_package")
         }
         self.context.reply = { [weak self] id, json in
             guard let self else { return }
-            self.queue.async { [weak self] in
+            self.thread.async { [weak self] in
                 guard let self, let host = self.availableHost(), json.utf8.count <= 65536, !json.utf8.contains(0) else { return }
                 if dgjs_reply(host, id, json) < 0 { self.finish(.failure(self.failure(host))) }
                 else { self.evaluate(dgjs_pump(host), host: host) }
@@ -113,14 +115,15 @@ public final class DGPluginRuntime {
         host?.stop()
         self.lock.unlock()
         let context = self.context
-        self.queue.async {
+        self.thread.async {
             host?.destroy()
             withExtendedLifetime(context) {}
         }
+        self.thread.finish()
     }
 
     public func start(completion: @escaping (Result<Void, DGPluginRuntimeError>) -> Void) {
-        self.queue.async {
+        self.thread.async {
             guard !self.started, self.completion == nil, let host = self.availableHost() else {
                 completion(.failure(DGPluginRuntimeError("invalid_lifecycle"))); return
             }
@@ -133,7 +136,7 @@ public final class DGPluginRuntime {
     }
 
     public func dispatch(kind: String, payloadJSON: String, completion: @escaping (Result<Void, DGPluginRuntimeError>) -> Void) {
-        self.queue.async {
+        self.thread.async {
             guard self.started, self.completion == nil, let host = self.availableHost(), kind.utf8.count < 32,
                   !kind.utf8.contains(0), payloadJSON.utf8.count <= 65536, !payloadJSON.utf8.contains(0) else {
                 completion(.failure(DGPluginRuntimeError("runtime_unavailable"))); return
@@ -150,7 +153,7 @@ public final class DGPluginRuntime {
         self.halted = true
         self.host?.stop()
         self.lock.unlock()
-        self.queue.async { self.finish(.failure(DGPluginRuntimeError("cancelled"))) }
+        self.thread.async { self.finish(.failure(DGPluginRuntimeError("cancelled"))) }
     }
 
     private func availableHost() -> OpaquePointer? {
@@ -170,7 +173,7 @@ public final class DGPluginRuntime {
         } else {
             self.pumpGeneration &+= 1
             let generation = self.pumpGeneration
-            self.queue.asyncAfter(deadline: .now() + .milliseconds(status == 2 ? 100 : 5)) { [weak self] in
+            self.thread.async(after: status == 2 ? 0.1 : 0.005) { [weak self] in
                 guard let self, self.pumpGeneration == generation, let host = self.availableHost() else { return }
                 self.evaluate(dgjs_pump(host), host: host)
             }

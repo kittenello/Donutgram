@@ -217,6 +217,9 @@ extern "C" DGJSHost *dgjs_create(DGJSRequest request, void *opaque) {
     h->runtime = JS_NewRuntime();
     if (!h->runtime) { delete h; return nullptr; }
     JS_SetMemoryLimit(h->runtime, 16 * 1024 * 1024);
+    // The limit only protects the process when the calling thread's real stack is several times larger: the
+    // Swift wrapper runs every call on its own 4 MiB thread (DGPluginRuntimeThread), never on a 512 KiB
+    // dispatch worker, where a deep recursion would reach the guard page before this check.
     JS_SetMaxStackSize(h->runtime, 512 * 1024);
     JS_SetMemoryLimitFunc(h->runtime, memoryLimit, h);
     JS_SetInterruptHandler(h->runtime, interrupt, h);
