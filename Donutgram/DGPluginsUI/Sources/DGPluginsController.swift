@@ -18,6 +18,11 @@ private extension DGPluginJSON {
     var uiNumberValue: Double? { if case let .number(value) = self { return value }; return nil }
 }
 
+private extension String {
+    /// The text with its first letter upper-cased, for status words shown on their own line.
+    var dgSentenceStart: String { return self.prefix(1).uppercased() + self.dropFirst() }
+}
+
 private struct DGPluginRow: ItemListNodeEntry {
     enum Kind: Int32 { case header, text, disclosure, toggle, input, multiline, markdown, card, slider, stepper, image, action, destructive }
     let index: Int32
@@ -66,7 +71,7 @@ private struct DGPluginRow: ItemListNodeEntry {
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .number(self.title, self.number, self.minimum, self.maximum, self.step, self.kind == .slider), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, numberUpdated: number)
         case .image:
             if let image = page.renderedImages[self.iconKey] { return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .image(image, self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17) }
-            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(page.tr("изображение недоступно", "image unavailable")), scale: presentationData.fontSize.itemListBaseFontSize / 17)
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(page.tr("Изображение недоступно", "Image unavailable")), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .action, .destructive:
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: self.title, kind: self.kind == .destructive ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: { if self.enabled { action() } })
         }
@@ -117,8 +122,12 @@ private final class DGPluginPage {
         if let observer = self.observer { self.manager.removeObserver(observer) }
     }
 
+    var russian: Bool {
+        return self.context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode.hasPrefix("ru")
+    }
+
     func tr(_ ru: String, _ en: String) -> String {
-        return self.context.sharedContext.currentPresentationData.with { $0 }.strings.primaryComponent.languageCode.hasPrefix("ru") ? ru : en
+        return self.russian ? ru : en
     }
 
     func refresh() {
@@ -134,7 +143,7 @@ private final class DGPluginPage {
             guard let self, let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil, validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin management screen is not active"))); return }
             guard method == "ui.toast" else { completion(.failure(DGPluginError(code: "feature_unavailable", message: "this adapter requires an active chat"))); return }
             guard let values = params.objectValue, Set(values.keys) == ["text"], let text = values["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { completion(.failure(DGPluginError(code: "invalid_argument", message: "invalid plugin notice"))); return }
-            let name = self.installation(installationId)?.manifest.name ?? "plugin"
+            let name = self.installation(installationId)?.manifest.name ?? self.tr("Плагин", "Plugin")
             guard validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))); return }
             // A toast, not a modal alert: notices never block the screen.
             controller.present(UndoOverlayController(presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, content: .info(title: String(name.prefix(64)), text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
@@ -172,11 +181,11 @@ private final class DGPluginPage {
 
     var title: String {
         switch self.mode {
-        case .list: return self.tr("плагины", "plugins")
-        case .permissions: return self.tr("разрешения", "permissions")
-        case .settings: return self.tr("настройки плагина", "plugin settings")
-        case .install: return self.tr("установка плагина", "install plugin")
-        case let .details(id): return self.installation(id)?.manifest.name ?? self.tr("плагин удалён", "plugin removed")
+        case .list: return self.tr("Плагины", "Plugins")
+        case .permissions: return self.tr("Разрешения", "Permissions")
+        case .settings: return self.tr("Настройки плагина", "Plugin settings")
+        case .install: return self.tr("Установка плагина", "Install plugin")
+        case let .details(id): return self.installation(id)?.manifest.name ?? self.tr("Плагин удалён", "Plugin removed")
         case let .rendered(state): return state.title
         }
     }
@@ -189,71 +198,77 @@ private final class DGPluginPage {
         switch self.mode {
         case .list:
             if let notice = self.notice { add(0, .text, "", notice) }
-            if let error = self.manager.persistenceError { add(0, .text, "", self.tr("выполнение остановлено: ", "execution stopped: ") + error) }
-            add(0, .toggle, "global", self.tr("разрешить выполнение плагинов", "allow plugins to run"), value: self.manager.globallyEnabled)
-            add(0, .text, "", self.tr("выключение немедленно останавливает все плагины и их задачи.", "turning this off immediately stops all plugins and their tasks."))
-            add(1, .input, "search", self.tr("поиск", "search"), detail: self.query)
-            add(1, .header, "", self.tr("установленные", "installed"))
+            if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
+            add(0, .toggle, "global", self.tr("Разрешить выполнение плагинов", "Allow plugins to run"), value: self.manager.globallyEnabled)
+            add(0, .text, "", self.tr("Выключение немедленно останавливает все плагины и их задачи.", "Turning this off immediately stops all plugins and their tasks."))
+            add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
+            add(1, .header, "", self.tr("УСТАНОВЛЕННЫЕ", "INSTALLED"))
             let matches = self.manager.installations.filter { self.query.isEmpty || ($0.manifest.name + " " + $0.manifest.id + " " + ($0.manifest.author?.name ?? "")).localizedCaseInsensitiveContains(self.query) }
             if matches.isEmpty {
-                add(1, .text, "", self.query.isEmpty ? self.tr("плагинов пока нет. откройте файл .donut.js или .dgplugin в сообщении telegram. просмотр файла не запускает код.", "no plugins yet. open a .donut.js or .dgplugin document in a telegram message. previewing never runs code.") : self.tr("ничего не найдено", "nothing found"))
+                add(1, .text, "", self.query.isEmpty ? self.tr("Плагинов пока нет. Откройте файл .donut.js или .dgplugin в сообщении Telegram. Просмотр файла не запускает код.", "No plugins yet. Open a .donut.js or .dgplugin document in a Telegram message. Previewing never runs code.") : self.tr("Ничего не найдено", "Nothing found"))
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
-                add(section, .disclosure, "details:" + item.id, item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("автор не указан", "author not specified")) + " · " + item.manifest.version + " · " + self.stateText(item), icon: item.id)
-                add(section, .toggle, "enabled:" + item.id, self.tr("включён", "enabled"), value: item.enabled)
+                add(section, .disclosure, "details:" + item.id, item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + item.manifest.version + " · " + self.stateText(item), icon: item.id)
+                add(section, .toggle, "enabled:" + item.id, self.tr("Включён", "Enabled"), value: item.enabled)
             }
         case let .install(package):
             self.appendCard(manifest: package.manifest, trust: package.trust, digest: package.digest, iconKey: "preview", add: add)
             if let old = self.manager.installations.first(where: { $0.manifest.id == package.manifest.id }) {
-                add(2, .header, "", self.tr("обновление", "update review"))
+                add(2, .header, "", self.tr("ОБНОВЛЕНИЕ", "UPDATE REVIEW"))
                 add(2, .text, "", old.manifest.version + " → " + package.manifest.version)
-                if old.manifest.profile != package.manifest.profile { add(2, .text, "", self.tr("изменён профиль: ", "profile changed: ") + old.manifest.profile + " → " + package.manifest.profile) }
+                if old.manifest.profile != package.manifest.profile { add(2, .text, "", self.tr("Изменён профиль: ", "Profile changed: ") + old.manifest.profile + " → " + package.manifest.profile) }
                 let previous = Set(old.manifest.permissions + old.manifest.optionalPermissions)
                 let added = (package.manifest.permissions + package.manifest.optionalPermissions).filter { !previous.contains($0) }
-                add(2, .text, "", added.isEmpty ? self.tr("новых разрешений нет. после обновления проверьте разрешения и включите плагин самостоятельно.", "no new permissions. review permissions and enable the plugin after updating.") : self.tr("новые разрешения:\n", "new permissions:\n") + added.map(self.permissionText).joined(separator: "\n\n"))
-                add(4, .action, "install", self.busy ? self.tr("обновляем…", "updating…") : self.tr("подтвердить обновление", "confirm update"))
+                add(2, .text, "", added.isEmpty ? self.tr("Новых разрешений нет. После обновления проверьте разрешения и включите плагин самостоятельно.", "No new permissions. Review permissions and enable the plugin after updating.") : self.tr("Новые разрешения:\n", "New permissions:\n") + added.map(self.permissionText).joined(separator: "\n\n"))
+                add(4, .action, "install", self.busy ? self.tr("Обновляем…", "Updating…") : self.tr("Подтвердить обновление", "Confirm update"))
             } else {
-                add(4, .action, "install", self.busy ? self.tr("устанавливаем…", "installing…") : self.tr("установить выключенным", "install disabled"))
+                add(4, .action, "install", self.busy ? self.tr("Устанавливаем…", "Installing…") : self.tr("Установить выключенным", "Install disabled"))
             }
-            add(4, .toggle, "afterInstall", self.tr("включить после установки", "enable after installation"), value: self.enableAfterInstall)
-            add(4, .text, "", self.tr("установка не выдаёт разрешения и не запускает код. подпись подтверждает происхождение, а не безопасность кода.", "installing grants no permissions and runs no code. a signature proves origin, not code safety."))
+            add(4, .toggle, "afterInstall", self.tr("Включить после установки", "Enable after installation"), value: self.enableAfterInstall)
+            add(4, .text, "", self.tr("Установка не выдаёт разрешения и не запускает код. Подпись подтверждает происхождение, а не безопасность кода.", "Installing grants no permissions and runs no code. A signature proves origin, not code safety."))
         case let .details(id):
-            guard let item = self.installation(id) ?? (self.pendingRemoval?.id == id ? self.pendingRemoval : nil) else { add(0, .text, "", self.tr("этот плагин удалён.", "this plugin has been removed.")); break }
+            guard let item = self.installation(id) ?? (self.pendingRemoval?.id == id ? self.pendingRemoval : nil) else { add(0, .text, "", self.tr("Этот плагин удалён.", "This plugin has been removed.")); break }
             self.appendCard(manifest: item.manifest, trust: item.trust, digest: item.digest, iconKey: id, add: add)
-            add(4, .toggle, "enabled:" + id, self.tr("включён", "enabled"), value: item.enabled)
-            add(4, .text, "", self.stateText(item))
-            if let error = item.lastError { add(4, .text, "", error) }
-            add(5, .disclosure, "permissions:" + id, self.tr("разрешения", "permissions"), detail: "\(item.grants.count)")
-            add(5, .disclosure, "settings:" + id, self.tr("настройки", "settings"))
-            add(5, .action, "reset:" + id, self.tr("сбросить настройки и данные", "reset settings and data"))
+            add(4, .toggle, "enabled:" + id, self.tr("Включён", "Enabled"), value: item.enabled)
+            add(4, .text, "", self.stateText(item).dgSentenceStart)
+            if let error = item.lastError { add(4, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
+            add(5, .disclosure, "permissions:" + id, self.tr("Разрешения", "Permissions"), detail: "\(item.grants.count)")
+            add(5, .disclosure, "settings:" + id, self.tr("Настройки", "Settings"))
+            add(5, .action, "reset:" + id, self.tr("Сбросить настройки и данные", "Reset settings and data"))
             for command in self.manager.commands.filter({ $0.installationId == id && $0.placement == "settings" }) {
                 add(6, .action, "command:" + command.id, command.title)
             }
-            add(7, .text, "", self.tr("для обновления откройте новый файл плагина в сообщении telegram. автоматической загрузки кода нет.", "to update, open the new plugin document in a telegram message. code is never downloaded automatically."))
-            if self.manager.canRollback(id: id) { add(7, .action, "rollback:" + id, self.tr("вернуться к предыдущей версии", "restore previous version")) }
+            // Where the plugin's other commands appear: they have no place on this screen.
+            let placements = Set(self.manager.commands.filter { $0.installationId == id }.map { $0.placement })
+            var commandPlaces: [String] = []
+            if !placements.isDisjoint(with: ["composer", "chatToolbar"]) { commandPlaces.append(self.tr("команды для чата — в меню, которое открывается долгим нажатием на аватар в шапке чата", "chat commands are in the menu that opens when you long-press the avatar in the chat header")) }
+            if !placements.isDisjoint(with: ["messageMenu", "selection"]) { commandPlaces.append(self.tr("команды для сообщений — в меню сообщения", "message commands are in a message's menu")) }
+            if !commandPlaces.isEmpty { add(6, .text, "", (commandPlaces.joined(separator: "; ") + ".").dgSentenceStart) }
+            add(7, .text, "", self.tr("Для обновления откройте новый файл плагина в сообщении Telegram. Автоматической загрузки кода нет.", "To update, open the new plugin document in a Telegram message. Code is never downloaded automatically."))
+            if self.manager.canRollback(id: id) { add(7, .action, "rollback:" + id, self.tr("Вернуться к предыдущей версии", "Restore previous version")) }
             if let publisher = self.manager.publisherIdentity(id: id), publisher.hasPrefix("ed25519:") {
-                add(7, .action, "publisher:" + id, item.trust == "revoked" ? self.tr("разблокировать издателя", "unblock publisher") : self.tr("заблокировать издателя", "block publisher"))
+                add(7, .action, "publisher:" + id, item.trust == "revoked" ? self.tr("Разблокировать издателя", "Unblock publisher") : self.tr("Заблокировать издателя", "Block publisher"))
             }
             let diagnostics = self.manager.diagnostics(id: id)
             if !diagnostics.isEmpty {
-                add(8, .header, "", self.tr("журнал ошибок", "error history"))
-                for entry in diagnostics.prefix(20) { add(8, .text, "", String(entry.prefix(512))) }
+                add(8, .header, "", self.tr("ЖУРНАЛ ОШИБОК", "ERROR HISTORY"))
+                for entry in diagnostics.prefix(20) { add(8, .text, "", String(dgPluginStoredReason(entry, russian: self.russian).prefix(512))) }
             }
-            add(9, .destructive, "remove:" + id, self.tr("удалить плагин", "remove plugin"))
+            add(9, .destructive, "remove:" + id, self.tr("Удалить плагин", "Remove plugin"))
         case let .permissions(id):
             guard let item = self.installation(id) else { break }
-            add(0, .text, "", self.tr("каждое разрешение выдаётся отдельно. отзыв немедленно отменяет связанные действия. обязательные права нужны для включения.", "grant each permission separately. revoking immediately cancels related work. required permissions are needed to enable the plugin."))
+            add(0, .text, "", self.tr("Каждое разрешение выдаётся отдельно. Отзыв немедленно отменяет связанные действия. Обязательные права нужны для включения.", "Grant each permission separately. Revoking immediately cancels related work. Required permissions are needed to enable the plugin."))
             for (index, permission) in (item.manifest.permissions + item.manifest.optionalPermissions).enumerated() {
                 let section = Int32(index + 1)
                 add(section, .toggle, "grant:\(index)", self.permissionTitle(permission.capability), value: item.grants.contains(permission))
                 let required = index < item.manifest.permissions.count
-                add(section, .text, "", (required ? self.tr("обязательное\n", "required\n") : self.tr("необязательное\n", "optional\n")) + self.permissionText(permission))
+                add(section, .text, "", (required ? self.tr("Обязательное\n", "Required\n") : self.tr("Необязательное\n", "Optional\n")) + self.permissionText(permission))
             }
         case let .settings(id):
             guard let item = self.installation(id) else { break }
             let properties = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue ?? [:]
-            if properties.isEmpty { add(0, .text, "", self.tr("у плагина нет настроек.", "this plugin has no settings.")) }
+            if properties.isEmpty { add(0, .text, "", self.tr("У плагина нет настроек.", "This plugin has no settings.")) }
             for (index, key) in properties.keys.sorted().enumerated() {
                 guard let schema = properties[key]?.objectValue else { continue }
                 let title = schema["title"]?.stringValue ?? key
@@ -284,8 +299,8 @@ private final class DGPluginPage {
                 if let description = schema["description"]?.stringValue { add(section, .text, "", description) }
             }
         case let .rendered(state):
-            add(0, .text, "", self.tr("страница плагина: ", "plugin page: ") + state.pluginName)
-            guard state.validity() else { add(0, .text, "", self.tr("плагин остановлен или доступ отозван. закройте эту страницу.", "the plugin stopped or permission was revoked. close this page.")); break }
+            add(0, .text, "", self.tr("Страница плагина: ", "Plugin page: ") + state.pluginName)
+            guard state.validity() else { add(0, .text, "", self.tr("Плагин остановлен или доступ отозван. Закройте эту страницу.", "The plugin stopped or permission was revoked. Close this page.")); break }
             var section: Int32 = 1
             func append(_ nodes: [DGPluginRenderNode]) {
                 for node in nodes {
@@ -319,11 +334,11 @@ private final class DGPluginPage {
 
     private func appendCard(manifest: DGPluginManifest, trust: String, digest: String, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
         let author = manifest.author.map { $0.name + ($0.username.map { " (@\($0))" } ?? "") } ?? self.tr("не указан", "not specified")
-        add(0, .card, "", manifest.name, manifest.version + "\n" + self.tr("заявленный автор: ", "claimed author: ") + author + "\n" + manifest.id, false, true, iconKey)
-        add(1, .text, "", self.tr("доверие: ", "trust: ") + self.trustText(trust) + "\n" + self.tr("профиль: ", "profile: ") + manifest.profile + "\nsha256: " + digest, "", false, true, "")
-        add(3, .header, "", self.tr("запрашиваемые разрешения", "requested permissions"), "", false, true, "")
-        let permissions = manifest.permissions.map { self.tr("обязательное: ", "required: ") + self.permissionText($0) } + manifest.optionalPermissions.map { self.tr("необязательное: ", "optional: ") + self.permissionText($0) }
-        add(3, .text, "", permissions.isEmpty ? self.tr("разрешения не запрошены", "no permissions requested") : permissions.joined(separator: "\n\n"), "", false, true, "")
+        add(0, .card, "", manifest.name, manifest.version + "\n" + self.tr("Заявленный автор: ", "Claimed author: ") + author + "\n" + manifest.id, false, true, iconKey)
+        add(1, .text, "", self.tr("Доверие: ", "Trust: ") + self.trustText(trust) + "\n" + self.tr("Профиль: ", "Profile: ") + manifest.profile + "\nsha256: " + digest, "", false, true, "")
+        add(3, .header, "", self.tr("ЗАПРАШИВАЕМЫЕ РАЗРЕШЕНИЯ", "REQUESTED PERMISSIONS"), "", false, true, "")
+        let permissions = manifest.permissions.map { self.tr("Обязательное: ", "Required: ") + self.permissionText($0) } + manifest.optionalPermissions.map { self.tr("Необязательное: ", "Optional: ") + self.permissionText($0) }
+        add(3, .text, "", permissions.isEmpty ? self.tr("Разрешения не запрошены", "No permissions requested") : permissions.joined(separator: "\n\n"), "", false, true, "")
         if let changelog = manifest.changelog, !changelog.isEmpty { add(3, .text, "", changelog, "", false, true, "") }
     }
 
@@ -333,34 +348,34 @@ private final class DGPluginPage {
 
     private func permissionTitle(_ capability: String) -> String {
         switch capability {
-        case "ui.contribute": return self.tr("команды и панели", "commands and panels")
-        case "ui.transform": return self.tr("локальное оформление экранов", "local screen appearance")
-        case "theme.read": return self.tr("текущая тема", "current theme")
-        case "theme.contribute": return self.tr("локальные цвета и оформление", "local colors and decorations")
-        case "composer.read": return self.tr("текст открытого черновика", "text in the open draft")
-        case "composer.transform": return self.tr("изменение открытого черновика", "change the open draft")
-        case "messages.selection.read": return self.tr("выделенный вами текст", "text you select")
-        case "messages.read": return self.tr("сообщения в выбранных чатах", "messages in selected chats")
-        case "chats.metadata.read": return self.tr("названия выбранных чатов", "selected chat names")
-        case "peers.read": return self.tr("данные выбранных контактов", "selected contact details")
-        case "storage.local": return self.tr("собственные локальные данные", "own local data")
-        case "network.public": return self.tr("публичные интернет-сервисы", "public internet services")
-        case "translation.request": return self.tr("перевод выбранного текста", "translate selected text")
-        case "navigation.open": return self.tr("открытие разрешённых экранов", "open allowed screens")
-        case "notifications.local": return self.tr("локальные уведомления", "local notifications")
-        case "files.userSelected": return self.tr("выбранный вами файл", "file you choose")
-        case "messages.compose": return self.tr("подготовка сообщения", "prepare a message")
-        case "messages.send": return self.tr("отправка без дополнительного подтверждения", "send without an additional confirmation")
-        case "messages.edit": return self.tr("редактирование выбранных сообщений", "edit selected messages")
-        case "messages.delete": return self.tr("удаление выбранных сообщений у всех", "delete selected messages for everyone")
-        case "messages.intercept": return self.tr("изменение текста перед отправкой", "change text before sending")
-        case "messages.sendInteractive": return self.tr("отправка с вашим подтверждением", "send with your confirmation")
+        case "ui.contribute": return self.tr("Команды и панели", "Commands and panels")
+        case "ui.transform": return self.tr("Локальное оформление экранов", "Local screen appearance")
+        case "theme.read": return self.tr("Текущая тема", "Current theme")
+        case "theme.contribute": return self.tr("Локальные цвета и оформление", "Local colors and decorations")
+        case "composer.read": return self.tr("Текст открытого черновика", "Text in the open draft")
+        case "composer.transform": return self.tr("Изменение открытого черновика", "Change the open draft")
+        case "messages.selection.read": return self.tr("Выделенный вами текст", "Text you select")
+        case "messages.read": return self.tr("Сообщения в выбранных чатах", "Messages in selected chats")
+        case "chats.metadata.read": return self.tr("Названия выбранных чатов", "Selected chat names")
+        case "peers.read": return self.tr("Данные выбранных контактов", "Selected contact details")
+        case "storage.local": return self.tr("Собственные локальные данные", "Own local data")
+        case "network.public": return self.tr("Публичные интернет-сервисы", "Public internet services")
+        case "translation.request": return self.tr("Перевод выбранного текста", "Translate selected text")
+        case "navigation.open": return self.tr("Открытие разрешённых экранов", "Open allowed screens")
+        case "notifications.local": return self.tr("Локальные уведомления", "Local notifications")
+        case "files.userSelected": return self.tr("Выбранный вами файл", "File you choose")
+        case "messages.compose": return self.tr("Подготовка сообщения", "Prepare a message")
+        case "messages.send": return self.tr("Отправка без дополнительного подтверждения", "Send without an additional confirmation")
+        case "messages.edit": return self.tr("Редактирование выбранных сообщений", "Edit selected messages")
+        case "messages.delete": return self.tr("Удаление выбранных сообщений у всех", "Delete selected messages for everyone")
+        case "messages.intercept": return self.tr("Изменение текста перед отправкой", "Change text before sending")
+        case "messages.sendInteractive": return self.tr("Отправка с вашим подтверждением", "Send with your confirmation")
         default: return capability
         }
     }
 
     private func settingText(_ value: DGPluginJSON) -> String {
-        switch value { case let .string(text): return text; case let .number(number): return String(number); case let .bool(value): return value ? self.tr("да", "yes") : self.tr("нет", "no"); default: return "" }
+        switch value { case let .string(text): return text; case let .number(number): return String(number); case let .bool(value): return value ? self.tr("Да", "Yes") : self.tr("Нет", "No"); default: return "" }
     }
 
     private func trustText(_ trust: String) -> String {
@@ -417,7 +432,7 @@ private final class DGPluginPage {
                     guard let self, let state, case let .rendered(current) = self.mode, current === state else { return }
                     state.invoke(node, value: option.value)
                     self.refresh()
-                }) } + [TextAlertAction(type: .defaultAction, title: self.tr("отмена", "cancel"), action: {})]
+                }) } + [TextAlertAction(type: .defaultAction, title: self.tr("Отмена", "Cancel"), action: {})]
                 self.controller?.present(textAlertController(context: self.context, title: node.title, text: "", actions: actions), in: .window(.root))
             } else { state.invoke(node, value: .null) }
             return
@@ -446,7 +461,7 @@ private final class DGPluginPage {
             }
         } else if key.hasPrefix("remove:") {
             let id = String(key.dropFirst(7))
-            self.confirm(title: self.tr("удалить плагин «", "remove plugin “") + (self.installation(id)?.manifest.name ?? "") + self.tr("»?", "”?"), text: self.tr("код и данные этого плагина для всех аккаунтов на устройстве будут удалены. это действие нельзя отменить.", "this plugin's code and data for every account on this device will be removed. this cannot be undone."), destructive: true) { [weak self] in
+            self.confirm(title: self.tr("Удалить плагин «", "Remove plugin “") + (self.installation(id)?.manifest.name ?? "") + self.tr("»?", "”?"), text: self.tr("Код и данные этого плагина для всех аккаунтов на устройстве будут удалены. Это действие нельзя отменить.", "This plugin's code and data for every account on this device will be removed. This cannot be undone."), destructive: true) { [weak self] in
                 guard let self else { return }
                 self.pendingRemoval = self.installation(id)
                 self.busy = true
@@ -463,19 +478,19 @@ private final class DGPluginPage {
             }
         } else if key.hasPrefix("reset:") {
             let id = String(key.dropFirst(6))
-            self.confirm(title: self.tr("сбросить данные плагина?", "reset plugin data?"), text: self.tr("настройки и локальные данные плагина для текущего аккаунта будут удалены. плагин будет остановлен.", "the plugin's settings and local data for this account will be removed. the plugin will stop."), destructive: true) { [weak self] in
+            self.confirm(title: self.tr("Сбросить данные плагина?", "Reset plugin data?"), text: self.tr("Настройки и локальные данные плагина для текущего аккаунта будут удалены. Плагин будет остановлен.", "The plugin's settings and local data for this account will be removed. The plugin will stop."), destructive: true) { [weak self] in
                 self?.manager.resetData(id: id) { [weak self] result in self?.complete(result) }
             }
         } else if key.hasPrefix("rollback:") {
             let id = String(key.dropFirst(9))
-            self.confirm(title: self.tr("вернуться к предыдущей версии?", "restore previous version?"), text: self.tr("плагин будет остановлен. проверьте разрешения перед повторным включением.", "the plugin will stop. review permissions before enabling it again."), destructive: false) { [weak self] in
+            self.confirm(title: self.tr("Вернуться к предыдущей версии?", "Restore previous version?"), text: self.tr("Плагин будет остановлен. Проверьте разрешения перед повторным включением.", "The plugin will stop. Review permissions before enabling it again."), destructive: false) { [weak self] in
                 self?.manager.rollback(id: id) { [weak self] result in self?.complete(result) }
             }
         } else if key.hasPrefix("publisher:") {
             let id = String(key.dropFirst(10))
             guard let identity = self.manager.publisherIdentity(id: id), identity.hasPrefix("ed25519:") else { return }
             let revoked = self.installation(id)?.trust != "revoked"
-            self.confirm(title: revoked ? self.tr("заблокировать издателя?", "block publisher?") : self.tr("разблокировать издателя?", "unblock publisher?"), text: self.tr("это изменит доверие ко всем плагинам этого ключа на устройстве. блокировка немедленно остановит их.", "this changes trust for every plugin signed by this key on this device. blocking stops them immediately."), destructive: revoked) { [weak self] in
+            self.confirm(title: revoked ? self.tr("Заблокировать издателя?", "Block publisher?") : self.tr("Разблокировать издателя?", "Unblock publisher?"), text: self.tr("Это изменит доверие ко всем плагинам этого ключа на устройстве. Блокировка немедленно остановит их.", "This changes trust for every plugin signed by this key on this device. Blocking stops them immediately."), destructive: revoked) { [weak self] in
                 self?.manager.setPublisherRevoked(identity, revoked: revoked) { [weak self] result in self?.complete(result) }
             }
         } else if key.hasPrefix("command:"), case let .details(id) = self.mode {
@@ -490,7 +505,7 @@ private final class DGPluginPage {
                     values[setting] = choice
                     self?.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
                 })
-            } + [TextAlertAction(type: .defaultAction, title: self.tr("отмена", "cancel"), action: {})]
+            } + [TextAlertAction(type: .defaultAction, title: self.tr("Отмена", "Cancel"), action: {})]
             self.controller?.present(textAlertController(context: self.context, title: setting, text: "", actions: actions), in: .window(.root))
         }
     }
@@ -557,7 +572,7 @@ private final class DGPluginPage {
     }
 
     private func returnToListAfterRemoval() {
-        let notice = self.tr("плагин удалён", "plugin removed")
+        let notice = self.tr("Плагин удалён", "Plugin removed")
         if let navigation = self.controller?.navigationController as? NavigationController {
             for (index, candidate) in navigation.viewControllers.enumerated().reversed() {
                 guard let candidate = candidate as? ViewController, let page = dgPluginPages.object(forKey: candidate), case .list = page.mode else { continue }
@@ -579,11 +594,11 @@ private final class DGPluginPage {
 
     private func showError(_ error: DGPluginError) {
         guard let controller = self.controller else { return }
-        controller.present(textAlertController(context: self.context, title: self.tr("не удалось", "unable to complete"), text: error.code + ": " + error.message, actions: [TextAlertAction(type: .defaultAction, title: self.tr("закрыть", "close"), action: {})]), in: .window(.root))
+        controller.present(textAlertController(context: self.context, title: self.tr("Не удалось", "Unable to complete"), text: dgPluginErrorDescription(error, russian: self.russian), actions: [TextAlertAction(type: .defaultAction, title: self.tr("Закрыть", "Close"), action: {})]), in: .window(.root))
     }
 
     private func confirm(title: String, text: String, destructive: Bool, action: @escaping () -> Void) {
-        self.controller?.present(textAlertController(context: self.context, title: title, text: text, actions: [TextAlertAction(type: .genericAction, title: self.tr("отмена", "cancel"), action: {}), TextAlertAction(type: destructive ? .destructiveAction : .defaultAction, title: self.tr("подтвердить", "confirm"), action: action)]), in: .window(.root))
+        self.controller?.present(textAlertController(context: self.context, title: title, text: text, actions: [TextAlertAction(type: .genericAction, title: self.tr("Отмена", "Cancel"), action: {}), TextAlertAction(type: destructive ? .destructiveAction : .defaultAction, title: self.tr("Подтвердить", "Confirm"), action: action)]), in: .window(.root))
     }
 
     private func push(_ mode: DGPluginPageMode) {
@@ -604,7 +619,7 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
     let signal = combineLatest(context.sharedContext.presentationData, page.revision.get())
     |> map { [page] presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let data = ItemListPresentationData(presentationData)
-        let close = ItemListNavigationButton(content: .text(page.tr("закрыть", "close")), style: .regular, enabled: !page.busy, action: { [weak page] in
+        let close = ItemListNavigationButton(content: .text(page.tr("Закрыть", "Close")), style: .regular, enabled: !page.busy, action: { [weak page] in
             guard let controller = page?.controller else { return }
             if case let .rendered(state)? = page?.mode { state.close() }
             if let navigation = controller.navigationController as? NavigationController { let _ = navigation.popViewController(animated: true) }
@@ -705,13 +720,13 @@ public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReferen
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let russian = presentationData.strings.primaryComponent.languageCode.hasPrefix("ru")
     let showError: (String) -> Void = { text in
-        presentOverlay(textAlertController(context: context, title: russian ? "не удалось открыть плагин" : "unable to open plugin", text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
+        presentOverlay(textAlertController(context: context, title: russian ? "Не удалось открыть плагин" : "Unable to open plugin", text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
     }
     let key = String(context.account.id.int64)
     dgPluginDocumentImports[key]?.finish(nil)
     let limit = 8 * 1024 * 1024
     if let size = file.media.size, size > Int64(limit) {
-        showError(russian ? "файл плагина превышает 8 миб" : "plugin document exceeds 8 mib")
+        showError(russian ? "Файл плагина больше 8 МБ." : "The plugin file is larger than 8 MB.")
         return true
     }
     var cancel: (() -> Void)?
@@ -724,7 +739,7 @@ public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReferen
         case let .success(package):
             present(dgMakePluginPage(context: context, mode: .install(package)))
         case let .failure(error):
-            showError(error.code == "validation_timeout" ? (russian ? "не удалось подготовить плагин за 30 секунд. откройте документ снова." : "unable to prepare the plugin within 30 seconds. reopen the document to retry.") : error.code + ": " + error.message)
+            showError(error.code == "validation_timeout" ? (russian ? "Не удалось подготовить плагин за 30 секунд. Откройте файл ещё раз." : "The plugin could not be prepared within 30 seconds. Open the file again.") : dgPluginErrorDescription(error, russian: russian))
         }
     }
     cancel = { [weak operation] in operation?.finish(nil) }
