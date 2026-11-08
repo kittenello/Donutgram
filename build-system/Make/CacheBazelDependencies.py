@@ -11,10 +11,20 @@ import urllib.parse
 import urllib.request
 
 
+class ReleaseRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        redirected = super().redirect_request(request, response, code, message, headers, new_url)
+        if redirected is not None and urllib.parse.urlparse(new_url).hostname != urllib.parse.urlparse(request.full_url).hostname:
+            redirected.remove_header("Authorization")
+        return redirected
+
+
 def open_url(url):
     accept = "application/octet-stream" if "/releases/assets/" in url else "*/*"
     request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "donutgram-build"})
-    return urllib.request.urlopen(request, timeout=120)
+    if urllib.parse.urlparse(url).hostname == "api.github.com" and os.environ.get("GITHUB_TOKEN"):
+        request.add_header("Authorization", "Bearer " + os.environ["GITHUB_TOKEN"])
+    return urllib.request.build_opener(ReleaseRedirectHandler()).open(request, timeout=120)
 
 
 def open_archive(url):

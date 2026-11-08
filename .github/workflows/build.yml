@@ -125,6 +125,8 @@ jobs:
       - name: Build unsigned IPA
         id: build
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 

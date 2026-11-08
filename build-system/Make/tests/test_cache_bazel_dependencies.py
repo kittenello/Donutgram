@@ -23,7 +23,7 @@ class CacheBazelDependenciesTests(unittest.TestCase):
         self.archives = [("archive.tar.gz", self.digest, "https://example.test/archive")]
 
     def test_verified_download_is_reused_without_network(self):
-        with patch.object(cache.urllib.request, "urlopen", return_value=io.BytesIO(self.content)) as download:
+        with patch.object(cache, "open_archive", return_value=io.BytesIO(self.content)) as download:
             cache.populate(self.directory, self.archives)
             cache.populate(self.directory, self.archives)
         self.assertEqual(download.call_count, 1)
@@ -31,14 +31,14 @@ class CacheBazelDependenciesTests(unittest.TestCase):
         self.assertFalse(list(self.directory.glob("*.part")))
 
     def test_incorrect_checksum_is_not_published(self):
-        with patch.object(cache.urllib.request, "urlopen", return_value=io.BytesIO(b"wrong archive")):
+        with patch.object(cache, "open_archive", return_value=io.BytesIO(b"wrong archive")):
             with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                 cache.populate(self.directory, self.archives)
         self.assertFalse(list(self.directory.iterdir()))
 
     def test_corrupt_cache_is_replaced(self):
         (self.directory / "archive.tar.gz").write_bytes(b"corrupt")
-        with patch.object(cache.urllib.request, "urlopen", return_value=io.BytesIO(self.content)):
+        with patch.object(cache, "open_archive", return_value=io.BytesIO(self.content)):
             cache.populate(self.directory, self.archives)
         self.assertEqual((self.directory / "archive.tar.gz").read_bytes(), self.content)
 
@@ -57,6 +57,11 @@ class CacheBazelDependenciesTests(unittest.TestCase):
                 self.assertEqual(response.read(), self.content)
         self.assertEqual(download.call_args_list[0].args[0], "https://mirror.bazel.build/github.com/owner/repo/releases/download/v1/archive.tar.gz")
         self.assertEqual(download.call_args_list[-1].args[0], "https://api.github.com/repos/owner/repo/releases/assets/123")
+
+    def test_api_token_is_not_forwarded_to_asset_host(self):
+        request = cache.urllib.request.Request("https://api.github.com/repos/owner/repo/releases/assets/123", headers={"Authorization": "Bearer test-only-value"})
+        redirected = cache.ReleaseRedirectHandler().redirect_request(request, None, 302, "Found", {}, "https://release-assets.githubusercontent.com/archive")
+        self.assertIsNone(redirected.get_header("Authorization"))
 
 
 if __name__ == "__main__":
