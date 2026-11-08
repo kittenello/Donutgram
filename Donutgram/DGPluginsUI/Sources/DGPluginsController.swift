@@ -356,6 +356,10 @@ private final class DGPluginPage {
         case "notifications.local": return self.tr("локальные уведомления", "local notifications")
         case "files.userSelected": return self.tr("выбранный вами файл", "file you choose")
         case "messages.compose": return self.tr("подготовка сообщения", "prepare a message")
+        case "messages.send": return self.tr("отправка без дополнительного подтверждения", "send without an additional confirmation")
+        case "messages.edit": return self.tr("редактирование выбранных сообщений", "edit selected messages")
+        case "messages.delete": return self.tr("удаление выбранных сообщений у всех", "delete selected messages for everyone")
+        case "messages.intercept": return self.tr("изменение текста перед отправкой", "change text before sending")
         case "messages.sendInteractive": return self.tr("отправка с вашим подтверждением", "send with your confirmation")
         default: return capability
         }

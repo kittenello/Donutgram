@@ -131,10 +131,11 @@ public enum DGPluginInstaller {
             "storage.local": ["pluginAccount"], "network.public": ["declaredOrigins"],
             "translation.request": ["selectedText"], "navigation.open": ["safeScreens"],
             "notifications.local": ["pluginAccount"], "files.userSelected": ["selectedFile"],
-            "messages.compose": ["chosenRecipient"], "messages.sendInteractive": ["chosenRecipient"]
+            "messages.compose": ["chosenRecipient"], "messages.sendInteractive": ["chosenRecipient"],
+            "messages.send": ["chosenRecipient"], "messages.edit": ["selectedMessages"], "messages.delete": ["selectedMessages"], "messages.intercept": ["activeComposer"]
         ]
         guard scopes[permission.capability]?.contains(permission.scope) == true, (1 ... 512).contains(permission.reason.count), permission.origins.count <= 16, Set(permission.origins).count == permission.origins.count else { throw self.error("invalid_permissions", "invalid capability or scope") }
-        let privateCapabilities: Set<String> = ["composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "files.userSelected", "messages.compose", "messages.sendInteractive", "translation.request", "ui.transform"]
+        let privateCapabilities: Set<String> = ["composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "files.userSelected", "messages.compose", "messages.sendInteractive", "messages.send", "messages.edit", "messages.delete", "messages.intercept", "translation.request", "ui.transform"]
         if profile == "publicNetwork", privateCapabilities.contains(permission.capability) { throw self.error("invalid_profile", "public-network plugins cannot access private data") }
         if permission.capability == "network.public" {
             guard profile == "publicNetwork", !permission.origins.isEmpty else { throw self.error("invalid_profile", "network access needs publicNetwork profile") }

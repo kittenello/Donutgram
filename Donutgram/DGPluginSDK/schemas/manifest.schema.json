@@ -198,7 +198,11 @@
             "notifications.local",
             "files.userSelected",
             "messages.compose",
-            "messages.sendInteractive"
+            "messages.sendInteractive",
+            "messages.send",
+            "messages.edit",
+            "messages.delete",
+            "messages.intercept"
           ]
         },
         "scope": {
@@ -545,6 +549,78 @@
               "scope": {
                 "enum": [
                   "chosenRecipient"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "messages.send"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "chosenRecipient"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "messages.edit"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "selectedMessages"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "messages.delete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "selectedMessages"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "messages.intercept"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "activeComposer"
                 ]
               }
             }

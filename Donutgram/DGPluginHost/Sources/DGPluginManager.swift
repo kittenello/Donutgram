@@ -76,6 +76,11 @@ private struct DGPluginRegisteredTransform {
     let priority: Int
 }
 
+private final class DGPluginOutgoingOperation {
+    var finished = false
+    var activeInstallation: String?
+}
+
 private final class DGPluginPendingTransform {
     let registrationId: String
     let slot: String
@@ -403,6 +408,79 @@ public final class DGPluginManager {
 
     public func releaseNativeResource(installationId: String, token: UUID) {
         coordinator.queue.async { self.executions[installationId]?.nativeCleanup.removeValue(forKey: token) }
+    }
+
+    public var interceptsOutgoingMessages: Bool {
+        return coordinator.queue.sync { !self.outgoingRegistrations().isEmpty }
+    }
+
+    private func outgoingRegistrations() -> [(String, DGPluginExecution, DGPluginRegisteredTransform)] {
+        return executions.flatMap { id, execution -> [(String, DGPluginExecution, DGPluginRegisteredTransform)] in
+            guard execution.state == .running, current(id, execution.generation),
+                  let record = coordinator.state.installations.first(where: { $0.id == id }),
+                  account(record).grants.contains(where: { $0.capability == "messages.intercept" && $0.scope == "activeComposer" }) else { return [] }
+            return execution.transforms.values.filter { $0.slot == "outgoing" }.map { (id, execution, $0) }
+        }.sorted { ($0.2.priority, $0.0, $0.2.id) < ($1.2.priority, $1.0, $1.2.id) }
+    }
+
+    public func interceptOutgoingText(_ text: String, completion: @escaping (Result<String?, DGPluginError>) -> Void) {
+        coordinator.queue.async {
+            let operation = DGPluginOutgoingOperation()
+            let finish: (Result<String?, DGPluginError>) -> Void = { result in
+                guard !operation.finished else { return }
+                operation.finished = true
+                DispatchQueue.main.async { completion(result) }
+            }
+            do {
+                let input = try DGPluginOutgoingMessage.input(text)
+                self.applyOutgoingInterceptors(self.outgoingRegistrations(), index: 0, input: input, operation: operation) { result in
+                    switch result {
+                    case let .success(value): finish(.success(value.objectValue?["cancelled"] == .bool(true) ? nil : value.objectValue?["text"]?.stringValue))
+                    case let .failure(error): finish(.failure(error))
+                    }
+                }
+                self.coordinator.queue.asyncAfter(deadline: .now() + 3) {
+                    guard !operation.finished else { return }
+                    finish(.failure(DGPluginError(code: "timeout", message: "outgoing plugin processing timed out; the draft was kept")))
+                    if let id = operation.activeInstallation { self.fail(id: id, message: "outgoing message handler timed out") }
+                }
+            } catch { finish(.failure(self.pluginError(error))) }
+        }
+    }
+
+    private func applyOutgoingInterceptors(_ registrations: [(String, DGPluginExecution, DGPluginRegisteredTransform)], index: Int, input: DGPluginJSON, operation: DGPluginOutgoingOperation, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) {
+        guard !operation.finished else { return }
+        guard index < registrations.count, input.objectValue?["cancelled"] != .bool(true) else { completion(.success(input)); return }
+        let (id, execution, registration) = registrations[index]
+        guard current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing", !execution.busy else { completion(.failure(DGPluginError(code: "busy", message: "outgoing plugin is unavailable; retry sending the draft"))); return }
+        operation.activeInstallation = id
+        let requestId = UUID().uuidString.lowercased()
+        let pending = DGPluginPendingTransform(registrationId: registration.id, slot: "outgoing", input: input)
+        execution.pendingTransforms[requestId] = pending
+        execution.busy = true
+        let payload = DGPluginJSON.object(["id": .string(registration.id), "requestId": .string(requestId), "input": input])
+        guard let bytes = try? JSONEncoder().encode(payload), let json = String(data: bytes, encoding: .utf8) else {
+            execution.busy = false
+            execution.pendingTransforms.removeValue(forKey: requestId)
+            completion(.failure(DGPluginError(code: "invalid_argument", message: "outgoing message could not be encoded")))
+            return
+        }
+        execution.runtime?.dispatch(kind: "transform", payloadJSON: json) { outcome in
+            self.coordinator.queue.async {
+                execution.busy = false
+                execution.pendingTransforms.removeValue(forKey: requestId)
+                guard !operation.finished else { return }
+                guard self.current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing" else { completion(.failure(DGPluginError(code: "cancelled", message: "outgoing plugin permission changed"))); return }
+                guard case .success = outcome, let result = pending.result else {
+                    self.fail(id: id, message: "outgoing message handler failed")
+                    completion(.failure(DGPluginError(code: "runtime_error", message: "outgoing plugin failed; the draft was kept")))
+                    return
+                }
+                self.applyOutgoingInterceptors(registrations, index: index + 1, input: result, operation: operation, completion: completion)
+                self.refreshDeferredViewModels()
+                self.drainEvents(id: id)
+            }
+        }
     }
 
     public func transformedViewModel(slot: String, input: DGPluginJSON, update: @escaping () -> Void) -> DGPluginJSON {
@@ -1010,20 +1088,23 @@ public final class DGPluginManager {
         case "ui.command.unregister":
             guard let id = arguments["id"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected command id") }
             execution.commands.removeAll { $0.id == id }; coordinator.publishAll(); return .null
-        case "ui.transform.register":
-            guard Set(arguments.keys).isSubset(of: ["id", "slot", "priority"]), let id = arguments["id"]?.dgString, id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil, let slot = arguments["slot"]?.dgString, ["profile", "chatList", "displayLinks"].contains(slot), account.grants.contains(where: { $0.capability == "ui.transform" && $0.scope == slot }), execution.transforms.count < 8 || execution.transforms[id] != nil else { throw DGPluginError(code: "scope_denied", message: "invalid or ungranted local transform slot") }
+        case "ui.transform.register", "messages.interceptor.register":
+            let outgoing = method == "messages.interceptor.register"
+            let allowedSlots = outgoing ? ["outgoing"] : ["profile", "chatList", "displayLinks"]
+            let transformCapability = outgoing ? "messages.intercept" : "ui.transform"
+            guard Set(arguments.keys).isSubset(of: ["id", "slot", "priority"]), let id = arguments["id"]?.dgString, id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil, let slot = arguments["slot"]?.dgString, allowedSlots.contains(slot), account.grants.contains(where: { $0.capability == transformCapability && $0.scope == (outgoing ? "activeComposer" : slot) }), execution.transforms.count < 8 || execution.transforms[id] != nil else { throw DGPluginError(code: "scope_denied", message: "invalid or ungranted local transform slot") }
             guard slot != "displayLinks" else { throw DGPluginError(code: "feature_unavailable", message: "displayed-link transforms have no native screen adapter in this client") }
             let priority = arguments["priority"]?.dgNumber ?? 0
             guard priority.isFinite, priority.rounded() == priority, abs(priority) <= 100, arguments["priority"] == nil || arguments["priority"]?.dgNumber != nil else { throw DGPluginError(code: "invalid_argument", message: "invalid transform priority") }
             execution.transforms[id] = DGPluginRegisteredTransform(id: id, slot: slot, priority: Int(priority))
             invalidateViewModels(); coordinator.publishAll(); return .string(id)
-        case "ui.transform.unregister":
+        case "ui.transform.unregister", "messages.interceptor.unregister":
             guard Set(arguments.keys) == ["id"], let id = arguments["id"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected transform id") }
             execution.transforms.removeValue(forKey: id)
             invalidateViewModels(); coordinator.publishAll(); return .null
-        case "ui.transform.result":
-            guard Set(arguments.keys) == ["requestId", "value"], let id = arguments["requestId"]?.dgString, let pending = execution.pendingTransforms[id], pending.result == nil, execution.transforms[pending.registrationId] != nil, account.grants.contains(where: { $0.capability == "ui.transform" && $0.scope == pending.slot }), let patch = arguments["value"] else { throw DGPluginError(code: "stale_handle", message: "transform request is no longer current") }
-            pending.result = try DGPluginViewTransform.apply(slot: pending.slot, input: pending.input, patch: patch)
+        case "ui.transform.result", "messages.interceptor.result":
+            guard Set(arguments.keys) == ["requestId", "value"], let id = arguments["requestId"]?.dgString, let pending = execution.pendingTransforms[id], pending.result == nil, execution.transforms[pending.registrationId] != nil, ((method == "messages.interceptor.result" && pending.slot == "outgoing" && account.grants.contains(where: { $0.capability == "messages.intercept" && $0.scope == "activeComposer" })) || (method == "ui.transform.result" && pending.slot != "outgoing" && account.grants.contains(where: { $0.capability == "ui.transform" && $0.scope == pending.slot }))), let patch = arguments["value"] else { throw DGPluginError(code: "stale_handle", message: "transform request is no longer current") }
+            pending.result = try pending.slot == "outgoing" ? DGPluginOutgoingMessage.apply(input: pending.input, patch: patch) : DGPluginViewTransform.apply(slot: pending.slot, input: pending.input, patch: patch)
             return .null
         case "events.subscribe":
             guard let name = arguments["name"]?.dgString, ["plugin.activated", "app.foreground", "account.contextChanged", "theme.changed", "locale.changed", "chat.opened", "chat.closed", "message.observed", "composer.changed"].contains(name), execution.subscriptions.count < 16 else { throw DGPluginError(code: "feature_unavailable", message: "event is not available") }

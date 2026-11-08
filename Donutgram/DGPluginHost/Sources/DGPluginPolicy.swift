@@ -37,6 +37,10 @@ public enum DGPluginPolicy {
         add(["navigation.open"], "navigation.open", "safeScreens", gesture: true)
         add(["notifications.local"], "notifications.local", "pluginAccount", gesture: true)
         add(["files.pick", "files.read"], "files.userSelected", "selectedFile", gesture: true)
+        add(["messages.send"], "messages.send", "chosenRecipient")
+        add(["messages.edit"], "messages.edit", "selectedMessages")
+        add(["messages.delete"], "messages.delete", "selectedMessages")
+        add(["messages.interceptor.register", "messages.interceptor.unregister", "messages.interceptor.result"], "messages.intercept", "activeComposer")
         add(["messages.compose"], "messages.compose", "chosenRecipient", gesture: true)
         add(["messages.prepare", "messages.sendInteractive"], "messages.sendInteractive", "chosenRecipient", gesture: true)
         add(["ui.transform.register", "ui.transform.unregister", "ui.transform.result"], "ui.transform", nil)
@@ -49,7 +53,7 @@ public enum DGPluginPolicy {
 
     public static func validateProfile(_ manifest: DGPluginManifest) throws {
         let permissions = manifest.permissions + manifest.optionalPermissions
-        let privateCapabilities: Set<String> = ["composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "messages.compose", "messages.sendInteractive", "files.userSelected", "translation.request", "ui.transform"]
+        let privateCapabilities: Set<String> = ["composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "messages.compose", "messages.sendInteractive", "messages.send", "messages.edit", "messages.delete", "messages.intercept", "files.userSelected", "translation.request", "ui.transform"]
         if manifest.profile == "localPrivate" {
             guard !permissions.contains(where: { $0.capability == "network.public" || $0.capability == "notifications.local" }) else {
                 throw DGPluginError(code: "permission_denied", message: "private plugins cannot request public network access")

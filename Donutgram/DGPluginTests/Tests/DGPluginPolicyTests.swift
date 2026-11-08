@@ -9,8 +9,25 @@ final class DGPluginPolicyTests: XCTestCase {
     }
 
     func testForbiddenEffectsHaveNoMethodRule() {
-        for method in ["account.logout", "account.delete", "sessions.terminate", "auth.getKey", "keychain.read", "payments.transfer", "stars.spend", "gifts.transfer", "messages.delete", "messages.send", "rawRequest", "runNative", "objc.invoke", "postbox.get", "permissions.grant", "plugins.install"] {
+        for method in ["account.logout", "account.delete", "sessions.terminate", "auth.getKey", "keychain.read", "payments.transfer", "stars.spend", "gifts.transfer", "rawRequest", "runNative", "objc.invoke", "postbox.get", "permissions.grant", "plugins.install"] {
             XCTAssertNil(DGPluginPolicy.methods[method], method)
+        }
+    }
+
+    func testMessageAutomationNeedsDistinctPrivatePermissions() throws {
+        for (method, capability, scope) in [("messages.send", "messages.send", "chosenRecipient"), ("messages.edit", "messages.edit", "selectedMessages"), ("messages.delete", "messages.delete", "selectedMessages"), ("messages.interceptor.register", "messages.intercept", "activeComposer")] {
+            XCTAssertEqual(DGPluginPolicy.methods[method]?.capability, capability)
+            XCTAssertEqual(DGPluginPolicy.methods[method]?.scope, scope)
+            XCTAssertEqual(DGPluginPolicy.methods[method]?.requiresGesture, false)
+            let permission = DGPluginPermission(capability: capability, scope: scope, reason: "message automation")
+            XCTAssertThrowsError(try DGPluginPolicy.validateProfile(self.manifest(profile: "publicNetwork", permissions: [permission])))
+            XCTAssertNoThrow(try DGPluginPolicy.validateProfile(self.manifest(permissions: [permission])))
+        }
+        let input = try DGPluginOutgoingMessage.input(".testdonut")
+        XCTAssertEqual(try DGPluginOutgoingMessage.apply(input: input, patch: .object(["text": .string("replacement")])), .object(["text": .string("replacement"), "cancelled": .bool(false)]))
+        XCTAssertEqual(try DGPluginOutgoingMessage.apply(input: input, patch: .object(["cancel": .bool(true)])), .object(["text": .string(".testdonut"), "cancelled": .bool(true)]))
+        for patch: DGPluginJSON in [.object(["text": .number(1)]), .object(["text": .string("")]), .object(["cancel": .string("yes")]), .object(["recipient": .string("forged")]), .object(["text": .string(String(repeating: "a", count: 4097))])] {
+            XCTAssertThrowsError(try DGPluginOutgoingMessage.apply(input: input, patch: patch))
         }
     }
 

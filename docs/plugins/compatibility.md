@@ -8,7 +8,7 @@ runtime uses the vendored quickjs-ng fork. the lock hashes its actual source fil
 |---|---|
 | interpreter limits and callbacks | compiled native c/c++ fixtures against the real vendored quickjs engine on windows |
 | static authoring tools | 26 python tests for parser, manifest/profile policy, zip paths/links/header mismatches, quotas, canonical vectors, deterministic packaging, wrappers, unavailable contracts and examples |
-| example logic | seven packaged examples exercised through node development fixtures, including native controls, public-response parsing and local transform patches |
+| example logic | eight packaged examples exercised through node development fixtures, including native controls, public-response parsing and local transform patches |
 | pure model/installer/runtime/host | actual production Windows libraries and portable workflows compiled/executed; no types-only installer/runtime stub in those checks |
 | native page schema | actual Foundation-only schema compiled on Windows and passed 35 shared fixtures; sdk validator checks the same cases; UIKit rendering remains separate |
 | Apple CryptoKit/ImageIO and native TLS | Apple platform branches require separate Apple-host compilation and integration; Windows signed packages fail explicitly when verification is unavailable |

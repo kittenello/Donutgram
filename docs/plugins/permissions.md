@@ -21,6 +21,10 @@ all grants belong to an installation and account. declaration is not consent. re
 | translation | translation.request / selectedText | native user action; exact current selection and named Telegram service consent |
 | compose draft | messages.compose / chosenRecipient | native user action; review in the ordinary composer, no send |
 | prepare/send interactively | messages.sendInteractive / chosenRecipient | native user action; immutable native content/recipient preview, one-use scoped token; paid recipients denied |
+| send directly | messages.send / chosenRecipient | separately granted automation; active native chat, ordinary unpaid text, no per-message preview |
+| edit selected message | messages.edit / selectedMessages | selected native message or owned expiring handle; fresh message and native edit rights checked |
+| delete selected message for everyone | messages.delete / selectedMessages | selected native message or owned expiring handle; current deleteGlobally rights required, no local-only fallback |
+| outgoing text interception | messages.intercept / activeComposer | beforeSend replacement/cancellation before normal enqueue; draft/chat comparison and bounded asynchronous processing |
 | native page / raster | ui.contribute / settings | one owned active page, generation-bound callbacks and installed raster handles; no URLs/HTML |
 | local transforms | ui.transform / profile or chatList | localPrivate; validated empty-pane/nonpinned models, cached patches, generation invalidation |
 | display-link transform | ui.transform / displayLinks | reserved schema/validator contract; registration unavailable until a native renderer is attached |
@@ -28,7 +32,7 @@ all grants belong to an installation and account. declaration is not consent. re
 
 localPrivate plugins cannot request generic public network. publicNetwork plugins cannot request private composer, selection, message, contact or file data. these restrictions apply to optional declarations as well. a selected-text external integration needs its own native confirmed-disclosure action; granting network access is not that confirmation.
 
-javascript request envelopes carry id, method and params. extra pluginId, accountId, publisher, permissions or userConfirmed fields are not authority. raw protocol requests, selectors, native references, keychain, authorization, session management, paid operations, asset transfer, message deletion and moderation have no registry entry.
+javascript request envelopes carry id, method and params. extra pluginId, accountId, publisher, permissions or userConfirmed fields are not authority. raw protocol requests, selectors, native references, keychain, authorization, session management, paid operations, asset transfer and general moderation have no registry entry. selected-message deletion is an explicit separate grant and uses native Telegram rights.
 
 the capabilities registry reports implementation availability rather than returning invented success. the result is advisory and does not replace consent or per-call checks. screen-dependent methods may still return unavailable or null when the required native screen is absent. an app-owned adapter receives a cancellation/validity closure; it must recheck immediately before side effects. javascript cannot create that closure or extend its lifetime. a successfully returned promise does not grant future access.
 

@@ -20,6 +20,7 @@ private final class DGPluginAdditionalState {
     var files: [String: (scope: String, text: String, expires: TimeInterval)] = [:]
     var picker: DGPluginTextPicker?
     var ownedScopes = Set<String>()
+    var messages: [String: (scope: String, message: EngineMessage, expires: TimeInterval)] = [:]
 }
 
 private final class DGPluginTextPicker: NSObject, UIDocumentPickerDelegate {
@@ -96,7 +97,7 @@ extension ChatControllerImpl {
     }
 
     func dgHandleAdditionalPluginRequest(installationId: String, method: String, params: DGPluginJSON, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Bool {
-        let supported: Set<String> = ["messages.read", "chats.metadata", "peers.read", "navigation.open", "notifications.local", "files.pick", "files.read", "messages.prepare", "messages.sendInteractive", "messages.compose", "translation.request"]
+        let supported: Set<String> = ["messages.read", "messages.send", "messages.edit", "messages.delete", "chats.metadata", "peers.read", "navigation.open", "notifications.local", "files.pick", "files.read", "messages.prepare", "messages.sendInteractive", "messages.compose", "translation.request"]
         guard supported.contains(method) else { return false }
         let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
         guard let scope = manager.nativeScope(installationId: installationId), validity(), isNodeLoaded, view.window != nil else { completion(.failure(DGPluginError(code: "cancelled", message: "native context is no longer active"))); return true }
@@ -107,6 +108,7 @@ extension ChatControllerImpl {
                 guard let self else { return }
                 self.dgAdditionalPluginState.actions.removeAll(scope: scope)
                 self.dgAdditionalPluginState.files = self.dgAdditionalPluginState.files.filter { $0.value.scope != scope }
+                self.dgAdditionalPluginState.messages = self.dgAdditionalPluginState.messages.filter { $0.value.scope != scope }
                 self.dgAdditionalPluginState.ownedScopes.remove(scope)
             }) != nil else { completion(.failure(DGPluginError(code: "quota_exceeded", message: "native scope resource limit reached"))); return true }
             dgAdditionalPluginState.ownedScopes.insert(scope)
@@ -115,7 +117,12 @@ extension ChatControllerImpl {
             switch method {
             case "messages.read":
                 guard arguments.isEmpty, let message = dgPluginChatState.selectedMessages[installationId], dgPluginSafeMessage(message) else { throw DGPluginError(code: "scope_denied", message: "choose one eligible message using its native plugin action") }
-                let snapshot = DGPluginJSON.object(["handle": .string(UUID().uuidString.lowercased()), "text": .string(message.text), "timestamp": .number(Double(message.timestamp)), "entities": .array([]), "entitiesComplete": .bool(false), "mediaComplete": .bool(false)])
+                let now = ProcessInfo.processInfo.systemUptime
+                dgAdditionalPluginState.messages = dgAdditionalPluginState.messages.filter { $0.value.expires >= now }
+                guard dgAdditionalPluginState.messages.count < 64 else { throw DGPluginError(code: "quota_exceeded", message: "too many message handles") }
+                let handle = UUID().uuidString.lowercased()
+                dgAdditionalPluginState.messages[handle] = (scope, message, now + 60)
+                let snapshot = DGPluginJSON.object(["handle": .string(handle), "text": .string(message.text), "timestamp": .number(Double(message.timestamp)), "entities": .array([]), "entitiesComplete": .bool(false), "mediaComplete": .bool(false)])
                 manager.emitNativeEvent(name: "message.observed", payload: snapshot, installationId: installationId)
                 completion(.success(.array([snapshot])))
             case "chats.metadata":
@@ -158,6 +165,8 @@ extension ChatControllerImpl {
                 completion(.success(.object(["text": .string(file.text), "encoding": .string("utf8")])))
             case "messages.prepare", "messages.compose", "messages.sendInteractive":
                 try dgPluginMessageAction(installationId: installationId, scope: scope, method: method, arguments: arguments, pluginName: pluginName, validity: validity, completion: completion)
+            case "messages.send", "messages.edit", "messages.delete":
+                try dgPluginDirectMessageAction(installationId: installationId, scope: scope, method: method, arguments: arguments, validity: validity, completion: completion)
             case "translation.request":
                 guard Set(arguments.keys).isSubset(of: ["targetLanguage", "text"]), let language = arguments["targetLanguage"]?.stringValue, language.range(of: "^[A-Za-z]{2,3}(-[A-Za-z]{2,8})?$", options: .regularExpression) != nil, let text = dgPluginSelectedText(installationId: installationId), !text.isEmpty, text.utf16.count <= 4096, arguments["text"] == nil || arguments["text"] == .string(text) else { throw DGPluginError(code: "scope_denied", message: "translation requires the exact native text selection") }
                 dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: "telegram translation · " + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
@@ -217,6 +226,72 @@ extension ChatControllerImpl {
         guard token != nil else { finish(.failure(DGPluginError(code: "quota_exceeded", message: "native action resource limit reached"))); return }
         present(controller, in: .window(.root))
         DispatchQueue.main.asyncAfter(deadline: .now() + 45) { finish(.failure(DGPluginError(code: "timeout", message: "native confirmation expired"))) }
+    }
+
+    private func dgPluginDirectMessageAction(installationId: String, scope: String, method: String, arguments: [String: DGPluginJSON], validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) throws {
+        guard dgPluginSafeComposer(), let peerId = chatLocation.peerId else { throw DGPluginError(code: "scope_denied", message: "an active chat is required") }
+        let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
+        let threadId = chatLocation.threadId
+        let current = { [weak self] in
+            guard let self else { return false }
+            return validity() && self.dgPluginSafeComposer() && self.chatLocation.peerId == peerId && self.chatLocation.threadId == threadId
+        }
+        let text = arguments["text"]?.stringValue
+        if method != "messages.delete" {
+            guard let text, !text.isEmpty, text.utf16.count <= 4096 else { throw DGPluginError(code: "invalid_argument", message: "expected ordinary message text") }
+        }
+        let messageId: EngineMessage.Id?
+        if method == "messages.send" {
+            guard Set(arguments.keys) == ["text"], presentationInterfaceState.sendPaidMessageStars == nil else { throw DGPluginError(code: "permission_denied", message: "only ordinary unpaid text can be sent") }
+            messageId = nil
+        } else {
+            guard Set(arguments.keys).isSubset(of: method == "messages.edit" ? ["handle", "text"] : ["handle"]) else { throw DGPluginError(code: "invalid_argument", message: "unexpected message action parameter") }
+            if let handleValue = arguments["handle"] {
+                guard let handle = handleValue.stringValue, let snapshot = dgAdditionalPluginState.messages[handle],
+                      snapshot.scope == scope, snapshot.message.id.peerId == peerId, snapshot.expires >= ProcessInfo.processInfo.systemUptime else { throw DGPluginError(code: "stale_handle", message: "selected message handle expired") }
+                messageId = snapshot.message.id
+                dgAdditionalPluginState.messages.removeValue(forKey: handle)
+            } else {
+                guard let selected = dgPluginChatState.selectedMessages[installationId], selected.id.peerId == peerId else { throw DGPluginError(code: "scope_denied", message: "select a message using its plugin menu action") }
+                messageId = selected.id
+            }
+        }
+        let disposable = DisposableSet()
+        var token: UUID?
+        var finished = false
+        let finish: (Result<DGPluginJSON, DGPluginError>) -> Void = { result in
+            guard !finished else { return }
+            finished = true
+            disposable.dispose()
+            if let token { manager.releaseNativeResource(installationId: installationId, token: token) }
+            completion(result)
+        }
+        token = manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: {
+            DispatchQueue.main.async { finish(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))) }
+        })
+        guard token != nil else { throw DGPluginError(code: "quota_exceeded", message: "native resource limit reached") }
+        if method == "messages.send", let text {
+            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: text, isCurrent: validity) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+                finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "message was not queued")))
+            }))
+        } else if let messageId {
+            disposable.add((context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: messageId)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] message in
+                guard let self, current(), let message else { finish(.failure(DGPluginError(code: "cancelled", message: "message or chat is no longer available"))); return }
+                if method == "messages.edit", let text {
+                    guard canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message._asMessage()) else { finish(.failure(DGPluginError(code: "permission_denied", message: "telegram does not allow editing this message"))); return }
+                    disposable.add((self.context.engine.messages.requestEditMessage(messageId: messageId, text: text, media: .keep, entities: nil, richText: nil, inlineStickers: [:]) |> deliverOnMainQueue).start(next: { result in
+                        if case let .done(edited) = result { finish(edited ? .success(.object(["status": .string("edited")])) : .failure(DGPluginError(code: "edit_failed", message: "message could not be edited"))) }
+                    }, error: { _ in finish(.failure(DGPluginError(code: "edit_failed", message: "telegram rejected the edit"))) }))
+                } else {
+                    disposable.add((self.context.sharedContext.chatAvailableMessageActions(engine: self.context.engine, accountPeerId: self.context.account.peerId, messageIds: [messageId], keepUpdated: false) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] actions in
+                        guard let self, current(), !actions.disableDelete, actions.options.contains(.deleteGlobally) else { finish(.failure(DGPluginError(code: "permission_denied", message: "telegram does not allow deleting this message for everyone"))); return }
+                        disposable.add((self.context.engine.messages.deleteMessagesInteractively(messageIds: [messageId], type: .forEveryone) |> deliverOnMainQueue).start(completed: {
+                            finish(.success(.object(["status": .string("deletionRequested")])))
+                        }))
+                    }))
+                }
+            }))
+        }
     }
 
     private func dgPluginMessageAction(installationId: String, scope: String, method: String, arguments: [String: DGPluginJSON], pluginName: String, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) throws {

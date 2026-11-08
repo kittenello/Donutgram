@@ -20,6 +20,22 @@ tool = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tool)
 
 class SDKTests(unittest.TestCase):
+    def test_message_automation_uses_separate_grants_and_exact_requests(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            scopes = {"messages.intercept": "activeComposer", "messages.send": "chosenRecipient", "messages.edit": "selectedMessages", "messages.delete": "selectedMessages"}
+            metadata = {"kind": "donutgram.plugin", "schemaVersion": 1, "id": "dev.example.message-tools", "name": "message tools", "version": "1.0.0", "description": "explicit message automation", "apiVersion": "^1.0.0", "permissions": [{"capability": capability, "scope": scope, "reason": "explicit automation"} for capability, scope in scopes.items()]}
+            (target / "manifest.json").write_text(json.dumps(metadata), encoding="utf-8")
+            (target / "main.js").write_text('const _plugin="donutgram"; definePlugin({async activate(api){await api.messages.beforeSend({id:"command"},input=>input.text===".testdonut"?{text:"replacement"}:{});await api.messages.send({text:"sent"});await api.messages.edit({text:"edited"});await api.messages.delete();}});', encoding="utf-8")
+            fixture = {"transforms": [{"id": "command", "input": {"text": ".testdonut", "cancelled": False}, "expectedPatch": {"text": "replacement"}}], "nativeResults": {"messages.send": {"status": "queued"}, "messages.edit": {"status": "edited"}, "messages.delete": {"status": "deletionRequested"}}, "expectedNativeCalls": [{"method": "messages.send", "params": {"text": "sent"}}, {"method": "messages.edit", "params": {"text": "edited"}}, {"method": "messages.delete", "params": {}}]}
+            fixture_path = target / "fixture.json"
+            fixture_path.write_text(json.dumps(fixture), encoding="utf-8")
+            self.assertTrue(tool.mock_test(target, fixture_path)["passed"])
+            metadata["profile"] = "publicNetwork"
+            (target / "manifest.json").write_text(json.dumps(metadata), encoding="utf-8")
+            with self.assertRaises(tool.ValidationError):
+                tool.read_package(target)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.directory = Path(self.temp.name)
@@ -46,7 +62,7 @@ class SDKTests(unittest.TestCase):
         return [("manifest.json", json.dumps(self.manifest)), ("main.js", 'const _plugin = "donutgram"; definePlugin({activate(){}});')]
 
     def test_examples_and_mock_host(self):
-        for name in ["quiet-links", "templates", "selected-text", "public-repository", "native-controls", "profile-empty", "unread-first"]:
+        for name in ["quiet-links", "templates", "selected-text", "public-repository", "native-controls", "profile-empty", "unread-first", "message-tools"]:
             with self.subTest(example=name):
                 metadata, files = tool.read_package(SDK / "examples" / name)
                 self.assertGreater(len(files), 0)

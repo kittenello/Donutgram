@@ -350,6 +350,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     var requestUpdateChatInterfaceState: (ContainedViewLayoutTransition, Bool, (ChatInterfaceState) -> ChatInterfaceState) -> Void = { _, _, _ in }
     var requestUpdateInterfaceState: (ContainedViewLayoutTransition, Bool, (ChatPresentationInterfaceState) -> ChatPresentationInterfaceState) -> Void = { _, _, _ in }
     var sendMessages: ([EnqueueMessage], Bool?, Int32?, Int32?, Bool, Bool) -> Void = { _, _, _, _, _, _ in }
+    var dgInterceptOutgoingSend: ((@escaping () -> Void, @escaping () -> Void) -> Bool)?
     var displayAttachmentMenu: () -> Void = { }
     var paste: (ChatTextInputPanelPasteData) -> Void = { _ in }
     var updateTypingActivity: (Bool) -> Void = { _ in }
@@ -5190,7 +5191,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
 
-    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, completion: @escaping () -> Void = {}) {
+    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, bypassPluginInterception: Bool = false, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
@@ -5198,6 +5199,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         if let richTextInputNode = textInputPanelNode.richTextInputNode, richTextInputNode.isInputFirstResponder {
             richTextInputNode.applyAutocorrection()
+        }
+
+        if !bypassPluginInterception, let intercept = self.dgInterceptOutgoingSend, intercept({ [weak self] in
+            self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, bypassPluginInterception: true, completion: completion)
+        }, completion) {
+            return
         }
         
         var effectivePresentationInterfaceState = self.chatPresentationInterfaceState

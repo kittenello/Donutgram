@@ -30,6 +30,7 @@ create refuses an existing directory. pack writes a deterministic stored zip wit
 - native-controls: demonstrates all supported declarative node families, generation-local callbacks, schema settings, an own-page accent and a packaged raster obtained through an opaque asset handle. changes persist only to the plugin's own settings. its theme permission is limited to localTokens.
 - profile-empty: returns a patch hiding only native profile panes marked empty. no command/contribution permission is needed because it registers only the profile transform.
 - unread-first: sorts nonpinned local chat-list models with unread rows first; an own boolean setting optionally filters read rows. it never changes server folders or pinned rows.
+- message-tools: replaces `.testdonut` before sending and adds clearly named direct-send, edit-selected and delete-selected-for-everyone commands. each effect has its own installation-time permission; native Telegram rights still apply.
 
 command/page examples request the exact `ui.contribute` placement alongside needed data permissions. transform-only examples request the exact `ui.transform` slot, without unrelated commands, storage or network rights. do not copy an incomplete command permission list without its contribution permission. examples rely on the corresponding native adapters and remain subject to client availability and manual ios verification.
 

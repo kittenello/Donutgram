@@ -25,9 +25,10 @@ SCOPES = {
     "storage.local": ["pluginAccount"], "network.public": ["declaredOrigins"],
     "translation.request": ["selectedText"], "navigation.open": ["safeScreens"],
     "notifications.local": ["pluginAccount"], "files.userSelected": ["selectedFile"],
-    "messages.compose": ["chosenRecipient"], "messages.sendInteractive": ["chosenRecipient"]
+    "messages.compose": ["chosenRecipient"], "messages.sendInteractive": ["chosenRecipient"],
+    "messages.send": ["chosenRecipient"], "messages.edit": ["selectedMessages"], "messages.delete": ["selectedMessages"], "messages.intercept": ["activeComposer"]
 }
-PRIVATE = {"composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "files.userSelected", "messages.compose", "messages.sendInteractive", "translation.request", "ui.transform"}
+PRIVATE = {"composer.read", "composer.transform", "messages.selection.read", "messages.read", "chats.metadata.read", "peers.read", "files.userSelected", "messages.compose", "messages.sendInteractive", "messages.send", "messages.edit", "messages.delete", "messages.intercept", "translation.request", "ui.transform"}
 FIELDS = {"kind", "schemaVersion", "id", "name", "version", "description", "author", "apiVersion", "minClientVersion", "entry", "icon", "permissions", "optionalPermissions", "settingsSchema", "profile", "changelog"}
 AVAILABLE = ["commands", "events", "storage", "settings", "capabilities", "environment", "composer", "selection", "theme", "ui", "network", "messages", "chats", "peers", "navigation", "notifications", "files", "translation", "assets", "actions.messages", "transforms"]
 UI_TYPES = {"section", "text", "markdown", "list", "button", "toggle", "input", "multiline", "select", "slider", "stepper", "image"}

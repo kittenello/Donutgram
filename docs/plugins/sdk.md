@@ -42,6 +42,20 @@ theme.contribute accepts exactly `{accent:"blue"|"green"|"purple"|"orange"}` und
 
 replace using `{composer:draft.handle,expectedRevision:draft.revision,range:{start,end},text}`. the optional range defaults to the captured selection. this edits the local composer through the native adapter; it does not send a message. the host compares the current draft before committing, and a stale handle/revision must fail. selection snapshots have `{text,source,entities,entitiesComplete:false}`; source is composer or message.
 
+## message automation
+
+`api.messages.beforeSend({id,priority?}, handler)` registers an outgoing ordinary-text handler with the separate `messages.intercept / activeComposer` permission. it receives `{text,cancelled:false}` and returns `{}`, `{text:"replacement"}`, or `{cancel:true}`. replacement text is plain text, at most4096 UTF-16 units. callbacks run in deterministic priority order before the normal send pipeline; cancellation stops the chain. media-only, oversized and non-text-rich drafts are outside this hook. edited-message submission does not run it. the normal reply, scheduling, silent-posting and payment flows continue after a valid replacement.
+
+the native draft is compared before replacement and again before resuming the send. changes to the draft, chat or thread cancel the pending send. errors, busy handlers, revocation and a three-second processing deadline keep the draft rather than sending the original command. handler callbacks do not manufacture a general native user gesture.
+
+`api.messages.send({text})` uses `messages.send / chosenRecipient` to enqueue ordinary unpaid text in the active native chat, without an additional per-message dialog. installation/permission review remains required. the older prepare/sendInteractive API still presents its own preview. direct sends return `{status:"queued"}`, not proof of server delivery, and do not recursively run the outgoing draft hook.
+
+`api.messages.edit({text,handle?})` and `api.messages.delete({handle?})` require separate `messages.edit / selectedMessages` and `messages.delete / selectedMessages` permissions. omit the handle only inside the selected message's native plugin-menu command. alternatively, use a runtime-owned handle returned by messages.read; it expires after60seconds and is consumed by one mutation. message reads still need their own read permission. acting on an already-selected message does not export protected text to the plugin.
+
+editing re-fetches the message and checks Telegram's native edit rules before replacing its text/caption. deletion checks the current native delete-for-everyone option, including administrative rights, and never silently falls back to local deletion. it can delete another author's message when the account has that right. edit returns `{status:"edited"}` after a successful edit response; deletion returns `{status:"deletionRequested"}` after queueing the native operation. these permissions do not grant arbitrary history enumeration, peer lookup, raw protocols or paid actions. all remain localPrivate-only and unavailable with publicNetwork.
+
+the message-tools example replaces `.testdonut` before sending and demonstrates clearly named native commands for direct send, edit and delete. native UI/server acceptance still requires device testing.
+
 ## native pages
 
 `const change = api.ui.callback(async value => { ... })` creates an owned runtime callback and returns `{id,dispose()}`; callback disposal is synchronous. put `change.id` in a node's callbackId. `await api.ui.render({id,title,nodes})` uses the native renderer and rejects when unavailable. callback delivery is bound to the native installation and runtime generation, not an id supplied by another plugin.

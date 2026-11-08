@@ -51,7 +51,13 @@ const rules = {
   'translation.request': ['translation.request', 'selectedText', true],
   'messages.prepare': ['messages.sendInteractive', 'chosenRecipient', true],
   'messages.sendInteractive': ['messages.sendInteractive', 'chosenRecipient', true],
-  'messages.compose': ['messages.compose', 'chosenRecipient', true]
+  'messages.compose': ['messages.compose', 'chosenRecipient', true],
+  'messages.send': ['messages.send', 'chosenRecipient'],
+  'messages.edit': ['messages.edit', 'selectedMessages'],
+  'messages.delete': ['messages.delete', 'selectedMessages'],
+  'messages.interceptor.register': ['messages.intercept', 'activeComposer'],
+  'messages.interceptor.unregister': ['messages.intercept', 'activeComposer'],
+  'messages.interceptor.result': ['messages.intercept', 'activeComposer']
 };
 function requireHost(condition, code) { if (!condition) throw Object.assign(new Error(code), {code}); }
 function validatePage(page) {
@@ -94,15 +100,16 @@ function host(method, params) {
     assets.set(handle, params.path);
     return handle;
   }
-  if (method === 'ui.transform.register') {
+  if (method === 'ui.transform.register' || method === 'messages.interceptor.register') {
     requireHost(params.slot !== 'displayLinks', 'feature_unavailable');
-    requireHost(grants.some((grant) => grant.capability === 'ui.transform' && grant.scope === params.slot), 'scope_denied');
+    const outgoing = method === 'messages.interceptor.register';
+    requireHost(outgoing ? params.slot === 'outgoing' : grants.some((grant) => grant.capability === 'ui.transform' && grant.scope === params.slot), 'scope_denied');
     requireHost((snapshot.manifest.profile || 'localPrivate') === 'localPrivate' && !transformRegistrations.has(params.id), 'permission_denied');
     transformRegistrations.set(params.id, params);
     return params.id;
   }
-  if (method === 'ui.transform.unregister') { transformRegistrations.delete(params.id); return null; }
-  if (method === 'ui.transform.result') { transformReplies.set(params.requestId, params.value); return null; }
+  if (method === 'ui.transform.unregister' || method === 'messages.interceptor.unregister') { transformRegistrations.delete(params.id); return null; }
+  if (method === 'ui.transform.result' || method === 'messages.interceptor.result') { transformReplies.set(params.requestId, params.value); return null; }
   if (method === 'network.request') {
     requireHost(snapshot.manifest.profile === 'publicNetwork', 'permission_denied');
     requireHost(Object.keys(params).every((key) => ['url', 'method'].includes(key)) && ['GET', 'HEAD'].includes(params.method || 'GET'), 'invalid_argument');
@@ -112,7 +119,7 @@ function host(method, params) {
     networkCalls.push({url: params.url, method: params.method || 'GET'});
     return structuredClone(fixture.responses[params.url]);
   }
-  if (['messages.read', 'chats.metadata', 'peers.read', 'navigation.open', 'notifications.local', 'files.pick', 'files.read', 'translation.request', 'messages.prepare', 'messages.sendInteractive', 'messages.compose'].includes(method)) {
+  if (['messages.read', 'messages.send', 'messages.edit', 'messages.delete', 'chats.metadata', 'peers.read', 'navigation.open', 'notifications.local', 'files.pick', 'files.read', 'translation.request', 'messages.prepare', 'messages.sendInteractive', 'messages.compose'].includes(method)) {
     requireHost(Object.hasOwn(fixture.nativeResults || {}, method), 'feature_unavailable');
     nativeCalls.push({method, params});
     return structuredClone(fixture.nativeResults[method]);

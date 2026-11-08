@@ -47,11 +47,13 @@ export interface TransformInputs {
   profile: {panes: readonly {id: string; empty: boolean}[]};
   chatList: {items: readonly {handle: string; title: string; unread: number; pinned: boolean}[]};
   displayLinks: {items: readonly {handle: string; title: string; url: string}[]};
+  outgoing: {text: string; cancelled: boolean};
 }
 export interface TransformPatches {
   profile: {hide: string[]};
   chatList: {order?: string[]; hidden?: string[]};
   displayLinks: {labels: {handle: string; text: string}[]};
+  outgoing: {text?: string; cancel?: boolean};
 }
 export type TransformSlot = keyof TransformInputs;
 export type PluginPageAccent = "blue" | "green" | "purple" | "orange";
@@ -66,7 +68,13 @@ export interface API {
   selection: {get(): Promise<Selection | null>};
   theme: {get(): Promise<{appearance: "light" | "dark"}>; contribute(params: {accent: PluginPageAccent}): Promise<{accent: PluginPageAccent}>; clear(): Promise<void>};
   network: {request(value: {url: string; method?: "GET" | "HEAD"}): Promise<{url: string; status: number; headers: {[key: string]: string}; body: string}>};
-  messages: {read(params?: Record<string, never>): Promise<SelectedMessage[]>};
+  messages: {
+    read(params?: Record<string, never>): Promise<SelectedMessage[]>;
+    send(params: {text: string}): Promise<{status: "queued"}>;
+    edit(params: {handle?: string; text: string}): Promise<{status: "edited"}>;
+    delete(params?: {handle?: string}): Promise<{status: "deletionRequested"}>;
+    beforeSend(descriptor: {id: string; priority?: number}, handler: (input: Readonly<TransformInputs["outgoing"]>) => TransformPatches["outgoing"] | Promise<TransformPatches["outgoing"]>): Promise<Disposable>;
+  };
   chats: {metadata(params?: Record<string, never>): Promise<{handle: string; title: string; scope: "currentNativeChat"}>};
   peers: {read(params?: Record<string, never>): Promise<{handle: string; title: string}[]>};
   navigation: {open(params: {screen: "plugins"}): Promise<void>};

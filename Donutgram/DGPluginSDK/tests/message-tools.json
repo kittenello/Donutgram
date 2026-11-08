@@ -1,0 +1,17 @@
+{
+  "commands": ["send-example", "edit-selected", "delete-selected"],
+  "nativeResults": {
+    "messages.send": {"status": "queued"},
+    "messages.edit": {"status": "edited"},
+    "messages.delete": {"status": "deletionRequested"}
+  },
+  "expectedNativeCalls": [
+    {"method": "messages.send", "params": {"text": "sent by message tools"}},
+    {"method": "messages.edit", "params": {"text": "edited by message tools"}},
+    {"method": "messages.delete", "params": {}}
+  ],
+  "transforms": [
+    {"id": "testdonut", "input": {"text": ".testdonut", "cancelled": false}, "expectedPatch": {"text": "donutgram plugin works"}},
+    {"id": "testdonut", "input": {"text": "ordinary text", "cancelled": false}, "expectedPatch": {}}
+  ]
+}

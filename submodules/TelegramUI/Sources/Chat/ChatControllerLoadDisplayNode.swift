@@ -1015,6 +1015,10 @@ extension ChatControllerImpl {
             }, messageCorrelationId)
         }
         
+        self.chatDisplayNode.dgInterceptOutgoingSend = { [weak self] resume, cancel in
+            guard let self else { return false }
+            return self.dgPluginInterceptOutgoingSend(resume: resume, cancel: cancel)
+        }
         self.chatDisplayNode.sendMessages = { [weak self] messages, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone in
             guard let strongSelf = self else {
                 return

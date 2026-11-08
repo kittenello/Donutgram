@@ -21,6 +21,7 @@ final class DGPluginChatState {
     var drafts: [String: DGPluginDraftSnapshot] = [:]
     var selectedMessages: [String: EngineMessage] = [:]
     var renderedPages: [String: DGPluginChatRenderedPage] = [:]
+    var outgoingSendPending = false
 }
 
 final class DGPluginChatRenderedPage {
@@ -30,6 +31,52 @@ final class DGPluginChatRenderedPage {
 }
 
 extension ChatControllerImpl {
+    func dgPluginInterceptOutgoingSend(resume: @escaping () -> Void, cancel: @escaping () -> Void) -> Bool {
+        let manager = DGPluginManager.shared(accountKey: String(self.context.account.id.int64))
+        guard manager.interceptsOutgoingMessages, self.dgPluginSafeComposer(), let peerId = self.chatLocation.peerId else { return false }
+        if self.dgPluginChatState.outgoingSendPending { cancel(); return true }
+        let draft = self.chatDisplayNode.textInputPanelNode?.inputTextState ?? self.presentationInterfaceState.interfaceState.effectiveInputState
+        let text = draft.content.plainText
+        guard !text.isEmpty, text.utf16.count <= 4096, draft.content.isEntityExpressible(options: []) else { return false }
+        let threadId = self.chatLocation.threadId
+        self.dgPluginChatState.outgoingSendPending = true
+        self.dgBindChatPlugins()
+        manager.interceptOutgoingText(text) { [weak self] result in
+            guard let self else { cancel(); return }
+            self.dgPluginChatState.outgoingSendPending = false
+            guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
+                  self.presentationInterfaceState.interfaceState.effectiveInputState == draft,
+                  self.chatDisplayNode.textInputPanelNode?.inputTextState == draft else { cancel(); return }
+            switch result {
+            case let .failure(error):
+                self.present(textAlertController(context: self.context, title: "plugin", text: error.code + ": " + error.message, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                cancel()
+            case .success(nil): cancel()
+            case let .success(replacement?):
+                let expected = replacement == text ? draft : draft.replacingFlatRange(NSRange(location: 0, length: (text as NSString).length), with: replacement)
+                if replacement != text {
+                    var applied = false
+                    self.interfaceInteraction?.updateTextInputStateAndMode { current, mode in
+                        guard current == draft else { return (current, mode) }
+                        applied = true
+                        return (expected, mode)
+                    }
+                    guard applied else { cancel(); return }
+                }
+                self.dgPluginChatState.outgoingSendPending = true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { cancel(); return }
+                    self.dgPluginChatState.outgoingSendPending = false
+                    guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
+                          self.presentationInterfaceState.interfaceState.effectiveInputState == expected,
+                          self.chatDisplayNode.textInputPanelNode?.inputTextState == expected else { cancel(); return }
+                    resume()
+                }
+            }
+        }
+        return true
+    }
+
     func dgBindChatPlugins() {
         dgBindPluginAccount(context: self.context)
         let manager = DGPluginManager.shared(accountKey: String(self.context.account.id.int64))
@@ -166,9 +213,15 @@ extension ChatControllerImpl {
     }
 
     func dgPluginMenuItems(placements: Set<String>, message: EngineMessage? = nil) -> [ContextMenuItem] {
-        guard self.dgPluginSafeComposer(), message.map(self.dgPluginSafeMessage) ?? true else { return [] }
+        guard self.dgPluginSafeComposer() else { return [] }
         let manager = DGPluginManager.shared(accountKey: String(self.context.account.id.int64))
-        return manager.commands.filter { placements.contains($0.placement) }.prefix(32).map { command in
+        return manager.commands.filter { command in
+            guard placements.contains(command.placement) else { return false }
+            if let message, !self.dgPluginSafeMessage(message) {
+                return manager.installations.first(where: { $0.id == command.installationId })?.grants.contains(where: { $0.capability == "messages.edit" || $0.capability == "messages.delete" }) == true
+            }
+            return true
+        }.prefix(32).map { command in
             let pluginName = manager.installations.first(where: { $0.id == command.installationId })?.manifest.name ?? "plugin"
             return .action(ContextMenuActionItem(text: command.title + " · " + pluginName, icon: { _ in nil }, action: { [weak self] _, dismiss in
                 dismiss(.default)

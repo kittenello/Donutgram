@@ -4,13 +4,15 @@ the original product task is unfinished. this branch is an implementation checkp
 
 ## implemented source
 
+- separately granted outgoing text replacement/cancellation, direct unpaid text sending without per-message confirmation, selected-message editing and deletion for everyone with Telegram's native rights checks. message-tools demonstrates these APIs; Apple compilation and real server/UI acceptance for this expansion are pending.
+
 - static manifest/document preview without execution; bounded stored/deflated zip reader; Apple Ed25519 verification and optional safe raster decoding; immutable verified package snapshots.
 - separate account/installation quickjs runtimes, capability/profile/scope/gesture checks, exact grants, own storage/settings, cancellation and generation invalidation; at most four running runtimes per account. account switch, backgrounding, power saving, disable and removal stop execution.
 - document-tap native installation review, disabled initial installation, installed list/card, settings, redacted diagnostics, publisher blocking, reset, reviewed updates, previous-version rollback and durable removal/recovery. profile-changing updates are rejected; removal and clean reinstall are required.
 - native composer/selection commands and bounded selected-message/current-chat/selected-author snapshots; selected utf8 files, Telegram translation consent, native ordinary-message preview with single-use recipient-bound confirmation, local notifications and enumerated plugin-settings navigation.
 - public HTTPS GET/HEAD broker with exact origins, validated numeric endpoints, original TLS hostname trust, no redirects, passive bounded responses and cancellation. Apple transport is unavailable on Windows.
 - native declarative pages with twelve node families, owned callbacks, replacement/closure cleanup, installed raster handles and four fixed accents limited to the plugin's own pages. local profile empty-pane hiding and nonpinned chat-list ordering/filtering use typed validated transform patches and cached native results.
-- bounded event envelopes and advertised native event sources; authoring types, strict CLI validators, deterministic packaging and seven example packages with passive development fixtures.
+- bounded event envelopes and advertised native event sources; authoring types, strict CLI validators, deterministic packaging and eight example packages with passive development fixtures.
 
 implementation availability still depends on platform, active native screen and grants. a wrapper or registered method is not proof that an adapter is attached or an effect occurred. displayLinks currently has a reserved schema/pure patch validator only; its registration rejects feature_unavailable until a native renderer exists. unsupported event names reject; arbitrary history/account lookup, external code downloads, raw native protocols and security/payment operations have no API.
 

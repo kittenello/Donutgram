@@ -40,6 +40,74 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         return try DGPluginInstaller.preview(data: Data(source.utf8), fileName: "fixture.donut.js")
     }
 
+    func testOutgoingTextRunsBeforeSendAndCanCancel() throws {
+        let permission = DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "replace a typed command")
+        let package = try self.package(permissions: [permission], body: "await api.messages.beforeSend({id:'text-command'},input=>input.text==='.testdonut'?{text:'replacement'}:input.text==='.cancel'?{cancel:true}:{});")
+        let id = try self.install(package, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        XCTAssertTrue(self.manager.interceptsOutgoingMessages)
+        XCTAssertEqual(try self.result { self.manager.interceptOutgoingText(".testdonut", completion: $0) }.get(), "replacement")
+        XCTAssertNil(try self.result { self.manager.interceptOutgoingText(".cancel", completion: $0) }.get())
+        XCTAssertEqual(try self.result { self.manager.interceptOutgoingText("ordinary", completion: $0) }.get(), "ordinary")
+        try self.result { self.manager.setGrants(id: id, permissions: [], completion: $0) }.get()
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+        XCTAssertEqual(try self.result { self.manager.interceptOutgoingText(".testdonut", completion: $0) }.get(), ".testdonut")
+    }
+
+    func testOutgoingFailureKeepsTheDraftInsteadOfSendingOriginalText() throws {
+        let permission = DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "test a broken interceptor")
+        let package = try self.package(permissions: [permission], body: "await api.messages.beforeSend({id:'broken'},()=>{throw Error('stop')});")
+        let id = try self.install(package, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let result = self.result { self.manager.interceptOutgoingText(".private-command", completion: $0) }
+        if case .success = result { XCTFail("a broken handler must never send the original command") }
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+    }
+
+    func testDirectMessageMethodsNeedGrantsWithoutRequiringAPerMessageGesture() throws {
+        let permissions = [("messages.send", "chosenRecipient"), ("messages.edit", "selectedMessages"), ("messages.delete", "selectedMessages")].map { DGPluginPermission(capability: $0.0, scope: $0.1, reason: "explicit message automation") }
+        var calls: [String] = []
+        self.manager.nativeRequest = { _, method, _, valid, completion in
+            XCTAssertTrue(valid())
+            calls.append(method)
+            completion(.success(.null))
+        }
+        let package = try self.package(permissions: permissions, body: "await api.messages.send({text:'direct'});await api.messages.edit({handle:'selected',text:'edited'});await api.messages.delete({handle:'selected'});")
+        let id = try self.install(package, permissions: permissions)
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        XCTAssertEqual(calls, ["messages.send", "messages.edit", "messages.delete"])
+    }
+
+    func testMessageAutomationCannotBorrowReadOrInteractiveSendGrants() throws {
+        var nativeCalls = 0
+        self.manager.nativeRequest = { _, _, _, _, completion in nativeCalls += 1; completion(.success(.null)) }
+        let permissions = [DGPluginPermission(capability: "messages.read", scope: "selectedChats", reason: "read selected"), DGPluginPermission(capability: "messages.sendInteractive", scope: "chosenRecipient", reason: "review each send")]
+        let package = try self.package(permissions: permissions, body: "for(const attempt of [()=>api.messages.send({text:'denied'}),()=>api.messages.edit({text:'denied'}),()=>api.messages.delete(),()=>api.messages.beforeSend({id:'denied'},()=>({}))]){let denied=false;try{await attempt()}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('message grant bypass')}")
+        let id = try self.install(package, permissions: permissions)
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        XCTAssertEqual(nativeCalls, 0)
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+    }
+
+    func testOutgoingRevocationRejectsDelayedReplacement() throws {
+        let permissions = [DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "delay replacement"), DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "delayed native fixture")]
+        let package = try self.package(permissions: permissions, body: "await api.messages.beforeSend({id:'delayed'},async()=>{await api.ui.toast('wait');return {text:'late'}});")
+        let id = try self.install(package, permissions: permissions)
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let requested = self.expectation(description: "outgoing handler pending")
+        let completed = self.expectation(description: "revoked outgoing handler fails")
+        var reply: ((Result<DGPluginJSON, DGPluginError>) -> Void)?
+        self.manager.nativeRequest = { _, _, _, _, completion in reply = completion; requested.fulfill() }
+        self.manager.interceptOutgoingText("original") { result in
+            if case .success = result { XCTFail("revoked outgoing handler must not resume sending") }
+            completed.fulfill()
+        }
+        self.wait(for: [requested], timeout: 2)
+        try self.result { self.manager.setGrants(id: id, permissions: [], completion: $0) }.get()
+        reply?(.success(.null))
+        self.wait(for: [completed], timeout: 4)
+    }
+
     private func install(_ package: DGVerifiedPluginPackage, permissions: [DGPluginPermission] = []) throws -> String {
         let id = try self.result { self.manager.install(package, completion: $0) }.get()
         self.installedIds.append(id)
