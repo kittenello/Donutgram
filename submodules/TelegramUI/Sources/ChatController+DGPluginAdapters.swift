@@ -271,7 +271,7 @@ extension ChatControllerImpl {
         })
         guard token != nil else { throw DGPluginError(code: "quota_exceeded", message: "native resource limit reached") }
         if method == "messages.send", let text {
-            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: text, isCurrent: validity) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: text, sendAsPeerId: presentationInterfaceState.currentSendAsPeerId, isCurrent: validity) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                 finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "message was not queued")))
             }))
         } else if let messageId {
@@ -315,8 +315,12 @@ extension ChatControllerImpl {
         let text = try store.preview(handle: handle, scope: scope, recipient: recipient)
         let draft = presentationInterfaceState.interfaceState.effectiveInputState
         let threadId = chatLocation.threadId
+        // The identity the user confirms is the one the message is sent with: captured now, not re-read later.
+        let sendAsPeerId = presentationInterfaceState.currentSendAsPeerId
+        let identity = sendAsPeerId.flatMap { id in id == context.account.peerId ? nil : presentationInterfaceState.sendAsPeers?.first(where: { $0.peer.id == id })?.peer.compactDisplayTitle }
         let action = method == "messages.compose" ? "prepare draft" : "send ordinary message"
-        dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
+        let identityText = method == "messages.compose" ? "" : identity.map { " · as " + String($0.prefix(128)) } ?? ""
+        dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + identityText + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
             guard let self, confirmationCurrent(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.dgPluginSafeComposer(), self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "cancelled", message: "recipient, price or account changed"))); return }
             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.SendPaidMessageStars(id: peerId)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] price in
                 guard let self, confirmationCurrent(), price == nil, self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "permission_denied", message: "paid or stale recipient is not allowed"))); return }
@@ -334,7 +338,7 @@ extension ChatControllerImpl {
                         guard applied else { throw DGPluginError(code: "conflict", message: "draft was not changed because the native confirmation became stale") }
                         finish(.success(.object(["status": .string("draftPrepared")])))
                     } else {
-                        let _ = (self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+                        let _ = (self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, sendAsPeerId: sendAsPeerId, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                             finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "ordinary unpaid message was not queued")))
                         })
                     }
