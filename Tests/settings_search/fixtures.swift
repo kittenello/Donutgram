@@ -13,6 +13,7 @@ defer { defaults.removePersistentDomain(forName: suite) }
 
 check(ids("").isEmpty && ids(" \n  ").isEmpty && ids("?!—").isEmpty, "empty queries never return every feature")
 check(ids("zzzxxyy").isEmpty, "unknown query has no results")
+check(ids("плагины") == ["plugins/"] && ids("javascript plugins") == ["plugins/"], "the plugin manager has one searchable section in both languages")
 check(ids("id") == ["profiles/profileId", "profiles/dialogIdFormat", "local-profile/visualId"], "words match from their start: «id» is not in «Hide» or «Video»")
 check(ids("фон") == ["messages/customBackgrounds", "stickers/hideStickerReplyBackground"], "«фон» does not find «телефон» or «микрофон»")
 check(dgSettingsSearchItems(query: "сообщения", hasIsland: true).first?.id == "messages/", "the section a query names comes first")

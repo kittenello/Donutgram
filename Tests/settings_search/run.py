@@ -27,9 +27,12 @@ def prepare():
     controller = (UI / "DGSettingsController.swift").read_text(encoding="utf-8")
     pages = dict(re.findall(r'case (\w+) = "([^"]+)"', links))
     catalog = {}
-    for page, title, rows in re.findall(r'    add\("([^"]+)", "([^"]+)", \[(.*?)\n    \](?:, parent: "[^"]+")?\)', search, re.S):
+    for page, title, rows in re.findall(r'    add\("([^"]+)", "([^"]+)", \[(.*?)\](?:, parent: "[^"]+")?\)', search, re.S):
         assert page not in catalog, page
-        catalog[page] = dict(re.findall(r'\("([^"]+)", "([^"]+)", "[^"]*"\)', rows))
+        entries = re.findall(r'\("([^"]*)", "([^"]+)", "[^"]*"\)', rows)
+        assert all(key for key, _ in entries), (page, "empty row key duplicates the section route")
+        assert len(dict(entries)) == len(entries), (page, "duplicate row keys")
+        catalog[page] = dict(entries)
     # Entries drawn by their own items report a fixed key, such as the speed slider's.
     fixed_keys = dict(re.findall(r'case \.(\w+): return DGSettingItemTag\(key: "([^"]+)"\)', controller))
     page_keys = {}
