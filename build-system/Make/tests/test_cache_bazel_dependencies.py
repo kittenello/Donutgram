@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -20,14 +21,11 @@ class CacheBazelDependenciesTests(unittest.TestCase):
         self.content = b"verified archive"
         self.digest = hashlib.sha256(self.content).hexdigest()
         self.archives = [("archive.tar.gz", self.digest, "https://example.test/archive")]
-        self.patch = patch.object(cache, "ARCHIVES", self.archives)
-        self.patch.start()
-        self.addCleanup(self.patch.stop)
 
     def test_verified_download_is_reused_without_network(self):
         with patch.object(cache.urllib.request, "urlopen", return_value=io.BytesIO(self.content)) as download:
-            cache.populate(self.directory)
-            cache.populate(self.directory)
+            cache.populate(self.directory, self.archives)
+            cache.populate(self.directory, self.archives)
         self.assertEqual(download.call_count, 1)
         self.assertEqual((self.directory / "archive.tar.gz").read_bytes(), self.content)
         self.assertFalse(list(self.directory.glob("*.part")))
@@ -35,14 +33,30 @@ class CacheBazelDependenciesTests(unittest.TestCase):
     def test_incorrect_checksum_is_not_published(self):
         with patch.object(cache.urllib.request, "urlopen", return_value=io.BytesIO(b"wrong archive")):
             with self.assertRaisesRegex(ValueError, "checksum mismatch"):
-                cache.populate(self.directory)
+                cache.populate(self.directory, self.archives)
         self.assertFalse(list(self.directory.iterdir()))
 
     def test_corrupt_cache_is_replaced(self):
         (self.directory / "archive.tar.gz").write_bytes(b"corrupt")
         with patch.object(cache.urllib.request, "urlopen", return_value=io.BytesIO(self.content)):
-            cache.populate(self.directory)
+            cache.populate(self.directory, self.archives)
         self.assertEqual((self.directory / "archive.tar.gz").read_bytes(), self.content)
+
+    def test_tampered_registry_metadata_is_rejected(self):
+        lock = self.directory / "MODULE.bazel.lock"
+        lock.write_text(json.dumps({"registryFileHashes": {"https://example.test/source.json": self.digest}}), encoding="utf-8")
+        with patch.object(cache, "open_url", return_value=io.BytesIO(b"changed metadata")):
+            with self.assertRaisesRegex(ValueError, "registry checksum mismatch"):
+                cache.locked_archives(lock)
+
+    def test_release_api_is_used_when_mirror_is_absent(self):
+        url = "https://github.com/owner/repo/releases/download/v1/archive.tar.gz"
+        metadata = json.dumps({"assets": [{"name": "archive.tar.gz", "url": "https://api.github.com/repos/owner/repo/releases/assets/123"}]}).encode()
+        with patch.object(cache, "open_url", side_effect=[cache.urllib.error.URLError("not mirrored"), io.BytesIO(metadata), io.BytesIO(self.content)]) as download:
+            with cache.open_archive(url) as response:
+                self.assertEqual(response.read(), self.content)
+        self.assertEqual(download.call_args_list[0].args[0], "https://mirror.bazel.build/github.com/owner/repo/releases/download/v1/archive.tar.gz")
+        self.assertEqual(download.call_args_list[-1].args[0], "https://api.github.com/repos/owner/repo/releases/assets/123")
 
 
 if __name__ == "__main__":

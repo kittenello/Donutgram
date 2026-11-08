@@ -1,36 +1,68 @@
 import hashlib
+import base64
+from concurrent.futures import ThreadPoolExecutor
+import json
 import os
 from pathlib import Path
+import re
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 
 
-ARCHIVES = [
-    (
-        "bazel-skylib-1.9.0.tar.gz",
-        "3b5b49006181f5f8ff626ef8ddceaa95e9bb8ad294f7b5d7b11ea9f7ddaf8c59",
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.9.0/bazel-skylib-1.9.0.tar.gz",
-    ),
-    (
-        "rules_rust-0.74.0.tar.gz",
-        "d8bcc1e111e98270dc03172e22ef7af9c2f94f3269801618a2b83d20890f8df5",
-        "https://api.github.com/repos/bazelbuild/rules_rust/releases/assets/534290059",
-    ),
-]
+def open_url(url):
+    accept = "application/octet-stream" if "/releases/assets/" in url else "*/*"
+    request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "donutgram-build"})
+    return urllib.request.urlopen(request, timeout=120)
 
 
-def populate(directory):
+def open_archive(url):
+    release = re.fullmatch(r"https://github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/([^/?]+)", url)
+    if release is None:
+        return open_url(url)
+    try:
+        return open_url(url.replace("https://github.com/", "https://mirror.bazel.build/github.com/", 1))
+    except (urllib.error.URLError, TimeoutError):
+        owner, repository, tag, name = release.groups()
+        with open_url(f"https://api.github.com/repos/{owner}/{repository}/releases/tags/{tag}") as response:
+            metadata = json.load(response)
+        asset = next(asset for asset in metadata["assets"] if asset["name"] == urllib.parse.unquote(name))
+        return open_url(asset["url"])
+
+
+def locked_archives(lock_path):
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+
+    def resolve(item):
+        url, expected = item
+        with open_url(url) as response:
+            content = response.read()
+        if hashlib.sha256(content).hexdigest() != expected:
+            raise ValueError("registry checksum mismatch: " + url)
+        source = json.loads(content)
+        archive_url = source.get("url")
+        if not archive_url or not source["integrity"].startswith("sha256-"):
+            return None
+        digest = base64.b64decode(source["integrity"][7:], validate=True).hex()
+        return Path(urllib.parse.urlparse(archive_url).path).name, digest, archive_url
+
+    sources = [(url, digest) for url, digest in lock["registryFileHashes"].items() if url.endswith("/source.json")]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        return [archive for archive in pool.map(resolve, sources) if archive is not None]
+
+
+def populate(directory, archives):
     directory.mkdir(parents=True, exist_ok=True)
-    for name, expected, url in ARCHIVES:
+    for name, expected, url in archives:
         destination = directory / name
         if destination.is_file() and hashlib.sha256(destination.read_bytes()).hexdigest() == expected:
             print("cached " + name, flush=True)
             continue
         temporary = destination.with_suffix(destination.suffix + ".part")
         try:
-            request = urllib.request.Request(url, headers={"Accept": "application/octet-stream", "User-Agent": "donutgram-build"})
             digest = hashlib.sha256()
-            with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
+            with open_archive(url) as response, temporary.open("wb") as output:
                 while chunk := response.read(1024 * 1024):
                     digest.update(chunk)
                     output.write(chunk)
@@ -43,4 +75,4 @@ def populate(directory):
 
 
 if __name__ == "__main__":
-    populate(Path(sys.argv[1]))
+    populate(Path(sys.argv[1]), locked_archives(Path(__file__).resolve().parents[2] / "MODULE.bazel.lock"))
