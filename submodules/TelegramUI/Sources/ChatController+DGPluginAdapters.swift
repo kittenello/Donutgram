@@ -133,7 +133,7 @@ extension ChatControllerImpl {
                 completion(.success(.array([.object(["handle": .string(UUID().uuidString.lowercased()), "title": .string(String(author.debugDisplayTitle.prefix(128)))])])))
             case "navigation.open":
                 guard Set(arguments.keys) == ["screen"], arguments["screen"] == .string("plugins"), validity(), let navigationController else { throw DGPluginError(code: "scope_denied", message: "only an available native plugin-management route is supported") }
-                navigationController.pushViewController(dgPluginsController(context: context))
+                navigationController.pushViewController(dgPluginsController(context: context), animated: true)
                 completion(.success(.null))
             case "files.pick":
                 guard arguments.isEmpty, dgAdditionalPluginState.picker == nil else { throw DGPluginError(code: "conflict", message: "a text-file chooser is already open") }
