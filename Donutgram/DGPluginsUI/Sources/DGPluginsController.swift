@@ -206,7 +206,7 @@ private final class DGPluginPage {
                 add(section, .toggle, "enabled:" + item.id, self.tr("включён", "enabled"), value: item.enabled)
             }
         case .loading:
-            add(0, .text, "", self.tr("проверяем неизменяемую копию вложения без запуска javascript…", "checking an immutable attachment copy without running javascript…"))
+            add(0, .text, "", self.tr("подготавливаем плагин…", "preparing plugin…"))
         case let .failure(message):
             add(0, .text, "", message)
         case let .install(package):
@@ -723,26 +723,22 @@ public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReferen
         let fetch = context.engine.resources.fetch(reference: file.abstract.resourceReference(resource), userLocation: .other, userContentType: .file).start(error: { _ in subscriber.putNext(nil); subscriber.putCompletion() })
         return ActionDisposable { read.dispose(); fetch.dispose() }
     }
-    page.resourceDisposable = (source
-    |> timeout(30.0, queue: Queue.mainQueue(), alternate: .single(nil))
-    |> take(1)
-    |> deliverOn(Queue.concurrentDefaultQueue())
-    |> map { resourceData -> Result<DGVerifiedPluginPackage, DGPluginError> in
-        guard let resourceData else { return .failure(DGPluginError(code: "download_failed", message: "unable to download plugin document")) }
-        do {
-            let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: resourceData.path))
-            defer { try? handle.close() }
-            let data = try handle.read(upToCount: limit + 1) ?? Data()
-            guard data.count <= limit else { throw DGPluginError(code: "package_too_large", message: "plugin document exceeds 8 mib") }
-            return .success(try DGPluginInstaller.preview(data: data, fileName: fileName))
-        } catch let error as DGPluginError { return .failure(error) }
-        catch { return .failure(DGPluginError(code: "invalid_package", message: "unable to read or validate plugin document")) }
-    }
+    page.resourceDisposable = (dgPluginValidateDocument(source: source, validate: { resourceData -> DGVerifiedPluginPackage in
+        guard let resourceData else { throw DGPluginError(code: "download_failed", message: "unable to download plugin document") }
+        let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: resourceData.path))
+        defer { try? handle.close() }
+        let data = try handle.read(upToCount: limit + 1) ?? Data()
+        guard data.count <= limit else { throw DGPluginError(code: "package_too_large", message: "plugin document exceeds 8 mib") }
+        return try DGPluginInstaller.preview(data: data, fileName: fileName)
+    })
     |> deliverOnMainQueue).start(next: { [weak page] result in
         guard let page else { return }
         switch result {
         case let .success(package): page.mode = .install(package)
-        case let .failure(error): page.mode = .failure(error.code + ": " + error.message)
+        case let .failure(error):
+            if error.code == "validation_timeout" {
+                page.mode = .failure(page.tr("не удалось подготовить плагин за 30 секунд. закройте этот экран и откройте документ снова.", "unable to prepare the plugin within 30 seconds. close this screen and reopen the document."))
+            } else { page.mode = .failure(error.code + ": " + error.message) }
         }
         page.refresh()
     })
@@ -756,13 +752,15 @@ private let dgPluginDocumentIconCache: NSCache<NSString, UIImage> = {
     return cache
 }()
 
+private let dgPluginDocumentIconQueue = Queue(name: "donutgram.plugin.document-icon", qos: .utility)
+
 public func dgPluginDocumentIcon(context: AccountContext, file: TelegramMediaFile) -> Signal<UIImage?, NoError> {
     let name = file.fileName ?? ""
     guard name.lowercased().hasSuffix(".donut.js") || name.lowercased().hasSuffix(".dgplugin") else { return .single(nil) }
     return context.engine.resources.data(resource: EngineMediaResource(file.resource))
     |> filter { $0.isComplete }
     |> take(1)
-    |> deliverOn(Queue.concurrentDefaultQueue())
+    |> deliverOn(dgPluginDocumentIconQueue)
     |> map { resource -> UIImage? in
         do {
             let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: resource.path))
