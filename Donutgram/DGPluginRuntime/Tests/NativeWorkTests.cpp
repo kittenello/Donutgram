@@ -132,12 +132,19 @@ int main(int argc, char **argv) {
             check(settle(host, dgjs_dispatch(host, "command", "{\"id\":\"dispose-transform\"}")) == 2, "dispose unregisters native ownership");
             check(requests.envelopes.back().find("\"method\":\"ui.transform.unregister\"") != std::string::npos, "unregister method");
             check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0 && requests.envelopes.size() == 4, "dispose is idempotent");
-            check(settle(host, dgjs_dispatch(host, "transform", payload)) < 0 && requests.envelopes.size() == 4, "disposed transform rejects without sending a stale patch");
+            check(settle(host, dgjs_dispatch(host, "transform", payload)) == 0 && dgjs_rejection(host) && std::strcmp(dgjs_rejection(host), "transform_not_found") == 0 && requests.envelopes.size() == 4, "disposed transform rejects without sending a stale patch");
         } else if (name == "transform_error") {
             add(host, "definePlugin({async activate(api){await api.transforms.register({id:'throws',slot:'profile'},async()=>{throw Error('hostile transform')})}})");
             check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "throwing transform registration");
             check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0 && settle(host, dgjs_pump(host)) == 0, "throwing fixture activated");
-            check(settle(host, dgjs_dispatch(host, "transform", "{\"id\":\"throws\",\"requestId\":\"r1\",\"input\":{}}")) < 0 && requests.envelopes.size() == 1, "handler rejection fails dispatch without posting a fake patch");
+            check(settle(host, dgjs_dispatch(host, "transform", "{\"id\":\"throws\",\"requestId\":\"r1\",\"input\":{}}")) == 0 && dgjs_rejection(host) && std::strcmp(dgjs_rejection(host), "plugin_error") == 0 && requests.envelopes.size() == 1, "handler rejection fails dispatch without posting a fake patch");
+            check(dgjs_dispatch(host, "event", "{\"name\":\"theme.changed\",\"payload\":{}}") == 0 && !dgjs_rejection(host), "a rejected transform leaves the runtime usable");
+        } else if (name == "rejection_getter") {
+            add(host, "definePlugin({activate(api){api.ui.callback(()=>{const e=new Error('x');Object.defineProperty(e,'code',{get(){for(;;){}}});throw e;});api.ui.callback(()=>{throw Object.assign(new Error('y'),{code:'Bad Code!'})});api.ui.callback(async()=>{throw Object.assign(new Error('z'),{code:'permission_denied'})})}})");
+            check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 0, "rejection fixture activated");
+            check(settle(host, dgjs_dispatch(host, "ui", "{\"id\":\"callback.1\",\"value\":null}")) == 0 && std::strcmp(dgjs_rejection(host), "plugin_error") == 0, "a code getter is never invoked");
+            check(settle(host, dgjs_dispatch(host, "ui", "{\"id\":\"callback.2\",\"value\":null}")) == 0 && std::strcmp(dgjs_rejection(host), "plugin_error") == 0, "an invalid code is not reported");
+            check(settle(host, dgjs_dispatch(host, "ui", "{\"id\":\"callback.3\",\"value\":null}")) == 0 && std::strcmp(dgjs_rejection(host), "permission_denied") == 0, "a plain code is reported");
         } else if (name == "transform_denial") {
             add(host, "definePlugin({async activate(api){let denied=false;try{await api.transforms.register({id:'retry',slot:'profile'},()=>({hide:[]}))}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('denial lost');await api.transforms.register({id:'retry',slot:'profile'},()=>({hide:[]}))}})");
             check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "first registration awaiting native permission");

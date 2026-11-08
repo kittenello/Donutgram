@@ -36,7 +36,7 @@ native_work_cases = [
     "typed_sort", "regexp_linear", "stringify", "parse", "repeat", "trim",
     "bigint", "pending_storm", "pure_promise", "caught_join", "native_wait",
     "wait_cancel", "detached_wait", "cumulative_active", "cpu_window", "stop_join", "stop_regexp",
-    "compile", "wrappers", "transforms", "transform_limit", "transform_error", "transform_denial", "default_policy",
+    "compile", "wrappers", "transforms", "transform_limit", "transform_error", "transform_denial", "rejection_getter", "default_policy",
 ]
 
 [

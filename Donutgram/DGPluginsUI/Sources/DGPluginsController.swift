@@ -571,7 +571,7 @@ private final class DGPluginPage {
     }
 
     private func complete(_ result: Result<Void, DGPluginError>) {
-        if case let .failure(error) = result { self.showError(error) }
+        if case let .failure(error) = result, error.code != "cancelled" { self.showError(error) }
         self.refresh()
     }
 

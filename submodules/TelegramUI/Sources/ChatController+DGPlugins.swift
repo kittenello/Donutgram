@@ -233,7 +233,7 @@ extension ChatControllerImpl {
                     guard let self else { return }
                     self.dgPluginChatState.selectedMessages.removeValue(forKey: command.installationId)
                     self.dgPluginChatState.drafts = self.dgPluginChatState.drafts.filter { $0.value.owner != command.installationId }
-                    if case let .failure(error) = result {
+                    if case let .failure(error) = result, error.code != "cancelled" {
                         self.present(textAlertController(context: self.context, title: "plugin", text: error.code + ": " + error.message, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                     }
                 }

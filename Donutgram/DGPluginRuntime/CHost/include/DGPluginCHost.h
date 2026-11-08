@@ -16,6 +16,9 @@ int dgjs_reply(DGJSHost *, int64_t request_id, const char *json);
 void dgjs_stop(DGJSHost *);
 void dgjs_destroy(DGJSHost *);
 const char *dgjs_error(DGJSHost *);
+/* After a dispatch completes (status 0): the sanitized error code if its promise was rejected, else NULL.
+   A rejected dispatch does not stop the runtime; only module, activation, budget and memory failures do. */
+const char *dgjs_rejection(DGJSHost *);
 #ifdef __cplusplus
 }
 #endif

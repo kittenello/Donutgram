@@ -61,7 +61,26 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
         let result = self.result { self.manager.interceptOutgoingText(".private-command", completion: $0) }
         if case .success = result { XCTFail("a broken handler must never send the original command") }
-        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+        if case let .failure(error) = result { XCTAssertEqual(error.code, "plugin_error") }
+        // The handler's own error keeps the plugin running; only budgets, memory or a broken activation stop it.
+        XCTAssertTrue(self.manager.interceptsOutgoingMessages)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
+    }
+
+    func testRejectedCommandReportsItsCodeAndKeepsThePluginRunning() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "test command")
+        let package = try self.package(permissions: [ui], body: "await api.commands.register({id:'refused',title:'refused',placement:'settings',async run(){throw Object.assign(new Error('refused'),{code:'permission_denied'})}});")
+        let id = try self.install(package, permissions: [ui])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        for _ in 0 ..< 4 {
+            let outcome = self.result { self.manager.runCommand(installationId: id, commandId: "refused", completion: $0) }
+            guard case let .failure(error) = outcome else { return XCTFail("a rejected command reported success") }
+            XCTAssertEqual(error.code, "permission_denied")
+        }
+        let installation = self.manager.installations.first(where: { $0.id == id })
+        XCTAssertEqual(installation?.state, .running)
+        XCTAssertEqual(installation?.enabled, true)
+        XCTAssertNil(installation?.lastError)
     }
 
     func testOutgoingPriorityComposesAndCancellationStopsTheChain() throws {

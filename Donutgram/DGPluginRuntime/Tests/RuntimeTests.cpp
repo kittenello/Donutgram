@@ -73,7 +73,8 @@ int main(int argc, char **argv) {
     std::string source = "definePlugin({activate(){},commands:[]});";
     check(dgjs_add_file(host, "main.js", reinterpret_cast<const uint8_t *>(source.data()), source.size()) == 0, "cancel fixture");
     check(dgjs_start(host, "main.js", bootstrap.c_str(), "{}") == 0, "start empty");
-    check(dgjs_dispatch(host, "command", "{\"id\":\"missing\"}") < 0, "unknown command fails");
+    check(dgjs_dispatch(host, "command", "{\"id\":\"missing\"}") == 0 && dgjs_rejection(host) && strcmp(dgjs_rejection(host), "command_not_found") == 0, "unknown command rejects with its code");
+    check(dgjs_dispatch(host, "event", "{\"name\":\"theme.changed\",\"payload\":{}}") == 0 && !dgjs_rejection(host), "a rejected command leaves the runtime usable");
     dgjs_destroy(host);
     requests = Requests{};
     host = dgjs_create(request, &requests);

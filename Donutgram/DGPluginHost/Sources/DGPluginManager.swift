@@ -435,8 +435,14 @@ public final class DGPluginManager {
                 case .success: execution.eventFailures = 0
                 case let .failure(error):
                     if error.code == "runtime_busy" { execution.events.insert((name, event), at: 0); return }
-                    self.fail(id: id, message: "plugin event handler failed or exceeded its budget")
-                    return
+                    if error.code == "plugin_rejected" {
+                        // The handler's own error: the runtime keeps running, unless it keeps failing.
+                        execution.eventFailures += 1
+                        if execution.eventFailures >= 5 { self.fail(id: id, message: "plugin event handlers failed five times in a row"); return }
+                    } else {
+                        self.fail(id: id, message: "plugin event handler exceeded its budget or stopped")
+                        return
+                    }
                 }
                 self.refreshDeferredViewModels(); self.drainEvents(id: id)
             }
@@ -546,12 +552,19 @@ public final class DGPluginManager {
                 execution.pendingTransforms.removeValue(forKey: requestId)
                 guard !operation.finished else { return }
                 guard self.current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing" else { completion(.failure(DGPluginError(code: "cancelled", message: "outgoing plugin permission changed"))); return }
-                guard case .success = outcome, let result = pending.result else {
-                    self.fail(id: id, message: "outgoing message handler failed")
-                    completion(.failure(DGPluginError(code: "runtime_error", message: "outgoing plugin failed; the draft was kept")))
+                switch outcome {
+                case .success where pending.result != nil:
+                    self.applyOutgoingInterceptors(registrations, index: index + 1, input: pending.result!, operation: operation, completion: completion)
+                case let .failure(error) where error.code != "plugin_rejected" && error.code != "runtime_busy":
+                    self.fail(id: id, message: "outgoing message handler exceeded its budget or stopped")
+                    completion(.failure(DGPluginError(code: "runtime_error", message: "outgoing plugin stopped; the draft was kept")))
                     return
+                default:
+                    // The handler's own error (or a busy runtime): keep the plugin running and the draft unsent.
+                    var code = "plugin_error"
+                    if case let .failure(error) = outcome { code = error.code == "runtime_busy" ? "busy" : (error.detail ?? "plugin_error") }
+                    completion(.failure(DGPluginError(code: code, message: "outgoing plugin reported an error; the draft was kept")))
                 }
-                self.applyOutgoingInterceptors(registrations, index: index + 1, input: result, operation: operation, completion: completion)
                 self.refreshDeferredViewModels()
                 self.drainEvents(id: id)
             }
@@ -612,12 +625,13 @@ public final class DGPluginManager {
                 let output: DGPluginJSON
                 if case .success = outcome, let result = pending.result {
                     execution.transformFailures = 0; output = result
-                } else if case let .failure(error) = outcome {
+                } else if case let .failure(error) = outcome, error.code != "plugin_rejected" {
                     if error.code == "runtime_busy" { completion(input, true); return }
-                    self.fail(id: id, message: "plugin view-model transform failed or exceeded its budget")
+                    self.fail(id: id, message: "plugin view-model transform exceeded its budget or stopped")
                     completion(input, false)
                     return
                 } else {
+                    // A rejected handler or a missing result keeps the native order; three in a row stop the plugin.
                     execution.transformFailures += 1; output = input
                     if execution.transformFailures >= 3 { self.fail(id: id, message: "plugin view-model transforms repeatedly failed") }
                 }
@@ -1013,7 +1027,11 @@ public final class DGPluginManager {
                         case .success: DispatchQueue.main.async { completion(.success(())) }
                         case let .failure(error):
                             if error.code == "runtime_busy" { self.complete(completion, error: DGPluginError(code: "busy", message: "a plugin callback is still running; retry the command")) }
-                            else { self.fail(id: installationId, message: "plugin command failed or exceeded its budget"); self.complete(completion, error: DGPluginError(code: "runtime_error", message: "command failed")) }
+                            else if error.code == "plugin_rejected" {
+                                // The command's own error (often a native refusal it did not catch): report it, keep the plugin on.
+                                self.complete(completion, error: DGPluginError(code: error.detail ?? "plugin_error", message: "the plugin command reported an error"))
+                            }
+                            else { self.fail(id: installationId, message: "plugin command exceeded its budget or stopped"); self.complete(completion, error: DGPluginError(code: "runtime_error", message: "command failed")) }
                         }
                     }
                 }
@@ -1246,7 +1264,7 @@ public final class DGPluginManager {
                     execution.busy = false; execution.gestureUntil = 0
                     self.refreshDeferredViewModels()
                     self.drainEvents(id: installationId)
-                    if case let .failure(error) = result, error.code != "runtime_busy" { self.fail(id: installationId, message: "plugin interface callback failed") }
+                    if case let .failure(error) = result, error.code != "runtime_busy", error.code != "plugin_rejected" { self.fail(id: installationId, message: "plugin interface callback exceeded its budget or stopped") }
                 }
             }
         }

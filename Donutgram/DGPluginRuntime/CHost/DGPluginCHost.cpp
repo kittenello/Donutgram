@@ -29,6 +29,11 @@ struct DGJSHost {
     size_t total = 0;
     const char *error = nullptr;
     bool modulePhase = false;
+    // The module and activate() are evaluating: a rejection there means the plugin cannot run.
+    bool activating = false;
+    // The current dispatch's promise was rejected; `rejection` holds the sanitized error code.
+    bool rejected = false;
+    std::string rejection;
     bool active = false;
     bool busy = false;
     unsigned jobs = 0;
@@ -193,6 +198,44 @@ static JSValue requestNative(JSContext *ctx, JSValueConst, int argc, JSValueCons
     return JS_UNDEFINED;
 }
 
+static bool validRejectionCode(const std::string &code) {
+    if (code.empty() || code.size() > 64) return false;
+    for (char c : code) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-')) return false;
+    }
+    return true;
+}
+
+// Records why the current dispatch's promise was rejected without running any plugin code: the `code` of an
+// Error is read only when it is an own data property (a getter or a Proxy is never invoked).
+static void recordRejection(DGJSHost *h) {
+    h->rejected = true;
+    h->rejection = "plugin_error";
+    JSValue reason = JS_PromiseResult(h->context, h->task);
+    if (JS_IsError(reason)) {
+        JSAtom atom = JS_NewAtom(h->context, "code");
+        JSPropertyDescriptor descriptor;
+        int found = atom == JS_ATOM_NULL ? -1 : JS_GetOwnProperty(h->context, &descriptor, reason, atom);
+        if (atom != JS_ATOM_NULL) JS_FreeAtom(h->context, atom);
+        if (found > 0) {
+            if (!(descriptor.flags & JS_PROP_GETSET) && JS_IsString(descriptor.value)) {
+                size_t length = 0;
+                const char *text = JS_ToCStringLen(h->context, &length, descriptor.value);
+                if (text) {
+                    std::string code(text, length);
+                    JS_FreeCString(h->context, text);
+                    if (validRejectionCode(code)) h->rejection = code;
+                }
+            }
+            JS_FreeValue(h->context, descriptor.value);
+            JS_FreeValue(h->context, descriptor.getter);
+            JS_FreeValue(h->context, descriptor.setter);
+        }
+        if (found < 0 || JS_HasException(h->context)) JS_FreeValue(h->context, JS_GetException(h->context));
+    }
+    JS_FreeValue(h->context, reason);
+}
+
 static int capture(DGJSHost *h) {
     JSValue exception = JS_GetException(h->context);
     JS_FreeValue(h->context, exception);
@@ -245,6 +288,9 @@ extern "C" int dgjs_add_file(DGJSHost *h, const char *path, const uint8_t *bytes
 extern "C" int dgjs_start(DGJSHost *h, const char *entry, const char *bootstrap, const char *environment) {
     if (h->active || h->stopped.load() || !h->files.count(entry) || strlen(environment) > 65536) return -1;
     h->active = true;
+    h->activating = true;
+    h->rejected = false;
+    h->rejection.clear();
     ExecutionSlice slice(h);
     beginOperation(h, std::chrono::milliseconds(1000));
     JS_UpdateStackTop(h->runtime);
@@ -277,7 +323,13 @@ extern "C" int dgjs_pump(DGJSHost *h) {
         if (++h->jobs > 4096) { fail(h, "microtask_limit"); return -1; }
         if (JS_IsException(h->task)) return capture(h);
         auto state = JS_PromiseState(h->context, h->task);
-        if (state == JS_PROMISE_REJECTED) { fail(h, "promise_rejected"); return -1; }
+        if (state == JS_PROMISE_REJECTED) {
+            // A rejected module or activate() leaves nothing to run. A rejected command, event, callback or
+            // transform is the plugin's own error: the runtime stays usable and the operation ends, once its
+            // detached work drains, with the error code in dgjs_rejection().
+            if (h->modulePhase || h->activating) { fail(h, "promise_rejected"); return -1; }
+            if (!h->rejected) recordRejection(h);
+        }
         if (state != JS_PROMISE_PENDING) {
             if (h->modulePhase) {
                 JS_FreeValue(h->context, h->task);
@@ -285,7 +337,7 @@ extern "C" int dgjs_pump(DGJSHost *h) {
                 h->modulePhase = false;
                 continue;
             }
-            if (!JS_IsJobPending(h->runtime) && h->pendingNative.empty()) { h->busy = false; return 0; }
+            if (!JS_IsJobPending(h->runtime) && h->pendingNative.empty()) { h->busy = false; h->activating = false; return 0; }
         }
         JSContext *jobContext = nullptr;
         int status = JS_ExecutePendingJob(h->runtime, &jobContext);
@@ -309,6 +361,8 @@ extern "C" int dgjs_pump(DGJSHost *h) {
 
 extern "C" int dgjs_dispatch(DGJSHost *h, const char *kind, const char *payload) {
     if (!h->active || h->stopped.load() || h->busy || strlen(payload) > 65536) return -1;
+    h->rejected = false;
+    h->rejection.clear();
     ExecutionSlice slice(h);
     beginOperation(h, std::chrono::milliseconds(250));
     JS_UpdateStackTop(h->runtime);
@@ -346,3 +400,4 @@ extern "C" void dgjs_destroy(DGJSHost *h) {
     JS_FreeContext(h->context); JS_FreeRuntime(h->runtime); delete h;
 }
 extern "C" const char *dgjs_error(DGJSHost *h) { return h->error ? h->error : "runtime_unavailable"; }
+extern "C" const char *dgjs_rejection(DGJSHost *h) { return h->rejected && !h->busy ? h->rejection.c_str() : nullptr; }

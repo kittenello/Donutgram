@@ -2,9 +2,13 @@ import Foundation
 import DGPluginCHost
 
 public struct DGPluginRuntimeError: Error, LocalizedError {
+    /// `plugin_rejected` when the plugin's own handler rejected; the runtime then keeps running. Every other
+    /// code (budgets, memory, cancellation, broken activation) means the runtime has stopped.
     public let code: String
+    /// For `plugin_rejected`: the sanitized `code` of the plugin's error, `plugin_error` when it had none.
+    public let detail: String?
     public var errorDescription: String? { return self.code }
-    public init(_ code: String) { self.code = code }
+    public init(_ code: String, detail: String? = nil) { self.code = code; self.detail = detail }
 }
 
 private final class DGPluginRequestContext: @unchecked Sendable {
@@ -168,7 +172,9 @@ public final class DGPluginRuntime {
 
     private func evaluate(_ status: Int32, host: OpaquePointer) {
         self.processing = status > 0
-        if status <= 0 {
+        if status == 0, let rejection = dgjs_rejection(host) {
+            self.finish(.failure(DGPluginRuntimeError("plugin_rejected", detail: String(cString: rejection))))
+        } else if status <= 0 {
             self.finish(status == 0 ? .success(()) : .failure(self.failure(host)))
         } else {
             self.pumpGeneration &+= 1
