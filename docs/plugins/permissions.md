@@ -11,7 +11,7 @@ all grants belong to an installation and account. declaration is not consent. re
 | theme snapshot | theme.read / currentTheme | appearance facts only |
 | own-page accent | theme.contribute / localTokens | four fixed native palettes; only this plugin's next page render |
 | composer read/replace | composer.read or composer.transform / activeComposer | native user action, opaque current-screen handle and revision checks in adapter |
-| selection | messages.selection.read / activeSelection | native user action, protected/service sources filtered before data delivery |
+| selection | messages.selection.read / activeSelection | native user action, protected/service sources filtered before data delivery; from a message's menu it is that message's whole text |
 | selected messages | messages.read / selectedChats | native user action; bounded explicitly selected snapshots, no history enumeration |
 | current chat / selected authors | chats.metadata.read / selectedChats; peers.read / selectedPeers | native user action; active context only, no arbitrary identifiers |
 | public requests | network.public / declaredOrigins | publicNetwork; exact granted HTTPS origin, public pinned endpoint, GET/HEAD and passive bounded data; Apple transport only |
@@ -21,8 +21,8 @@ all grants belong to an installation and account. declaration is not consent. re
 | translation | translation.request / selectedText | native user action; exact current selection and named Telegram service consent |
 | compose draft | messages.compose / chosenRecipient | native user action; review in the ordinary composer, no send |
 | prepare/send interactively | messages.sendInteractive / chosenRecipient | native user action; immutable native content/recipient preview, one-use scoped token; paid recipients denied |
-| send directly | messages.send / chosenRecipient | separately granted automation; active native chat, ordinary unpaid text, no per-message preview |
-| edit selected message | messages.edit / selectedMessages | selected native message or owned expiring handle; fresh message and native edit rights checked |
+| send directly | messages.send / chosenRecipient | separately granted automation; active native chat, ordinary unpaid text, no per-message preview; the chat's send-as identity; with edit and delete at most five actions in ten seconds and twenty a minute |
+| edit selected message | messages.edit / selectedMessages | selected native message or owned expiring handle; fresh message and native edit rights checked; plain replacement text, formatting is not kept |
 | delete selected message for everyone | messages.delete / selectedMessages | selected native message or owned expiring handle; current deleteGlobally rights required, no local-only fallback |
 | outgoing text interception | messages.intercept / activeComposer | beforeSend replacement/cancellation before normal enqueue; draft/chat comparison and bounded asynchronous processing |
 | native page / raster | ui.contribute / settings | one owned active page, generation-bound callbacks and installed raster handles; no URLs/HTML |

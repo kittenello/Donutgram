@@ -40,4 +40,17 @@ real native-screen checks remain for sensitive-source filtering, composer revisi
 
 additional adversarial review is still required for the full integrated diff and native helper interruption. Swift 5 mode on Swift 6.4.2 emits concurrency warnings in main-queue callback paths; passing tests do not resolve those warnings. a DNS resolver worker can outlive a cancelled request because getaddrinfo has no cancellation here; request completion and connection creation remain deadline/generation guarded.
 
-app-store execution is compile-gated out through the distribution flag. no app-store approval or entitlement clearance is claimed. no pull request has been opened or remote branch pushed for this checkpoint.
+app-store execution is compile-gated out through the distribution flag. no app-store approval or entitlement clearance is claimed. this branch is pull request kittenello/Donutgram#131; its IPA builds in CI.
+
+## review fixes (2026-11-09)
+
+- each runtime runs on its own 4 MiB thread instead of a dispatch queue, whose 512 KiB stacks let a deep recursion crash the app before quickjs's 512 KiB limit fired. runtimes still executing when the app died are turned off at the next launch.
+- a rejected command, event, page callback or transform no longer stops and disables the plugin; the error's code is shown to the user. budgets are measured in thread cpu time; an operation nothing can settle fails at once.
+- the chat list and the profile rebuild for transforms only when a transform appears, disappears or changes its results, no longer on every scroll step or plugin-manager update.
+- an intercepted scheduled or "when online" send keeps its draft when a plugin cancels or fails. plugin sends keep the chat's send-as identity.
+- send/edit/delete share a rate limit; notices are toasts.
+- plugin-written data is saved half a second later in one write; the main thread reads snapshots instead of waiting for the plugin queue.
+- the client version comes from the bundle; plugin screens and chat dialogs are localized and capitalized.
+- `Tests/run_tests.py` runs the runtime, native-work and engine suites, and the "Plugin runtime tests" workflow runs it on macos-26.
+
+these changes are compiled by the CI IPA build; the runtime suites ran with mingw gcc on windows, where stop_join's 2 ms stop is below the timer granularity. device behaviour is not verified.
