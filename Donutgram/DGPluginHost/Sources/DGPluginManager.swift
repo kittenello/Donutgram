@@ -71,6 +71,8 @@ private final class DGPluginExecution {
     /// Uptimes of the last minute's direct message actions (send, edit, delete), for their rate limit.
     var messageActionTimes: [TimeInterval] = []
     var noticeTimes: [TimeInterval] = []
+    /// Running estimate of the account storage's encoded size, computed on first use.
+    var storageBytes: Int?
 }
 
 private struct DGPluginRegisteredTransform {
@@ -113,6 +115,9 @@ private final class DGPluginCoordinator {
     var powerSaving = false
     var startupError: DGPluginError?
     var persistenceError: String?
+    /// Set when a deferred save of plugin-written data failed; cleared by the next successful save.
+    var deferredSaveError: String?
+    private var savePending = false
     #if DG_PLUGIN_TESTS
     var testIOFailure: String?
     #endif
@@ -125,6 +130,12 @@ private final class DGPluginCoordinator {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         self.root = support.appendingPathComponent("DonutgramPlugins", isDirectory: true)
         #endif
+        // The first use comes from the main thread at launch; reading and recovering the state (up to 32 MiB)
+        // runs on the queue instead, and every later operation is queued behind it.
+        queue.async { self.load() }
+    }
+
+    private func load() {
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             var excludedRoot = root
@@ -149,12 +160,14 @@ private final class DGPluginCoordinator {
                         throw DGPluginError(code: "invalid_argument", message: "invalid installation identity")
                     }
                 }
+                var changed = false
                 for record in state.installations where record.removing {
                     try cleanupFiles(record)
+                    changed = true
                 }
                 state.installations.removeAll(where: { $0.removing })
-                recoverInterruptedRuns()
-                try persist()
+                if recoverInterruptedRuns() { changed = true }
+                if changed { try persist() }
             }
         } catch {
             startupError = DGPluginError(code: "storage_error", message: "plugin state requires recovery; execution is stopped")
@@ -162,23 +175,47 @@ private final class DGPluginCoordinator {
         }
     }
 
+    /// Storage and settings that plugin code writes are saved together half a second later instead of once per
+    /// call: every save writes the whole state file. Management operations keep saving at once, and leaving the
+    /// foreground saves what is pending.
+    func scheduleSave() {
+        guard !savePending else { return }
+        savePending = true
+        queue.asyncAfter(deadline: .now() + 0.5) { self.saveIfPending() }
+    }
+
+    func saveIfPending() {
+        guard savePending else { return }
+        do {
+            try persist()
+        } catch {
+            deferredSaveError = "unable to save plugin data; its latest changes may be lost after a restart"
+            publishAll()
+        }
+    }
+
     func persist() throws {
         guard startupError == nil else { throw startupError! }
         try testFailure("persist")
+        // This write contains everything a deferred save was waiting for.
+        savePending = false
         let data = try JSONEncoder().encode(state)
         guard data.count <= 32 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin state exceeds its limit") }
         try data.write(to: root.appendingPathComponent("state.json"), options: .atomic)
+        deferredSaveError = nil
     }
 
     var runningMarkersURL: URL { return root.appendingPathComponent("running.json") }
 
     /// Turns off every plugin that was executing when the previous process ended without stopping it.
-    func recoverInterruptedRuns() {
+    /// Returns whether a record changed.
+    func recoverInterruptedRuns() -> Bool {
         let url = runningMarkersURL
-        guard let data = try? Data(contentsOf: url) else { return }
+        guard let data = try? Data(contentsOf: url) else { return false }
         try? FileManager.default.removeItem(at: url)
-        guard data.count <= 65536, let markers = try? JSONDecoder().decode([DGPluginRunningMarker].self, from: data) else { return }
+        guard data.count <= 65536, let markers = try? JSONDecoder().decode([DGPluginRunningMarker].self, from: data) else { return false }
         let entry = ISO8601DateFormatter().string(from: Date()) + " " + Self.interruptedMessage
+        var changed = false
         for marker in markers {
             guard let index = state.installations.firstIndex(where: { $0.id == marker.installation }),
                   var account = state.installations[index].accounts[marker.account], account.enabled else { continue }
@@ -187,7 +224,9 @@ private final class DGPluginCoordinator {
             account.lastError = Self.interruptedMessage
             account.diagnostics = Array(((account.diagnostics ?? []) + [entry]).suffix(20))
             state.installations[index].accounts[marker.account] = account
+            changed = true
         }
+        return changed
     }
 
     func markRunning(_ marker: DGPluginRunningMarker) {
@@ -300,6 +339,9 @@ public final class DGPluginManager {
     private var snapshotPersistenceError: String?
     private var snapshotTransformSlots = Set<String>()
     private var snapshotViewRevision: UInt64 = 0
+    private var snapshotIntercepts = false
+    private var snapshotPublishers: [String: String] = [:]
+    private var snapshotDiagnostics: [String: [String]] = [:]
     private var viewModelCache: [String: DGPluginJSON] = [:]
     private var viewModelRevision: UInt64 = 0
     private var pendingViewModels = Set<String>()
@@ -374,7 +416,7 @@ public final class DGPluginManager {
         coordinator.queue.async {
             guard self.coordinator.foreground != active else { return }
             self.coordinator.foreground = active
-            if !active { self.coordinator.stopAll() } else { for manager in Self.allManagers() { manager.reconcile() } }
+            if !active { self.coordinator.stopAll(); self.coordinator.saveIfPending() } else { for manager in Self.allManagers() { manager.reconcile() } }
             self.coordinator.publishAll()
         }
     }
@@ -465,16 +507,11 @@ public final class DGPluginManager {
         return DGPluginViewTransformState(active: snapshotTransformSlots.contains(slot), revision: snapshotViewRevision)
     }
 
-    public func publisherIdentity(id: String) -> String? {
-        return coordinator.queue.sync { self.coordinator.state.installations.first(where: { $0.id == id })?.publisherIdentity }
-    }
+    // Snapshot reads for the main thread: waiting for the plugin queue could block on a state write or a
+    // package verification.
+    public func publisherIdentity(id: String) -> String? { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotPublishers[id] }
 
-    public func diagnostics(id: String) -> [String] {
-        return coordinator.queue.sync {
-            guard let record = self.coordinator.state.installations.first(where: { $0.id == id }) else { return [] }
-            return self.account(record).diagnostics ?? []
-        }
-    }
+    public func diagnostics(id: String) -> [String] { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotDiagnostics[id] ?? [] }
 
     public func nativeScope(installationId: String) -> String? {
         return coordinator.queue.sync {
@@ -494,9 +531,8 @@ public final class DGPluginManager {
         coordinator.queue.async { self.executions[installationId]?.nativeCleanup.removeValue(forKey: token) }
     }
 
-    public var interceptsOutgoingMessages: Bool {
-        return coordinator.queue.sync { !self.outgoingRegistrations().isEmpty }
-    }
+    /// Read on every send from the main thread, so it comes from the snapshot.
+    public var interceptsOutgoingMessages: Bool { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotIntercepts }
 
     private func outgoingRegistrations() -> [(String, DGPluginExecution, DGPluginRegisteredTransform)] {
         return executions.flatMap { id, execution -> [(String, DGPluginExecution, DGPluginRegisteredTransform)] in
@@ -693,11 +729,15 @@ public final class DGPluginManager {
                 transformSlots.insert(transform.slot)
             }
         }
+        let intercepts = !outgoingRegistrations().isEmpty
+        let publishers = Dictionary(coordinator.state.installations.map { ($0.id, $0.publisherIdentity) }, uniquingKeysWith: { first, _ in first })
+        let diagnostics = Dictionary(coordinator.state.installations.map { ($0.id, self.account($0).diagnostics ?? []) }, uniquingKeysWith: { first, _ in first })
         snapshotLock.lock()
         snapshotTransformSlots = transformSlots; snapshotViewRevision = viewModelRevision
+        snapshotIntercepts = intercepts; snapshotPublishers = publishers; snapshotDiagnostics = diagnostics
         snapshotInstallations = values; snapshotCommands = commands; snapshotIcons = icons; snapshotEnabled = coordinator.state.globallyEnabled
         snapshotRollbackIds = Set(coordinator.state.installations.filter { $0.previous != nil && !$0.removing }.map { $0.id })
-        snapshotPersistenceError = coordinator.persistenceError
+        snapshotPersistenceError = coordinator.persistenceError ?? coordinator.deferredSaveError
         let callbacks = Array(observers.values)
         snapshotLock.unlock()
         DispatchQueue.main.async { for callback in callbacks { callback() } }
@@ -1191,13 +1231,18 @@ public final class DGPluginManager {
         case "storage.get", "storage.set", "storage.remove":
             guard let key = arguments["key"]?.dgString, !key.isEmpty, key.utf8.count <= 128, !["__proto__", "prototype", "constructor"].contains(key) else { throw DGPluginError(code: "invalid_argument", message: "invalid storage key") }
             if method == "storage.get" { return account.storage[key] ?? .null }
+            // The quota is kept as a running estimate per execution, so a write no longer encodes the whole storage.
+            var bytes = try execution.storageBytes ?? account.storage.reduce(0) { $0 + (try Self.storageEntryBytes(key: $1.key, value: $1.value)) }
+            if let old = account.storage[key] { bytes -= try Self.storageEntryBytes(key: key, value: old) }
             if method == "storage.remove" { account.storage.removeValue(forKey: key) }
             else {
                 guard let value = arguments["value"], try JSONEncoder().encode(value).count <= 262144, account.storage.count < 1024 || account.storage[key] != nil else { throw DGPluginError(code: "quota_exceeded", message: "storage item exceeds its quota") }
                 try value.validateLimits()
+                bytes += try Self.storageEntryBytes(key: key, value: value)
+                guard bytes <= 5 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin storage quota exceeded") }
                 account.storage[key] = value
             }
-            guard try JSONEncoder().encode(account.storage).count <= 5 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin storage quota exceeded") }
+            execution.storageBytes = bytes
         case "ui.command.register":
             guard let id = arguments["id"]?.dgString, id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil, let title = arguments["title"]?.dgString, !title.isEmpty, title.utf16.count <= 100, let placement = arguments["placement"]?.dgString, ["composer", "selection", "messageMenu", "chatToolbar", "settings"].contains(placement), execution.commands.count < 32 || execution.commands.contains(where: { $0.id == id }) else { throw DGPluginError(code: "invalid_argument", message: "invalid command descriptor") }
             guard account.grants.contains(where: { $0.capability == "ui.contribute" && ($0.scope == placement || $0.scope == "supportedSlots") }) else { throw DGPluginError(code: "scope_denied", message: "command placement was not granted") }
@@ -1251,9 +1296,15 @@ public final class DGPluginManager {
         default: return nil
         }
         coordinator.state.installations[index].accounts[accountKey] = account
-        do { try coordinator.persist() } catch { coordinator.state.installations[index] = record; throw error }
-        coordinator.publishAll()
+        coordinator.scheduleSave()
+        // Storage is not part of the published snapshot; settings are.
+        if method == "settings.set" { coordinator.publishAll() }
         return .null
+    }
+
+    /// An estimate of one entry's share of the encoded storage object: its quoted key, colon, comma and value.
+    private static func storageEntryBytes(key: String, value: DGPluginJSON) throws -> Int {
+        return key.utf8.count + 4 + (try JSONEncoder().encode(value).count)
     }
 
     private func respond(_ result: Result<DGPluginJSON, DGPluginError>, _ reply: @escaping (String) -> Void) {
