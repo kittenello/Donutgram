@@ -6572,9 +6572,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     source = .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: .zero))
                 }
                 
-                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { [weak strongSelf] list in
-                    let commands = strongSelf?.dgPluginMenuItems(placements: ["composer", "chatToolbar"]) ?? []
-                    return ContextController.Items(content: .list(list + commands))
+                // Donutgram: built here on the main thread. The items signal maps on the Postbox queue, and the plugin
+                // items read the chat's view and interface state.
+                let pluginCommands = strongSelf.dgPluginMenuItems(placements: ["composer", "chatToolbar"])
+                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: source, items: items |> map { list in
+                    return ContextController.Items(content: .list(list + pluginCommands))
                 }, gesture: gesture)
                 contextController.dismissed = { [weak self] in
                     self?.canReadHistory.set(true)
