@@ -32,14 +32,19 @@ def main():
     parser.add_argument("--bootstrap", required=True)
     parser.add_argument("--default-smoke")
     parser.add_argument("--default-host")
+    parser.add_argument("--skip", action="append", default=[], help="a scenario to leave out, such as a timing case the local host cannot meet")
     args = parser.parse_args()
+    unknown = set(args.skip) - set(CASES)
+    if unknown:
+        raise SystemExit("unknown scenarios: " + ", ".join(sorted(unknown)))
     run([args.regression, args.bootstrap], 20)
-    for case in CASES:
+    cases = [case for case in CASES if case not in args.skip]
+    for case in cases:
         run([args.native, case, args.bootstrap], 10)
     for executable in [args.default_smoke, args.default_host]:
         if executable:
             run([executable], 15)
-    print(f"passed regression process and {len(CASES)} isolated native-work scenarios")
+    print(f"passed regression process and {len(cases)} isolated native-work scenarios" + (f" ({len(args.skip)} skipped)" if args.skip else ""))
 
 
 if __name__ == "__main__":
