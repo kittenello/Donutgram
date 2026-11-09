@@ -85,8 +85,9 @@ private struct DGPluginRegisteredTransform {
 
 private final class DGPluginOutgoingOperation {
     var finished = false
-    /// The plugin of the current step; a failure of the operation names it.
+    /// The plugin of the current step, while it waits for its runtime or runs; a failure of the operation names it.
     var currentInstallation: String?
+    /// Set only while that plugin's handler is running: a timeout stops the plugin only then.
     var activeInstallation: String?
 }
 
@@ -577,8 +578,13 @@ public final class DGPluginManager {
                 }
                 self.coordinator.queue.asyncAfter(deadline: .now() + 3) {
                     guard !operation.finished else { return }
-                    finish(.failure(DGPluginError(code: "timeout", message: "outgoing plugin processing timed out; the draft was kept")))
-                    if let id = operation.activeInstallation { self.fail(id: id, message: "outgoing message handler timed out") }
+                    if let id = operation.activeInstallation {
+                        finish(.failure(DGPluginError(code: "timeout", message: "outgoing plugin processing timed out; the draft was kept")))
+                        self.fail(id: id, message: "outgoing message handler timed out")
+                    } else {
+                        // Still waiting for a plugin that is busy with something else: it did nothing wrong.
+                        finish(.failure(DGPluginError(code: "busy", message: "outgoing plugin stayed busy; retry sending the draft")))
+                    }
                 }
             } catch { finish(.failure(self.pluginError(error))) }
         }
@@ -589,7 +595,15 @@ public final class DGPluginManager {
         guard index < registrations.count, input.objectValue?["cancelled"] != .bool(true) else { completion(.success(input)); return }
         let (id, execution, registration) = registrations[index]
         operation.currentInstallation = id
-        guard current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing", !execution.busy else { completion(.failure(DGPluginError(code: "busy", message: "outgoing plugin is unavailable; retry sending the draft"))); return }
+        guard current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing" else { completion(.failure(DGPluginError(code: "busy", message: "outgoing plugin is unavailable; retry sending the draft"))); return }
+        guard !execution.busy else {
+            // An event, a view transform or a command is running (a command can wait on the network): wait for it.
+            // The operation's 3 s timer ends the wait.
+            coordinator.queue.asyncAfter(deadline: .now() + 0.02) {
+                self.applyOutgoingInterceptors(registrations, index: index, input: input, operation: operation, completion: completion)
+            }
+            return
+        }
         operation.activeInstallation = id
         let requestId = UUID().uuidString.lowercased()
         let pending = DGPluginPendingTransform(registrationId: registration.id, slot: "outgoing", input: input)
@@ -599,6 +613,7 @@ public final class DGPluginManager {
         guard let bytes = try? JSONEncoder().encode(payload), let json = String(data: bytes, encoding: .utf8) else {
             execution.busy = false
             execution.pendingTransforms.removeValue(forKey: requestId)
+            operation.activeInstallation = nil
             completion(.failure(DGPluginError(code: "invalid_argument", message: "outgoing message could not be encoded")))
             return
         }
@@ -606,6 +621,8 @@ public final class DGPluginManager {
             self.coordinator.queue.async {
                 execution.busy = false
                 execution.pendingTransforms.removeValue(forKey: requestId)
+                // The handler has answered: from here a timeout must not stop this plugin.
+                operation.activeInstallation = nil
                 guard !operation.finished else { return }
                 guard self.current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing" else { completion(.failure(DGPluginError(code: "cancelled", message: "outgoing plugin permission changed"))); return }
                 switch outcome {
