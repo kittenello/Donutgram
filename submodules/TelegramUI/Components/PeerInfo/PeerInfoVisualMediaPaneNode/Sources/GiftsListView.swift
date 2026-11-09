@@ -689,8 +689,7 @@ final class GiftsListView: UIView {
                     } else {
                         peer = nil
                     }
-                    // A disappeared gift's last price is not an offer anymore.
-                    let resellAmounts = disappearedDate == nil ? (gift.resellAmounts ?? []) : []
+                    let resellAmounts = gift.resellAmounts ?? []
                     resellAmount = resellAmounts.first(where: { $0.currency == .stars })
                     
                     if !resellAmounts.isEmpty {

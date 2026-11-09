@@ -3549,16 +3549,14 @@ public final class ProfileGiftsContext {
                 )
             }
 
-            // The snapshot of a gift that is no longer in the profile. Its sale
-            // price, upgrade and transfer options describe a gift the profile
-            // no longer has, so they are dropped rather than offered.
+            // The snapshot of a gift that is no longer in the profile. Its
+            // conversion, upgrade and transfer options describe a gift the
+            // profile no longer has, so they are dropped rather than offered.
+            // Only ordinary gifts are kept as missing, so there is no sale
+            // price to drop.
             public func withoutActions() -> StarGift {
-                var gift = self.gift
-                if case let .unique(uniqueGift) = gift {
-                    gift = .unique(uniqueGift.withResellAmounts(nil))
-                }
                 var result = StarGift(
-                    gift: gift,
+                    gift: self.gift,
                     reference: self.reference,
                     fromPeer: self.fromPeer,
                     date: self.date,
@@ -3720,6 +3718,9 @@ public final class ProfileGiftsContext {
             }.map { $0.element }
         }
 
+        // The history in saved order without missing collectibles: a collectible
+        // that leaves a profile was usually sold or transferred, so it is not
+        // shown as a deleted gift.
         static func trackedGiftHistory(_ history: [DisappearedGift]) -> [DisappearedGift] {
             return sortedGiftHistory(history.filter { entry in
                 if entry.isMissing, case .unique = entry.gift.gift {
@@ -3748,10 +3749,15 @@ public final class ProfileGiftsContext {
             return result
         }
 
-        // Keep the server order of live gifts and insert each missing group into a
-        // gap between live gifts. Anchoring to another inserted gift reverses groups.
-        // Until the list is loaded to its end (`isComplete`), a missing gift whose
-        // neighbours are not loaded yet is left out rather than parked after the
+        // The live gifts in server order, pinned ones first, with each missing
+        // gift inserted into a gap between unpinned live gifts; missing
+        // collectibles are left out (see `trackedGiftHistory`). A gift's slot
+        // comes from its saved neighbours, but it must fit the live gifts' dates
+        // there; otherwise it goes in by date, so the anchors only break ties
+        // among gifts of the same date. Until the list is loaded to its end
+        // (`isComplete`), a missing gift is placed only next to a loaded
+        // neighbour or by date once a strictly older gift is loaded, so that its
+        // slot is final; otherwise it is left out rather than parked after the
         // loaded part, from where it would jump once the rest arrives.
         public static func giftsWithDisappeared(current: [StarGift], history: [DisappearedGift], isComplete: Bool = true) -> [DisappearedGift] {
             let current = current.filter { $0.pinnedToTop } + current.filter { !$0.pinnedToTop }
