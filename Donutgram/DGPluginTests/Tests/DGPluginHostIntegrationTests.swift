@@ -12,6 +12,8 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         try XCTSkipIf(!DGPluginManager.executionAvailable, "this distribution compiles external plugin execution out")
         self.manager = DGPluginManager.shared(accountKey: "plugin-test-" + UUID().uuidString)
         self.manager.setAccountActive(true)
+        // Plugins start only in the foreground, and the app's host starts in the background until it becomes active.
+        self.manager.setForegroundActive(true)
         self.manager.setGloballyEnabled(true)
     }
 
