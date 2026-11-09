@@ -451,7 +451,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         // (dgLocalized translates both forms).
         let installedPlugins = pluginManager.installations
         let pluginStatus = installedPlugins.isEmpty ? "" : (pluginManager.globallyEnabled ? "\(installedPlugins.filter { $0.state == .running }.count) из \(installedPlugins.count)" : "Выкл")
-        entries.append(.rootRow(26, 3, "plugins", "Плагины", pluginStatus, "Bots", 0x5E5CE6))
+        entries.append(.rootRow(26, 3, "plugins", "Плагины", pluginStatus, "Bot", 0x5E5CE6))
         entries.append(.header(30, 4, "ПРОЧЕЕ"))
         entries.append(.rootRow(31, 4, "adsAndGifts", "Реклама и подарки", "", "Gift", 0xAF52DE))
         entries.append(.rootRow(32, 4, "about", "О Donutgram", dgAppVersion(), "Faq", 0x0A84FF))

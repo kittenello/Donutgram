@@ -57,6 +57,12 @@ def prepare():
     assert 'listEntries.insert(.input(-3, -2, "settingsSearch", state.searchQuery' in controller
     assert 'dgSettingsControllerForLink(context: context, page: item.page, key: item.key)' in controller
     assert 'state.searchQuery = value' in controller
+    # Every section of the root names one of Telegram's settings glyphs: a name with no image draws an empty tile.
+    glyphs = re.findall(r'\.rootRow\(.*, "(\w+)", 0x[0-9A-Fa-f]{6}\)\)', controller)
+    assert len(glyphs) == controller.count("entries.append(.rootRow("), glyphs
+    icons = ROOT / "submodules/TelegramUI/Images.xcassets/Item List/Icons"
+    missing = sorted(set(glyphs) - {path.name[:-len(".imageset")] for path in icons.glob("*.imageset")})
+    assert not missing, missing
     enum = block(links, "enum DGSettingsPage:")
     shown_row = block(features, "private func dgShownRow(").replace("DGSimpleSettings.shared", "testSettings")
     current_row = block(features, "private func dgCurrentRowLocation(")
