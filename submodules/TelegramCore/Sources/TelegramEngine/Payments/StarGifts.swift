@@ -3754,6 +3754,12 @@ public final class ProfileGiftsContext {
             let current = current.filter { $0.pinnedToTop } + current.filter { !$0.pinnedToTop }
             let pinnedCount = current.prefix(while: { $0.pinnedToTop }).count
             let orderedHistory = trackedGiftHistory(history)
+            if orderedHistory.isEmpty {
+                // Nothing to restore: the live gifts as they are, pins first.
+                return reindexGiftHistory(current.map { gift in
+                    return DisappearedGift(gift: gift, position: 0, previousReference: nil, nextReference: nil, lastSeen: 0, isMissing: false)
+                })
+            }
             let matches = matchGiftHistory(current: current, history: orderedHistory)
             var continuation: [Int?] = Array(repeating: nil, count: orderedHistory.count)
             var liveKeys: [[AnyHashable]: [Int]] = [:]
