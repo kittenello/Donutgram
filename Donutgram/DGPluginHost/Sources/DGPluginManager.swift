@@ -99,9 +99,11 @@ private final class DGPluginPendingTransform {
     init(registrationId: String, slot: String, input: DGPluginJSON) { self.registrationId = registrationId; self.slot = slot; self.input = input }
 }
 
-/// One plugin runtime that is executing for one account. The set of them is kept on disk while they run, so
-/// a launch after a crash can tell which plugins were running and turn them off instead of starting them
-/// again (a plugin that crashes the app in `activate` would otherwise crash every launch).
+/// One plugin runtime that has just started for one account. The set of them is kept on disk from the start
+/// until ten seconds after a successful activation (or until the plugin stops), so a launch after a crash can
+/// tell which plugins were starting and turn them off instead of starting them again (a plugin that crashes
+/// the app in `activate` or in the events right after would otherwise crash every launch). A crash later on
+/// is not blamed on the running plugins.
 private struct DGPluginRunningMarker: Codable, Hashable {
     let account: String
     let installation: String
@@ -219,7 +221,8 @@ private final class DGPluginCoordinator {
 
     var runningMarkersURL: URL { return root.appendingPathComponent("running.json") }
 
-    /// Turns off every plugin that was executing when the previous process ended without stopping it.
+    /// Turns off every plugin that was starting (or had started less than ten seconds before) when the previous
+    /// process ended without stopping it.
     /// Returns whether a record changed.
     func recoverInterruptedRuns() -> Bool {
         let url = runningMarkersURL
@@ -1078,6 +1081,13 @@ public final class DGPluginManager {
                         self.emitNativeEvent(name: "account.contextChanged", payload: .object(["active": .bool(true)]), installationId: id)
                         self.emitNativeEvent(name: "app.foreground", payload: .object(["active": .bool(true)]), installationId: id)
                         self.coordinator.publishAll()
+                        // Ten seconds cover activate() and the events delivered right after it; a crash later is not
+                        // taken for this plugin's, so its marker goes.
+                        let generation = execution.generation
+                        self.coordinator.queue.asyncAfter(deadline: .now() + 10) {
+                            guard self.executions[id]?.generation == generation else { return }
+                            self.coordinator.clearRunning(DGPluginRunningMarker(account: self.accountKey, installation: id))
+                        }
                         DispatchQueue.main.async { completion(.success(())) }
                     case .failure:
                         self.fail(id: id, message: "plugin activation failed or exceeded its budget")

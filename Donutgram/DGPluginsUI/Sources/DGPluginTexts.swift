@@ -116,7 +116,7 @@ public func dgPluginStoredReason(_ text: String, russian: Bool) -> String {
     case "plugin interface callback exceeded its budget or stopped", "plugin interface callback failed":
         return tr("Действие на странице плагина превысило лимит или остановилось.", "An action on the plugin's page exceeded its limit or stopped.")
     case "the app closed unexpectedly while this plugin was running, so it was turned off":
-        return tr("Приложение закрылось с ошибкой, пока плагин работал, поэтому он выключен. Включите его снова, если сбой не связан с ним.", "The app closed unexpectedly while the plugin was running, so it was turned off. Turn it on again if it was not the cause.")
+        return tr("Приложение закрылось с ошибкой сразу после запуска плагина, поэтому он выключен. Включите его снова, если сбой не связан с ним.", "The app closed unexpectedly right after the plugin started, so it was turned off. Turn it on again if it was not the cause.")
     case "plugin state requires recovery; execution is stopped":
         return tr("Данные плагинов повреждены, выполнение остановлено.", "Plugin data needs recovery; execution is stopped.")
     case "unable to save the global switch; execution remains stopped for this session":
