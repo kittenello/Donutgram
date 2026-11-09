@@ -713,7 +713,13 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
         let isRevealedShadowBanned = DGSimpleSettings.shared.isShadowBanRevealed(chatPeerId: item.message.id.peerId.toInt64()) && item.content.contains(where: { element in
             DonutgramShadowBan.isBannedContent(element.0)
         })
-        self.alpha = (isDeleted && DGSimpleSettings.shared.semiTransparentDeletedMessages) || isRevealedShadowBanned ? 0.55 : 1.0
+        if isRevealedShadowBanned {
+            self.alpha = 0.55
+        } else if isDeleted && DGSimpleSettings.shared.semiTransparentDeletedMessages {
+            self.alpha = 0.8
+        } else {
+            self.alpha = 1.0
+        }
     }
     
     open func updateAccessibilityData(_ accessibilityData: ChatMessageAccessibilityData) {

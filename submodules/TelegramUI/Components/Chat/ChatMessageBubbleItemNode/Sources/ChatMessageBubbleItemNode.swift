@@ -4501,11 +4501,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             forceBackgroundSide = true
         }
         let mergeType = ChatMessageBackgroundMergeType(top: updatedMergedTop == .fullyMerged, bottom: updatedMergedBottom == .fullyMerged || DGSimpleSettings.shared.removeMessageTails, side: forceBackgroundSide)
-        let isTransparentDeleted = DGSimpleSettings.shared.semiTransparentDeletedMessages && item.content.contains(where: { element in
-            element.0.localTags.contains(.donutgramDeleted)
-        })
         let backgroundType: ChatMessageBackgroundType
-        if hideBackground || isTransparentDeleted {
+        if hideBackground {
             backgroundType = .none
         } else if DGSimpleSettings.shared.removeMessageTails {
             backgroundType = incoming ? .incoming(.Extracted) : .outgoing(.Extracted)
