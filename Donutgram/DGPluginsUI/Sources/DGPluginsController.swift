@@ -87,6 +87,9 @@ private enum DGPluginPageMode {
     case rendered(DGPluginRenderedState)
 }
 
+/// How many plugins it takes for the list to get a search field: about two screens of rows.
+private let dgPluginSearchMinimumCount = 8
+
 private final class DGPluginPresentedPage {
     weak var controller: ViewController?
     let token: UUID
@@ -201,11 +204,16 @@ private final class DGPluginPage {
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
             add(0, .toggle, "global", self.tr("Разрешить выполнение плагинов", "Allow plugins to run"), value: self.manager.globallyEnabled)
             add(0, .text, "", self.tr("Выключение немедленно останавливает все плагины и их задачи.", "Turning this off immediately stops all plugins and their tasks."))
-            add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
-            add(1, .header, "", self.tr("УСТАНОВЛЕННЫЕ", "INSTALLED"))
-            let matches = self.manager.installations.filter { self.query.isEmpty || ($0.manifest.name + " " + $0.manifest.id + " " + ($0.manifest.author?.name ?? "")).localizedCaseInsensitiveContains(self.query) }
+            let installations = self.manager.installations
+            // A short list is read at a glance, so the search field appears only once the list is long.
+            let searchable = installations.count >= dgPluginSearchMinimumCount
+            if searchable { add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query) } else { self.query = "" }
+            // The header shares the section of the first plugin, or of the note that there are none, and so sits
+            // right above it.
+            add(2, .header, "", self.tr("УСТАНОВЛЕННЫЕ", "INSTALLED"))
+            let matches = installations.filter { self.query.isEmpty || ($0.manifest.name + " " + $0.manifest.id + " " + ($0.manifest.author?.name ?? "")).localizedCaseInsensitiveContains(self.query) }
             if matches.isEmpty {
-                add(1, .text, "", self.query.isEmpty ? self.tr("Плагинов пока нет. Откройте файл .donut.js или .dgplugin в сообщении Telegram. Просмотр файла не запускает код.", "No plugins yet. Open a .donut.js or .dgplugin document in a Telegram message. Previewing never runs code.") : self.tr("Ничего не найдено", "Nothing found"))
+                add(2, .text, "", self.query.isEmpty ? self.tr("Плагинов пока нет. Откройте файл .donut.js или .dgplugin в сообщении Telegram. Просмотр файла не запускает код.", "No plugins yet. Open a .donut.js or .dgplugin document in a Telegram message. Previewing never runs code.") : self.tr("Ничего не найдено", "Nothing found"))
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
