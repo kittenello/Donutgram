@@ -105,6 +105,8 @@ public func dgPluginStoredReason(_ text: String, russian: Bool) -> String {
         return tr("Обработка сообщения перед отправкой заняла слишком много времени.", "Processing a message before sending took too long.")
     case "outgoing message handler exceeded its budget or stopped", "outgoing message handler failed":
         return tr("Обработчик сообщений перед отправкой превысил лимит или остановился.", "The before-send handler exceeded its limit or stopped.")
+    case "outgoing message handlers failed three times in a row":
+        return tr("Обработчик сообщений перед отправкой три раза подряд завершился ошибкой.", "The before-send handler failed three times in a row.")
     case "plugin view-model transform exceeded its budget or stopped", "plugin view-model transform failed or exceeded its budget":
         return tr("Изменение экрана превысило лимит или остановилось.", "A screen transform exceeded its limit or stopped.")
     case "plugin view-model transforms repeatedly failed":

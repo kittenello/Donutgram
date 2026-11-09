@@ -48,7 +48,7 @@ extension ChatControllerImpl {
         let threadId = self.chatLocation.threadId
         self.dgPluginChatState.outgoingSendPending = true
         self.dgBindChatPlugins()
-        manager.interceptOutgoingText(text) { [weak self] result in
+        manager.interceptOutgoingText(text, namingPlugin: { [weak self] result, pluginName in
             guard let self else { return }
             self.dgPluginChatState.outgoingSendPending = false
             guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
@@ -57,7 +57,7 @@ extension ChatControllerImpl {
             switch result {
             case let .failure(error):
                 let text = self.dgPluginText("Сообщение не отправлено, текст остался в поле ввода.", "The message was not sent; its text stays in the input field.") + "\n" + dgPluginErrorDescription(error, russian: self.dgPluginRussian)
-                self.present(textAlertController(context: self.context, title: self.dgPluginText("Плагин", "Plugin"), text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                self.present(textAlertController(context: self.context, title: pluginName ?? self.dgPluginText("Плагин", "Plugin"), text: text, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             case .success(nil):
                 break
             case let .success(replacement?):
@@ -81,7 +81,7 @@ extension ChatControllerImpl {
                     resume()
                 }
             }
-        }
+        })
         return true
     }
 

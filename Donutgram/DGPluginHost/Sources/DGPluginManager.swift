@@ -67,6 +67,8 @@ private final class DGPluginExecution {
     var transformFailures = 0
     var events: [(String, DGPluginJSON)] = []
     var eventFailures = 0
+    /// Outgoing-message handler failures in a row (a rejection or no result); three stop the plugin.
+    var outgoingFailures = 0
     var themeTokens: DGPluginJSON = .object([:])
     /// Uptimes of the last minute's direct message actions (send, edit, delete), for their rate limit.
     var messageActionTimes: [TimeInterval] = []
@@ -83,6 +85,8 @@ private struct DGPluginRegisteredTransform {
 
 private final class DGPluginOutgoingOperation {
     var finished = false
+    /// The plugin of the current step; a failure of the operation names it.
+    var currentInstallation: String?
     var activeInstallation: String?
 }
 
@@ -544,12 +548,24 @@ public final class DGPluginManager {
     }
 
     public func interceptOutgoingText(_ text: String, completion: @escaping (Result<String?, DGPluginError>) -> Void) {
+        self.interceptOutgoingText(text, namingPlugin: { result, _ in completion(result) })
+    }
+
+    /// The same as `interceptOutgoingText(_:completion:)`; a failure also gives the name of the plugin that caused it,
+    /// or nil when no plugin did.
+    public func interceptOutgoingText(_ text: String, namingPlugin completion: @escaping (Result<String?, DGPluginError>, String?) -> Void) {
         coordinator.queue.async {
             let operation = DGPluginOutgoingOperation()
             let finish: (Result<String?, DGPluginError>) -> Void = { result in
                 guard !operation.finished else { return }
                 operation.finished = true
-                DispatchQueue.main.async { completion(result) }
+                let pluginName: String?
+                if case .failure = result, let id = operation.currentInstallation {
+                    pluginName = self.coordinator.state.installations.first(where: { $0.id == id })?.manifest.name
+                } else {
+                    pluginName = nil
+                }
+                DispatchQueue.main.async { completion(result, pluginName) }
             }
             do {
                 let input = try DGPluginOutgoingMessage.input(text)
@@ -572,6 +588,7 @@ public final class DGPluginManager {
         guard !operation.finished else { return }
         guard index < registrations.count, input.objectValue?["cancelled"] != .bool(true) else { completion(.success(input)); return }
         let (id, execution, registration) = registrations[index]
+        operation.currentInstallation = id
         guard current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing", !execution.busy else { completion(.failure(DGPluginError(code: "busy", message: "outgoing plugin is unavailable; retry sending the draft"))); return }
         operation.activeInstallation = id
         let requestId = UUID().uuidString.lowercased()
@@ -593,15 +610,29 @@ public final class DGPluginManager {
                 guard self.current(id, execution.generation), execution.transforms[registration.id]?.slot == "outgoing" else { completion(.failure(DGPluginError(code: "cancelled", message: "outgoing plugin permission changed"))); return }
                 switch outcome {
                 case .success where pending.result != nil:
+                    execution.outgoingFailures = 0
                     self.applyOutgoingInterceptors(registrations, index: index + 1, input: pending.result!, operation: operation, completion: completion)
                 case let .failure(error) where error.code != "plugin_rejected" && error.code != "runtime_busy":
                     self.fail(id: id, message: "outgoing message handler exceeded its budget or stopped")
                     completion(.failure(DGPluginError(code: "runtime_error", message: "outgoing plugin stopped; the draft was kept")))
                     return
                 default:
-                    // The handler's own error (or a busy runtime): keep the plugin running and the draft unsent.
+                    // The handler's own error (or a busy runtime): keep the plugin running and the draft unsent. A handler
+                    // that fails three times in a row would block every send, so it stops the plugin.
                     var code = "plugin_error"
-                    if case let .failure(error) = outcome { code = error.code == "runtime_busy" ? "busy" : (error.detail ?? "plugin_error") }
+                    var runtimeBusy = false
+                    if case let .failure(error) = outcome {
+                        runtimeBusy = error.code == "runtime_busy"
+                        code = runtimeBusy ? "busy" : (error.detail ?? "plugin_error")
+                    }
+                    if !runtimeBusy {
+                        execution.outgoingFailures += 1
+                        if execution.outgoingFailures >= 3 {
+                            self.fail(id: id, message: "outgoing message handlers failed three times in a row")
+                            completion(.failure(DGPluginError(code: "runtime_error", message: "outgoing plugin stopped; the draft was kept")))
+                            return
+                        }
+                    }
                     completion(.failure(DGPluginError(code: code, message: "outgoing plugin reported an error; the draft was kept")))
                 }
                 self.refreshDeferredViewModels()

@@ -67,6 +67,21 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
     }
 
+    func testOutgoingHandlerFailingThreeTimesInARowStopsThePlugin() throws {
+        let permission = DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "test a broken interceptor")
+        let package = try self.package(permissions: [permission], body: "await api.messages.beforeSend({id:'broken'},()=>{throw Error('stop')});")
+        let id = try self.install(package, permissions: [permission])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        // A handler that keeps failing would block every send, so the third failure in a row stops the plugin.
+        for expected in ["plugin_error", "plugin_error", "runtime_error"] {
+            let result = self.result { self.manager.interceptOutgoingText(".private-command", completion: $0) }
+            guard case let .failure(error) = result else { return XCTFail("a broken handler must never send the original command") }
+            XCTAssertEqual(error.code, expected)
+        }
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.enabled, false)
+    }
+
     func testRejectedCommandReportsItsCodeAndKeepsThePluginRunning() throws {
         let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "test command")
         let package = try self.package(permissions: [ui], body: "await api.commands.register({id:'refused',title:'refused',placement:'settings',async run(){throw Object.assign(new Error('refused'),{code:'permission_denied'})}});")
