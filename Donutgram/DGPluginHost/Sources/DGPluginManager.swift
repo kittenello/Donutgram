@@ -116,7 +116,14 @@ private final class DGPluginCoordinator {
     var packages: [String: DGVerifiedPluginPackage] = [:]
     var runningMarkers = Set<DGPluginRunningMarker>()
     var activeAccountKey: String?
+    // The app reports the foreground once it becomes active (setForegroundActive), after the account is activated:
+    // starting as true would start every enabled plugin on a background launch and stop it right after. The test hosts
+    // only activate an account.
+    #if DG_PLUGIN_TESTS
     var foreground = true
+    #else
+    var foreground = false
+    #endif
     var powerSaving = false
     var startupError: DGPluginError?
     var persistenceError: String?
