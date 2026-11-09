@@ -46,7 +46,7 @@ private let dgEnglishStrings: [String: String] = [
     "Отправляет GIF как видео без звука. Обход не сработает, если в чате запрещена отправка видео.": "Sends GIFs as silent videos. This cannot bypass a ban on sending videos in the chat.",
     "Отправляет стикеры как видео без звука. Обход не сработает, если в чате запрещена отправка видео.": "Sends stickers as silent videos. This cannot bypass a ban on sending videos in the chat.",
     "Открывает чаты и каналы, недоступные из-за ограничений именно на iPhone.": "Opens chats and channels blocked specifically on iPhone.",
-    "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.": "Shows hidden, sold, and deleted gifts. You must have opened the person's profile at least once while the gift was still visible.",
+    "Показывает скрытые и удалённые обычные подарки; NFT не запоминаются. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.": "Shows hidden and deleted regular gifts; NFTs are not remembered. You must have opened the person's profile at least once while the gift was still visible.",
     "Загрузка истории операций…": "Loading transaction history…",
     "Не удалось загрузить кошелёк": "Could not load the wallet",
     "Не удалось загрузить историю операций": "Could not load transaction history",
