@@ -15,6 +15,9 @@ struct Requests {
     std::vector<int64_t> ids;
     std::vector<std::string> envelopes;
     std::atomic<bool> began{false};
+    // Set by a stopper thread once dgjs_stop has returned; a request made with waitForStop holds the runtime thread until then.
+    std::atomic<bool> stopped{false};
+    bool waitForStop = false;
     unsigned sleepMilliseconds = 0;
 };
 
@@ -29,6 +32,7 @@ static void request(void *opaque, const char *json) {
     state->ids.push_back(std::strtoll(id + 5, nullptr, 10));
     state->envelopes.push_back(json);
     state->began.store(true);
+    if (state->waitForStop) while (!state->stopped.load()) std::this_thread::yield();
     if (state->sleepMilliseconds) std::this_thread::sleep_for(std::chrono::milliseconds(state->sleepMilliseconds));
 }
 
@@ -109,10 +113,17 @@ int main(int argc, char **argv) {
         } else if (name == "stop_join" || name == "stop_regexp") {
             std::string operation = name == "stop_join" ? "Array.prototype.join.call({length:7000000},'');" : "/^(a+)+$/.test('a'.repeat(30)+'!');";
             add(host, "definePlugin({activate(api){api.storage.get('begin');" + operation + "}})");
+            // The join is charged most of its work budget up front and ends by itself with native_work_limit a few
+            // milliseconds after the request, so a timed stop can come too late. Its request waits until the stop has been
+            // requested, and the join then begins on a stopped runtime. The backtracking regexp runs ~100 ms, so its stop
+            // still comes 2 ms into the match and interrupts work in progress.
+            const bool join = name == "stop_join";
+            requests.waitForStop = join;
             std::thread stopper([&] {
                 while (!requests.began.load()) std::this_thread::yield();
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                if (!join) std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 dgjs_stop(host);
+                requests.stopped.store(true);
             });
             int status = dgjs_start(host, "main.js", bootstrap.c_str(), "{}");
             stopper.join();
