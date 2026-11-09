@@ -177,8 +177,8 @@ for other in [
     expect(updated.filter { $0.isMissing }.map { $0.gift._fromPeerId! } == [2], "an unrelated collectible hid a bear")
 }
 
-// A collectible sold and bought back under a new reference is the same gift,
-// and an older missing copy of it is not shown next to it.
+// A sold collectible is dropped, not kept as missing; bought back under a new
+// reference it is shown once, and a stale missing copy of it stays hidden.
 let originalCollectible = collectible(3, reference: 3, date: 9997, sender: 3, original: nil)
 let sold = History.updatedGiftHistory(current: [gift(1)], history: snapshot([gift(1), originalCollectible]), previousCheck: 150, observedAt: 200, maxDisappearedCount: 10)
 expect(references(sold) == [1], "a sold collectible was retained")
@@ -287,5 +287,31 @@ let mixedMissing = [4, 6, 8].enumerated().map { index, id in
 }
 expect(ids(History.giftsWithDisappeared(current: mixedLive + [mixedPin], history: mixedMissing)) == [20, 3, 4, 5, 6, 7, 8], "mixed collectibles and bears were not ordered after the pin")
 expect(History.updatedGiftHistory(current: [], history: snapshot(mixedLive + [mixedPin]), previousCheck: 150, observedAt: 200, maxDisappearedCount: 10).isEmpty, "an all-collectible profile retained missing gifts")
+
+// A partly loaded list places a missing gift without anchors by its date only
+// once an older gift is loaded, so it does not jump when the rest arrives.
+let unanchored = [DisappearedGift(gift: gift(4), position: 2, previousReference: nil, nextReference: nil, lastSeen: 123, isMissing: true)]
+expect(ids(History.giftsWithDisappeared(current: [gift(1), gift(2)], history: unanchored, isComplete: false)) == [1, 2], "a missing gift was shown before its slot loaded")
+expect(ids(History.giftsWithDisappeared(current: [gift(1), gift(2), gift(5)], history: unanchored, isComplete: false)) == [1, 2, 4, 5], "a missing gift was not placed by its date")
+
+// Gifts of the same second: the slot is final only after a strictly older gift.
+var sameSecond = [gift(2), gift(4), gift(6)]
+for index in sameSecond.indices { sameSecond[index].date = 100 }
+var olderGift = gift(8)
+olderGift.date = 50
+var sameSecondMissing = gift(3)
+sameSecondMissing.date = 100
+let sameSecondHistory = [DisappearedGift(gift: sameSecondMissing, position: 1, previousReference: nil, nextReference: nil, lastSeen: 123, isMissing: true)]
+expect(ids(History.giftsWithDisappeared(current: Array(sameSecond.prefix(2)), history: sameSecondHistory, isComplete: false)) == [2, 4], "a same-second gift was placed before its slot was final")
+expect(ids(History.giftsWithDisappeared(current: sameSecond, history: sameSecondHistory, isComplete: false)) == [2, 4, 6], "a same-second gift was placed without an older gift")
+let sameSecondComplete = History.giftsWithDisappeared(current: sameSecond + [olderGift], history: sameSecondHistory, isComplete: true)
+expect(ids(sameSecondComplete) == [3, 2, 4, 6, 8], "a same-second gift was misplaced in a complete list")
+expect(ids(History.giftsWithDisappeared(current: sameSecond + [olderGift], history: sameSecondHistory, isComplete: false)) == ids(sameSecondComplete), "a same-second gift jumped once the list completed")
+
+// Without a history the live gifts come back as they are, pins first.
+let withoutHistory = History.giftsWithDisappeared(current: [gift(3), pinned, gift(5)], history: [])
+expect(ids(withoutHistory) == [8, 3, 5], "an empty history did not put pins first")
+expect(!withoutHistory.contains(where: { $0.isMissing || $0.lastSeen != 0 }), "an empty history produced missing gifts")
+checkPositions(withoutHistory)
 
 print("Profile gift history: \(checks) checks passed")
