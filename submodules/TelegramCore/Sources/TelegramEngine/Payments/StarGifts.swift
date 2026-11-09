@@ -3821,6 +3821,19 @@ public final class ProfileGiftsContext {
                 return nil
             }
 
+            // The slot of a missing gift by its date among the unpinned live gifts,
+            // which come date-descending: in front of the first one not newer than
+            // it. While the list is partly loaded the slot is final only once a
+            // strictly older gift is loaded, as every gift of the same date is then
+            // loaded too; until then a gift of the same date may still arrive.
+            func dateSlot(_ entry: DisappearedGift) -> Int? {
+                let unpinned = current.indices.dropFirst(pinnedCount)
+                if !isComplete && !unpinned.contains(where: { current[$0].date < entry.gift.date }) {
+                    return nil
+                }
+                return unpinned.first(where: { current[$0].date <= entry.gift.date })
+            }
+
             // The nearest entry before (after) each position that continues as a
             // live gift, not looking past a gift that is not loaded yet.
             var previousLive: [Int?] = Array(repeating: nil, count: orderedHistory.count + 1)
@@ -3860,7 +3873,7 @@ public final class ProfileGiftsContext {
                     insertionIndex = index
                 } else if let index = previousLive[historyIndex] {
                     insertionIndex = index + 1
-                } else if let index = current.indices.dropFirst(pinnedCount).first(where: { current[$0].date <= entry.gift.date }) {
+                } else if let index = dateSlot(entry) {
                     insertionIndex = index
                 } else if isComplete {
                     insertionIndex = min(max(0, Int(entry.position) - missingCount), current.count)
@@ -3870,7 +3883,7 @@ public final class ProfileGiftsContext {
                 insertionIndex = max(pinnedCount, insertionIndex)
                 if (insertionIndex > pinnedCount && current[insertionIndex - 1].date < entry.gift.date)
                     || (insertionIndex < current.count && current[insertionIndex].date > entry.gift.date) {
-                    if let index = current.indices.dropFirst(pinnedCount).first(where: { current[$0].date <= entry.gift.date }) {
+                    if let index = dateSlot(entry) {
                         insertionIndex = index
                     } else if isComplete {
                         insertionIndex = current.count
