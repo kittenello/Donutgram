@@ -616,7 +616,9 @@ private func dgMakePluginPage(context: AccountContext, mode: DGPluginPageMode) -
 private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
     let context = page.context
     dgBindPluginAccount(context: context)
+    // On the main queue: the state reads the page and its controller, and the theme can change on another queue.
     let signal = combineLatest(context.sharedContext.presentationData, page.revision.get())
+    |> deliverOnMainQueue
     |> map { [page] presentationData, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let data = ItemListPresentationData(presentationData)
         let close = ItemListNavigationButton(content: .text(page.tr("Закрыть", "Close")), style: .regular, enabled: !page.busy, action: { [weak page] in
@@ -625,7 +627,11 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
             if let navigation = controller.navigationController as? NavigationController { let _ = navigation.popViewController(animated: true) }
             else { controller.dismiss() }
         })
-        let state = ItemListControllerState(presentationData: data, title: .text(page.title), leftNavigationButton: nil, rightNavigationButton: close, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        // Inside a navigation stack the bar already has a button of its own: back for a pushed page, a cross for a
+        // sheet. «Закрыть» is only for a page presented on its own, such as a plugin's page over the chat, where
+        // nothing else leads out. A page joins its stack before it first builds this state.
+        let standalone = page.controller?.navigationController == nil
+        let state = ItemListControllerState(presentationData: data, title: .text(page.title), leftNavigationButton: nil, rightNavigationButton: standalone ? close : nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: data, entries: page.rows(), style: .blocks, animateChanges: false), page))
     }
     let controller = ItemListController(context: context, state: signal)
