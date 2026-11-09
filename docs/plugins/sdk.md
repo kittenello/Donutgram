@@ -19,7 +19,7 @@ all native operations return promises. `api.commands.register({id,title,placemen
 | composer | getActiveDraft(), replaceSelection(request); native user gesture and optimistic revision required |
 | selection | get(); explicit native selection snapshot, protected sources excluded |
 | theme | get(); safe appearance snapshot; contribute({accent}), clear() for the plugin's own pages |
-| ui | toast(text) shows a non-modal notice titled with the plugin's name (five per ten seconds), callback(handler), render(page), dispose({id}) |
+| ui | toast(text) shows a non-modal notice titled "Plugin · name" (five per ten seconds), callback(handler), render(page), dispose({id}) |
 | network | request({url,method?}); publicNetwork profile, exact declared https origins, GET/HEAD, bounded passive utf8 response |
 | messages/chats/peers | read selected message/current chat/selected author snapshots through explicit native context; no history enumerator |
 | files | native pick() and read({handle}); bounded expiring utf8 text handle, no arbitrary path |
@@ -46,7 +46,7 @@ replace using `{composer:draft.handle,expectedRevision:draft.revision,range:{sta
 
 `api.messages.beforeSend({id,priority?}, handler)` registers an outgoing ordinary-text handler with the separate `messages.intercept / activeComposer` permission. it receives `{text,cancelled:false}` and returns `{}`, `{text:"replacement"}`, or `{cancel:true}`. replacement text is plain text, at most4096 UTF-16 units. callbacks run in deterministic priority order before the normal send pipeline; cancellation stops the chain. media-only, oversized and non-text-rich drafts are outside this hook. edited-message submission does not run it. the normal reply, scheduling, silent-posting and payment flows continue after a valid replacement.
 
-the native draft is compared before replacement and again before resuming the send. changes to the draft, chat or thread cancel the pending send. errors, busy handlers, revocation and a three-second processing deadline keep the draft rather than sending the original command. handler callbacks do not manufacture a general native user gesture.
+the native draft is compared before replacement and again before resuming the send. changes to the draft, chat or thread cancel the pending send. errors, revocation and a three-second processing deadline keep the draft rather than sending the original command. a plugin busy with other work is waited for within that deadline. a handler that fails three times in a row stops its plugin, and the alert names the plugin that kept the draft. handler callbacks do not manufacture a general native user gesture.
 
 `api.messages.send({text})` uses `messages.send / chosenRecipient` to enqueue ordinary unpaid text in the active native chat, without an additional per-message dialog. installation/permission review remains required. the older prepare/sendInteractive API still presents its own preview. direct sends return `{status:"queued"}`, not proof of server delivery, and do not recursively run the outgoing draft hook. a message is sent under the identity chosen in the chat's "send as" selector. send, edit and delete together are limited to five actions in ten seconds and twenty a minute per plugin; more reject with `rate_limited`.
 

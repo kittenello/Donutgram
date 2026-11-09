@@ -44,13 +44,15 @@ app-store execution is compile-gated out through the distribution flag. no app-s
 
 ## review fixes (2026-11-09)
 
-- each runtime runs on its own 4 MiB thread instead of a dispatch queue, whose 512 KiB stacks let a deep recursion crash the app before quickjs's 512 KiB limit fired. runtimes still executing when the app died are turned off at the next launch.
+- each runtime runs on its own 4 MiB thread instead of a dispatch queue, whose 512 KiB stacks let a deep recursion crash the app before quickjs's 512 KiB limit fired. a plugin that was starting (or had started less than ten seconds before) when the app died is turned off at the next launch.
 - a rejected command, event, page callback or transform no longer stops and disables the plugin; the error's code is shown to the user. budgets are measured in thread cpu time; an operation nothing can settle fails at once.
 - the chat list and the profile rebuild for transforms only when a transform appears, disappears or changes its results, no longer on every scroll step or plugin-manager update.
 - an intercepted scheduled or "when online" send keeps its draft when a plugin cancels or fails. plugin sends keep the chat's send-as identity.
-- send/edit/delete share a rate limit; notices are toasts.
+- an outgoing handler that fails three times in a row stops its plugin; a busy plugin is waited for up to the three-second deadline; the send's alert names the plugin.
+- plugins start only once the app reports the foreground.
+- send/edit/delete share a rate limit; notices are toasts titled "Plugin · name".
 - plugin-written data is saved half a second later in one write; the main thread reads snapshots instead of waiting for the plugin queue.
 - the client version comes from the bundle; plugin screens and chat dialogs are localized and capitalized.
 - `Tests/run_tests.py` runs the runtime, native-work and engine suites, and the "Plugin runtime tests" workflow runs it on macos-26.
 
-these changes are compiled by the CI IPA build; the runtime suites ran with mingw gcc on windows, where stop_join's 2 ms stop is below the timer granularity. device behaviour is not verified.
+swift is compiled only by the CI IPA build; nothing compiles or runs it locally. the c/c++ runtime suites run on macos CI and locally with gcc, including on windows. device behaviour is not verified.
