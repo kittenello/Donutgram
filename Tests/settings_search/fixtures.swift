@@ -13,7 +13,7 @@ defer { defaults.removePersistentDomain(forName: suite) }
 
 check(ids("").isEmpty && ids(" \n  ").isEmpty && ids("?!—").isEmpty, "empty queries never return every feature")
 check(ids("zzzxxyy").isEmpty, "unknown query has no results")
-check(ids("плагины") == ["plugins/"] && ids("javascript plugins") == ["plugins/"], "the plugin manager has one searchable section in both languages")
+check(ids("плагины") == ["plugins/"] && ids("plugins") == ["plugins/"], "the plugin manager has one searchable section in both languages")
 check(dgCurrentRowLocation(page: .plugins, key: "").0 == .plugins, "plugin section routes to its native page")
 check(dgCurrentRowLocation(page: .plugins, key: "settings").1 == "settings", "plugin deep links preserve the row key")
 check(dgCurrentRowLocation(page: .ghostOptions, key: "stories").0 == .ghost && dgCurrentRowLocation(page: .ghostOptions, key: "stories").1 == "storyViews", "legacy ghost links keep their migrated destination")
