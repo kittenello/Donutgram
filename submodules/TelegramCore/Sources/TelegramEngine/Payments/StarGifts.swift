@@ -2101,6 +2101,9 @@ private func donutgramReadGiftHistory(transaction: Transaction, peerId: EnginePe
     let previousCount = history.entries.count
     history.entries = ProfileGiftsContext.State.trackedGiftHistory(history.entries)
     if history.entries.count != previousCount {
+        // The stored value is the full history, so the survivors can take
+        // contiguous positions and point at each other instead of the dropped entries.
+        history.entries = ProfileGiftsContext.State.reindexGiftHistory(history.entries)
         let index = donutgramGiftHistoryIndex(transaction: transaction)
         if history.entries.isEmpty {
             transaction.removeItemCacheEntry(id: donutgramGiftHistoryEntryId(peerId: peerId))
@@ -3910,7 +3913,7 @@ public final class ProfileGiftsContext {
             return reindexGiftHistory(result)
         }
 
-        private static func reindexGiftHistory(_ history: [DisappearedGift]) -> [DisappearedGift] {
+        static func reindexGiftHistory(_ history: [DisappearedGift]) -> [DisappearedGift] {
             var result = history
             for index in result.indices {
                 result[index].position = Int32(index)
