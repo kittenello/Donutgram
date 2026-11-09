@@ -56,8 +56,31 @@ struct DGJSHost {
 
 static void fail(DGJSHost *h, const char *message);
 
+#if defined(_WIN32)
+#if defined(_MSC_VER)
+#pragma comment(lib, "advapi32")
+#endif
+// The processor's nominal frequency in MHz, which is the rate QueryThreadCycleTime counts at, or 0 when it is unknown.
+static DWORD nominalProcessorMHz() {
+    DWORD value = 0;
+    DWORD size = sizeof(value);
+    if (RegGetValueA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", "~MHz", RRF_RT_REG_DWORD, nullptr, &value, &size) != ERROR_SUCCESS) return 0;
+    return value;
+}
+#endif
+
 static bool threadCPU(uint64_t &result) {
 #if defined(_WIN32)
+    // Windows is not a product target; this path exists so the runtime suites can run on a Windows host. GetThreadTimes
+    // charged a thread that ran the whole time only 28-66 % of the wall time, so every budget allowed several times its
+    // CPU. The thread's cycle count is read instead and converted with the nominal frequency, in microseconds first so
+    // that the product cannot overflow. GetThreadTimes stays the fallback.
+    static const DWORD mhz = nominalProcessorMHz();
+    ULONG64 cycles = 0;
+    if (mhz != 0 && QueryThreadCycleTime(GetCurrentThread(), &cycles)) {
+        result = (cycles / mhz) * 1000 + (cycles % mhz) * 1000 / mhz;
+        return true;
+    }
     FILETIME created, exited, kernel, user;
     if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) return false;
     ULARGE_INTEGER k, u;
