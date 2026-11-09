@@ -143,7 +143,7 @@ private final class DGPluginPage {
             guard let self, let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil, validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin management screen is not active"))); return }
             guard method == "ui.toast" else { completion(.failure(DGPluginError(code: "feature_unavailable", message: "this adapter requires an active chat"))); return }
             guard let values = params.objectValue, Set(values.keys) == ["text"], let text = values["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { completion(.failure(DGPluginError(code: "invalid_argument", message: "invalid plugin notice"))); return }
-            let name = self.installation(installationId)?.manifest.name ?? self.tr("Плагин", "Plugin")
+            let name = dgPluginNoticeTitle(pluginName: self.installation(installationId)?.manifest.name, russian: self.russian)
             guard validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))); return }
             // A toast, not a modal alert: notices never block the screen.
             controller.present(UndoOverlayController(presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, content: .info(title: String(name.prefix(64)), text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)

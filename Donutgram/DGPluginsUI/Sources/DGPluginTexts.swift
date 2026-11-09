@@ -8,6 +8,14 @@ private func dgPluginTr(_ russian: Bool, _ ru: String, _ en: String) -> String {
     return russian ? ru : en
 }
 
+/// The title of a plugin's notice. The plugin chooses its own name, so the title always says it is a plugin: a plugin
+/// named «Telegram» must not show a notice that looks like Telegram's.
+public func dgPluginNoticeTitle(pluginName: String?, russian: Bool) -> String {
+    let prefix = dgPluginTr(russian, "Плагин", "Plugin")
+    guard let pluginName, !pluginName.isEmpty else { return prefix }
+    return prefix + " · " + pluginName
+}
+
 /// The explanation of a failed plugin operation for an alert.
 public func dgPluginErrorDescription(_ error: DGPluginError, russian: Bool) -> String {
     let tr = { (ru: String, en: String) in dgPluginTr(russian, ru, en) }
