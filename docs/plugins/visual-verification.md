@@ -23,7 +23,7 @@ sharing from a card or details opens the native Telegram recipient picker, with 
 - missing/broken icons, long content, light/dark appearance and large accessibility text;
 - install disabled, one-action reviewed enable, optional capability controls, denied grants and activation failure;
 - same-version/downgrade rejection, update changelog, changed profile/scopes/origins and newly requested permissions;
-- enable/disable from list and details, global stop, permission revoke, reset confirmation and both removal paths;
+- enable/disable from list and details, the alert naming missing required permissions (first enable, after an update, after a revoke) with both answers, global stop, permission revoke, reset confirmation and both removal paths;
 - old/new accounts while an operation is pending, and foreground/background transitions;
 - declarative plugin pages, every supported control and cancellation while a callback is pending.
 

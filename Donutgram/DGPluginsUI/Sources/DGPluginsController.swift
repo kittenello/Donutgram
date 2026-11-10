@@ -484,13 +484,21 @@ private final class DGPluginPage {
         if key.hasPrefix("enabled:") {
             let id = String(key.dropFirst(8))
             guard self.manager.globallyEnabled, let item = self.installation(id) else { self.refresh(); return }
-            let request = UUID()
-            self.enableRequests[id] = request
-            self.manager.setEnabled(id: id, enabled: value, reviewedDigest: item.digest) { [weak self] result in
-                guard let self, self.enableRequests[id] == request else { return }
-                self.enableRequests.removeValue(forKey: id)
-                self.complete(result)
+            let enable = { [weak self] in
+                guard let self else { return }
+                let request = UUID()
+                self.enableRequests[id] = request
+                self.manager.setEnabled(id: id, enabled: value, reviewedDigest: item.digest) { [weak self] result in
+                    guard let self, self.enableRequests[id] == request else { return }
+                    self.enableRequests.removeValue(forKey: id)
+                    self.complete(result)
+                }
             }
+            // Turning a plugin on grants the required permissions it does not hold yet: all of them the first time, the
+            // ones an update added, the ones the user revoked. The switch names them and asks first.
+            let granted = Set(item.grants.map(DGPluginPolicy.permissionKey))
+            let missing = value ? item.manifest.permissions.filter({ !granted.contains(DGPluginPolicy.permissionKey($0)) }) : []
+            if missing.isEmpty { enable() } else { self.confirmGrants(item: item, missing: missing, enable: enable) }
         } else if key.hasPrefix("grant:"), case let .permissions(id) = self.mode, let item = self.installation(id), let index = Int(key.dropFirst(6)) {
             let requested = item.manifest.permissions + item.manifest.optionalPermissions
             guard requested.indices.contains(index) else { return }
@@ -602,6 +610,22 @@ private final class DGPluginPage {
 
     private func confirm(title: String, text: String, destructive: Bool, action: @escaping () -> Void) {
         self.controller?.present(textAlertController(context: self.context, title: title, text: text, actions: [TextAlertAction(type: .genericAction, title: self.tr("Отмена", "Cancel"), action: {}), TextAlertAction(type: destructive ? .destructiveAction : .defaultAction, title: self.tr("Подтвердить", "Confirm"), action: action)]), in: .window(.root))
+    }
+
+    /// Names the required permissions a switch is about to grant. Cancelling puts the switch back; the alert cannot be
+    /// dismissed by a tap outside, which would leave the switch on while the plugin stays off.
+    private func confirmGrants(item: DGPluginInstallation, missing: [DGPluginPermission], enable: @escaping () -> Void) {
+        guard let controller = self.controller else { self.refresh(); return }
+        let lines = missing.map { permission -> String in
+            let line = "• " + self.permissionTitle(permission.capability)
+            return permission.origins.isEmpty ? line : line + " (" + permission.origins.joined(separator: ", ") + ")"
+        }
+        let title = self.tr("Включить «", "Turn on “") + item.manifest.name + self.tr("»?", "”?")
+        let text = self.tr("Плагин получит обязательные разрешения:", "The plugin will get its required permissions:") + "\n" + lines.joined(separator: "\n")
+        controller.present(textAlertController(context: self.context, title: title, text: text, actions: [
+            TextAlertAction(type: .genericAction, title: self.tr("Отмена", "Cancel"), action: { [weak self] in self?.refresh() }),
+            TextAlertAction(type: .defaultAction, title: self.tr("Разрешить", "Allow"), action: enable)
+        ], dismissOnOutsideTap: false), in: .window(.root))
     }
 
     private func push(_ mode: DGPluginPageMode) {
