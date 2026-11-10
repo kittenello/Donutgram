@@ -179,6 +179,38 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertTrue(item.grants.isEmpty)
     }
 
+    func testSettingsSessionComesBackWhenTheAppReturnsToTheForeground() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let package = try self.package(permissions: [ui], body: "await api.commands.register({id:'settings',title:'settings',placement:'settings',run:async()=>{}});")
+        let id = try self.install(package)
+        let owner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: owner, completion: $0) }.get()
+        XCTAssertEqual(self.manager.commands.filter { $0.installationId == id }.map { $0.id }, ["settings"])
+        let stopped = self.expectation(description: "leaving the foreground stopped the settings session")
+        let returned = self.expectation(description: "the open settings screen got its session back")
+        var sawStop = false
+        var sawReturn = false
+        let observer = self.manager.observe {
+            let available = self.manager.commands.contains { $0.installationId == id && $0.id == "settings" }
+            if !sawStop, !available {
+                sawStop = true
+                stopped.fulfill()
+            } else if sawStop, !sawReturn, available {
+                sawReturn = true
+                returned.fulfill()
+            }
+        }
+        defer { self.manager.removeObserver(observer) }
+        self.manager.setForegroundActive(false)
+        self.wait(for: [stopped], timeout: 5)
+        self.manager.setForegroundActive(true)
+        self.wait(for: [returned], timeout: 5)
+        try self.result { self.manager.runCommand(installationId: id, commandId: "settings", completion: $0) }.get()
+        self.manager.closeSettings(id: id, owner: owner)
+        XCTAssertThrowsError(try self.result { self.manager.runCommand(installationId: id, commandId: "settings", completion: $0) }.get())
+        XCTAssertFalse(self.manager.installations.first { $0.id == id }?.enabled ?? true)
+    }
+
     func testReviewedEnableGrantsOnlyRequiredCapabilities() throws {
         let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "store replacements")
         let optional = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "optional appearance")

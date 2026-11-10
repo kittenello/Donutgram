@@ -44,7 +44,6 @@ private struct DGPluginDeviceState: Codable {
 
 private final class DGPluginExecution {
     var settingsOnly = false
-    var settingsOwners = Set<UUID>()
     let generation = UUID()
     var runtime: DGPluginRuntime?
     var state: DGPluginState = .starting
@@ -365,6 +364,9 @@ public final class DGPluginManager {
     private var deferredViewUpdates: [String: () -> Void] = [:]
     private var observers: [UUID: () -> Void] = [:]
     private var executions: [String: DGPluginExecution] = [:]
+    /// The open settings screens of each installation. They belong to the manager, not to a runtime: leaving the
+    /// foreground stops every runtime, and reconcile starts a settings session again while one of its screens is open.
+    private var settingsOwners: [String: Set<UUID>] = [:]
     private var adapter: ((String, String, DGPluginJSON, @escaping () -> Bool, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)?
     private var renderAdapter: ((String, DGPluginJSON, String, @escaping () -> Bool, @escaping (String) -> Data?, @escaping (String, DGPluginJSON) -> Void, @escaping () -> Void) -> Result<() -> Void, DGPluginError>)?
     private var environment: [String: DGPluginJSON] = ["clientVersion": .string(DGPluginClientVersion.current), "locale": .string("en"), "appearance": .string("light"), "lowPowerMode": .bool(false)]
@@ -1067,48 +1069,57 @@ public final class DGPluginManager {
             let account = self.account(record)
             if coordinator.state.globallyEnabled && account.enabled && account.failures < 3 && account.lastError == nil && (executions[record.id] == nil || executions[record.id]?.settingsOnly == true) { start(id: record.id, completion: { _ in }) }
         }
+        // Settings screens still open get their sessions back, after the plugins that run on their own have taken
+        // their runtime slots.
+        for (id, owners) in settingsOwners where !owners.isEmpty && executions[id] == nil && coordinator.state.installations.contains(where: { $0.id == id && !$0.removing }) {
+            start(id: id, settings: true, completion: { _ in })
+        }
     }
 
     private func current(_ id: String, _ generation: UUID) -> Bool {
         guard Self.executionAvailable, coordinator.startupError == nil, coordinator.foreground, !coordinator.powerSaving, coordinator.activeAccountKey == accountKey, let execution = executions[id], execution.generation == generation, let record = coordinator.state.installations.first(where: { $0.id == id && !$0.removing }), !(coordinator.state.revokedPublishers ?? []).contains(record.publisherIdentity) else { return false }
-        return execution.settingsOnly ? !execution.settingsOwners.isEmpty : coordinator.state.globallyEnabled && account(record).enabled
+        return execution.settingsOnly ? !(settingsOwners[id] ?? []).isEmpty : coordinator.state.globallyEnabled && account(record).enabled
     }
 
     public func prepareSettings(id: String, owner: UUID, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
         coordinator.queue.async {
             guard let record = self.coordinator.state.installations.first(where: { $0.id == id && !$0.removing }) else { self.complete(completion, error: DGPluginError(code: "stale_handle", message: "installation is unavailable")); return }
             guard self.settingsPermissions(record).contains(where: { $0.capability == "ui.contribute" }) else { DispatchQueue.main.async { completion(.success(())) }; return }
+            // The screen is registered even while the plugin runs normally: if that execution stops, the screen still
+            // needs a settings session at the next reconcile.
+            self.settingsOwners[id, default: []].insert(owner)
             if let execution = self.executions[id], self.current(id, execution.generation) {
-                if execution.settingsOnly { execution.settingsOwners.insert(owner) }
                 DispatchQueue.main.async { completion(.success(())) }
                 return
             }
-            self.start(id: id, settingsOwner: owner, completion: completion)
+            self.start(id: id, settings: true, completion: completion)
         }
     }
 
     public func closeSettings(id: String, owner: UUID) {
         coordinator.queue.async {
+            _ = self.settingsOwners[id]?.remove(owner)
+            guard self.settingsOwners[id]?.isEmpty ?? true else { return }
+            self.settingsOwners.removeValue(forKey: id)
             guard let execution = self.executions[id], execution.settingsOnly else { return }
-            execution.settingsOwners.remove(owner)
-            if execution.settingsOwners.isEmpty { self.stop(id: id); self.coordinator.publishAll() }
+            self.stop(id: id)
+            self.coordinator.publishAll()
         }
     }
 
-    private func start(id: String, settingsOwner: UUID? = nil, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+    private func start(id: String, settings: Bool = false, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
         do {
             guard let record = coordinator.state.installations.first(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is unavailable") }
             stop(id: id)
             guard Self.executionAvailable, coordinator.startupError == nil, !(coordinator.state.revokedPublishers ?? []).contains(record.publisherIdentity) else { throw DGPluginError(code: "permission_denied", message: "plugin execution is unavailable") }
-            guard coordinator.activeAccountKey == accountKey, coordinator.foreground, !coordinator.powerSaving, settingsOwner != nil || coordinator.state.globallyEnabled else {
+            guard coordinator.activeAccountKey == accountKey, coordinator.foreground, !coordinator.powerSaving, settings || coordinator.state.globallyEnabled else {
                 coordinator.publishAll(); DispatchQueue.main.async { completion(.success(())) }; return
             }
-            guard settingsOwner != nil || requiredGranted(record, account(record)) else { throw DGPluginError(code: "permission_denied", message: "required permissions were revoked") }
+            guard settings || requiredGranted(record, account(record)) else { throw DGPluginError(code: "permission_denied", message: "required permissions were revoked") }
             guard executions.count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "active plugin runtime limit reached") }
             let package = try coordinator.package(record)
             let execution = DGPluginExecution()
-            execution.settingsOnly = settingsOwner != nil
-            if let settingsOwner { execution.settingsOwners.insert(settingsOwner) }
+            execution.settingsOnly = settings
             executions[id] = execution
             if !execution.settingsOnly { coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id)) }
             var runtimeEnvironment = environment
@@ -1147,7 +1158,7 @@ public final class DGPluginManager {
             }
             coordinator.publishAll()
         } catch {
-            if settingsOwner != nil { stop(id: id); coordinator.publishAll() }
+            if settings { stop(id: id); coordinator.publishAll() }
             else { fail(id: id, message: "plugin could not start") }
             complete(completion, error: error)
         }
