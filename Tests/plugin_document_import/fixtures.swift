@@ -50,6 +50,7 @@ func pluginListSearchAndPauseTransitions() {
         check(rows.filter { $0.kind == .plugin }.count == count, "unfiltered plugin list lost a card")
         check(!rows.contains { $0.kind == .text }, "empty or unfiltered list gained an installation hint")
         check(rows.first { $0.key == "global" }?.detail == "", "global switch gained a pause or count subtitle")
+        check(rows.first { $0.key == "global" }?.title == "Plugins", "global title must stay constant")
     }
     page.manager.installations = Array(installations.prefix(5))
     page.query = "plugin0"
@@ -58,6 +59,7 @@ func pluginListSearchAndPauseTransitions() {
     check(active.contains { $0.key == "search" }, "filtering to one result hid the search field")
     page.manager.globallyEnabled = false
     let paused = page.rows()
+    check(paused.first { $0.key == "global" }?.title == "Plugins", "pausing changed the global title")
     let pausedCard = paused.first { $0.kind == .plugin }!
     check(pausedCard.value && !pausedCard.toggleEnabled && pausedCard.enabled, "pause must lock the switch while preserving saved enablement and card actions")
     check(pausedCard.detail == "Author not specified · 1.0.0", "card repeats the global pause status")
@@ -66,6 +68,10 @@ func pluginListSearchAndPauseTransitions() {
     page.manager.globallyEnabled = true
     let resumed = page.rows().first { $0.kind == .plugin }!
     check(resumed.value && resumed.toggleEnabled && resumed.enabled, "resume must unlock the saved switch")
+    let runningDetail = resumed.detail
+    page.manager.installations = [DGPluginInstallation(id: "installation-0", manifest: installations[0].manifest, digest: "digest-0", trust: "local", enabled: true, state: .starting)]
+    check(page.rows().first { $0.kind == .plugin }?.detail == runningDetail, "activation added a transient subtitle and resized the card")
+    page.manager.installations = Array(installations.prefix(5))
     page.query = "no such plugin"
     let noMatches = page.rows()
     check(noMatches.contains { $0.key == "search" }, "empty search results hid the search field")

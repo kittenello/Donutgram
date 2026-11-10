@@ -41,7 +41,7 @@ export type UINode =
 export interface UIPage { id: string; title: string; nodes: UINode[]; }
 export interface PluginEvent { readonly id: string; readonly timestamp: number; readonly version: 1; readonly data: JSONValue; }
 export type PluginEventName = "plugin.activated" | "account.contextChanged" | "app.foreground" | "theme.changed" | "locale.changed" | "chat.opened" | "chat.closed" | "composer.changed" | "message.observed";
-export interface Environment { readonly clientVersion: string; readonly locale: string; readonly appearance: "light" | "dark"; readonly lowPowerMode: boolean; }
+export interface Environment { readonly clientVersion: string; readonly locale: string; readonly appearance: "light" | "dark"; readonly lowPowerMode: boolean; readonly executionMode?: "normal" | "settings"; }
 export interface SelectedMessage { readonly handle: string; readonly text: string; readonly timestamp: number; readonly entities: JSONValue[]; readonly entitiesComplete: false; readonly mediaComplete: false; }
 export interface TransformInputs {
   profile: {panes: readonly {id: string; empty: boolean}[]};

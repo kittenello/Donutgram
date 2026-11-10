@@ -15,7 +15,7 @@ all native operations return promises. `api.commands.register({id,title,placemen
 | storage | get, set, remove, keys; plugin/account namespace, json values only |
 | settings | get(), set(values); schema-validated persisted values |
 | capabilities | has(name), list() |
-| environment | get(); activation-time clientVersion/locale/appearance/lowPowerMode snapshot, not account identity authority |
+| environment | get(); activation-time clientVersion/locale/appearance/lowPowerMode/executionMode snapshot, not account identity authority |
 | composer | getActiveDraft(), replaceSelection(request); native user gesture and optimistic revision required |
 | selection | get(); explicit native selection snapshot, protected sources excluded |
 | theme | get(); safe appearance snapshot; contribute({accent}), clear() for the plugin's own pages |
@@ -55,6 +55,10 @@ the native draft is compared before replacement and again before resuming the se
 editing re-fetches the message and checks Telegram's native edit rules before replacing its text/caption. the new text is plain: the message's formatting, links and custom emoji are not kept. deletion checks the current native delete-for-everyone option, including administrative rights, and never silently falls back to local deletion. it can delete another author's message when the account has that right. edit returns `{status:"edited"}` after a successful edit response; deletion returns `{status:"deletionRequested"}` after queueing the native operation. these permissions do not grant arbitrary history enumeration, peer lookup, raw protocols or paid actions. all remain localPrivate-only and unavailable with publicNetwork.
 
 the message-tools example replaces `.testdonut` before sending and demonstrates clearly named native commands for direct send, edit and delete. native UI/server acceptance still requires device testing.
+
+## settings while disabled
+
+schema fields remain editable without enabling a plugin. custom settings use a temporary session with `environment.executionMode === "settings"`; register settings commands before any work that needs normal execution. only declared local settings/storage, packaged images and plugin-owned native pages are usable. chat commands, transforms, events and network calls stay inactive; the saved enabled state and grants do not change. the session ends when the last settings screen closes.
 
 ## native pages
 

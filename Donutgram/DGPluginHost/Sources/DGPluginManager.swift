@@ -43,6 +43,8 @@ private struct DGPluginDeviceState: Codable {
 }
 
 private final class DGPluginExecution {
+    var settingsOnly = false
+    var settingsOwners = Set<UUID>()
     let generation = UUID()
     var runtime: DGPluginRuntime?
     var state: DGPluginState = .starting
@@ -770,7 +772,7 @@ public final class DGPluginManager {
             let state: DGPluginState
             if record.removing { state = .removing }
             else if account.failures >= 3 { state = .quarantined }
-            else if let execution = executions[record.id] { state = execution.state }
+            else if let execution = executions[record.id], !execution.settingsOnly { state = execution.state }
             else if !requiredGranted(record, account) && account.enabled { state = .permissionRequired }
             else if account.lastError != nil { state = .failed }
             else { state = .installedDisabled }
@@ -1063,29 +1065,55 @@ public final class DGPluginManager {
         guard coordinator.activeAccountKey == accountKey else { return }
         for record in coordinator.state.installations where !record.removing {
             let account = self.account(record)
-            if account.enabled && account.failures < 3 && account.lastError == nil && executions[record.id] == nil { start(id: record.id, completion: { _ in }) }
+            if coordinator.state.globallyEnabled && account.enabled && account.failures < 3 && account.lastError == nil && (executions[record.id] == nil || executions[record.id]?.settingsOnly == true) { start(id: record.id, completion: { _ in }) }
         }
     }
 
     private func current(_ id: String, _ generation: UUID) -> Bool {
-        guard Self.executionAvailable, coordinator.startupError == nil, coordinator.state.globallyEnabled, coordinator.foreground, !coordinator.powerSaving, coordinator.activeAccountKey == accountKey, executions[id]?.generation == generation, let record = coordinator.state.installations.first(where: { $0.id == id && !$0.removing }), !(coordinator.state.revokedPublishers ?? []).contains(record.publisherIdentity), account(record).enabled else { return false }
-        return true
+        guard Self.executionAvailable, coordinator.startupError == nil, coordinator.foreground, !coordinator.powerSaving, coordinator.activeAccountKey == accountKey, let execution = executions[id], execution.generation == generation, let record = coordinator.state.installations.first(where: { $0.id == id && !$0.removing }), !(coordinator.state.revokedPublishers ?? []).contains(record.publisherIdentity) else { return false }
+        return execution.settingsOnly ? !execution.settingsOwners.isEmpty : coordinator.state.globallyEnabled && account(record).enabled
     }
 
-    private func start(id: String, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+    public func prepareSettings(id: String, owner: UUID, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+        coordinator.queue.async {
+            guard let record = self.coordinator.state.installations.first(where: { $0.id == id && !$0.removing }) else { self.complete(completion, error: DGPluginError(code: "stale_handle", message: "installation is unavailable")); return }
+            guard self.settingsPermissions(record).contains(where: { $0.capability == "ui.contribute" }) else { DispatchQueue.main.async { completion(.success(())) }; return }
+            if let execution = self.executions[id], self.current(id, execution.generation) {
+                if execution.settingsOnly { execution.settingsOwners.insert(owner) }
+                DispatchQueue.main.async { completion(.success(())) }
+                return
+            }
+            self.start(id: id, settingsOwner: owner, completion: completion)
+        }
+    }
+
+    public func closeSettings(id: String, owner: UUID) {
+        coordinator.queue.async {
+            guard let execution = self.executions[id], execution.settingsOnly else { return }
+            execution.settingsOwners.remove(owner)
+            if execution.settingsOwners.isEmpty { self.stop(id: id); self.coordinator.publishAll() }
+        }
+    }
+
+    private func start(id: String, settingsOwner: UUID? = nil, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
         do {
             guard let record = coordinator.state.installations.first(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is unavailable") }
             stop(id: id)
-            guard coordinator.activeAccountKey == accountKey, coordinator.foreground, !coordinator.powerSaving, coordinator.state.globallyEnabled else {
+            guard Self.executionAvailable, coordinator.startupError == nil, !(coordinator.state.revokedPublishers ?? []).contains(record.publisherIdentity) else { throw DGPluginError(code: "permission_denied", message: "plugin execution is unavailable") }
+            guard coordinator.activeAccountKey == accountKey, coordinator.foreground, !coordinator.powerSaving, settingsOwner != nil || coordinator.state.globallyEnabled else {
                 coordinator.publishAll(); DispatchQueue.main.async { completion(.success(())) }; return
             }
-            guard requiredGranted(record, account(record)) else { throw DGPluginError(code: "permission_denied", message: "required permissions were revoked") }
+            guard settingsOwner != nil || requiredGranted(record, account(record)) else { throw DGPluginError(code: "permission_denied", message: "required permissions were revoked") }
             guard executions.count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "active plugin runtime limit reached") }
             let package = try coordinator.package(record)
             let execution = DGPluginExecution()
+            execution.settingsOnly = settingsOwner != nil
+            if let settingsOwner { execution.settingsOwners.insert(settingsOwner) }
             executions[id] = execution
-            coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id))
-            let environmentJSON = String(data: try JSONEncoder().encode(DGPluginJSON.object(environment)), encoding: .utf8) ?? "{}"
+            if !execution.settingsOnly { coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id)) }
+            var runtimeEnvironment = environment
+            runtimeEnvironment["executionMode"] = .string(execution.settingsOnly ? "settings" : "normal")
+            let environmentJSON = String(data: try JSONEncoder().encode(DGPluginJSON.object(runtimeEnvironment)), encoding: .utf8) ?? "{}"
             let runtime = try DGPluginRuntime(files: package.files, entry: package.manifest.entry, environmentJSON: environmentJSON, request: { [weak self, weak execution] request, reply in
                 guard let self = self, let execution = execution else { reply("{\"error\":{\"code\":\"plugin_disabled\",\"message\":\"plugin stopped\"}}"); return }
                 self.coordinator.queue.async { self.handle(request, installationId: id, generation: execution.generation, reply: reply) }
@@ -1118,10 +1146,15 @@ public final class DGPluginManager {
                 }
             }
             coordinator.publishAll()
-        } catch { fail(id: id, message: "plugin could not start"); complete(completion, error: error) }
+        } catch {
+            if settingsOwner != nil { stop(id: id); coordinator.publishAll() }
+            else { fail(id: id, message: "plugin could not start") }
+            complete(completion, error: error)
+        }
     }
 
     private func fail(id: String, message: String) {
+        if executions[id]?.settingsOnly == true { stop(id: id); coordinator.publishAll(); return }
         let activationFailed = executions[id]?.state == .starting
         stop(id: id)
         if activationFailed, let record = coordinator.state.installations.first(where: { $0.id == id }), record.previous != nil { try? restorePrevious(id: id) }
@@ -1181,6 +1214,16 @@ public final class DGPluginManager {
             guard execution.requests <= 600 else { throw DGPluginError(code: "quota_exceeded", message: "plugin request budget exceeded") }
             let record = coordinator.state.installations[index]
             let account = self.account(record)
+            if execution.settingsOnly {
+                if ["ui.transform.register", "messages.interceptor.register"].contains(method) {
+                    respond(.success(.string(params.dgObject?["id"]?.dgString ?? "settings-inactive")), reply); return
+                }
+                if ["ui.transform.unregister", "messages.interceptor.unregister", "events.subscribe", "events.unsubscribe"].contains(method) { respond(.success(.null), reply); return }
+                if method == "ui.command.register", params.dgObject?["placement"]?.dgString != "settings" {
+                    respond(.success(.string(params.dgObject?["id"]?.dgString ?? "settings-inactive")), reply); return
+                }
+                guard Self.settingsMethods.contains(method) else { throw DGPluginError(code: "plugin_disabled", message: "only local plugin settings are available while the plugin is disabled") }
+            }
             try authorize(rule, record: record, account: account, execution: execution)
             guard rule.available else { throw DGPluginError(code: "feature_unavailable", message: "this adapter is not available in this client") }
             if ["messages.send", "messages.edit", "messages.delete"].contains(method) {
@@ -1285,11 +1328,20 @@ public final class DGPluginManager {
         } catch { respond(.failure(pluginError(error)), reply) }
     }
 
+    private static let settingsMethods: Set<String> = ["environment.get", "settings.get", "settings.set", "capabilities.has", "capabilities.list", "storage.get", "storage.set", "storage.remove", "storage.keys", "ui.command.register", "ui.command.unregister", "ui.render", "ui.dispose", "ui.toast", "assets.image", "theme.get", "theme.contribute", "theme.clear"]
+
+    private func settingsPermissions(_ record: DGPluginStoredRecord) -> [DGPluginPermission] {
+        return (record.manifest.permissions + record.manifest.optionalPermissions).filter {
+            ($0.capability == "ui.contribute" && ["settings", "supportedSlots"].contains($0.scope)) || ($0.capability == "storage.local" && $0.scope == "pluginAccount") || ($0.capability == "theme.read" && $0.scope == "currentTheme") || ($0.capability == "theme.contribute" && $0.scope == "localTokens")
+        }
+    }
+
     private func authorize(_ rule: DGPluginMethodRule, record: DGPluginStoredRecord, account: DGPluginAccountRecord, execution: DGPluginExecution, allowNativeWait: Bool = false) throws {
         try DGPluginPolicy.validateProfile(record.manifest)
         if let capability = rule.capability {
             let declared = Set((record.manifest.permissions + record.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
-            guard account.grants.contains(where: { $0.capability == capability && (rule.scope == nil || $0.scope == rule.scope!) && declared.contains(DGPluginPolicy.permissionKey($0)) }) else {
+            let grants = execution.settingsOnly ? settingsPermissions(record) : account.grants
+            guard grants.contains(where: { $0.capability == capability && (rule.scope == nil || $0.scope == rule.scope!) && declared.contains(DGPluginPolicy.permissionKey($0)) }) else {
                 throw DGPluginError(code: "permission_denied", message: "required capability or scope was not granted")
             }
         }
@@ -1300,6 +1352,7 @@ public final class DGPluginManager {
         let arguments = params.dgObject ?? [:]
         let record = coordinator.state.installations[index]
         var account = self.account(record)
+        let grants = execution.settingsOnly ? settingsPermissions(record) : account.grants
         switch method {
         case "environment.get": return .object(environment)
         case "settings.get": return .object(account.settings)
@@ -1309,10 +1362,10 @@ public final class DGPluginManager {
             account.settings = values
         case "capabilities.has":
             guard let name = arguments["capability"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected capability") }
-            return .bool(account.grants.contains { $0.capability == name && (name != "ui.transform" || ["profile", "chatList"].contains($0.scope)) } && DGPluginPolicy.methods.values.contains { $0.capability == name && $0.available })
+            return .bool(grants.contains { $0.capability == name && (name != "ui.transform" || ["profile", "chatList"].contains($0.scope)) } && DGPluginPolicy.methods.values.contains { $0.capability == name && $0.available })
         case "capabilities.list":
             return .object(Dictionary(uniqueKeysWithValues: DGPluginPolicy.methods.map { name, rule in
-                (name, .bool(rule.available && (rule.capability == nil || account.grants.contains { $0.capability == rule.capability && (rule.capability != "ui.transform" || ["profile", "chatList"].contains($0.scope)) })))
+                (name, .bool(rule.available && (!execution.settingsOnly || Self.settingsMethods.contains(name)) && (rule.capability == nil || grants.contains { $0.capability == rule.capability && (rule.capability != "ui.transform" || ["profile", "chatList"].contains($0.scope)) })))
             }))
         case "storage.keys": return .array(account.storage.keys.sorted().map(DGPluginJSON.string))
         case "storage.get", "storage.set", "storage.remove":
@@ -1332,7 +1385,7 @@ public final class DGPluginManager {
             execution.storageBytes = bytes
         case "ui.command.register":
             guard let id = arguments["id"]?.dgString, id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil, let title = arguments["title"]?.dgString, !title.isEmpty, title.utf16.count <= 100, let placement = arguments["placement"]?.dgString, ["composer", "selection", "messageMenu", "chatToolbar", "settings"].contains(placement), execution.commands.count < 32 || execution.commands.contains(where: { $0.id == id }) else { throw DGPluginError(code: "invalid_argument", message: "invalid command descriptor") }
-            guard account.grants.contains(where: { $0.capability == "ui.contribute" && ($0.scope == placement || $0.scope == "supportedSlots") }) else { throw DGPluginError(code: "scope_denied", message: "command placement was not granted") }
+            guard grants.contains(where: { $0.capability == "ui.contribute" && ($0.scope == placement || $0.scope == "supportedSlots") }) else { throw DGPluginError(code: "scope_denied", message: "command placement was not granted") }
             execution.commands.removeAll { $0.id == id }
             execution.commands.append(DGPluginCommandDescriptor(installationId: record.id, id: id, title: title, placement: placement))
             coordinator.publishAll()

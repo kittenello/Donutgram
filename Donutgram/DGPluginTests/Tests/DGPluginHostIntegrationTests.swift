@@ -42,6 +42,143 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         return try DGPluginInstaller.preview(data: Data(source.utf8), fileName: "fixture.donut.js")
     }
 
+    func testDisabledSettingsKeepChatHandlersAndSavedEnableStateOff() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "save local settings")
+        let intercept = DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "normal execution only")
+        let package = try self.package(permissions: [ui, storage, intercept], body: """
+            await api.messages.beforeSend({id:'replace'},()=>({text:'must stay off'}));
+            await api.commands.register({id:'chat',title:'chat',placement:'composer',run:async()=>{throw Error('chat ran')}});
+            await api.events.on('chat.opened',async()=>{throw Error('chat event ran')});
+            await api.commands.register({id:'settings',title:'settings',placement:'settings',run:async()=>{await api.storage.set('saved','yes')}});
+            """)
+        let id = try self.install(package)
+        self.manager.setGloballyEnabled(false)
+        let owner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: owner, completion: $0) }.get()
+        XCTAssertFalse(self.manager.globallyEnabled)
+        let item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertFalse(item.enabled)
+        XCTAssertEqual(item.state, .installedDisabled)
+        XCTAssertTrue(item.grants.isEmpty)
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+        XCTAssertEqual(self.manager.commands.filter { $0.installationId == id }.map { $0.id }, ["settings"])
+        try self.result { self.manager.runCommand(installationId: id, commandId: "settings", completion: $0) }.get()
+        XCTAssertThrowsError(try self.result { self.manager.runCommand(installationId: id, commandId: "chat", completion: $0) }.get())
+        self.manager.closeSettings(id: id, owner: owner)
+        let secondOwner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: secondOwner, completion: $0) }.get()
+        try self.result { self.manager.runCommand(installationId: id, commandId: "settings", completion: $0) }.get()
+        self.manager.closeSettings(id: id, owner: secondOwner)
+        XCTAssertThrowsError(try self.result { self.manager.runCommand(installationId: id, commandId: "settings", completion: $0) }.get())
+        XCTAssertTrue(self.manager.installations.first { $0.id == id }?.grants.isEmpty == true)
+    }
+
+    func testSettingsModeRejectsAccountActionsEvenWithExistingGrants() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let send = DGPluginPermission(capability: "messages.send", scope: "chosenRecipient", reason: "normal execution only")
+        let package = try self.package(permissions: [ui, send], body: """
+            const list=await api.capabilities.list();
+            if(list['messages.send'] || await api.capabilities.has('messages.send'))throw Error('account capability exposed');
+            let denied=false;try{await api.messages.send({text:'never send'})}catch(e){denied=e.code==='plugin_disabled'}
+            if(!denied)throw Error('account action was not rejected');
+            await api.commands.register({id:'settings',title:'settings',placement:'settings',run:async()=>{}});
+            """)
+        let id = try self.install(package, permissions: [ui, send])
+        var nativeCalls = 0
+        self.manager.nativeRequest = { _, _, _, _, completion in nativeCalls += 1; completion(.success(.null)) }
+        try self.result { self.manager.prepareSettings(id: id, owner: UUID(), completion: $0) }.get()
+        XCTAssertEqual(nativeCalls, 0)
+        XCTAssertFalse(self.manager.installations.first { $0.id == id }?.enabled ?? true)
+        XCTAssertEqual(self.manager.installations.first { $0.id == id }?.grants, [ui, send])
+    }
+
+    func testDisabledSettingsRenderCallbacksSaveAndCloseWithTheirLastOwner() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "save local settings")
+        let package = try self.package(permissions: [ui, storage], body: """
+            if((await api.environment.get()).executionMode!=='settings')throw Error('wrong execution mode');
+            const save=api.ui.callback(async()=>{await api.storage.set('saved','yes');await api.ui.toast('saved')});
+            await api.commands.register({id:'show',title:'show',placement:'settings',run:async()=>{
+              await api.ui.render({id:'settings',title:'settings',nodes:[{type:'button',id:'save',title:'save',callbackId:save.id}]});
+            }});
+            await api.commands.register({id:'verify',title:'verify',placement:'settings',run:async()=>{if(await api.storage.get('saved')!=='yes')throw Error('settings were not saved')}});
+            """)
+        let id = try self.install(package)
+        self.manager.setGloballyEnabled(false)
+        let firstOwner = UUID(), secondOwner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: firstOwner, completion: $0) }.get()
+        try self.result { self.manager.prepareSettings(id: id, owner: secondOwner, completion: $0) }.get()
+        self.manager.closeSettings(id: id, owner: firstOwner)
+        var invoke: ((String, DGPluginJSON) -> Void)?
+        var callbackId: String?
+        var validity: (() -> Bool)?
+        let closed = self.expectation(description: "settings page cleaned up")
+        self.manager.nativeRender = { _, page, _, valid, _, callback, _ in
+            XCTAssertTrue(valid())
+            validity = valid
+            invoke = callback
+            if case let .object(values) = page, case let .array(nodes)? = values["nodes"], case let .object(button)? = nodes.first, case let .string(value)? = button["callbackId"] { callbackId = value }
+            return .success { closed.fulfill() }
+        }
+        let saved = self.expectation(description: "settings callback saved local data")
+        self.manager.nativeRequest = { _, method, _, valid, completion in
+            XCTAssertEqual(method, "ui.toast")
+            XCTAssertTrue(valid())
+            completion(.success(.null))
+            saved.fulfill()
+        }
+        try self.result { self.manager.runCommand(installationId: id, commandId: "show", completion: $0) }.get()
+        let callback = try XCTUnwrap(invoke)
+        callback(try XCTUnwrap(callbackId), .null)
+        self.wait(for: [saved], timeout: 5)
+        self.manager.closeSettings(id: id, owner: secondOwner)
+        self.wait(for: [closed], timeout: 5)
+        XCTAssertFalse(validity?() ?? true)
+        XCTAssertThrowsError(try self.result { self.manager.runCommand(installationId: id, commandId: "verify", completion: $0) }.get())
+        let reopenedOwner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: reopenedOwner, completion: $0) }.get()
+        try self.result { self.manager.runCommand(installationId: id, commandId: "verify", completion: $0) }.get()
+        self.manager.closeSettings(id: id, owner: reopenedOwner)
+        XCTAssertTrue(self.manager.installations.first { $0.id == id }?.grants.isEmpty == true)
+        XCTAssertFalse(self.manager.installations.first { $0.id == id }?.enabled ?? true)
+    }
+
+    func testEnablingReplacesSettingsSessionAndClosingItsOwnerKeepsPluginRunning() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let intercept = DGPluginPermission(capability: "messages.intercept", scope: "activeComposer", reason: "normal execution only")
+        let package = try self.package(permissions: [ui, intercept], body: """
+            const mode=(await api.environment.get()).executionMode;
+            await api.commands.register({id:'verify',title:'verify',placement:'settings',run:async()=>{if(mode!=='normal')throw Error('settings runtime survived enable')}});
+            if(mode==='settings')return;
+            await api.messages.beforeSend({id:'replace'},()=>({text:'normal'}));
+            """)
+        let id = try self.install(package)
+        let owner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: owner, completion: $0) }.get()
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+        try self.result { self.manager.setEnabled(id: id, enabled: true, reviewedDigest: package.digest, completion: $0) }.get()
+        XCTAssertTrue(self.manager.interceptsOutgoingMessages)
+        self.manager.closeSettings(id: id, owner: owner)
+        try self.result { self.manager.runCommand(installationId: id, commandId: "verify", completion: $0) }.get()
+        XCTAssertTrue(self.manager.installations.first { $0.id == id }?.enabled == true)
+        XCTAssertEqual(self.manager.installations.first { $0.id == id }?.state, .running)
+        try self.result { self.manager.setEnabled(id: id, enabled: false, completion: $0) }.get()
+        XCTAssertFalse(self.manager.interceptsOutgoingMessages)
+    }
+
+    func testSettingsActivationFailureDoesNotDisableOrRollBackInstallation() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let package = try self.package(permissions: [ui], body: "throw Error('broken settings');")
+        let id = try self.install(package)
+        XCTAssertThrowsError(try self.result { self.manager.prepareSettings(id: id, owner: UUID(), completion: $0) }.get())
+        let item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertFalse(item.enabled)
+        XCTAssertNil(item.lastError)
+        XCTAssertEqual(item.digest, package.digest)
+        XCTAssertTrue(item.grants.isEmpty)
+    }
+
     func testReviewedEnableGrantsOnlyRequiredCapabilities() throws {
         let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "store replacements")
         let optional = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "optional appearance")

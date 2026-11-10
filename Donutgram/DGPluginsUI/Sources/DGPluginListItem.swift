@@ -191,7 +191,7 @@ private final class DGPluginListItemNode: ListViewItemNode {
         self.headingButton.isEnabled = item.content.interactive
         self.enabledSwitch.frame = geometry.frames.toggle
         self.enabledSwitch.onTintColor = accent
-        self.enabledSwitch.setOn(item.content.enabled, animated: false)
+        if self.enabledSwitch.isOn != item.content.enabled { self.enabledSwitch.setOn(item.content.enabled, animated: false) }
         self.enabledSwitch.isEnabled = item.content.interactive && item.content.toggleEnabled
         self.enabledSwitch.accessibilityLabel = item.content.title
         self.descriptionLabel.text = item.content.description

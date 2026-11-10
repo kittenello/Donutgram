@@ -118,15 +118,21 @@ private final class DGPluginPage {
     var renderedAccent: UIColor?
     private var presentedPages: [String: DGPluginPresentedPage] = [:]
     private var pendingRemoval: DGPluginInstallation?
+    private let settingsOwner = UUID()
+    private var settingsPrepared = false
+    private var settingsLoading = false
+    private var enableRequests: [String: UUID] = [:]
 
     init(context: AccountContext, mode: DGPluginPageMode) {
         self.context = context
         self.manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
         self.mode = mode
+        if case .settings = mode { self.settingsLoading = true }
         self.observer = self.manager.observe { [weak self] in self?.refresh() }
     }
 
     deinit {
+        if case let .settings(id) = self.mode { self.manager.closeSettings(id: id, owner: self.settingsOwner) }
         if case let .rendered(state) = self.mode { state.close() }
         if let observer = self.observer { self.manager.removeObserver(observer) }
     }
@@ -157,6 +163,24 @@ private final class DGPluginPage {
             return false
         }
         return self.accepts(epoch)
+    }
+
+    func prepareSettings() {
+        guard case let .settings(id) = self.mode, !self.settingsPrepared else { return }
+        self.settingsPrepared = true
+        self.settingsLoading = true
+        self.refresh()
+        self.manager.prepareSettings(id: id, owner: self.settingsOwner) { [weak self] result in
+            guard let self else { return }
+            self.settingsLoading = false
+            self.complete(result)
+        }
+    }
+
+    func closeSettings() {
+        guard case let .settings(id) = self.mode else { return }
+        self.settingsPrepared = false
+        self.manager.closeSettings(id: id, owner: self.settingsOwner)
     }
 
     func bindNativeHost() {
@@ -221,7 +245,7 @@ private final class DGPluginPage {
         case .list:
             if let notice = self.notice { add(0, .text, "", notice) }
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
-            add(0, .toggle, "global", self.manager.globallyEnabled ? self.tr("Плагины включены", "Plugins enabled") : self.tr("Плагины выключены", "Plugins disabled"), value: self.manager.globallyEnabled, icon: "__plugins")
+            add(0, .toggle, "global", self.tr("Плагины", "Plugins"), value: self.manager.globallyEnabled, icon: "__plugins")
             let installations = self.manager.installations
             if installations.count >= 5 {
                 add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
@@ -235,7 +259,7 @@ private final class DGPluginPage {
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
-                let status = !self.manager.globallyEnabled || (item.enabled && item.state == .running) ? "" : " · " + self.stateText(item)
+                let status = self.manager.globallyEnabled && [.failed, .quarantined, .permissionRequired].contains(item.state) ? " · " + self.stateText(item) : ""
                 rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .plugin, key: "details:" + item.id, title: item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + item.manifest.version + status, value: item.enabled, enabled: !self.busy, iconKey: item.id, summary: item.manifest.description, toggleEnabled: self.manager.globallyEnabled))
             }
         case let .details(id):
@@ -280,7 +304,7 @@ private final class DGPluginPage {
             let properties = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue ?? [:]
             let commands = self.manager.commands.filter { $0.installationId == id && $0.placement == "settings" }
             for command in commands { add(0, .action, "command:" + command.id, command.title) }
-            if properties.isEmpty && commands.isEmpty { add(0, .text, "", item.enabled ? self.tr("У плагина нет настроек.", "This plugin has no settings.") : self.tr("Включите плагин, чтобы открыть его настройки.", "Enable the plugin to open its settings.")) }
+            if properties.isEmpty && commands.isEmpty { add(0, .text, "", self.settingsLoading ? self.tr("Загрузка настроек…", "Loading settings…") : self.tr("У плагина нет настроек.", "This plugin has no settings.")) }
             for (index, key) in properties.keys.sorted().enumerated() {
                 guard let schema = properties[key]?.objectValue else { continue }
                 let title = schema["title"]?.stringValue ?? key
@@ -484,11 +508,12 @@ private final class DGPluginPage {
         if key.hasPrefix("enabled:") {
             let id = String(key.dropFirst(8))
             guard self.manager.globallyEnabled, let item = self.installation(id) else { self.refresh(); return }
-            self.busy = true
-            self.refresh()
+            let request = UUID()
+            self.enableRequests[id] = request
             self.manager.setEnabled(id: id, enabled: value, reviewedDigest: item.digest) { [weak self] result in
-                self?.busy = false
-                self?.complete(result)
+                guard let self, self.enableRequests[id] == request else { return }
+                self.enableRequests.removeValue(forKey: id)
+                self.complete(result)
             }
         } else if key.hasPrefix("grant:"), case let .permissions(id) = self.mode, let item = self.installation(id), let index = Int(key.dropFirst(6)) {
             let requested = item.manifest.permissions + item.manifest.optionalPermissions
@@ -639,12 +664,13 @@ private func dgMakePluginPage(page: DGPluginPage) -> ItemListController {
     let controller = ItemListController(context: context, state: signal)
     controller.alwaysSynchronous = true
     page.controller = controller
-    controller.didAppear = { [weak page] _ in page?.bindNativeHost() }
+    controller.didAppear = { [weak page] _ in page?.bindNativeHost(); page?.prepareSettings() }
     dgPluginPages.setObject(page, forKey: controller)
     controller.didDisappear = { [weak page, weak controller] _ in
-        guard let page, let controller, case let .rendered(state) = page.mode else { return }
+        guard let page, let controller else { return }
         if let navigation = controller.navigationController, navigation.viewControllers.contains(where: { $0 === controller }) { return }
-        state.close()
+        page.closeSettings()
+        if case let .rendered(state) = page.mode { state.close() }
     }
     return controller
 }
