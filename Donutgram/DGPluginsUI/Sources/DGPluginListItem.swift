@@ -12,6 +12,7 @@ struct DGPluginListContent {
     let description: String
     let enabled: Bool
     let interactive: Bool
+    let toggleEnabled: Bool
     let actions: [String]
 }
 
@@ -191,7 +192,7 @@ private final class DGPluginListItemNode: ListViewItemNode {
         self.enabledSwitch.frame = geometry.frames.toggle
         self.enabledSwitch.onTintColor = accent
         self.enabledSwitch.setOn(item.content.enabled, animated: false)
-        self.enabledSwitch.isEnabled = item.content.interactive
+        self.enabledSwitch.isEnabled = item.content.interactive && item.content.toggleEnabled
         self.enabledSwitch.accessibilityLabel = item.content.title
         self.descriptionLabel.text = item.content.description
         self.descriptionLabel.font = .systemFont(ofSize: 14 * item.scale)

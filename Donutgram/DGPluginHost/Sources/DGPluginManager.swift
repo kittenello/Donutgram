@@ -868,6 +868,7 @@ public final class DGPluginManager {
                 if let reviewedDigest {
                     guard record.digest == reviewedDigest else { throw DGPluginError(code: "revision_conflict", message: "plugin changed after review") }
                     if enabled {
+                        guard self.coordinator.state.globallyEnabled else { throw DGPluginError(code: "plugin_disabled", message: "plugins are paused") }
                         let declared = Set((record.manifest.permissions + record.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
                         let retained = account.grants.filter { declared.contains(DGPluginPolicy.permissionKey($0)) }
                         let keys = Set(retained.map(DGPluginPolicy.permissionKey))

@@ -82,6 +82,50 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertNil(item.lastError)
     }
 
+    func testReviewedEnableWhilePausedDoesNotGrantOrChangeSavedState() throws {
+        let permission = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "required storage")
+        let package = try self.package(permissions: [permission], body: "throw Error('paused plugin must not run');")
+        let id = try self.install(package)
+        self.manager.setGloballyEnabled(false)
+        let result = self.result { self.manager.setEnabled(id: id, enabled: true, reviewedDigest: package.digest, completion: $0) }
+        guard case let .failure(error) = result else { return XCTFail("a reviewed toggle enabled a paused plugin") }
+        XCTAssertEqual(error.code, "plugin_disabled")
+        XCTAssertFalse(self.manager.globallyEnabled)
+        let item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertFalse(item.enabled)
+        XCTAssertTrue(item.grants.isEmpty)
+        XCTAssertNil(item.lastError)
+    }
+
+    func testGlobalPauseAndResumePreserveIndividualSwitches() throws {
+        let active = try self.package(body: "")
+        let activeId = try self.install(active)
+        let inactiveId = try self.install(self.package(body: "throw Error('disabled plugin must stay disabled');"))
+        try self.result { self.manager.setEnabled(id: activeId, enabled: true, reviewedDigest: active.digest, completion: $0) }.get()
+        self.manager.setGloballyEnabled(false)
+        _ = try self.result { self.manager.exportPackage(id: activeId, completion: $0) }.get()
+        XCTAssertFalse(self.manager.globallyEnabled)
+        XCTAssertTrue(try XCTUnwrap(self.manager.installations.first { $0.id == activeId }).enabled)
+        XCTAssertNotEqual(try XCTUnwrap(self.manager.installations.first { $0.id == activeId }).state, .running)
+        XCTAssertFalse(try XCTUnwrap(self.manager.installations.first { $0.id == inactiveId }).enabled)
+        let resumed = self.expectation(description: "previously enabled plugin resumed")
+        var completed = false
+        let observer = self.manager.observe {
+            if !completed, self.manager.globallyEnabled, self.manager.installations.contains(where: { $0.id == activeId && $0.state == .running }) {
+                completed = true
+                resumed.fulfill()
+            }
+        }
+        defer { self.manager.removeObserver(observer) }
+        self.manager.setGloballyEnabled(true)
+        self.wait(for: [resumed], timeout: 5)
+        XCTAssertTrue(try XCTUnwrap(self.manager.installations.first { $0.id == activeId }).enabled)
+        let inactive = try XCTUnwrap(self.manager.installations.first { $0.id == inactiveId })
+        XCTAssertFalse(inactive.enabled)
+        XCTAssertNotEqual(inactive.state, .running)
+        XCTAssertNil(inactive.lastError)
+    }
+
     func testExportKeepsOriginalPackageBytesWithoutStartingIt() throws {
         let package = try self.package(body: "throw Error('sharing must not execute code');")
         let id = try self.install(package)

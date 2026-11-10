@@ -42,6 +42,7 @@ private struct DGPluginRow: ItemListNodeEntry {
     var epoch: Int = 0
     var maxText: Int = 4096
     var summary: String = ""
+    var toggleEnabled: Bool = true
 
     static func < (lhs: DGPluginRow, rhs: DGPluginRow) -> Bool { return lhs.stableId < rhs.stableId }
 
@@ -69,7 +70,7 @@ private struct DGPluginRow: ItemListNodeEntry {
         case .card:
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .card(page.icon(self.iconKey, size: 68), self.title, self.detail, page.cardDescription()), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .plugin:
-            let content = DGPluginListContent(icon: page.icon(self.iconKey, size: 44), title: self.title, subtitle: self.detail, description: self.summary, enabled: self.value, interactive: self.enabled, actions: [page.tr("Настройки", "Settings"), page.tr("Поделиться", "Share"), page.tr("Удалить", "Remove")])
+            let content = DGPluginListContent(icon: page.icon(self.iconKey, size: 44), title: self.title, subtitle: self.detail, description: self.summary, enabled: self.value, interactive: self.enabled, toggleEnabled: self.toggleEnabled, actions: [page.tr("Настройки", "Settings"), page.tr("Поделиться", "Share"), page.tr("Удалить", "Remove")])
             return DGPluginListItem(sectionId: self.section, theme: presentationData.theme, content: content, scale: presentationData.fontSize.itemListBaseFontSize / 17, open: action, toggle: { value in
                 if page.accepts(self.epoch) { page.toggle("enabled:" + self.iconKey, value) }
             }, action: { index in
@@ -207,8 +208,7 @@ private final class DGPluginPage {
         case .list:
             if let notice = self.notice { add(0, .text, "", notice) }
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
-            let running = self.manager.installations.filter { $0.state == .running }.count
-            add(0, .toggle, "global", self.manager.globallyEnabled ? self.tr("Плагины включены", "Plugins enabled") : self.tr("Плагины выключены", "Plugins disabled"), detail: self.manager.globallyEnabled ? self.tr("Работают: ", "Running: ") + String(running) : self.tr("Все плагины на паузе", "All plugins are paused"), value: self.manager.globallyEnabled, icon: "__plugins")
+            add(0, .toggle, "global", self.manager.globallyEnabled ? self.tr("Плагины включены", "Plugins enabled") : self.tr("Плагины выключены", "Plugins disabled"), value: self.manager.globallyEnabled, icon: "__plugins")
             let installations = self.manager.installations
             add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
             add(2, .header, "", self.tr("УСТАНОВЛЕННЫЕ", "INSTALLED"))
@@ -218,14 +218,14 @@ private final class DGPluginPage {
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
-                let status = item.enabled && item.state == .running ? "" : " · " + self.stateText(item)
-                rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .plugin, key: "details:" + item.id, title: item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + item.manifest.version + status, value: item.enabled, enabled: !self.busy, iconKey: item.id, summary: item.manifest.description))
+                let status = !self.manager.globallyEnabled || (item.enabled && item.state == .running) ? "" : " · " + self.stateText(item)
+                rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .plugin, key: "details:" + item.id, title: item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + item.manifest.version + status, value: item.enabled, enabled: !self.busy, iconKey: item.id, summary: item.manifest.description, toggleEnabled: self.manager.globallyEnabled))
             }
         case let .details(id):
             guard let item = self.installation(id) ?? (self.pendingRemoval?.id == id ? self.pendingRemoval : nil) else { add(0, .text, "", self.tr("Этот плагин удалён.", "This plugin has been removed.")); break }
             self.appendCard(manifest: item.manifest, iconKey: id, add: add)
-            add(4, .toggle, "enabled:" + id, self.tr("Включён", "Enabled"), value: item.enabled)
-            add(4, .text, "", self.stateText(item).dgSentenceStart)
+            add(4, .toggle, "enabled:" + id, self.tr("Включён", "Enabled"), value: item.enabled, enabled: self.manager.globallyEnabled)
+            if self.manager.globallyEnabled { add(4, .text, "", self.stateText(item).dgSentenceStart) }
             if let error = item.lastError { add(4, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
             add(5, .disclosure, "settings:" + id, self.tr("Настройки плагина", "Plugin settings"))
             add(5, .action, "share:" + id, self.tr("Поделиться", "Share"))
@@ -466,7 +466,7 @@ private final class DGPluginPage {
         if key == "global" { self.manager.setGloballyEnabled(value); return }
         if key.hasPrefix("enabled:") {
             let id = String(key.dropFirst(8))
-            guard let item = self.installation(id) else { return }
+            guard self.manager.globallyEnabled, let item = self.installation(id) else { self.refresh(); return }
             self.busy = true
             self.refresh()
             self.manager.setEnabled(id: id, enabled: value, reviewedDigest: item.digest) { [weak self] result in

@@ -98,7 +98,7 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         if #available(iOS 13.0, *) { self.closeButton.setImage(UIImage(systemName: "xmark"), for: .normal) }
         self.closeButton.accessibilityLabel = self.presentationData.strings.Common_Close
         self.closeButton.addTarget(self, action: #selector(closePressed), for: .touchUpInside)
-        self.enabledSwitch.isOn = true
+        self.enabledSwitch.isOn = self.manager.globallyEnabled
         self.installButton.layer.cornerRadius = 14
         self.installButton.addTarget(self, action: #selector(installPressed), for: .touchUpInside)
         self.installButton.addSubview(self.progress)
@@ -153,7 +153,8 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.enabledLabel.font = .systemFont(ofSize: 15 * scale)
         self.enabledLabel.textColor = theme.list.itemPrimaryTextColor
         self.enabledSwitch.onTintColor = theme.list.itemAccentColor
-        self.enabledSwitch.isEnabled = !self.busy
+        self.enabledSwitch.isEnabled = !self.busy && self.manager.globallyEnabled
+        if !self.manager.globallyEnabled { self.enabledSwitch.setOn(false, animated: false) }
         self.enabledSwitch.accessibilityLabel = self.enabledLabel.text
         self.enabledSwitch.isHidden = self.installedId != nil
         self.enabledLabel.isHidden = self.enabledSwitch.isHidden
@@ -260,7 +261,7 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         }
         self.busy = true
         self.errorLabel.text = nil
-        let enable = self.enabledSwitch.isOn
+        let enable = self.enabledSwitch.isOn && self.manager.globallyEnabled
         let wasUpdate = self.previousVersion != nil
         self.update()
         self.manager.install(self.package) { [weak self] result in
@@ -268,7 +269,7 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
             switch result {
             case let .failure(error): self.failed(error)
             case let .success(id):
-                if enable {
+                if enable && self.manager.globallyEnabled {
                     self.manager.setEnabled(id: id, enabled: true, reviewedDigest: self.package.digest) { [weak self] result in
                         guard let self, !self.leaving else { return }
                         switch result {
