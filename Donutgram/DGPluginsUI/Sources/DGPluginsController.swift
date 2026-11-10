@@ -790,8 +790,9 @@ public func dgPluginDocumentIcon(context: AccountContext, file: TelegramMediaFil
             let digest = DGPluginInstaller.digest(bytes)
             if let image = dgPluginDocumentIconCache.object(forKey: digest as NSString) { return image }
             let package = try DGPluginInstaller.preview(data: bytes, fileName: name)
-            let image = dgPluginIcon(data: package.iconData, id: package.manifest.id, name: package.manifest.name)
-            dgPluginDocumentIconCache.setObject(image, forKey: digest as NSString, cost: 96 * 96 * 4)
+            let image = dgPluginIcon(data: package.iconData, id: package.manifest.id, name: package.manifest.name, size: 44)
+            let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 44 * 44 * 4
+            dgPluginDocumentIconCache.setObject(image, forKey: digest as NSString, cost: cost)
             return image
         } catch { return nil }
     }

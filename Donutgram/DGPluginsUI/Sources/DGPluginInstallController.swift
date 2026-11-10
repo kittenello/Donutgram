@@ -11,7 +11,7 @@ import DGPluginInstaller
 import DGPluginHost
 import UndoUI
 
-final class DGPluginInstallController: ViewController {
+final class DGPluginInstallController: ViewController, UIGestureRecognizerDelegate {
     private let context: AccountContext
     private let package: DGVerifiedPluginPackage
     private let manager: DGPluginManager
@@ -108,9 +108,13 @@ final class DGPluginInstallController: ViewController {
         self.errorLabel.accessibilityTraits = .staticText
         let swipe = UISwipeGestureRecognizer(target: self, action: #selector(closePressed))
         swipe.direction = .down
-        self.typeLabel.isUserInteractionEnabled = true
-        self.typeLabel.addGestureRecognizer(swipe)
+        swipe.delegate = self
+        self.sheet.addGestureRecognizer(swipe)
         self.update()
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        return touch.location(in: self.scroll).y < 74
     }
 
     private func update() {
@@ -126,7 +130,7 @@ final class DGPluginInstallController: ViewController {
                 self.installedId = existing.digest == self.package.digest || newerInstalled ? existing.id : nil
             } else { self.installedId = nil }
         }
-        let update = existing != nil && self.installedId == nil
+        let update = self.previousVersion != nil && self.installedId == nil
         self.sheet.backgroundColor = theme.list.blocksBackgroundColor
         self.descriptionBackground.backgroundColor = theme.list.itemBlocksBackgroundColor
         self.grabber.backgroundColor = theme.list.itemSecondaryTextColor.withAlphaComponent(0.4)
@@ -164,7 +168,9 @@ final class DGPluginInstallController: ViewController {
         self.installButton.titleLabel?.textAlignment = .center
         self.installButton.isEnabled = !self.busy
         self.installButton.alpha = self.busy ? 0.7 : 1
-        self.installButton.setTitle(self.busy ? self.tr("Подождите…", "Please wait…") : self.installedId != nil ? self.tr("Открыть настройки", "Open settings") : update ? self.tr("Обновить", "Update") : self.tr("Установить", "Install"), for: .normal)
+        let buttonTitle = self.installedId != nil ? self.tr("Открыть настройки", "Open settings") : update ? self.tr("Обновить", "Update") : self.tr("Установить", "Install")
+        self.installButton.setTitle(self.busy ? "" : buttonTitle, for: .normal)
+        self.installButton.accessibilityLabel = self.busy ? self.tr("Подождите…", "Please wait…") : buttonTitle
         self.noteLabel.text = self.installedId != nil ? self.tr("Плагин уже установлен", "Plugin already installed") : self.tr("Появится в настройках → Плагины", "Available in Settings → Plugins")
         self.noteLabel.font = .systemFont(ofSize: 12 * scale)
         self.noteLabel.textColor = theme.list.itemSecondaryTextColor
@@ -203,16 +209,18 @@ final class DGPluginInstallController: ViewController {
         self.descriptionBackground.frame = CGRect(x: 20, y: descriptionY, width: inner, height: y - descriptionY)
         y += 18
         if self.installedId == nil {
-            let labelHeight = ceil(self.enabledLabel.sizeThatFits(CGSize(width: max(1, inner - 67), height: 100000)).height)
-            let rowHeight = max(44, labelHeight)
-            self.enabledLabel.frame = CGRect(x: 22, y: y + (rowHeight - labelHeight) / 2, width: max(1, inner - 67), height: labelHeight)
-            self.enabledSwitch.frame = CGRect(x: width - 71, y: y + (rowHeight - 31) / 2, width: 51, height: 31)
+            let toggleSize = self.enabledSwitch.sizeThatFits(.zero)
+            let labelWidth = max(1, inner - toggleSize.width - 16)
+            let labelHeight = ceil(self.enabledLabel.sizeThatFits(CGSize(width: labelWidth, height: 100000)).height)
+            let rowHeight = max(44, max(toggleSize.height, labelHeight))
+            self.enabledLabel.frame = CGRect(x: 22, y: y + (rowHeight - labelHeight) / 2, width: labelWidth, height: labelHeight)
+            self.enabledSwitch.frame = CGRect(x: width - 20 - toggleSize.width, y: y + (rowHeight - toggleSize.height) / 2, width: toggleSize.width, height: toggleSize.height)
             y += rowHeight + 15
         }
         if !(self.errorLabel.text ?? "").isEmpty { y = label(self.errorLabel, y: y, width: inner) + 14 }
         let buttonHeight = max(50, ceil((self.installButton.titleLabel?.font.lineHeight ?? 20) * 2) + 12)
         self.installButton.frame = CGRect(x: 20, y: y, width: inner, height: buttonHeight)
-        self.progress.frame = CGRect(x: 15, y: (buttonHeight - 20) / 2, width: 20, height: 20)
+        self.progress.frame = CGRect(x: (inner - 20) / 2, y: (buttonHeight - 20) / 2, width: 20, height: 20)
         y = label(self.noteLabel, y: self.installButton.frame.maxY + 11, width: inner) + 20 + max(safe.bottom, layout.safeInsets.bottom)
         let height = min(y, max(1, layout.size.height - max(safe.top, layout.safeInsets.top) - 12))
         self.sheet.frame = CGRect(x: left + (layout.size.width - left - right - width) / 2, y: layout.size.height - height, width: width, height: height)

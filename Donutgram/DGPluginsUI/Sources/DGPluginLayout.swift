@@ -14,14 +14,14 @@ struct DGPluginCardLayout {
     let actions: [CGRect]
     let height: CGFloat
 
-    init(width: CGFloat, titleHeight: CGFloat, subtitleHeight: CGFloat, descriptionHeight: CGFloat, actionLabelHeight: CGFloat) {
-        let headingHeight = max(44, titleHeight + 3 + subtitleHeight)
+    init(width: CGFloat, titleHeight: CGFloat, subtitleHeight: CGFloat, descriptionHeight: CGFloat, actionLabelHeight: CGFloat, toggleSize: CGSize) {
+        let headingHeight = max(44, max(toggleSize.height, titleHeight + 3 + subtitleHeight))
         self.icon = CGRect(x: 16, y: 14, width: 44, height: 44)
-        let textWidth = max(1, width - 151)
+        let textWidth = max(1, width - 100 - toggleSize.width)
         self.title = CGRect(x: 72, y: 14, width: textWidth, height: titleHeight)
         self.subtitle = CGRect(x: 72, y: self.title.maxY + 3, width: textWidth, height: subtitleHeight)
-        self.headingButton = CGRect(x: 0, y: 0, width: max(1, width - 75), height: headingHeight + 23)
-        self.toggle = CGRect(x: width - 67, y: 14 + max(0, (headingHeight - 31) / 2), width: 51, height: 31)
+        self.headingButton = CGRect(x: 0, y: 0, width: max(1, width - 24 - toggleSize.width), height: headingHeight + 23)
+        self.toggle = CGRect(x: width - 16 - toggleSize.width, y: 14 + max(0, (headingHeight - toggleSize.height) / 2), width: toggleSize.width, height: toggleSize.height)
         self.description = CGRect(x: 16, y: 14 + headingHeight + 9, width: max(1, width - 32), height: descriptionHeight)
         self.separator = CGRect(x: 16, y: self.description.maxY + 9, width: max(1, width - 32), height: 1)
         let actionWidth = max(1, (width - 32) / 3)

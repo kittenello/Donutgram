@@ -63,29 +63,20 @@ final class DGPluginListItem: ListViewItem, ItemListItem {
 
 private struct DGPluginListLayout {
     let frames: DGPluginCardLayout
-    let height: CGFloat
-    let titleHeight: CGFloat
-    let subtitleHeight: CGFloat
-    let descriptionHeight: CGFloat
-    let headingHeight: CGFloat
-    let actionHeight: CGFloat
+    var height: CGFloat { return self.frames.height }
 
-    init(item: DGPluginListItem, width: CGFloat) {
-        let headingWidth = max(1, width - 32 - 44 - 12 - 51 - 12)
+    init(item: DGPluginListItem, width: CGFloat, toggleSize: CGSize) {
+        let headingWidth = max(1, width - 100 - toggleSize.width)
         func measure(_ text: String, size: CGFloat, width: CGFloat, lines: Int, weight: UIFont.Weight = .regular) -> CGFloat {
             let font = UIFont.systemFont(ofSize: size * item.scale, weight: weight)
             return min(ceil(font.lineHeight * CGFloat(lines)), DGPluginNativeItem.textHeight(NSAttributedString(string: text, attributes: [.font: font]), width: width))
         }
-        self.titleHeight = measure(item.content.title, size: 17, width: headingWidth, lines: 2, weight: .medium)
-        self.subtitleHeight = measure(item.content.subtitle, size: 12, width: headingWidth, lines: 2)
-        self.headingHeight = max(44, self.titleHeight + 3 + self.subtitleHeight)
-        self.descriptionHeight = measure(item.content.description, size: 14, width: max(1, width - 32), lines: 2)
+        let titleHeight = measure(item.content.title, size: 17, width: headingWidth, lines: 2, weight: .medium)
+        let subtitleHeight = measure(item.content.subtitle, size: 12, width: headingWidth, lines: 2)
+        let descriptionHeight = measure(item.content.description, size: 14, width: max(1, width - 32), lines: 2)
         let actionWidth = max(1, (width - 32) / 3 - 4)
         let labelHeight = item.content.actions.map { measure($0, size: 11, width: actionWidth, lines: 2) }.max() ?? 0
-        self.actionHeight = max(48, 18 + 4 + labelHeight + 10)
-        let frames = DGPluginCardLayout(width: width, titleHeight: self.titleHeight, subtitleHeight: self.subtitleHeight, descriptionHeight: self.descriptionHeight, actionLabelHeight: labelHeight)
-        self.frames = frames
-        self.height = frames.height
+        self.frames = DGPluginCardLayout(width: width, titleHeight: titleHeight, subtitleHeight: subtitleHeight, descriptionHeight: descriptionHeight, actionLabelHeight: labelHeight, toggleSize: toggleSize)
     }
 }
 
@@ -158,9 +149,10 @@ private final class DGPluginListItemNode: ListViewItemNode {
     }
 
     func asyncLayout() -> (DGPluginListItem, ListViewItemLayoutParams, ListViewItemNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
+        let toggleSize = self.enabledSwitch.sizeThatFits(.zero)
         return { [weak self] item, params, neighbors in
             let width = max(1, params.width - params.leftInset - params.rightInset)
-            let geometry = DGPluginListLayout(item: item, width: width)
+            let geometry = DGPluginListLayout(item: item, width: width, toggleSize: toggleSize)
             let itemNeighbors = itemListNeighbors(item: item, topFacet: neighbors.previous?.base(ItemListNeighborFacet.self), bottomFacet: neighbors.next?.base(ItemListNeighborFacet.self))
             var insets = itemListNeighborsGroupedInsets(itemNeighbors, params)
             if case .otherSection = itemNeighbors.top { insets.top = 10 }
