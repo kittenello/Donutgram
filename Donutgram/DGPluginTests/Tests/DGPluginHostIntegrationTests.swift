@@ -211,6 +211,27 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertFalse(self.manager.installations.first { $0.id == id }?.enabled ?? true)
     }
 
+    func testSettingsSessionUsesOnlyGrantedOptionalPermissions() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "local settings")
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "optional storage")
+        let package = try self.package(permissions: [ui], optionalPermissions: [storage], body: """
+            const attempt=async()=>{try{await api.storage.set('saved','yes');return true}catch(e){if(e.code!=='permission_denied')throw e;return false}};
+            await api.commands.register({id:'declined',title:'declined',placement:'settings',run:async()=>{if(await api.capabilities.has('storage.local')||await attempt())throw Error('a declined optional permission was used')}});
+            await api.commands.register({id:'granted',title:'granted',placement:'settings',run:async()=>{if(!(await api.capabilities.has('storage.local'))||!(await attempt()))throw Error('a granted optional permission was refused')}});
+            """)
+        let id = try self.install(package)
+        let firstOwner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: firstOwner, completion: $0) }.get()
+        try self.result { self.manager.runCommand(installationId: id, commandId: "declined", completion: $0) }.get()
+        self.manager.closeSettings(id: id, owner: firstOwner)
+        try self.result { self.manager.setGrants(id: id, permissions: [storage], completion: $0) }.get()
+        let secondOwner = UUID()
+        try self.result { self.manager.prepareSettings(id: id, owner: secondOwner, completion: $0) }.get()
+        try self.result { self.manager.runCommand(installationId: id, commandId: "granted", completion: $0) }.get()
+        self.manager.closeSettings(id: id, owner: secondOwner)
+        XCTAssertFalse(self.manager.installations.first { $0.id == id }?.enabled ?? true)
+    }
+
     func testChangingAnOptionalPermissionRestartsThePluginInsteadOfTurningItOff() throws {
         let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "required storage")
         let theme = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "optional appearance")

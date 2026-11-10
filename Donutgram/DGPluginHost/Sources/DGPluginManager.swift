@@ -1358,8 +1358,12 @@ public final class DGPluginManager {
 
     private static let settingsMethods: Set<String> = ["environment.get", "settings.get", "settings.set", "capabilities.has", "capabilities.list", "storage.get", "storage.set", "storage.remove", "storage.keys", "ui.command.register", "ui.command.unregister", "ui.render", "ui.dispose", "ui.toast", "assets.image", "theme.get", "theme.contribute", "theme.clear"]
 
+    /// The local permissions of a settings session: the ones the plugin would hold if it were turned on now, so its
+    /// required permissions and the optional ones the user granted. A declined or revoked optional permission stays off.
     private func settingsPermissions(_ record: DGPluginStoredRecord) -> [DGPluginPermission] {
-        return (record.manifest.permissions + record.manifest.optionalPermissions).filter {
+        let granted = Set(account(record).grants.map(DGPluginPolicy.permissionKey))
+        let optional = record.manifest.optionalPermissions.filter { granted.contains(DGPluginPolicy.permissionKey($0)) }
+        return (record.manifest.permissions + optional).filter {
             ($0.capability == "ui.contribute" && ["settings", "supportedSlots"].contains($0.scope)) || ($0.capability == "storage.local" && $0.scope == "pluginAccount") || ($0.capability == "theme.read" && $0.scope == "currentTheme") || ($0.capability == "theme.contribute" && $0.scope == "localTokens")
         }
     }
