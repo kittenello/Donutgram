@@ -2,6 +2,86 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) {
     if !value() { fatalError(message) }
 }
 
+func pluginSearchKeepsInputBeforeTheNextListUpdate() {
+    let page = DGPluginInputFixture()
+    let row = DGPluginRow(index: 0, section: 1, kind: .input, key: "search", title: "Search")
+    let input = row.inputCallback(page: page)
+    input("а")
+    input("ав")
+    input("автозамена")
+    check(page.query == "автозамена", "search lost text while the list was applying its previous update")
+    page.refresh()
+    input("курсы")
+    check(page.query == "курсы", "an unrelated manager refresh dropped search input")
+    page.busy = true
+    input("busy")
+    check(page.query == "курсы", "busy page accepted search input")
+    page.busy = false
+    page.mode = .other
+    var current = row
+    current.epoch = page.sequence
+    current.inputCallback(page: page)("wrong page")
+    check(page.query == "курсы", "search input escaped its list page")
+    page.mode = .settings
+    check(page.acceptsInput(row.epoch, "setting:replacement"), "native setting input was dropped during a list update")
+    check(!page.acceptsInput(row.epoch, "render:field"), "stale plugin-rendered input bypassed its page revision")
+    check(page.acceptsInput(page.sequence, "render:field"), "current plugin-rendered input was rejected")
+    page.busy = true
+    check(!page.acceptsInput(row.epoch, "setting:replacement"), "busy page accepted native setting input")
+    page.busy = false
+    page.mode = .other
+    check(!page.acceptsInput(page.sequence, "setting:replacement"), "native setting input escaped its settings page")
+    print("plugin rapid text input, page ownership, busy state and rendered revision guards passed")
+}
+
+pluginSearchKeepsInputBeforeTheNextListUpdate()
+
+func pluginListSearchAndPauseTransitions() {
+    let page = DGPluginListFixture()
+    let installations = (0 ..< 6).map { index in
+        DGPluginInstallation(id: "installation-\(index)", manifest: DGPluginManifest(id: "dev.example.plugin\(index)", name: "plugin\(index)", version: "1.0.0", description: "fixture"), digest: "digest-\(index)", trust: "local", enabled: index == 0, state: index == 0 ? .running : .installedDisabled)
+    }
+    for count in 0 ... 6 {
+        page.manager.installations = Array(installations.prefix(count))
+        page.query = ""
+        let rows = page.rows()
+        check(rows.filter { $0.key == "search" }.count == (count >= 5 ? 1 : 0), "search threshold must use the installed count")
+        check(rows.filter { $0.kind == .header && $0.title == "INSTALLED" }.count == 1, "installed header must remain visible")
+        check(rows.filter { $0.kind == .plugin }.count == count, "unfiltered plugin list lost a card")
+        check(!rows.contains { $0.kind == .text }, "empty or unfiltered list gained an installation hint")
+        check(rows.first { $0.key == "global" }?.detail == "", "global switch gained a pause or count subtitle")
+    }
+    page.manager.installations = Array(installations.prefix(5))
+    page.query = "plugin0"
+    let active = page.rows()
+    check(active.filter { $0.kind == .plugin }.count == 1, "search must filter cards")
+    check(active.contains { $0.key == "search" }, "filtering to one result hid the search field")
+    page.manager.globallyEnabled = false
+    let paused = page.rows()
+    let pausedCard = paused.first { $0.kind == .plugin }!
+    check(pausedCard.value && !pausedCard.toggleEnabled && pausedCard.enabled, "pause must lock the switch while preserving saved enablement and card actions")
+    check(pausedCard.detail == "Author not specified · 1.0.0", "card repeats the global pause status")
+    let transition = mergeListsStableWithUpdates(leftList: active, rightList: paused, isLess: { $0 < $1 }, isEqual: { $0 == $1 }, getId: { AnyHashable($0.stableId) })
+    check(transition.2.contains { $0.1.kind == .plugin && !$0.1.toggleEnabled }, "list diff missed a switch-only change")
+    page.manager.globallyEnabled = true
+    let resumed = page.rows().first { $0.kind == .plugin }!
+    check(resumed.value && resumed.toggleEnabled && resumed.enabled, "resume must unlock the saved switch")
+    page.query = "no such plugin"
+    let noMatches = page.rows()
+    check(noMatches.contains { $0.key == "search" }, "empty search results hid the search field")
+    check(noMatches.contains { $0.kind == .text && $0.title == "Nothing found" }, "active search lost its no-results message")
+    page.manager.installations.removeLast()
+    let afterRemoval = page.rows()
+    check(page.query.isEmpty, "hidden search retained its old filter after removal")
+    check(!afterRemoval.contains { $0.key == "search" }, "search stayed visible below five installed plugins")
+    check(afterRemoval.filter { $0.kind == .plugin }.count == 4, "hidden search filtered the remaining plugins")
+    page.manager.installations = []
+    check(page.rows().map { $0.kind } == [.toggle, .header], "empty list must retain only the global switch and installed header")
+    print("plugin list thresholds, empty results, removal, pause/resume and switch-only diffs passed")
+}
+
+pluginListSearchAndPauseTransitions()
+
 func wait(_ semaphore: DispatchSemaphore, _ message: String) {
     check(semaphore.wait(timeout: .now() + 2) == .success, message)
 }

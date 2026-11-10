@@ -50,7 +50,7 @@ private struct DGPluginRow: ItemListNodeEntry {
         let page = arguments as! DGPluginPage
         let action = { if page.accepts(self.epoch) { page.action(self.key) } }
         let toggle: (Bool) -> Void = { if page.accepts(self.epoch) { page.toggle(self.key, $0) } }
-        let input: (String) -> Void = { if page.accepts(self.epoch) { page.input(self.key, $0) } }
+        let input: (String) -> Void = { if page.acceptsInput(self.epoch, self.key) { page.input(self.key, $0) } }
         let number: (Double) -> Void = { if page.accepts(self.epoch) { page.number(self.key, $0) } }
         switch self.kind {
         case .header:
@@ -145,6 +145,19 @@ private final class DGPluginPage {
     }
 
     func accepts(_ epoch: Int) -> Bool { return epoch == self.sequence && !self.busy }
+
+    func acceptsInput(_ epoch: Int, _ key: String) -> Bool {
+        guard !self.busy else { return false }
+        if key == "search" {
+            if case .list = self.mode { return true }
+            return false
+        }
+        if key.hasPrefix("setting:") {
+            if case .settings = self.mode { return true }
+            return false
+        }
+        return self.accepts(epoch)
+    }
 
     func bindNativeHost() {
         if case .rendered = self.mode { return }
