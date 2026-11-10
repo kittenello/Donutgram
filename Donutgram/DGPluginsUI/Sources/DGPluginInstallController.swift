@@ -29,10 +29,7 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
     private let enabledLabel = UILabel()
     private let enabledSwitch = UISwitch()
     private let installButton = UIButton(type: .system)
-    private let progress: UIActivityIndicatorView = {
-        if #available(iOS 13.0, *) { return UIActivityIndicatorView(style: .medium) }
-        return UIActivityIndicatorView(style: .white)
-    }()
+    private let progress = UIActivityIndicatorView()
     private let noteLabel = UILabel()
     private let errorLabel = UILabel()
     private var presentationData: PresentationData
