@@ -135,3 +135,40 @@ public func dgPluginStoredReason(_ text: String, russian: Bool) -> String {
         return text
     }
 }
+
+/// The name of a capability as the user reads it, wherever a permission is shown or asked for.
+func dgPluginPermissionTitle(_ capability: String, russian: Bool) -> String {
+    let tr = { (ru: String, en: String) in dgPluginTr(russian, ru, en) }
+    switch capability {
+    case "ui.contribute": return tr("Команды и панели", "Commands and panels")
+    case "ui.transform": return tr("Локальное оформление экранов", "Local screen appearance")
+    case "theme.read": return tr("Текущая тема", "Current theme")
+    case "theme.contribute": return tr("Локальные цвета и оформление", "Local colors and decorations")
+    case "composer.read": return tr("Текст открытого черновика", "Text in the open draft")
+    case "composer.transform": return tr("Изменение открытого черновика", "Change the open draft")
+    case "messages.selection.read": return tr("Выделенный текст или всё выбранное сообщение", "Selected text or the whole message you choose")
+    case "messages.read": return tr("Сообщения в выбранных чатах", "Messages in selected chats")
+    case "chats.metadata.read": return tr("Названия выбранных чатов", "Selected chat names")
+    case "peers.read": return tr("Данные выбранных контактов", "Selected contact details")
+    case "storage.local": return tr("Собственные локальные данные", "Own local data")
+    case "network.public": return tr("Публичные интернет-сервисы", "Public internet services")
+    case "translation.request": return tr("Перевод выбранного текста", "Translate selected text")
+    case "navigation.open": return tr("Открытие разрешённых экранов", "Open allowed screens")
+    case "notifications.local": return tr("Локальные уведомления", "Local notifications")
+    case "files.userSelected": return tr("Выбранный вами файл", "File you choose")
+    case "messages.compose": return tr("Подготовка сообщения", "Prepare a message")
+    case "messages.send": return tr("Отправка без дополнительного подтверждения", "Send without an additional confirmation")
+    case "messages.edit": return tr("Замена текста выбранных сообщений, форматирование не сохраняется", "Replace the text of messages you choose; formatting is not kept")
+    case "messages.delete": return tr("Удаление выбранных сообщений у всех", "Delete selected messages for everyone")
+    case "messages.intercept": return tr("Изменение текста перед отправкой", "Change text before sending")
+    case "messages.sendInteractive": return tr("Отправка с вашим подтверждением", "Send with your confirmation")
+    default: return capability
+    }
+}
+
+/// Whether a permission is required, followed by the exact services a network permission reaches: the reason is the
+/// plugin's own text, the origins are what the host enforces.
+func dgPluginPermissionDetail(_ permission: DGPluginPermission, required: Bool, russian: Bool) -> String {
+    let kind = required ? dgPluginTr(russian, "Обязательное", "Required") : dgPluginTr(russian, "Необязательное", "Optional")
+    return permission.origins.isEmpty ? kind : kind + " · " + permission.origins.joined(separator: ", ")
+}

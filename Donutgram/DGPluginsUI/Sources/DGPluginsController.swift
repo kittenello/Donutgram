@@ -373,31 +373,7 @@ private final class DGPluginPage {
     }
 
     private func permissionTitle(_ capability: String) -> String {
-        switch capability {
-        case "ui.contribute": return self.tr("Команды и панели", "Commands and panels")
-        case "ui.transform": return self.tr("Локальное оформление экранов", "Local screen appearance")
-        case "theme.read": return self.tr("Текущая тема", "Current theme")
-        case "theme.contribute": return self.tr("Локальные цвета и оформление", "Local colors and decorations")
-        case "composer.read": return self.tr("Текст открытого черновика", "Text in the open draft")
-        case "composer.transform": return self.tr("Изменение открытого черновика", "Change the open draft")
-        case "messages.selection.read": return self.tr("Выделенный текст или всё выбранное сообщение", "Selected text or the whole message you choose")
-        case "messages.read": return self.tr("Сообщения в выбранных чатах", "Messages in selected chats")
-        case "chats.metadata.read": return self.tr("Названия выбранных чатов", "Selected chat names")
-        case "peers.read": return self.tr("Данные выбранных контактов", "Selected contact details")
-        case "storage.local": return self.tr("Собственные локальные данные", "Own local data")
-        case "network.public": return self.tr("Публичные интернет-сервисы", "Public internet services")
-        case "translation.request": return self.tr("Перевод выбранного текста", "Translate selected text")
-        case "navigation.open": return self.tr("Открытие разрешённых экранов", "Open allowed screens")
-        case "notifications.local": return self.tr("Локальные уведомления", "Local notifications")
-        case "files.userSelected": return self.tr("Выбранный вами файл", "File you choose")
-        case "messages.compose": return self.tr("Подготовка сообщения", "Prepare a message")
-        case "messages.send": return self.tr("Отправка без дополнительного подтверждения", "Send without an additional confirmation")
-        case "messages.edit": return self.tr("Замена текста выбранных сообщений, форматирование не сохраняется", "Replace the text of messages you choose; formatting is not kept")
-        case "messages.delete": return self.tr("Удаление выбранных сообщений у всех", "Delete selected messages for everyone")
-        case "messages.intercept": return self.tr("Изменение текста перед отправкой", "Change text before sending")
-        case "messages.sendInteractive": return self.tr("Отправка с вашим подтверждением", "Send with your confirmation")
-        default: return capability
-        }
+        return dgPluginPermissionTitle(capability, russian: self.russian)
     }
 
     private func settingText(_ value: DGPluginJSON) -> String {

@@ -25,6 +25,10 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
     private let authorLabel = UILabel()
     private let descriptionBackground = UIView()
     private let descriptionLabel = UILabel()
+    private let permissionsHeader = UILabel()
+    private let permissionsBackground = UIView()
+    private let permissionsLabel = UILabel()
+    private let permissionsFooter = UILabel()
     private let enabledLabel = UILabel()
     private let enabledSwitch = UISwitch()
     private let installButton = UIButton(type: .system)
@@ -82,16 +86,18 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.scroll.alwaysBounceVertical = false
         self.scroll.showsVerticalScrollIndicator = false
         self.scroll.contentInsetAdjustmentBehavior = .never
-        for view in [self.grabber, self.closeButton, self.imageView, self.nameLabel, self.authorLabel, self.descriptionBackground, self.descriptionLabel, self.enabledLabel, self.enabledSwitch, self.installButton, self.errorLabel] { self.scroll.addSubview(view) }
+        for view in [self.grabber, self.closeButton, self.imageView, self.nameLabel, self.authorLabel, self.descriptionBackground, self.descriptionLabel, self.permissionsHeader, self.permissionsBackground, self.permissionsLabel, self.permissionsFooter, self.enabledLabel, self.enabledSwitch, self.installButton, self.errorLabel] { self.scroll.addSubview(view) }
         self.grabber.layer.cornerRadius = 2
         self.imageView.contentMode = .scaleAspectFit
         self.imageView.clipsToBounds = true
         self.imageView.layer.cornerRadius = 18
         self.imageView.image = dgPluginIcon(data: self.package.iconData, id: self.package.manifest.id, name: self.package.manifest.name, size: 68)
-        for label in [self.nameLabel, self.authorLabel, self.descriptionLabel, self.enabledLabel, self.errorLabel] { label.numberOfLines = 0 }
+        for label in [self.nameLabel, self.authorLabel, self.descriptionLabel, self.permissionsHeader, self.permissionsLabel, self.permissionsFooter, self.enabledLabel, self.errorLabel] { label.numberOfLines = 0 }
         for label in [self.nameLabel, self.authorLabel] { label.textAlignment = .center }
         self.nameLabel.accessibilityTraits = .header
+        self.permissionsHeader.accessibilityTraits = .header
         self.descriptionBackground.layer.cornerRadius = 17
+        self.permissionsBackground.layer.cornerRadius = 17
         self.closeButton.layer.cornerRadius = 17
         if #available(iOS 13.0, *) { self.closeButton.setImage(UIImage(systemName: "xmark"), for: .normal) }
         self.closeButton.accessibilityLabel = self.presentationData.strings.Common_Close
@@ -144,6 +150,19 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.descriptionLabel.text = update && !changelog.isEmpty ? changelog : self.package.manifest.description
         self.descriptionLabel.font = .systemFont(ofSize: 16 * scale)
         self.descriptionLabel.textColor = theme.list.itemPrimaryTextColor
+        // The one action below grants the required permissions, so the sheet names all of them first; an update marks
+        // what the installed version did not declare.
+        let previousPermissions: Set<String>? = update ? Set(((existing?.manifest.permissions ?? []) + (existing?.manifest.optionalPermissions ?? [])).map(DGPluginPolicy.permissionKey)) : nil
+        self.permissionsHeader.text = self.tr("РАЗРЕШЕНИЯ", "PERMISSIONS")
+        self.permissionsHeader.font = .systemFont(ofSize: 13 * scale)
+        self.permissionsHeader.textColor = theme.list.sectionHeaderTextColor
+        self.permissionsBackground.backgroundColor = theme.list.itemBlocksBackgroundColor
+        self.permissionsLabel.attributedText = self.permissionsText(scale: scale, addedSince: previousPermissions)
+        let requestsPermissions = !self.package.manifest.permissions.isEmpty || !self.package.manifest.optionalPermissions.isEmpty
+        self.permissionsFooter.text = requestsPermissions ? self.tr("Обязательные разрешения плагин получит, когда вы его включите. Необязательные выдаются только вручную: «Дополнительно» → «Доступ к функциям».", "The plugin gets its required permissions when you turn it on. Optional ones are granted only by you, under Advanced → Feature access.") : nil
+        self.permissionsFooter.font = .systemFont(ofSize: 13 * scale)
+        self.permissionsFooter.textColor = theme.list.freeTextColor
+        for view in [self.permissionsHeader, self.permissionsBackground, self.permissionsLabel, self.permissionsFooter] { view.isHidden = self.installedId != nil }
         self.enabledLabel.text = update ? self.tr("Включить после обновления", "Enable after updating") : self.tr("Включить после установки", "Enable after installation")
         self.enabledLabel.font = .systemFont(ofSize: 15 * scale)
         self.enabledLabel.textColor = theme.list.itemPrimaryTextColor
@@ -168,6 +187,34 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.errorLabel.textColor = theme.list.itemDestructiveColor
         if self.busy { self.progress.startAnimating() } else { self.progress.stopAnimating() }
         if let layout = self.layout { self.applyLayout(layout) }
+    }
+
+    /// Each requested permission: its name, whether it is required, the exact services of a network permission and the
+    /// plugin's own reason, which explains but does not widen access.
+    private func permissionsText(scale: CGFloat, addedSince previous: Set<String>?) -> NSAttributedString {
+        let theme = self.presentationData.theme
+        let russian = self.presentationData.strings.primaryComponent.languageCode.hasPrefix("ru")
+        let titleFont = UIFont.systemFont(ofSize: 15 * scale, weight: .semibold)
+        let detailFont = UIFont.systemFont(ofSize: 13 * scale)
+        let manifest = self.package.manifest
+        let entries: [(DGPluginPermission, Bool)] = manifest.permissions.map { ($0, true) } + manifest.optionalPermissions.map { ($0, false) }
+        let text = NSMutableAttributedString()
+        guard !entries.isEmpty else {
+            text.append(NSAttributedString(string: self.tr("Плагину не нужны разрешения.", "The plugin requests no permissions."), attributes: [.font: detailFont, .foregroundColor: theme.list.itemSecondaryTextColor]))
+            return text
+        }
+        for (index, entry) in entries.enumerated() {
+            let permission = entry.0
+            if index > 0 { text.append(NSAttributedString(string: "\n\n", attributes: [.font: detailFont])) }
+            text.append(NSAttributedString(string: dgPluginPermissionTitle(permission.capability, russian: russian), attributes: [.font: titleFont, .foregroundColor: theme.list.itemPrimaryTextColor]))
+            if let previous, !previous.contains(DGPluginPolicy.permissionKey(permission)) {
+                text.append(NSAttributedString(string: " · " + self.tr("новое", "new"), attributes: [.font: titleFont, .foregroundColor: theme.list.itemAccentColor]))
+            }
+            var detail = dgPluginPermissionDetail(permission, required: entry.1, russian: russian)
+            if !permission.reason.isEmpty { detail += "\n" + permission.reason }
+            text.append(NSAttributedString(string: "\n" + detail, attributes: [.font: detailFont, .foregroundColor: theme.list.itemSecondaryTextColor]))
+        }
+        return text
     }
 
     override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
@@ -198,6 +245,12 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.descriptionBackground.frame = CGRect(x: 20, y: descriptionY, width: inner, height: y - descriptionY)
         y += 18
         if self.installedId == nil {
+            y = label(self.permissionsHeader, x: 36, y: y, width: max(1, inner - 32)) + 7
+            let permissionsY = y
+            y = label(self.permissionsLabel, x: 36, y: permissionsY + 14, width: max(1, inner - 32)) + 14
+            self.permissionsBackground.frame = CGRect(x: 20, y: permissionsY, width: inner, height: y - permissionsY)
+            if !(self.permissionsFooter.text ?? "").isEmpty { y = label(self.permissionsFooter, x: 36, y: y + 7, width: max(1, inner - 32)) }
+            y += 18
             let toggleSize = self.enabledSwitch.sizeThatFits(.zero)
             let labelWidth = max(1, inner - toggleSize.width - 16)
             let labelHeight = ceil(self.enabledLabel.sizeThatFits(CGSize(width: labelWidth, height: 100000)).height)
