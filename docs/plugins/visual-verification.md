@@ -14,6 +14,8 @@ enabling, disabling, granting/revoking rights, account switching, global stoppin
 
 the removal confirmation names the plugin and explains that all of its accounts' local data on this device is removed. cancelling changes nothing. successful confirmed removal returns to the original updated list controller and shows a short removal notice; installation cards opened directly from a document become the list when no earlier list exists. cancelling does not stop the runtime. resetting data has its own confirmation and applies only to the current account.
 
+sharing from a card or details opens the native Telegram recipient picker, with no system activity sheet. verify saved messages, another chat, multiple recipients and forum topics. cancelling must enqueue nothing. the sent document retains the exported filename, extension, exact package bytes and size; it remains available to the uploader after closing the plugin page. repeat with global plugin execution disabled. cache preparation failures show an error without opening the picker.
+
 ## recordings required
 
 - settings entry, search by name/author/id, empty results and keyboard dismissal;

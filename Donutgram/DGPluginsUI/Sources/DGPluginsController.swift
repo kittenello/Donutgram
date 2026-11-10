@@ -548,29 +548,24 @@ private final class DGPluginPage {
             switch result {
             case let .failure(error): self.busy = false; self.showError(error); self.refresh()
             case let .success(package):
+                let context = self.context
                 DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("donutgram-plugin-" + UUID().uuidString, isDirectory: true)
-                    do {
-                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                        let url = directory.appendingPathComponent(package.fileName)
-                        try package.data.write(to: url, options: .atomic)
-                        DispatchQueue.main.async { [weak self] in
-                            self?.busy = false
-                            self?.refresh()
-                            guard let controller = self?.controller, controller.isNodeLoaded, controller.view.window != nil, controller.presentedViewController == nil else { try? FileManager.default.removeItem(at: directory); return }
-                            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                            activity.popoverPresentationController?.sourceView = controller.view
-                            activity.popoverPresentationController?.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.maxY - 1, width: 1, height: 1)
-                            activity.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: directory) }
-                            controller.present(activity, animated: true)
+                    let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+                    let resourceId = EngineMediaResource.Id(resource.id)
+                    context.engine.resources.storeResourceData(id: resourceId, data: package.data, synchronous: true)
+                    let stored = context.engine.resources.completedResourcePath(id: resourceId) != nil
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.busy = false
+                        self.refresh()
+                        guard stored else {
+                            self.showError(DGPluginError(code: "storage_error", message: "unable to prepare the plugin file"))
+                            return
                         }
-                    } catch {
-                        try? FileManager.default.removeItem(at: directory)
-                        DispatchQueue.main.async { [weak self] in
-                            self?.busy = false
-                            self?.showError(DGPluginError(code: "storage_error", message: "unable to prepare the plugin file"))
-                            self?.refresh()
-                        }
+                        guard let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil else { return }
+                        let file = TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: resource.fileId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/octet-stream", size: Int64(package.data.count), attributes: [.FileName(fileName: package.fileName)], alternativeRepresentations: [])
+                        let share = context.sharedContext.makeShareScreen(context: context, params: ShareControllerParams(subject: .media(.standalone(media: file), nil), externalShare: false))
+                        controller.present(share, in: .window(.root))
                     }
                 }
             }
