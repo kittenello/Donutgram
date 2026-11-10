@@ -56,3 +56,16 @@ app-store execution is compile-gated out through the distribution flag. no app-s
 - `Tests/run_tests.py` runs the runtime, native-work and engine suites, and the "Plugin runtime tests" workflow runs it on macos-26.
 
 swift is compiled only by the CI IPA build; nothing compiles or runs it locally. the c/c++ runtime suites run on macos CI and locally with gcc, including on windows. device behaviour is not verified.
+
+## permission and settings-session fixes (2026-11-11)
+
+- the install sheet lists every requested permission (required or optional, exact network origins, the plugin's reason) and marks the ones an update adds, since its one action grants the required ones.
+- an enable switch in the list or details names the required permissions the plugin does not hold yet and grants them only after Allow; cancelling puts the switch back.
+- feature access marks required and optional permissions with their origins and matches grants by the host's permission key, so a reworded reason no longer breaks a switch.
+- the sheet and installed details say "signature verified" or "author not confirmed: the file is unsigned" under the author.
+- the open settings screens belong to the manager, so a disabled plugin's settings session comes back after the app returns from the background or power saving.
+- changing an optional permission restarts an enabled plugin instead of turning it off; losing a required one still turns it off.
+- a settings session holds only the local permissions the plugin would get if turned on, so a declined optional one stays off.
+- an empty plugin list says how to install a plugin from a chat.
+
+the new host tests in `DGPluginHostIntegrationTests` run with the Swift host suite, which no CI workflow runs yet; the list fixture runs in "Plugin document import tests".
