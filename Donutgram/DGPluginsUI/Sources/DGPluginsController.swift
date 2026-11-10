@@ -294,10 +294,14 @@ private final class DGPluginPage {
             }
         case let .permissions(id):
             guard let item = self.installation(id) else { break }
+            // A grant matches by capability, scope and origins, as in the host: an update may reword the reason of a
+            // permission the user already granted.
+            let granted = Set(item.grants.map(DGPluginPolicy.permissionKey))
             for (index, permission) in (item.manifest.permissions + item.manifest.optionalPermissions).enumerated() {
                 let section = Int32(index + 1)
-                add(section, .toggle, "grant:\(index)", self.permissionTitle(permission.capability), value: item.grants.contains(permission))
-                add(section, .text, "", permission.reason)
+                add(section, .toggle, "grant:\(index)", self.permissionTitle(permission.capability), value: granted.contains(DGPluginPolicy.permissionKey(permission)))
+                let detail = dgPluginPermissionDetail(permission, required: index < item.manifest.permissions.count, russian: self.russian)
+                add(section, .text, "", permission.reason.isEmpty ? detail : detail + "\n" + permission.reason)
             }
         case let .settings(id):
             guard let item = self.installation(id) else { break }
@@ -502,7 +506,8 @@ private final class DGPluginPage {
         } else if key.hasPrefix("grant:"), case let .permissions(id) = self.mode, let item = self.installation(id), let index = Int(key.dropFirst(6)) {
             let requested = item.manifest.permissions + item.manifest.optionalPermissions
             guard requested.indices.contains(index) else { return }
-            var grants = item.grants.filter { $0 != requested[index] }
+            let identity = DGPluginPolicy.permissionKey(requested[index])
+            var grants = item.grants.filter { DGPluginPolicy.permissionKey($0) != identity }
             if value { grants.append(requested[index]) }
             self.manager.setGrants(id: id, permissions: grants) { [weak self] result in
                 self?.complete(result)
