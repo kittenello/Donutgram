@@ -19,7 +19,6 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
     private let sheet = UIView()
     private let scroll = UIScrollView()
     private let grabber = UIView()
-    private let typeLabel = UILabel()
     private let closeButton = UIButton(type: .system)
     private let imageView = UIImageView()
     private let nameLabel = UILabel()
@@ -30,7 +29,6 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
     private let enabledSwitch = UISwitch()
     private let installButton = UIButton(type: .system)
     private let progress = UIActivityIndicatorView()
-    private let noteLabel = UILabel()
     private let errorLabel = UILabel()
     private var presentationData: PresentationData
     private var presentationDisposable: Disposable?
@@ -84,14 +82,14 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.scroll.alwaysBounceVertical = false
         self.scroll.showsVerticalScrollIndicator = false
         self.scroll.contentInsetAdjustmentBehavior = .never
-        for view in [self.grabber, self.typeLabel, self.closeButton, self.imageView, self.nameLabel, self.authorLabel, self.descriptionBackground, self.descriptionLabel, self.enabledLabel, self.enabledSwitch, self.installButton, self.noteLabel, self.errorLabel] { self.scroll.addSubview(view) }
+        for view in [self.grabber, self.closeButton, self.imageView, self.nameLabel, self.authorLabel, self.descriptionBackground, self.descriptionLabel, self.enabledLabel, self.enabledSwitch, self.installButton, self.errorLabel] { self.scroll.addSubview(view) }
         self.grabber.layer.cornerRadius = 2
         self.imageView.contentMode = .scaleAspectFit
         self.imageView.clipsToBounds = true
         self.imageView.layer.cornerRadius = 18
         self.imageView.image = dgPluginIcon(data: self.package.iconData, id: self.package.manifest.id, name: self.package.manifest.name, size: 68)
-        for label in [self.nameLabel, self.authorLabel, self.descriptionLabel, self.enabledLabel, self.noteLabel, self.errorLabel] { label.numberOfLines = 0 }
-        for label in [self.nameLabel, self.authorLabel, self.noteLabel] { label.textAlignment = .center }
+        for label in [self.nameLabel, self.authorLabel, self.descriptionLabel, self.enabledLabel, self.errorLabel] { label.numberOfLines = 0 }
+        for label in [self.nameLabel, self.authorLabel] { label.textAlignment = .center }
         self.nameLabel.accessibilityTraits = .header
         self.descriptionBackground.layer.cornerRadius = 17
         self.closeButton.layer.cornerRadius = 17
@@ -131,9 +129,6 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.sheet.backgroundColor = theme.list.blocksBackgroundColor
         self.descriptionBackground.backgroundColor = theme.list.itemBlocksBackgroundColor
         self.grabber.backgroundColor = theme.list.itemSecondaryTextColor.withAlphaComponent(0.4)
-        self.typeLabel.textColor = theme.list.itemSecondaryTextColor
-        self.typeLabel.text = update ? self.tr("Обновление плагина", "Plugin update") : self.tr("Плагин", "Plugin")
-        self.typeLabel.font = .systemFont(ofSize: 13 * scale)
         self.closeButton.backgroundColor = theme.list.itemBlocksBackgroundColor
         self.closeButton.tintColor = theme.list.itemSecondaryTextColor
         self.closeButton.isEnabled = !self.busy
@@ -169,9 +164,6 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         let buttonTitle = self.installedId != nil ? self.tr("Открыть настройки", "Open settings") : update ? self.tr("Обновить", "Update") : self.tr("Установить", "Install")
         self.installButton.setTitle(self.busy ? "" : buttonTitle, for: .normal)
         self.installButton.accessibilityLabel = self.busy ? self.tr("Подождите…", "Please wait…") : buttonTitle
-        self.noteLabel.text = self.installedId != nil ? self.tr("Плагин уже установлен", "Plugin already installed") : self.tr("Появится в настройках → Плагины", "Available in Settings → Plugins")
-        self.noteLabel.font = .systemFont(ofSize: 12 * scale)
-        self.noteLabel.textColor = theme.list.itemSecondaryTextColor
         self.errorLabel.font = .systemFont(ofSize: 14 * scale)
         self.errorLabel.textColor = theme.list.itemDestructiveColor
         if self.busy { self.progress.startAnimating() } else { self.progress.stopAnimating() }
@@ -192,7 +184,6 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         let width = min(480, max(1, layout.size.width - left - right))
         let inner = max(1, width - 40)
         self.grabber.frame = CGRect(x: (width - 32) / 2, y: 9, width: 32, height: 4)
-        self.typeLabel.frame = CGRect(x: 21, y: 24, width: max(1, inner - 44), height: 40)
         self.closeButton.frame = CGRect(x: width - 61, y: 23, width: 44, height: 44)
         self.imageView.frame = CGRect(x: (width - 68) / 2, y: 74, width: 68, height: 68)
         func label(_ label: UILabel, x: CGFloat = 20, y: CGFloat, width: CGFloat) -> CGFloat {
@@ -219,7 +210,7 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         let buttonHeight = max(50, ceil((self.installButton.titleLabel?.font.lineHeight ?? 20) * 2) + 12)
         self.installButton.frame = CGRect(x: 20, y: y, width: inner, height: buttonHeight)
         self.progress.frame = CGRect(x: (inner - 20) / 2, y: (buttonHeight - 20) / 2, width: 20, height: 20)
-        y = label(self.noteLabel, y: self.installButton.frame.maxY + 11, width: inner) + 20 + max(safe.bottom, layout.safeInsets.bottom)
+        y = self.installButton.frame.maxY + 20 + max(safe.bottom, layout.safeInsets.bottom)
         let height = min(y, max(1, layout.size.height - max(safe.top, layout.safeInsets.top) - 12))
         self.sheet.frame = CGRect(x: left + (layout.size.width - left - right - width) / 2, y: layout.size.height - height, width: width, height: height)
         self.scroll.frame = CGRect(x: 0, y: 0, width: width, height: height)
