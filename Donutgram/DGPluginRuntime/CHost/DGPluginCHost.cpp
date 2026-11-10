@@ -133,7 +133,7 @@ static void fail(DGJSHost *h, const char *message) {
 static void beginOperation(DGJSHost *h, std::chrono::milliseconds budget) {
     h->opCpuUsed = 0;
     h->opCpuBudget = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(budget).count());
-    h->deadline = std::chrono::steady_clock::now() + std::max(budget * 8, std::chrono::milliseconds(2000));
+    h->deadline = std::chrono::steady_clock::now() + (std::max)(budget * 8, std::chrono::milliseconds(2000));
     h->nativeWaitUsed = std::chrono::steady_clock::duration::zero();
     h->waitingNative = false;
     h->busy = true;

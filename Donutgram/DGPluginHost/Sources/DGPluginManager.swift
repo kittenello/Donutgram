@@ -859,12 +859,21 @@ public final class DGPluginManager {
         return left > right
     }
 
-    public func setEnabled(id: String, enabled: Bool, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+    public func setEnabled(id: String, enabled: Bool, reviewedDigest: String? = nil, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
         coordinator.queue.async {
             do {
                 guard let index = self.coordinator.state.installations.firstIndex(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is no longer available") }
                 let record = self.coordinator.state.installations[index]
                 var account = self.account(record)
+                if let reviewedDigest {
+                    guard record.digest == reviewedDigest else { throw DGPluginError(code: "revision_conflict", message: "plugin changed after review") }
+                    if enabled {
+                        let declared = Set((record.manifest.permissions + record.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
+                        let retained = account.grants.filter { declared.contains(DGPluginPolicy.permissionKey($0)) }
+                        let keys = Set(retained.map(DGPluginPolicy.permissionKey))
+                        account.grants = retained + record.manifest.permissions.filter { !keys.contains(DGPluginPolicy.permissionKey($0)) }
+                    }
+                }
                 if enabled {
                     guard Self.executionAvailable else { throw DGPluginError(code: "feature_unavailable", message: "external execution is unavailable") }
                     guard self.executions[id] != nil || self.executions.count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "at most four plugin runtimes may run for one account") }
@@ -883,6 +892,18 @@ public final class DGPluginManager {
                 }
                 if !enabled { self.stop(id: id); self.coordinator.publishAll(); DispatchQueue.main.async { completion(.success(())) } }
                 else { self.start(id: id, completion: completion) }
+            } catch { self.complete(completion, error: error) }
+        }
+    }
+
+    public func exportPackage(id: String, completion: @escaping (Result<(data: Data, fileName: String), DGPluginError>) -> Void) {
+        coordinator.queue.async {
+            do {
+                guard let record = self.coordinator.state.installations.first(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is no longer available") }
+                let package = try self.coordinator.package(record)
+                let name = record.manifest.id.split(separator: ".").last.map(String.init) ?? "plugin"
+                let fileName = name + (record.fileName.lowercased().hasSuffix(".donut.js") ? ".donut.js" : ".dgplugin")
+                DispatchQueue.main.async { completion(.success((package.originalData, fileName))) }
             } catch { self.complete(completion, error: error) }
         }
     }

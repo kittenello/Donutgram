@@ -35,11 +35,70 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         return result ?? .failure(DGPluginError(code: "test_timeout", message: "host operation did not complete"))
     }
 
-    private func package(id: String = "dev.example.test-" + UUID().uuidString.lowercased(), version: String = "1.0.0", profile: String = "localPrivate", permissions: [DGPluginPermission] = [], body: String) throws -> DGVerifiedPluginPackage {
-        let manifest = DGPluginManifest(id: id, name: "host test", version: version, description: "host integration fixture", permissions: permissions, profile: profile)
+    private func package(id: String = "dev.example.test-" + UUID().uuidString.lowercased(), version: String = "1.0.0", profile: String = "localPrivate", permissions: [DGPluginPermission] = [], optionalPermissions: [DGPluginPermission] = [], body: String) throws -> DGVerifiedPluginPackage {
+        let manifest = DGPluginManifest(id: id, name: "host test", version: version, description: "host integration fixture", permissions: permissions, optionalPermissions: optionalPermissions, profile: profile)
         let json = String(data: try JSONEncoder().encode(manifest), encoding: .utf8)!
         let source = "const _plugin = \"donutgram\";\nconst manifest = " + json + ";\nexport default definePlugin(manifest,{async activate(api){" + body + "}});"
         return try DGPluginInstaller.preview(data: Data(source.utf8), fileName: "fixture.donut.js")
+    }
+
+    func testReviewedEnableGrantsOnlyRequiredCapabilities() throws {
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "store replacements")
+        let optional = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "optional appearance")
+        let package = try self.package(permissions: [storage], optionalPermissions: [optional], body: "await api.storage.set('started',true);")
+        let id = try self.install(package)
+        XCTAssertThrowsError(try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get())
+        try self.result { self.manager.setEnabled(id: id, enabled: true, reviewedDigest: package.digest, completion: $0) }.get()
+        let item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertEqual(item.grants, [storage])
+        XCTAssertEqual(item.state, .running)
+        XCTAssertFalse(item.grants.contains(optional))
+    }
+
+    func testReviewedEnableRejectsAChangedVersionWithoutGrantingIt() throws {
+        let pluginId = "dev.example.review-" + UUID().uuidString.lowercased()
+        let first = try self.package(id: pluginId, body: "")
+        let id = try self.install(first)
+        let permission = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "new capability")
+        let next = try self.package(id: pluginId, version: "2.0.0", permissions: [permission], body: "")
+        _ = try self.result { self.manager.install(next, completion: $0) }.get()
+        let result = self.result { self.manager.setEnabled(id: id, enabled: true, reviewedDigest: first.digest, completion: $0) }
+        guard case let .failure(error) = result else { return XCTFail("an old review enabled a new version") }
+        XCTAssertEqual(error.code, "revision_conflict")
+        let item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertEqual(item.digest, next.digest)
+        XCTAssertFalse(item.enabled)
+        XCTAssertTrue(item.grants.isEmpty)
+    }
+
+    func testReviewedDisabledInstallationDoesNotGrantOrRunCode() throws {
+        let permission = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "required storage")
+        let package = try self.package(permissions: [permission], body: "throw Error('must not run');")
+        let id = try self.install(package)
+        try self.result { self.manager.setEnabled(id: id, enabled: false, reviewedDigest: package.digest, completion: $0) }.get()
+        let item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertFalse(item.enabled)
+        XCTAssertTrue(item.grants.isEmpty)
+        XCTAssertNil(item.lastError)
+    }
+
+    func testExportKeepsOriginalPackageBytesWithoutStartingIt() throws {
+        let package = try self.package(body: "throw Error('sharing must not execute code');")
+        let id = try self.install(package)
+        let exported = try self.result { self.manager.exportPackage(id: id, completion: $0) }.get()
+        XCTAssertEqual(exported.data, package.originalData)
+        XCTAssertEqual(exported.fileName, String(package.manifest.id.split(separator: ".").last!) + ".donut.js")
+        XCTAssertEqual(try DGPluginInstaller.preview(data: exported.data, fileName: exported.fileName).digest, package.digest)
+        XCTAssertFalse(try XCTUnwrap(self.manager.installations.first { $0.id == id }).enabled)
+    }
+
+    func testExportRejectsRemovedPlugins() throws {
+        let package = try self.package(body: "")
+        let id = try self.install(package)
+        try self.result { self.manager.remove(id: id, completion: $0) }.get()
+        let result = self.result { self.manager.exportPackage(id: id, completion: $0) }
+        guard case let .failure(error) = result else { return XCTFail("a removed plugin was shared") }
+        XCTAssertEqual(error.code, "stale_handle")
     }
 
     func testOutgoingTextRunsBeforeSendAndCanCancel() throws {

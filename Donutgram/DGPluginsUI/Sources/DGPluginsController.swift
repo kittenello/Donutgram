@@ -24,7 +24,7 @@ private extension String {
 }
 
 private struct DGPluginRow: ItemListNodeEntry {
-    enum Kind: Int32 { case header, text, disclosure, toggle, input, multiline, markdown, card, slider, stepper, image, action, destructive }
+    enum Kind: Int32 { case header, text, disclosure, toggle, input, multiline, markdown, card, slider, stepper, image, action, destructive, plugin }
     let index: Int32
     var stableId: Int32 { return self.index * 16 + self.kind.rawValue }
     let section: ItemListSectionId
@@ -41,6 +41,7 @@ private struct DGPluginRow: ItemListNodeEntry {
     var step: Double = 1
     var epoch: Int = 0
     var maxText: Int = 4096
+    var summary: String = ""
 
     static func < (lhs: DGPluginRow, rhs: DGPluginRow) -> Bool { return lhs.stableId < rhs.stableId }
 
@@ -58,7 +59,7 @@ private struct DGPluginRow: ItemListNodeEntry {
         case .disclosure:
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: self.iconKey.isEmpty ? nil : page.icon(self.iconKey), title: self.title, label: self.detail, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: action)
         case .toggle:
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: self.title, value: self.value, enableInteractiveChanges: self.enabled, enabled: self.enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: toggle)
+            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: self.iconKey.isEmpty ? nil : page.icon(self.iconKey, size: 32), title: self.title, text: self.detail.isEmpty ? nil : self.detail, value: self.value, enableInteractiveChanges: self.enabled, enabled: self.enabled, maximumNumberOfLines: 0, sectionId: self.section, style: .blocks, updated: toggle)
         case .input:
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: self.key == "search" ? "" : self.title), text: self.detail, placeholder: self.title, type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: input, shouldUpdateText: { $0.utf16.count <= self.maxText }, action: {})
         case .multiline:
@@ -66,7 +67,15 @@ private struct DGPluginRow: ItemListNodeEntry {
         case .markdown:
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .card:
-            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .card(page.icon(self.iconKey, size: 96), self.title, self.detail, page.cardDescription()), scale: presentationData.fontSize.itemListBaseFontSize / 17)
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .card(page.icon(self.iconKey, size: 68), self.title, self.detail, page.cardDescription()), scale: presentationData.fontSize.itemListBaseFontSize / 17)
+        case .plugin:
+            let content = DGPluginListContent(icon: page.icon(self.iconKey, size: 44), title: self.title, subtitle: self.detail, description: self.summary, enabled: self.value, interactive: self.enabled, actions: [page.tr("Настройки", "Settings"), page.tr("Поделиться", "Share"), page.tr("Удалить", "Remove")])
+            return DGPluginListItem(sectionId: self.section, theme: presentationData.theme, content: content, scale: presentationData.fontSize.itemListBaseFontSize / 17, open: action, toggle: { value in
+                if page.accepts(self.epoch) { page.toggle("enabled:" + self.iconKey, value) }
+            }, action: { index in
+                guard page.accepts(self.epoch), (0 ..< 3).contains(index) else { return }
+                page.action(["settings:", "share:", "remove:"][index] + self.iconKey)
+            })
         case .slider, .stepper:
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .number(self.title, self.number, self.minimum, self.maximum, self.step, self.kind == .slider), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, numberUpdated: number)
         case .image:
@@ -80,15 +89,12 @@ private struct DGPluginRow: ItemListNodeEntry {
 
 private enum DGPluginPageMode {
     case list
-    case install(DGVerifiedPluginPackage)
     case details(String)
     case permissions(String)
     case settings(String)
+    case advanced(String)
     case rendered(DGPluginRenderedState)
 }
-
-/// How many plugins it takes for the list to get a search field: about two screens of rows.
-private let dgPluginSearchMinimumCount = 8
 
 private final class DGPluginPresentedPage {
     weak var controller: ViewController?
@@ -104,7 +110,6 @@ private final class DGPluginPage {
     var mode: DGPluginPageMode
     var query = ""
     var busy = false
-    var enableAfterInstall = false
     var observer: UUID?
     private var sequence = 0
     var notice: String?
@@ -185,9 +190,9 @@ private final class DGPluginPage {
     var title: String {
         switch self.mode {
         case .list: return self.tr("Плагины", "Plugins")
-        case .permissions: return self.tr("Разрешения", "Permissions")
+        case .permissions: return self.tr("Возможности плагина", "Plugin capabilities")
         case .settings: return self.tr("Настройки плагина", "Plugin settings")
-        case .install: return self.tr("Установка плагина", "Install plugin")
+        case .advanced: return self.tr("Дополнительно", "Advanced")
         case let .details(id): return self.installation(id)?.manifest.name ?? self.tr("Плагин удалён", "Plugin removed")
         case let .rendered(state): return state.title
         }
@@ -202,58 +207,41 @@ private final class DGPluginPage {
         case .list:
             if let notice = self.notice { add(0, .text, "", notice) }
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
-            add(0, .toggle, "global", self.tr("Разрешить выполнение плагинов", "Allow plugins to run"), value: self.manager.globallyEnabled)
-            add(0, .text, "", self.tr("Выключение немедленно останавливает все плагины и их задачи.", "Turning this off immediately stops all plugins and their tasks."))
+            let running = self.manager.installations.filter { $0.state == .running }.count
+            add(0, .toggle, "global", self.manager.globallyEnabled ? self.tr("Плагины включены", "Plugins enabled") : self.tr("Плагины выключены", "Plugins disabled"), detail: self.manager.globallyEnabled ? self.tr("Работают: ", "Running: ") + String(running) : self.tr("Все плагины на паузе", "All plugins are paused"), value: self.manager.globallyEnabled, icon: "__plugins")
             let installations = self.manager.installations
-            // A short list is read at a glance, so the search field appears only once the list is long.
-            let searchable = installations.count >= dgPluginSearchMinimumCount
-            if searchable { add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query) } else { self.query = "" }
-            // The header shares the section of the first plugin, or of the note that there are none, and so sits
-            // right above it.
+            add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
             add(2, .header, "", self.tr("УСТАНОВЛЕННЫЕ", "INSTALLED"))
             let matches = installations.filter { self.query.isEmpty || ($0.manifest.name + " " + $0.manifest.id + " " + ($0.manifest.author?.name ?? "")).localizedCaseInsensitiveContains(self.query) }
             if matches.isEmpty {
-                add(2, .text, "", self.query.isEmpty ? self.tr("Плагинов пока нет. Откройте файл .donut.js или .dgplugin в сообщении Telegram. Просмотр файла не запускает код.", "No plugins yet. Open a .donut.js or .dgplugin document in a Telegram message. Previewing never runs code.") : self.tr("Ничего не найдено", "Nothing found"))
+                add(2, .text, "", self.query.isEmpty ? self.tr("Плагинов пока нет. Для установки откройте плагин в чате.", "No plugins yet. Open a plugin in a chat to install it.") : self.tr("Ничего не найдено", "Nothing found"))
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
-                add(section, .disclosure, "details:" + item.id, item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + item.manifest.version + " · " + self.stateText(item), icon: item.id)
-                add(section, .toggle, "enabled:" + item.id, self.tr("Включён", "Enabled"), value: item.enabled)
+                let status = item.enabled && item.state == .running ? "" : " · " + self.stateText(item)
+                rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .plugin, key: "details:" + item.id, title: item.manifest.name, detail: (item.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + item.manifest.version + status, value: item.enabled, enabled: !self.busy, iconKey: item.id, summary: item.manifest.description))
             }
-        case let .install(package):
-            self.appendCard(manifest: package.manifest, trust: package.trust, digest: package.digest, iconKey: "preview", add: add)
-            if let old = self.manager.installations.first(where: { $0.manifest.id == package.manifest.id }) {
-                add(2, .header, "", self.tr("ОБНОВЛЕНИЕ", "UPDATE REVIEW"))
-                add(2, .text, "", old.manifest.version + " → " + package.manifest.version)
-                if old.manifest.profile != package.manifest.profile { add(2, .text, "", self.tr("Изменён профиль: ", "Profile changed: ") + old.manifest.profile + " → " + package.manifest.profile) }
-                let previous = Set(old.manifest.permissions + old.manifest.optionalPermissions)
-                let added = (package.manifest.permissions + package.manifest.optionalPermissions).filter { !previous.contains($0) }
-                add(2, .text, "", added.isEmpty ? self.tr("Новых разрешений нет. После обновления проверьте разрешения и включите плагин самостоятельно.", "No new permissions. Review permissions and enable the plugin after updating.") : self.tr("Новые разрешения:\n", "New permissions:\n") + added.map(self.permissionText).joined(separator: "\n\n"))
-                add(4, .action, "install", self.busy ? self.tr("Обновляем…", "Updating…") : self.tr("Подтвердить обновление", "Confirm update"))
-            } else {
-                add(4, .action, "install", self.busy ? self.tr("Устанавливаем…", "Installing…") : self.tr("Установить выключенным", "Install disabled"))
-            }
-            add(4, .toggle, "afterInstall", self.tr("Включить после установки", "Enable after installation"), value: self.enableAfterInstall)
-            add(4, .text, "", self.tr("Установка не выдаёт разрешения и не запускает код. Подпись подтверждает происхождение, а не безопасность кода.", "Installing grants no permissions and runs no code. A signature proves origin, not code safety."))
         case let .details(id):
             guard let item = self.installation(id) ?? (self.pendingRemoval?.id == id ? self.pendingRemoval : nil) else { add(0, .text, "", self.tr("Этот плагин удалён.", "This plugin has been removed.")); break }
-            self.appendCard(manifest: item.manifest, trust: item.trust, digest: item.digest, iconKey: id, add: add)
+            self.appendCard(manifest: item.manifest, iconKey: id, add: add)
             add(4, .toggle, "enabled:" + id, self.tr("Включён", "Enabled"), value: item.enabled)
             add(4, .text, "", self.stateText(item).dgSentenceStart)
             if let error = item.lastError { add(4, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
-            add(5, .disclosure, "permissions:" + id, self.tr("Разрешения", "Permissions"), detail: "\(item.grants.count)")
-            add(5, .disclosure, "settings:" + id, self.tr("Настройки", "Settings"))
-            add(5, .action, "reset:" + id, self.tr("Сбросить настройки и данные", "Reset settings and data"))
-            for command in self.manager.commands.filter({ $0.installationId == id && $0.placement == "settings" }) {
-                add(6, .action, "command:" + command.id, command.title)
-            }
-            // Where the plugin's other commands appear: they have no place on this screen.
+            add(5, .disclosure, "settings:" + id, self.tr("Настройки плагина", "Plugin settings"))
+            add(5, .action, "share:" + id, self.tr("Поделиться", "Share"))
             let placements = Set(self.manager.commands.filter { $0.installationId == id }.map { $0.placement })
             var commandPlaces: [String] = []
             if !placements.isDisjoint(with: ["composer", "chatToolbar"]) { commandPlaces.append(self.tr("команды для чата — в меню, которое открывается долгим нажатием на аватар в шапке чата", "chat commands are in the menu that opens when you long-press the avatar in the chat header")) }
             if !placements.isDisjoint(with: ["messageMenu", "selection"]) { commandPlaces.append(self.tr("команды для сообщений — в меню сообщения", "message commands are in a message's menu")) }
             if !commandPlaces.isEmpty { add(6, .text, "", (commandPlaces.joined(separator: "; ") + ".").dgSentenceStart) }
-            add(7, .text, "", self.tr("Для обновления откройте новый файл плагина в сообщении Telegram. Автоматической загрузки кода нет.", "To update, open the new plugin document in a Telegram message. Code is never downloaded automatically."))
+            if let changelog = item.manifest.changelog, !changelog.isEmpty { add(7, .header, "", self.tr("ЧТО НОВОГО", "WHAT'S NEW")); add(7, .text, "", changelog) }
+            add(8, .disclosure, "advanced:" + id, self.tr("Дополнительно", "Advanced"))
+            add(9, .destructive, "remove:" + id, self.tr("Удалить плагин", "Remove plugin"))
+        case let .advanced(id):
+            guard let item = self.installation(id) else { break }
+            add(0, .disclosure, "permissions:" + id, self.tr("Доступ к функциям", "Feature access"))
+            add(1, .action, "reset:" + id, self.tr("Сбросить настройки и данные", "Reset settings and data"))
+            add(2, .text, "", self.tr("Для обновления откройте новую версию плагина в чате.", "To update, open a new version of the plugin in a chat."))
             if self.manager.canRollback(id: id) { add(7, .action, "rollback:" + id, self.tr("Вернуться к предыдущей версии", "Restore previous version")) }
             if let publisher = self.manager.publisherIdentity(id: id), publisher.hasPrefix("ed25519:") {
                 add(7, .action, "publisher:" + id, item.trust == "revoked" ? self.tr("Разблокировать издателя", "Unblock publisher") : self.tr("Заблокировать издателя", "Block publisher"))
@@ -263,25 +251,24 @@ private final class DGPluginPage {
                 add(8, .header, "", self.tr("ЖУРНАЛ ОШИБОК", "ERROR HISTORY"))
                 for entry in diagnostics.prefix(20) { add(8, .text, "", String(dgPluginStoredReason(entry, russian: self.russian).prefix(512))) }
             }
-            add(9, .destructive, "remove:" + id, self.tr("Удалить плагин", "Remove plugin"))
         case let .permissions(id):
             guard let item = self.installation(id) else { break }
-            add(0, .text, "", self.tr("Каждое разрешение выдаётся отдельно. Отзыв немедленно отменяет связанные действия. Обязательные права нужны для включения.", "Grant each permission separately. Revoking immediately cancels related work. Required permissions are needed to enable the plugin."))
             for (index, permission) in (item.manifest.permissions + item.manifest.optionalPermissions).enumerated() {
                 let section = Int32(index + 1)
                 add(section, .toggle, "grant:\(index)", self.permissionTitle(permission.capability), value: item.grants.contains(permission))
-                let required = index < item.manifest.permissions.count
-                add(section, .text, "", (required ? self.tr("Обязательное\n", "Required\n") : self.tr("Необязательное\n", "Optional\n")) + self.permissionText(permission))
+                add(section, .text, "", permission.reason)
             }
         case let .settings(id):
             guard let item = self.installation(id) else { break }
             let properties = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue ?? [:]
-            if properties.isEmpty { add(0, .text, "", self.tr("У плагина нет настроек.", "This plugin has no settings.")) }
+            let commands = self.manager.commands.filter { $0.installationId == id && $0.placement == "settings" }
+            for command in commands { add(0, .action, "command:" + command.id, command.title) }
+            if properties.isEmpty && commands.isEmpty { add(0, .text, "", item.enabled ? self.tr("У плагина нет настроек.", "This plugin has no settings.") : self.tr("Включите плагин, чтобы открыть его настройки.", "Enable the plugin to open its settings.")) }
             for (index, key) in properties.keys.sorted().enumerated() {
                 guard let schema = properties[key]?.objectValue else { continue }
                 let title = schema["title"]?.stringValue ?? key
                 let value = item.settings[key] ?? schema["default"] ?? .null
-                let section = Int32(index)
+                let section = Int32(index + 1)
                 if case .array? = schema["enum"] {
                     add(section, .disclosure, "enum:" + key, title, detail: self.settingText(value))
                     continue
@@ -307,7 +294,6 @@ private final class DGPluginPage {
                 if let description = schema["description"]?.stringValue { add(section, .text, "", description) }
             }
         case let .rendered(state):
-            add(0, .text, "", self.tr("Страница плагина: ", "Plugin page: ") + state.pluginName)
             guard state.validity() else { add(0, .text, "", self.tr("Плагин остановлен или доступ отозван. Закройте эту страницу.", "The plugin stopped or permission was revoked. Close this page.")); break }
             var section: Int32 = 1
             func append(_ nodes: [DGPluginRenderNode]) {
@@ -340,18 +326,9 @@ private final class DGPluginPage {
         return rows.map { row in var row = row; row.epoch = self.sequence; return row }
     }
 
-    private func appendCard(manifest: DGPluginManifest, trust: String, digest: String, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
+    private func appendCard(manifest: DGPluginManifest, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
         let author = manifest.author.map { $0.name + ($0.username.map { " (@\($0))" } ?? "") } ?? self.tr("не указан", "not specified")
-        add(0, .card, "", manifest.name, manifest.version + "\n" + self.tr("Заявленный автор: ", "Claimed author: ") + author + "\n" + manifest.id, false, true, iconKey)
-        add(1, .text, "", self.tr("Доверие: ", "Trust: ") + self.trustText(trust) + "\n" + self.tr("Профиль: ", "Profile: ") + manifest.profile + "\nsha256: " + digest, "", false, true, "")
-        add(3, .header, "", self.tr("ЗАПРАШИВАЕМЫЕ РАЗРЕШЕНИЯ", "REQUESTED PERMISSIONS"), "", false, true, "")
-        let permissions = manifest.permissions.map { self.tr("Обязательное: ", "Required: ") + self.permissionText($0) } + manifest.optionalPermissions.map { self.tr("Необязательное: ", "Optional: ") + self.permissionText($0) }
-        add(3, .text, "", permissions.isEmpty ? self.tr("Разрешения не запрошены", "No permissions requested") : permissions.joined(separator: "\n\n"), "", false, true, "")
-        if let changelog = manifest.changelog, !changelog.isEmpty { add(3, .text, "", changelog, "", false, true, "") }
-    }
-
-    private func permissionText(_ permission: DGPluginPermission) -> String {
-        return self.permissionTitle(permission.capability) + "\n" + permission.reason + "\n" + permission.capability + " · " + permission.scope + (permission.origins.isEmpty ? "" : "\n" + permission.origins.joined(separator: "\n"))
+        add(0, .card, "", manifest.name, author + " · " + manifest.version, false, true, iconKey)
     }
 
     private func permissionTitle(_ capability: String) -> String {
@@ -386,16 +363,6 @@ private final class DGPluginPage {
         switch value { case let .string(text): return text; case let .number(number): return String(number); case let .bool(value): return value ? self.tr("Да", "Yes") : self.tr("Нет", "No"); default: return "" }
     }
 
-    private func trustText(_ trust: String) -> String {
-        switch trust {
-        case "verified", "signatureVerified": return self.tr("подпись проверена", "signature verified")
-        case "signatureMismatch": return self.tr("подпись не совпадает", "signature mismatch")
-        case "revoked": return self.tr("источник отозван", "source revoked")
-        case "modified": return self.tr("пакет изменён после проверки", "package modified after verification")
-        default: return self.tr("из файла · автор не подтверждён", "from file · unverified author")
-        }
-    }
-
     private func stateText(_ item: DGPluginInstallation) -> String {
         if !self.manager.globallyEnabled { return self.tr("выполнение остановлено для всех плагинов", "all plugin execution is stopped") }
         switch item.state {
@@ -413,22 +380,14 @@ private final class DGPluginPage {
 
     func cardDescription() -> String {
         switch self.mode {
-        case let .install(package): return package.manifest.description
         case let .details(id): return self.installation(id)?.manifest.description ?? self.pendingRemoval?.manifest.description ?? ""
         default: return ""
         }
     }
 
     func icon(_ key: String, size: CGFloat = 40) -> UIImage {
-        let manifest: DGPluginManifest?
-        let data: Data?
-        if key == "preview", case let .install(package) = self.mode {
-            manifest = package.manifest
-            data = package.iconData
-        } else {
-            manifest = self.installation(key)?.manifest ?? self.pendingRemoval?.manifest
-            data = self.manager.iconData(id: key)
-        }
+        let manifest = self.installation(key)?.manifest ?? self.pendingRemoval?.manifest
+        let data = self.manager.iconData(id: key)
         return dgPluginIcon(data: data, id: manifest?.id ?? key, name: manifest?.name ?? "dg", size: size)
     }
 
@@ -448,26 +407,9 @@ private final class DGPluginPage {
         if key.hasPrefix("details:") { self.push(.details(String(key.dropFirst(8)))); return }
         if key.hasPrefix("permissions:") { self.push(.permissions(String(key.dropFirst(12)))); return }
         if key.hasPrefix("settings:") { self.push(.settings(String(key.dropFirst(9)))); return }
-        if key == "install", case let .install(package) = self.mode {
-            self.busy = true
-            self.refresh()
-            self.manager.install(package) { [weak self] result in
-                guard let self else { return }
-                self.busy = false
-                switch result {
-                case let .success(id):
-                    self.mode = .details(id)
-                    if self.enableAfterInstall {
-                        if let item = self.installation(id), item.manifest.permissions.allSatisfy({ item.grants.contains($0) }) {
-                            self.enableAfterInstall = false
-                            self.manager.setEnabled(id: id, enabled: true) { [weak self] result in self?.complete(result) }
-                        } else { self.mode = .permissions(id) }
-                    }
-                case let .failure(error): self.showError(error)
-                }
-                self.refresh()
-            }
-        } else if key.hasPrefix("remove:") {
+        if key.hasPrefix("advanced:") { self.push(.advanced(String(key.dropFirst(9)))); return }
+        if key.hasPrefix("share:") { self.share(String(key.dropFirst(6))); return }
+        if key.hasPrefix("remove:") {
             let id = String(key.dropFirst(7))
             self.confirm(title: self.tr("Удалить плагин «", "Remove plugin “") + (self.installation(id)?.manifest.name ?? "") + self.tr("»?", "”?"), text: self.tr("Код и данные этого плагина для всех аккаунтов на устройстве будут удалены. Это действие нельзя отменить.", "This plugin's code and data for every account on this device will be removed. This cannot be undone."), destructive: true) { [weak self] in
                 guard let self else { return }
@@ -501,7 +443,7 @@ private final class DGPluginPage {
             self.confirm(title: revoked ? self.tr("Заблокировать издателя?", "Block publisher?") : self.tr("Разблокировать издателя?", "Unblock publisher?"), text: self.tr("Это изменит доверие ко всем плагинам этого ключа на устройстве. Блокировка немедленно остановит их.", "This changes trust for every plugin signed by this key on this device. Blocking stops them immediately."), destructive: revoked) { [weak self] in
                 self?.manager.setPublisherRevoked(identity, revoked: revoked) { [weak self] result in self?.complete(result) }
             }
-        } else if key.hasPrefix("command:"), case let .details(id) = self.mode {
+        } else if key.hasPrefix("command:"), let id = self.settingsInstallationId {
             self.bindNativeHost()
             self.manager.runCommand(installationId: id, commandId: String(key.dropFirst(8)), input: .null) { [weak self] result in self?.complete(result) }
         } else if key.hasPrefix("enum:"), case let .settings(id) = self.mode, let item = self.installation(id) {
@@ -521,12 +463,14 @@ private final class DGPluginPage {
     func toggle(_ key: String, _ value: Bool) {
         guard !self.busy else { return }
         if key.hasPrefix("render:"), case let .rendered(state) = self.mode, let node = state.node(String(key.dropFirst(7))), node.type == "toggle" { state.invoke(node, value: .bool(value)); self.refresh(); return }
-        if key == "afterInstall" { self.enableAfterInstall = value; self.refresh(); return }
         if key == "global" { self.manager.setGloballyEnabled(value); return }
         if key.hasPrefix("enabled:") {
             let id = String(key.dropFirst(8))
-            self.manager.setEnabled(id: id, enabled: value) { [weak self] result in
-                if case let .failure(error) = result, error.code == "permission_denied" { self?.push(.permissions(id)) }
+            guard let item = self.installation(id) else { return }
+            self.busy = true
+            self.refresh()
+            self.manager.setEnabled(id: id, enabled: value, reviewedDigest: item.digest) { [weak self] result in
+                self?.busy = false
                 self?.complete(result)
             }
         } else if key.hasPrefix("grant:"), case let .permissions(id) = self.mode, let item = self.installation(id), let index = Int(key.dropFirst(6)) {
@@ -535,13 +479,7 @@ private final class DGPluginPage {
             var grants = item.grants.filter { $0 != requested[index] }
             if value { grants.append(requested[index]) }
             self.manager.setGrants(id: id, permissions: grants) { [weak self] result in
-                guard let self else { return }
-                if case .success = result, self.enableAfterInstall, item.manifest.permissions.allSatisfy({ grants.contains($0) }) {
-                    self.enableAfterInstall = false
-                    self.mode = .details(id)
-                    self.manager.setEnabled(id: id, enabled: true) { [weak self] result in self?.complete(result) }
-                }
-                self.complete(result)
+                self?.complete(result)
             }
         } else if key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) {
             var values = item.settings
@@ -593,6 +531,50 @@ private final class DGPluginPage {
         self.mode = .list
         self.notice = notice
         self.refresh()
+    }
+
+    private var settingsInstallationId: String? {
+        switch self.mode {
+        case let .settings(id), let .details(id): return id
+        default: return nil
+        }
+    }
+
+    private func share(_ id: String) {
+        self.busy = true
+        self.refresh()
+        self.manager.exportPackage(id: id) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .failure(error): self.busy = false; self.showError(error); self.refresh()
+            case let .success(package):
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("donutgram-plugin-" + UUID().uuidString, isDirectory: true)
+                    do {
+                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                        let url = directory.appendingPathComponent(package.fileName)
+                        try package.data.write(to: url, options: .atomic)
+                        DispatchQueue.main.async { [weak self] in
+                            self?.busy = false
+                            self?.refresh()
+                            guard let controller = self?.controller, controller.isNodeLoaded, controller.view.window != nil, controller.presentedViewController == nil else { try? FileManager.default.removeItem(at: directory); return }
+                            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                            activity.popoverPresentationController?.sourceView = controller.view
+                            activity.popoverPresentationController?.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.maxY - 1, width: 1, height: 1)
+                            activity.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: directory) }
+                            controller.present(activity, animated: true)
+                        }
+                    } catch {
+                        try? FileManager.default.removeItem(at: directory)
+                        DispatchQueue.main.async { [weak self] in
+                            self?.busy = false
+                            self?.showError(DGPluginError(code: "storage_error", message: "unable to prepare the plugin file"))
+                            self?.refresh()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func complete(_ result: Result<Void, DGPluginError>) {
@@ -660,7 +642,11 @@ public func dgPluginsController(context: AccountContext) -> ViewController {
 }
 
 public func dgPluginInstallController(context: AccountContext, package: DGVerifiedPluginPackage) -> ViewController {
-    return dgMakePluginPage(context: context, mode: .install(package))
+    return DGPluginInstallController(context: context, package: package)
+}
+
+func dgInstalledPluginSettingsController(context: AccountContext, id: String) -> ViewController {
+    return dgMakePluginPage(context: context, mode: .settings(id))
 }
 
 public func dgPluginRenderedController(context: AccountContext, page: DGPluginJSON, pluginName: String, validity: @escaping () -> Bool, onCallback: @escaping (String, DGPluginJSON) -> Void, assetProvider: @escaping (String) -> Data? = { _ in nil }, onClose: (() -> Void)? = nil) throws -> ViewController {
@@ -751,7 +737,7 @@ public func dgOpenPluginDocument(context: AccountContext, file: FileMediaReferen
         guard let result else { return }
         switch result {
         case let .success(package):
-            present(dgMakePluginPage(context: context, mode: .install(package)))
+            present(dgPluginInstallController(context: context, package: package))
         case let .failure(error):
             showError(error.code == "validation_timeout" ? (russian ? "Не удалось подготовить плагин за 30 секунд. Откройте файл ещё раз." : "The plugin could not be prepared within 30 seconds. Open the file again.") : dgPluginErrorDescription(error, russian: russian))
         }
@@ -826,7 +812,12 @@ private func dgPluginRasterImage(data: Data, maximumPixelSize: Int) -> UIImage? 
 public func dgPluginIcon(data: Data?, id: String, name: String, size: CGFloat = 40) -> UIImage {
     let dimension = min(96, max(20, size))
     if let data, let image = dgPluginRasterImage(data: data, maximumPixelSize: Int(dimension * 3)), let bitmap = image.cgImage {
-        return UIImage(cgImage: bitmap, scale: CGFloat(max(bitmap.width, bitmap.height)) / dimension, orientation: .up)
+        return UIGraphicsImageRenderer(size: CGSize(width: dimension, height: dimension)).image { _ in
+            let width = CGFloat(bitmap.width)
+            let height = CGFloat(bitmap.height)
+            let scale = min(dimension / width, dimension / height)
+            image.draw(in: CGRect(x: (dimension - width * scale) / 2, y: (dimension - height * scale) / 2, width: width * scale, height: height * scale))
+        }
     }
     var hash: UInt32 = 2166136261
     for byte in id.utf8 { hash = (hash ^ UInt32(byte)) &* 16777619 }
@@ -834,10 +825,9 @@ public func dgPluginIcon(data: Data?, id: String, name: String, size: CGFloat = 
     return renderer.image { _ in
         UIColor(hue: CGFloat(hash % 360) / 360, saturation: 0.45, brightness: 0.65, alpha: 1).setFill()
         UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: dimension, height: dimension), cornerRadius: dimension * 0.225).fill()
-        let initials = name.split(whereSeparator: { $0.isWhitespace }).prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
-        let text = initials.isEmpty ? "DG" : initials
-        let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: dimension * 0.4, weight: .semibold), .foregroundColor: UIColor.white]
-        let size = (text as NSString).size(withAttributes: attributes)
-        (text as NSString).draw(at: CGPoint(x: (dimension - size.width) / 2, y: (dimension - size.height) / 2), withAttributes: attributes)
+        if #available(iOS 13.0, *), let symbol = UIImage(systemName: "puzzlepiece.extension.fill") ?? UIImage(systemName: "square.grid.2x2.fill") {
+            let inset = dimension * 0.23
+            symbol.withTintColor(.white, renderingMode: .alwaysOriginal).draw(in: CGRect(x: inset, y: inset, width: dimension - inset * 2, height: dimension - inset * 2))
+        }
     }
 }

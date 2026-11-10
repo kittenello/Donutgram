@@ -34,7 +34,7 @@ def prepare():
     assert "mode: .loading" not in document and "case loading" not in controller
     assert "presentOverlay(overlay)" in document and "overlay?.dismiss()" in document
     assert "operation?.finish(nil)" in document and "dgPluginDocumentImports[key] = operation" in document
-    assert "case let .success(package):\n            present(dgMakePluginPage" in document
+    assert "case let .success(package):\n            present(dgPluginInstallController" in document
     image_item = controller.split("        case .image:", 1)[1].split("        case .action", 1)[0]
     assert "ItemListTextItem(" not in image_item
     contents = [(SIGNALS / name).read_text(encoding="utf-8") for name in ["Atomic.swift", "Disposable.swift", "Subscriber.swift", "Signal.swift", "Queue.swift", "Timer.swift"]]

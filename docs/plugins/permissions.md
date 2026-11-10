@@ -2,6 +2,8 @@
 
 all grants belong to an installation and account. declaration is not consent. required grants must exist before enable; optional denial leaves the plugin able to use other granted methods. permission identity is capability, scope and the sorted exact origin set. reason text is explanatory and cannot widen access. new origins, scope or capabilities require new consent. updates stop and disable previous execution. profile changes require uninstall with all-account data removal and a fresh installation.
 
+the native installation sheet combines reviewed installation and activation in one user action. its enable-after-install switch starts on. that action, or an explicit enable switch in the installed list, passes the reviewed package digest to `setEnabled`. the host compares the digest on its serial queue before adding the current manifest's required capabilities and saving activation. an older review cannot grant capabilities to a newer package. optional capabilities are not granted automatically; existing declared grants are retained. installing with the switch off grants nothing and does not execute code. low-level callers without a reviewed digest still need explicit grants. advanced feature controls remain available for revocation and optional capabilities.
+
 | method family | capability and scope | native policy |
 |---|---|---|
 | environment, capabilities | none | bounded host facts only |

@@ -61,7 +61,7 @@ final class DGPluginNativeItem: ListViewItem, ItemListItem {
         let inner = max(1, width - 32)
         switch self.content {
         case let .card(_, title, subtitle, description):
-            return 172 + Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 22 * self.scale, weight: .semibold)]), width: inner) + Self.textHeight(NSAttributedString(string: subtitle, attributes: [.font: UIFont.systemFont(ofSize: 15 * self.scale)]), width: inner) + Self.textHeight(NSAttributedString(string: description, attributes: [.font: UIFont.systemFont(ofSize: 16 * self.scale)]), width: inner)
+            return 136 + Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 22 * self.scale, weight: .semibold)]), width: inner) + Self.textHeight(NSAttributedString(string: subtitle, attributes: [.font: UIFont.systemFont(ofSize: 15 * self.scale)]), width: inner) + Self.textHeight(NSAttributedString(string: description, attributes: [.font: UIFont.systemFont(ofSize: 16 * self.scale)]), width: inner)
         case let .number(title, value, _, _, _, slider):
             let titleHeight = Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 16 * self.scale)]), width: max(1, inner - (slider ? 0 : 112)))
             let valueHeight = Self.textHeight(NSAttributedString(string: String(format: "%g", value), attributes: [.font: UIFont.systemFont(ofSize: 15 * self.scale)]), width: inner)
@@ -141,6 +141,7 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
         let height = item.height(width: width)
         self.block.frame = CGRect(x: params.leftInset, y: 0, width: width, height: height)
         self.block.backgroundColor = item.theme.list.itemBlocksBackgroundColor
+        if case .card = item.content { self.block.backgroundColor = item.theme.list.blocksBackgroundColor }
         var corners: CACornerMask = []
         if case .sameSection(false) = neighbors.top {} else { corners.formUnion([.layerMinXMinYCorner, .layerMaxXMinYCorner]) }
         if case .sameSection(false) = neighbors.bottom {} else { corners.formUnion([.layerMinXMaxYCorner, .layerMaxXMaxYCorner]) }
@@ -164,11 +165,11 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
         case let .card(image, title, subtitle, description):
             self.imageView.isHidden = false
             self.imageView.image = image
-            self.imageView.frame = CGRect(x: (width - 96) / 2, y: 20, width: 96, height: 96)
+            self.imageView.frame = CGRect(x: (width - 68) / 2, y: 16, width: 68, height: 68)
             self.titleLabel.font = .systemFont(ofSize: 22 * item.scale, weight: .semibold)
             self.titleLabel.textAlignment = .center
             self.subtitleLabel.textAlignment = .center
-            let titleEnd = label(self.titleLabel, title, y: 132)
+            let titleEnd = label(self.titleLabel, title, y: 100)
             let subtitleEnd = label(self.subtitleLabel, subtitle, y: titleEnd + 6)
             let _ = label(self.bodyLabel, description, y: subtitleEnd + 16)
         case let .number(title, value, minimum, maximum, step, useSlider):

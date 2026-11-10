@@ -679,9 +679,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                     hasThumbnail = largestImageRepresentation(file.previewRepresentations) != nil || file.immediateThumbnailData != nil || file.mimeType.hasPrefix("image/")
                     hasThumbnailImage = hasThumbnail
                 }
-                // Without bubbles a file with a preview is a row like any other file, its preview the size of the round
-                // icon, so the names of a run of files line up and every row is as tall.
-                let isCompactThumbnail = hasThumbnail && arguments.bubbleStyle == .bubbleless && !arguments.isAttachedContentBlock
+                let isPluginDocument = dgIsPluginDocument(fileName: arguments.file.fileName ?? "") && !arguments.file.isMusic && !arguments.file.isVoice && !arguments.file.isInstantVideo
+                let isCompactThumbnail = hasThumbnail && (isPluginDocument || (arguments.bubbleStyle == .bubbleless && !arguments.isAttachedContentBlock))
                 
                 if mediaUpdated {
                     if hasThumbnailImage {
