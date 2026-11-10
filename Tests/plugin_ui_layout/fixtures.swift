@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 var cases = 0
 for width in stride(from: CGFloat(200), through: 1024, by: 16) {
