@@ -386,7 +386,7 @@ private final class DGPluginPage {
     }
 
     func icon(_ key: String, size: CGFloat = 40) -> UIImage {
-        let manifest = self.installation(key)?.manifest ?? self.pendingRemoval?.manifest
+        let manifest = self.installation(key)?.manifest ?? (self.pendingRemoval?.id == key ? self.pendingRemoval?.manifest : nil)
         let data = self.manager.iconData(id: key)
         return dgPluginIcon(data: data, id: manifest?.id ?? key, name: manifest?.name ?? "dg", size: size)
     }
