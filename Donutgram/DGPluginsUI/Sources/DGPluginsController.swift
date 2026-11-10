@@ -294,6 +294,7 @@ private final class DGPluginPage {
             }
         case let .permissions(id):
             guard let item = self.installation(id) else { break }
+            add(0, .text, "", self.tr("Без обязательных разрешений плагин не работает: если отключить одно из них, плагин выключится. После других изменений включённый плагин перезапускается.", "The plugin cannot run without its required permissions: turning one off turns the plugin off. Other changes restart a plugin that is on."))
             // A grant matches by capability, scope and origins, as in the host: an update may reword the reason of a
             // permission the user already granted.
             let granted = Set(item.grants.map(DGPluginPolicy.permissionKey))

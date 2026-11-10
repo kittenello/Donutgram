@@ -930,12 +930,29 @@ public final class DGPluginManager {
     }
 
     public func setGrants(id: String, permissions: [DGPluginPermission], completion: @escaping (Result<Void, DGPluginError>) -> Void) {
-        mutate(id: id, completion: completion) { record, account in
-            let declared = Set((record.manifest.permissions + record.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
-            guard permissions.allSatisfy({ declared.contains(DGPluginPolicy.permissionKey($0)) }) else { throw DGPluginError(code: "permission_denied", message: "permission was not declared by this package") }
-            account.grants = permissions
-            account.enabled = false
-            account.lastError = nil
+        coordinator.queue.async {
+            do {
+                guard let index = self.coordinator.state.installations.firstIndex(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is unavailable") }
+                let record = self.coordinator.state.installations[index]
+                var account = self.account(record)
+                let declared = Set((record.manifest.permissions + record.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
+                guard permissions.allSatisfy({ declared.contains(DGPluginPolicy.permissionKey($0)) }) else { throw DGPluginError(code: "permission_denied", message: "permission was not declared by this package") }
+                account.grants = permissions
+                account.lastError = nil
+                // The runtime stops either way: it must not keep work that a revoked permission allowed, and a new grant
+                // takes effect from activate(). A plugin that still holds every required permission keeps its switch and
+                // starts again; one that lost a required permission cannot run and turns off.
+                let restart = account.enabled && self.requiredGranted(record, account)
+                if !restart { account.enabled = false }
+                self.stop(id: id)
+                self.coordinator.state.installations[index].accounts[self.accountKey] = account
+                do { try self.coordinator.persist() } catch {
+                    self.coordinator.publishAll()
+                    throw DGPluginError(code: "storage_error", message: "unable to save plugin state; changes may not survive restart")
+                }
+                if restart { self.start(id: id, completion: completion) }
+                else { self.coordinator.publishAll(); DispatchQueue.main.async { completion(.success(())) } }
+            } catch { self.complete(completion, error: error) }
         }
     }
 

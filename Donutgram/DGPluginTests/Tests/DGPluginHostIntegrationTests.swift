@@ -211,6 +211,26 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertFalse(self.manager.installations.first { $0.id == id }?.enabled ?? true)
     }
 
+    func testChangingAnOptionalPermissionRestartsThePluginInsteadOfTurningItOff() throws {
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "required storage")
+        let theme = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "optional appearance")
+        let package = try self.package(permissions: [storage], optionalPermissions: [theme], body: "")
+        let id = try self.install(package, permissions: [storage])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        try self.result { self.manager.setGrants(id: id, permissions: [storage, theme], completion: $0) }.get()
+        var item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertTrue(item.enabled)
+        XCTAssertEqual(item.state, .running)
+        try self.result { self.manager.setGrants(id: id, permissions: [storage], completion: $0) }.get()
+        item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertTrue(item.enabled)
+        XCTAssertEqual(item.state, .running)
+        try self.result { self.manager.setGrants(id: id, permissions: [], completion: $0) }.get()
+        item = try XCTUnwrap(self.manager.installations.first { $0.id == id })
+        XCTAssertFalse(item.enabled)
+        XCTAssertNotEqual(item.state, .running)
+    }
+
     func testReviewedEnableGrantsOnlyRequiredCapabilities() throws {
         let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "store replacements")
         let optional = DGPluginPermission(capability: "theme.read", scope: "currentTheme", reason: "optional appearance")
