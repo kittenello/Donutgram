@@ -48,7 +48,7 @@ func pluginListSearchAndPauseTransitions() {
         check(rows.filter { $0.key == "search" }.count == (count >= 5 ? 1 : 0), "search threshold must use the installed count")
         check(rows.filter { $0.kind == .header && $0.title == "INSTALLED" }.count == 1, "installed header must remain visible")
         check(rows.filter { $0.kind == .plugin }.count == count, "unfiltered plugin list lost a card")
-        check(!rows.contains { $0.kind == .text }, "empty or unfiltered list gained an installation hint")
+        check(rows.contains(where: { $0.kind == .text }) == (count == 0), "only an empty list explains how to install a plugin")
         check(rows.first { $0.key == "global" }?.detail == "", "global switch gained a pause or count subtitle")
         check(rows.first { $0.key == "global" }?.title == "Plugins", "global title must stay constant")
     }
@@ -82,7 +82,9 @@ func pluginListSearchAndPauseTransitions() {
     check(!afterRemoval.contains { $0.key == "search" }, "search stayed visible below five installed plugins")
     check(afterRemoval.filter { $0.kind == .plugin }.count == 4, "hidden search filtered the remaining plugins")
     page.manager.installations = []
-    check(page.rows().map { $0.kind } == [.toggle, .header], "empty list must retain only the global switch and installed header")
+    let empty = page.rows()
+    check(empty.map { $0.kind } == [.toggle, .header, .text], "empty list must show the global switch, the installed header and the install hint")
+    check(empty.last?.title.contains(".donut.js") == true && empty.last?.section == empty.first(where: { $0.kind == .header })?.section, "the install hint must sit under the installed header")
     print("plugin list thresholds, empty results, removal, pause/resume and switch-only diffs passed")
 }
 

@@ -257,6 +257,10 @@ private final class DGPluginPage {
             if matches.isEmpty && !self.query.isEmpty {
                 add(2, .text, "", self.tr("Ничего не найдено", "Nothing found"))
             }
+            // Nothing else on these screens says where plugins come from, so an empty list does.
+            if installations.isEmpty {
+                add(2, .text, "", self.tr("Плагинов пока нет. Чтобы установить плагин, откройте его файл .donut.js или .dgplugin в чате. Открытие файла не запускает его код.", "No plugins yet. To install one, open its .donut.js or .dgplugin file in a chat. Opening the file never runs its code."))
+            }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
                 let status = self.manager.globallyEnabled && [.failed, .quarantined, .permissionRequired].contains(item.state) ? " · " + self.stateText(item) : ""
