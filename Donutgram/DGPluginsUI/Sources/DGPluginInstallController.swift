@@ -143,7 +143,9 @@ final class DGPluginInstallController: ViewController, UIGestureRecognizerDelega
         self.nameLabel.font = .systemFont(ofSize: 24 * scale, weight: .semibold)
         self.nameLabel.textColor = theme.list.itemPrimaryTextColor
         let version = update ? (self.previousVersion ?? "") + " → " + self.package.manifest.version : (existing?.manifest.version ?? self.package.manifest.version)
-        self.authorLabel.text = (self.package.manifest.author?.name ?? self.tr("Автор не указан", "Author not specified")) + " · " + version
+        let author = self.package.manifest.author?.name
+        let trust = dgPluginTrustNote(self.package.trust, hasAuthor: author != nil, russian: self.presentationData.strings.primaryComponent.languageCode.hasPrefix("ru"))
+        self.authorLabel.text = (author ?? self.tr("Автор не указан", "Author not specified")) + " · " + version + "\n" + trust
         self.authorLabel.font = .systemFont(ofSize: 13 * scale)
         self.authorLabel.textColor = theme.list.itemSecondaryTextColor
         let changelog = self.package.manifest.changelog ?? ""

@@ -264,7 +264,7 @@ private final class DGPluginPage {
             }
         case let .details(id):
             guard let item = self.installation(id) ?? (self.pendingRemoval?.id == id ? self.pendingRemoval : nil) else { add(0, .text, "", self.tr("Этот плагин удалён.", "This plugin has been removed.")); break }
-            self.appendCard(manifest: item.manifest, iconKey: id, add: add)
+            self.appendCard(manifest: item.manifest, trust: item.trust, iconKey: id, add: add)
             add(4, .toggle, "enabled:" + id, self.tr("Включён", "Enabled"), value: item.enabled, enabled: self.manager.globallyEnabled)
             if self.manager.globallyEnabled { add(4, .text, "", self.stateText(item).dgSentenceStart) }
             if let error = item.lastError { add(4, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
@@ -371,9 +371,9 @@ private final class DGPluginPage {
         return rows.map { row in var row = row; row.epoch = self.sequence; return row }
     }
 
-    private func appendCard(manifest: DGPluginManifest, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
+    private func appendCard(manifest: DGPluginManifest, trust: String, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
         let author = manifest.author.map { $0.name + ($0.username.map { " (@\($0))" } ?? "") } ?? self.tr("не указан", "not specified")
-        add(0, .card, "", manifest.name, author + " · " + manifest.version, false, true, iconKey)
+        add(0, .card, "", manifest.name, author + " · " + manifest.version + "\n" + dgPluginTrustNote(trust, hasAuthor: manifest.author != nil, russian: self.russian), false, true, iconKey)
     }
 
     private func permissionTitle(_ capability: String) -> String {

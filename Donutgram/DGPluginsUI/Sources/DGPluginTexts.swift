@@ -166,6 +166,16 @@ func dgPluginPermissionTitle(_ capability: String, russian: Bool) -> String {
     }
 }
 
+/// What the signature says about a plugin's author. Without one the manifest's author is only a claim: any file can name
+/// any author, so the claim is never shown on its own.
+func dgPluginTrustNote(_ trust: String, hasAuthor: Bool, russian: Bool) -> String {
+    switch trust {
+    case "signatureVerified", "verified": return dgPluginTr(russian, "Подпись проверена", "Signature verified")
+    case "revoked": return dgPluginTr(russian, "Издатель заблокирован на этом устройстве", "Publisher blocked on this device")
+    default: return hasAuthor ? dgPluginTr(russian, "Автор не подтверждён: файл без подписи", "Author not confirmed: the file is unsigned") : dgPluginTr(russian, "Файл без подписи", "The file is unsigned")
+    }
+}
+
 /// Whether a permission is required, followed by the exact services a network permission reaches: the reason is the
 /// plugin's own text, the origins are what the host enforces.
 func dgPluginPermissionDetail(_ permission: DGPluginPermission, required: Bool, russian: Bool) -> String {
