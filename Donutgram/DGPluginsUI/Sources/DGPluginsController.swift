@@ -210,11 +210,15 @@ private final class DGPluginPage {
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
             add(0, .toggle, "global", self.manager.globallyEnabled ? self.tr("Плагины включены", "Plugins enabled") : self.tr("Плагины выключены", "Plugins disabled"), value: self.manager.globallyEnabled, icon: "__plugins")
             let installations = self.manager.installations
-            add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
+            if installations.count >= 5 {
+                add(1, .input, "search", self.tr("Поиск", "Search"), detail: self.query)
+            } else {
+                self.query = ""
+            }
             add(2, .header, "", self.tr("УСТАНОВЛЕННЫЕ", "INSTALLED"))
             let matches = installations.filter { self.query.isEmpty || ($0.manifest.name + " " + $0.manifest.id + " " + ($0.manifest.author?.name ?? "")).localizedCaseInsensitiveContains(self.query) }
-            if matches.isEmpty {
-                add(2, .text, "", self.query.isEmpty ? self.tr("Плагинов пока нет. Для установки откройте плагин в чате.", "No plugins yet. Open a plugin in a chat to install it.") : self.tr("Ничего не найдено", "Nothing found"))
+            if matches.isEmpty && !self.query.isEmpty {
+                add(2, .text, "", self.tr("Ничего не найдено", "Nothing found"))
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
