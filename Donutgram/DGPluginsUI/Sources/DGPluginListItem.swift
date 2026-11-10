@@ -35,12 +35,17 @@ final class DGPluginListItem: ListViewItem, ItemListItem {
     }
 
     func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, neighbors: ListViewItemNeighbors, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
-        async {
+        Queue.mainQueue().async {
             let node = DGPluginListItemNode()
-            let (layout, apply) = node.asyncLayout()(self, params, neighbors)
-            node.contentSize = layout.contentSize
-            node.insets = layout.insets
-            Queue.mainQueue().async { completion(node, { (nil, { _ in apply() }) }) }
+            let calculate = node.asyncLayout()
+            async {
+                let (layout, apply) = calculate(self, params, neighbors)
+                Queue.mainQueue().async {
+                    node.contentSize = layout.contentSize
+                    node.insets = layout.insets
+                    completion(node, { (nil, { _ in apply() }) })
+                }
+            }
         }
     }
 
