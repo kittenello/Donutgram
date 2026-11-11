@@ -27,6 +27,9 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Блюр сообщений": "Message Bubble Blur",
+    "Блюр сообщений, работает только с кастомными обоями": "Message bubble blur, works only with custom wallpapers",
+    "Фон сообщений": "Message Backgrounds",
     "Усиленное энергосбережение": "Enhanced Power Saving",
     "Чтобы изменить эти настройки, выключите усиленное энергосбережение.": "Turn off Enhanced Power Saving to change these settings.",
     "Полностью отключает анимации, воспроизведение стикеров и эмодзи, автозапуск видео и GIF, эффекты и фоновые предзагрузки.": "Disables animations, sticker and emoji playback, video and GIF autoplay, effects, and background preloading.",

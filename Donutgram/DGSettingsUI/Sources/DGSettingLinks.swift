@@ -32,6 +32,7 @@ private enum DGSettingDescription {
         "downloadTikTok": downloads,
         "downloadShorts": downloads,
         "hideViaBot": "Скрывает подпись «через бота» над сообщениями.",
+        "blurMessages": "Блюр сообщений, работает только с кастомными обоями",
         "hideAIFeatures": "Скрывает кнопки функций ИИ в редакторах сообщений и подписей.",
         "removeLinkPreviews": "Отправляет ссылки без карточек предпросмотра.",
         "neutralComposeButton": "Использует обычный цвет для кнопки нового сообщения в списке чатов.",

@@ -326,30 +326,34 @@ func dgMessagesSettingsController(context: AccountContext, focusKey: String? = n
             .toggle(7, 0, "mentionComma", "Запятая после упоминания", s.commaAfterMention, true),
             .toggle(8, 0, "mentionAvatars", "Аватарки в упоминаниях", s.mentionAvatars, true),
             .toggle(9, 0, "forwardDate", "Дата оригинала в пересланных", s.showForwardDate, true),
-            .header(10, 1, "УПОМИНАНИЯ"),
-            .toggle(11, 1, "removePings", "Упоминания как обычные сообщения", s.removePings, true),
-            .header(20, 2, "СОДЕРЖИМОЕ"),
-            .toggle(21, 2, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
-            .toggle(22, 2, "hideServiceMessages", "Скрыть служебные сообщения", s.hideServiceMessages, true),
-            .toggle(23, 2, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
-            .toggle(24, 2, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
-            .toggle(25, 2, "hideBotAutomation", "Скрыть плашку автоматизации", s.hideBotAutomation, true),
-            .toggle(26, 2, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
-            .toggle(27, 2, "hideAIFeatures", "Скрыть функции ИИ", s.hideAIFeatures, true),
-            .toggle(28, 2, "hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", s.hidePhoneNumberInChatTitle, true),
-            .header(30, 3, "ОТПРАВКА"),
-            .toggle(31, 3, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
-            .header(40, 4, "КАНАЛЫ"),
-            .toggle(41, 4, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
-            .toggle(42, 4, "channelForwardCount", "Счётчик пересылок у постов", s.showChannelForwardCount, true),
-            .menu(43, 4, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
-            .header(50, 5, "МЕНЮ АВАТАРКИ"),
-            .toggle(51, 5, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true),
+            .header(10, 1, "ФОН СООБЩЕНИЙ"),
+            .toggle(11, 1, "blurMessages", "Блюр сообщений", s.blurMessages, true),
+            .info(12, 1, "Блюр сообщений, работает только с кастомными обоями"),
+            .header(20, 2, "УПОМИНАНИЯ"),
+            .toggle(21, 2, "removePings", "Упоминания как обычные сообщения", s.removePings, true),
+            .header(30, 3, "СОДЕРЖИМОЕ"),
+            .toggle(31, 3, "hideViaBot", "Скрыть «Via Bot» в сообщении", s.hideViaBot, true),
+            .toggle(32, 3, "hideServiceMessages", "Скрыть служебные сообщения", s.hideServiceMessages, true),
+            .toggle(33, 3, "greetingSticker", "Скрыть приветственный стикер", s.hideGreetingSticker, true),
+            .toggle(34, 3, "pollResultsBeforeVoting", "Итоги до голосования", s.showPollResultsBeforeVoting, true),
+            .toggle(35, 3, "hideBotAutomation", "Скрыть плашку автоматизации", s.hideBotAutomation, true),
+            .toggle(36, 3, "customBackgrounds", "Отключить кастомные фоны", s.disableCustomBackgrounds, true),
+            .toggle(37, 3, "hideAIFeatures", "Скрыть функции ИИ", s.hideAIFeatures, true),
+            .toggle(38, 3, "hidePhoneNumberInChatTitle", "Скрыть номер в заголовке чата", s.hidePhoneNumberInChatTitle, true),
+            .header(40, 4, "ОТПРАВКА"),
+            .toggle(41, 4, "removeLinkPreviews", "Отправлять без превью ссылок", s.removeLinkPreviews, true),
+            .header(50, 5, "КАНАЛЫ"),
+            .toggle(51, 5, "wideChannelPosts", "Широкие посты в каналах", s.wideChannelPosts, true),
+            .toggle(52, 5, "channelForwardCount", "Счётчик пересылок у постов", s.showChannelForwardCount, true),
+            .menu(53, 5, "channelBottomButton", "Нижняя кнопка", dgChannelBottomButtonTitle(s.channelBottomButton)),
+            .header(60, 6, "МЕНЮ АВАТАРКИ"),
+            .toggle(61, 6, "jumpToStart", "Кнопка «В начало чата»", s.jumpToStartInChatMenu, true),
         ]
         return result
     }, additionalUpdates: previewUpdates, toggle: { key, value in
         switch key {
         case "tails": s.removeMessageTails = value
+        case "blurMessages": s.blurMessages = value
         case "seconds": s.showMessageSeconds = value
         case "editedIcon": s.editedIcon = value
         case "customBackgrounds": s.disableCustomBackgrounds = value

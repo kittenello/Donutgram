@@ -143,6 +143,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("mentionComma", "Запятая после упоминания", "ПУЗЫРИ"),
         ("mentionAvatars", "Аватарки в упоминаниях", "ПУЗЫРИ"),
         ("forwardDate", "Дата оригинала в пересланных", "ПУЗЫРИ"),
+        ("blurMessages", "Блюр сообщений", "ФОН СООБЩЕНИЙ"),
         ("removePings", "Упоминания как обычные сообщения", "УПОМИНАНИЯ"),
         ("hideViaBot", "Скрыть «Via Bot» в сообщении", "СОДЕРЖИМОЕ"),
         ("hideServiceMessages", "Скрыть служебные сообщения", "СОДЕРЖИМОЕ"),

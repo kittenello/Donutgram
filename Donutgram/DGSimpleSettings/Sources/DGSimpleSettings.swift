@@ -260,6 +260,7 @@ public final class DGSimpleSettings {
         static let disabledAutoplayMediaTypes = "donutgram.chats.disabledAutoplayMediaTypes"
         static let hiddenReactions = "donutgram.chats.hiddenReactions"
         static let removeMessageTails = "donutgram.chats.removeMessageTails"
+        static let blurMessages = "donutgram.chats.blurMessages"
         static let hideShareButton = "donutgram.chats.hideShareButton"
         static let disableColoredReplies = "donutgram.chats.disableColoredReplies"
         static let showMessageSeconds = "donutgram.chats.showMessageSeconds"
@@ -1269,6 +1270,7 @@ public final class DGSimpleSettings {
         set { setInteger(newValue.rawValue & 7, Key.musicPlaybackExceptions) }
     }
     public var removeMessageTails: Bool { get { bool(Key.removeMessageTails) } set { setBool(newValue, Key.removeMessageTails) } }
+    public var blurMessages: Bool { get { bool(Key.blurMessages) } set { setBool(newValue, Key.blurMessages) } }
     public var hideShareButton: Bool { get { false } set { } }
     public var disableColoredReplies: Bool { get { bool(Key.disableColoredReplies) } set { setBool(newValue, Key.disableColoredReplies) } }
     public var showForwardDate: Bool { get { bool(Key.showForwardDate) } set { setBool(newValue, Key.showForwardDate) } }
