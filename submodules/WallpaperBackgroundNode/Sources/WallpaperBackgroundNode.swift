@@ -1,4 +1,5 @@
 import Foundation
+import DGSimpleSettings
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -687,6 +688,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
 
             if let bubbleTheme = backgroundNode.bubbleTheme, let bubbleCorners = backgroundNode.bubbleCorners {
                 let wallpaper = backgroundNode.wallpaper ?? bubbleTheme.chat.defaultWallpaper
+                let blurMessages = self.bubbleType != .free && backgroundNode.shouldBlurMessageBackground
 
                 let graphics = PresentationResourcesChat.principalGraphics(theme: bubbleTheme, wallpaper: wallpaper, bubbleCorners: bubbleCorners)
                 
@@ -701,7 +703,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                     }
                     needsCleanBackground = bubbleTheme.chat.message.incoming.bubble.withWallpaper.fill.contains(where: { $0.alpha <= 0.99 })
                 case .outgoing:
-                    if backgroundNode.outgoingBubbleGradientBackgroundNode != nil {
+                    if backgroundNode.outgoingBubbleGradientBackgroundNode != nil && !blurMessages {
                         self.contentNode.image = nil
                         self.contentNode.backgroundColor = nil
                     } else {
@@ -750,6 +752,11 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                     }
                 }
 
+                self.contentNode.alpha = blurMessages ? 0.5 : 1.0
+                if blurMessages {
+                    needsCleanBackground = true
+                }
+
                 if needsCleanBackground {
                     if hasComplexGradient {
                         needsGradientBackground = backgroundNode.gradientBackgroundNode != nil
@@ -760,7 +767,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
 
                 var gradientBackgroundSource: GradientBackgroundNode? = backgroundNode.gradientBackgroundNode
 
-                if case .outgoing = self.bubbleType {
+                if case .outgoing = self.bubbleType, !blurMessages {
                     if let outgoingBubbleGradientBackgroundNode = backgroundNode.outgoingBubbleGradientBackgroundNode {
                         gradientBackgroundSource = outgoingBubbleGradientBackgroundNode
                         needsWallpaperBackground = false
@@ -1138,6 +1145,8 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
     private var bubbleTheme: PresentationTheme?
     private var bubbleCorners: PresentationChatBubbleCorners?
     private var bubbleBackgroundNodeReferences = SparseBag<BubbleBackgroundNodeReference>()
+    private var blurMessagesEnabled = DGSimpleSettings.shared.blurMessages
+    private var blurMessagesObserver: NSObjectProtocol?
 
     private let wallpaperDisposable = MetaDisposable()
 
@@ -1256,9 +1265,21 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         self.layer.addSublayer(self.patternImageLayer)
         
         self.layer.addSublayer(self.dimLayer)
+
+        self.blurMessagesObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.blurMessagesEnabled != DGSimpleSettings.shared.blurMessages else {
+                return
+            }
+            self.blurMessagesEnabled = DGSimpleSettings.shared.blurMessages
+            self.updateBubbleBackgroundNodes()
+            self.updateBubbles()
+        }
     }
 
     deinit {
+        if let blurMessagesObserver = self.blurMessagesObserver {
+            NotificationCenter.default.removeObserver(blurMessagesObserver)
+        }
         if let powerSavingObserver = self.powerSavingObserver {
             NotificationCenter.default.removeObserver(powerSavingObserver)
         }
@@ -1453,23 +1474,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             }
         }
         
-        if self.hasBubbleBackground(for: .free) {
-            self.freeBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .free)
-        } else {
-            self.freeBackgroundNode = nil
-        }
-        
-        if self.hasBubbleBackground(for: .incoming) {
-            self.incomingBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .incoming)
-        } else {
-            self.incomingBackgroundNode = nil
-        }
-        
-        if self.hasBubbleBackground(for: .outgoing) {
-            self.outgoingBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .outgoing)
-        } else {
-            self.outgoingBackgroundNode = nil
-        }
+        self.updateBubbleBackgroundNodes()
 
         if let (size, displayMode) = self.validLayout {
             self.updateLayout(size: size, displayMode: displayMode, transition: .immediate)
@@ -1924,26 +1929,30 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
                 self.outgoingBubbleGradientBackgroundNode = nil
             }
             
-            if self.hasBubbleBackground(for: .free) {
-                self.freeBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .free)
-            } else {
-                self.freeBackgroundNode = nil
-            }
-            
-            if self.hasBubbleBackground(for: .incoming) {
-                self.incomingBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .incoming)
-            } else {
-                self.incomingBackgroundNode = nil
-            }
-            
-            if self.hasBubbleBackground(for: .outgoing) {
-                self.outgoingBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .outgoing)
-            } else {
-                self.outgoingBackgroundNode = nil
-            }
+            self.updateBubbleBackgroundNodes()
 
             self.updateBubbles()
             self.updateDimming()
+        }
+    }
+
+    private func updateBubbleBackgroundNodes() {
+        if self.hasBubbleBackground(for: .free) {
+            self.freeBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .free)
+        } else {
+            self.freeBackgroundNode = nil
+        }
+
+        if self.hasBubbleBackground(for: .incoming) {
+            self.incomingBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .incoming)
+        } else {
+            self.incomingBackgroundNode = nil
+        }
+
+        if self.hasBubbleBackground(for: .outgoing) {
+            self.outgoingBackgroundNode = WallpaperBackgroundNodeImpl.BubbleBackgroundNodeImpl(backgroundNode: self, bubbleType: .outgoing)
+        } else {
+            self.outgoingBackgroundNode = nil
         }
     }
 
@@ -1953,12 +1962,27 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         }
     }
 
+    private var shouldBlurMessageBackground: Bool {
+        guard DGSimpleSettings.shared.blurMessages, let wallpaper = self.wallpaper, let bubbleTheme = self.bubbleTheme, wallpaper != bubbleTheme.chat.defaultWallpaper else {
+            return false
+        }
+        switch wallpaper {
+        case .image, .file, .gradient:
+            return true
+        case .builtin, .color, .emoticon:
+            return false
+        }
+    }
+
     public func hasBubbleBackground(for type: WallpaperBubbleType) -> Bool {
         guard let bubbleTheme = self.bubbleTheme, let bubbleCorners = self.bubbleCorners else {
             return false
         }
         if self.wallpaper == nil && !self.isSettingUpWallpaper {
             return false
+        }
+        if type != .free && self.shouldBlurMessageBackground {
+            return true
         }
 
         var hasPlainWallpaper = false

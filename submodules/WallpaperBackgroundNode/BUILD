@@ -53,6 +53,7 @@ swift_library(
         ":WallpaperBackgroundNodeBundle",
     ],
     deps = [
+        "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
         "//submodules/Display:Display",
         "//submodules/GradientBackground:GradientBackground",

@@ -32,13 +32,14 @@ private enum DGSettingDescription {
         "downloadTikTok": downloads,
         "downloadShorts": downloads,
         "hideViaBot": "Скрывает подпись «через бота» над сообщениями.",
+        "blurMessages": "Блюр сообщений, работает только с кастомными обоями",
         "hideAIFeatures": "Скрывает кнопки функций ИИ в редакторах сообщений и подписей.",
         "removeLinkPreviews": "Отправляет ссылки без карточек предпросмотра.",
         "neutralComposeButton": "Использует обычный цвет для кнопки нового сообщения в списке чатов.",
         "gifUnlock": "Отправляет GIF как видео без звука. Обход не сработает, если в чате запрещена отправка видео.",
         "stickerUnlock": "Отправляет стикеры как видео без звука. Обход не сработает, если в чате запрещена отправка видео.",
         "bypassContentRestrictions": "Открывает чаты и каналы, недоступные из-за ограничений именно на iPhone.",
-        "disappearedGifts": "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.",
+        "disappearedGifts": "Показывает скрытые и удалённые обычные подарки; NFT не запоминаются. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.",
         "telegramStatistics": "Аналитика приложения, время чтения постов в каналах, прослушанная музыка, служебные логи и данные о качестве звонков, как в обычном Telegram. Сетевая телеметрия не отправляется никогда.",
         "hideBlocked": "Сообщения тех, кого вы заблокировали, скрыты в группах и комментариях, как в теневом бане. Боты не скрываются: остановленный бот тоже числится заблокированным.",
         "pollResultsBeforeVoting": "Если в опросе можно отменить голос, вы увидите, сколько человек выбрали каждый вариант, ещё до своего голоса.",
@@ -120,7 +121,6 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
     let context: AccountContext
     weak var controller: ItemListController?
     let page: DGSettingsPage
-    private weak var highlightedMenu: DGSettingMenuController?
 
     init(context: AccountContext, controller: ItemListController, page: DGSettingsPage) {
         self.context = context
@@ -134,15 +134,15 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
         self.controller?.view.addGestureRecognizer(gesture)
     }
 
-    private func target(at point: CGPoint, in controller: ItemListController) -> (tag: DGSettingItemTag, view: UIView)? {
-        var found: (tag: DGSettingItemTag, view: UIView)?
+    private func target(at point: CGPoint, in controller: ItemListController) -> (tag: DGSettingItemTag, node: ListViewItemNode)? {
+        var found: (tag: DGSettingItemTag, node: ListViewItemNode)?
         controller.forEachItemNode { node in
             guard found == nil,
                   let tag = (node as? ItemListItemNode)?.tag as? DGSettingItemTag,
-                  node.view.bounds.contains(node.view.convert(point, from: controller.view)) else {
+                  CGRect(origin: .zero, size: node.contentSize).contains(node.view.convert(point, from: controller.view)) else {
                 return
             }
-            found = (tag, node.view)
+            found = (tag, node)
         }
         return found
     }
@@ -172,14 +172,6 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
     }
 
     @objc func handle(_ gesture: UILongPressGestureRecognizer) {
-        switch gesture.state {
-        case .ended, .cancelled, .failed:
-            self.highlightedMenu?.clearHighlight()
-            self.highlightedMenu = nil
-            return
-        default:
-            break
-        }
         guard gesture.state == .began,
               let controller = self.controller,
               let target = self.target(at: gesture.location(in: controller.view), in: controller) else {
@@ -204,14 +196,14 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
         let languageCode = presentationData.strings.primaryComponent.languageCode
         let description = DGSettingDescription.byKey[target.tag.key].map { dgLocalized($0, languageCode: languageCode) }
         let menu = DGSettingMenuController(
-            sourceView: target.view,
+            sourceNode: target.node,
             presentationData: presentationData,
             description: description ?? target.tag.title,
             copy: { [weak controller] in
                 UIPasteboard.general.string = url.absoluteString
                 controller?.present(UndoOverlayController(presentationData: presentationData, content: .linkCopied(title: nil, text: presentationData.strings.Conversation_LinkCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
             },
-            share: { [weak controller, weak sourceView = target.view] in
+            share: { [weak controller, weak sourceView = target.node.view] in
                 guard let controller else {
                     return
                 }
@@ -224,20 +216,21 @@ final class DGSettingsLongPressHandler: NSObject, UIGestureRecognizerDelegate {
         )
         controller.view.endEditing(true)
         menu.loadViewIfNeeded()
-        self.highlightedMenu = menu
         controller.present(menu, animated: true)
     }
 }
 
 private final class DGSettingMenuController: UIViewController, UIPopoverPresentationControllerDelegate {
+    private weak var sourceNode: ListViewItemNode?
     private weak var sourceView: UIView?
     private let presentationData: PresentationData
     private let detail: String?
     private let copy: () -> Void
     private let share: () -> Void
-    private let highlight = UIView()
 
-    init(sourceView: UIView, presentationData: PresentationData, description: String?, copy: @escaping () -> Void, share: @escaping () -> Void) {
+    init(sourceNode: ListViewItemNode, presentationData: PresentationData, description: String?, copy: @escaping () -> Void, share: @escaping () -> Void) {
+        let sourceView = sourceNode.view
+        self.sourceNode = sourceNode
         self.sourceView = sourceView
         self.presentationData = presentationData
         self.detail = description
@@ -250,7 +243,7 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
         if let popover = self.popoverPresentationController {
             popover.delegate = self
             popover.sourceView = sourceView
-            let bounds = sourceView.bounds
+            let bounds = CGRect(origin: .zero, size: sourceNode.contentSize)
             let inset = min(62.0, bounds.width * 0.25)
             let anchorX = sourceView.effectiveUserInterfaceLayoutDirection == .rightToLeft ? bounds.maxX - inset : bounds.minX + inset
             popover.sourceRect = CGRect(x: anchorX, y: bounds.minY, width: 1.0, height: bounds.height).insetBy(dx: 0.0, dy: -4.0)
@@ -278,10 +271,10 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
         self.view.addSubview(scrollView)
         scrollView.addSubview(stack)
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: self.view.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
@@ -344,14 +337,7 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if !self.highlight.isHidden, let sourceView = self.sourceView {
-            self.highlight.frame = sourceView.bounds.insetBy(dx: 16.0, dy: 1.0)
-            self.highlight.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            self.highlight.isUserInteractionEnabled = false
-            self.highlight.layer.cornerRadius = 12.0
-            self.highlight.backgroundColor = self.presentationData.theme.contextMenu.primaryColor.withAlphaComponent(0.10)
-            sourceView.addSubview(self.highlight)
-        }
+        self.sourceNode?.setHighlighted(true, at: .zero, animated: false)
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -360,8 +346,7 @@ private final class DGSettingMenuController: UIViewController, UIPopoverPresenta
     }
 
     func clearHighlight() {
-        self.highlight.isHidden = true
-        self.highlight.removeFromSuperview()
+        self.sourceNode?.setHighlighted(false, at: .zero, animated: false)
     }
 
     func adaptivePresentationStyle(for controller: UIPresentationController, traitCollection: UITraitCollection) -> UIModalPresentationStyle {
