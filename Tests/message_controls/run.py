@@ -67,7 +67,9 @@ def prepare():
     # Only the Donutgram previews update their bubbles in place; the stock theme screens are unchanged.
     assert preview.count("updatesMessagesInPlace: true") == 2 and "synchronousLoads: item.updatesMessagesInPlace" in preview
     history = read("submodules/TelegramUI/Sources/ChatHistoryListNode.swift")
-    assert "includeAllMessages: stickerRepliesChanged" in history and "|| premiumReplyEmojiChanged)" in history
+    refresh_call = next(line for line in history.splitlines() if "self.updateLoadedMessageItems(" in line and "includeAllMessages:" in line)
+    refresh_conditions = {condition.strip() for condition in refresh_call.split("includeAllMessages:", 1)[1].strip().removesuffix(")").split("||")}
+    assert {"stickerRepliesChanged", "premiumReplyEmojiChanged", "blurMessagesChanged"} <= refresh_conditions
     contact = read("submodules/TelegramUI/Components/Chat/ChatMessageContactBubbleContentNode/Sources/ChatMessageContactBubbleContentNode.swift")
     assert "if !DGSimpleSettings.shared.hidePremiumReplyEmoji, let contactPeer" in contact
     bg = read("submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/Sources/MessageInlineBlockBackgroundView.swift")
