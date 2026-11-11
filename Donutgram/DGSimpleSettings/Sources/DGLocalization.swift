@@ -434,6 +434,8 @@ private let dgEnglishStrings: [String: String] = [
     "команда Donutgram": "Donutgram team",
     "Канал": "Channel",
     "исходный код": "source code",
+    "документация плагинов": "plugin documentation",
+    "Документация плагинов": "Plugin Documentation",
     "версия": "version",
     "Изменение заработает после перезапуска приложения.": "This takes effect after you restart the app.",
     "Закрыть приложение": "Close App",

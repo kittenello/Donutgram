@@ -931,6 +931,7 @@ func dgAboutLinkUrl(key: String) -> String? {
     switch key {
     case "channel": return "https://t.me/donutgram"
     case "sourceCode": return "https://github.com/kittenello/Donutgram"
+    case "pluginDocs": return "https://docs.forktg.surf"
     default: return nil
     }
 }
@@ -945,7 +946,8 @@ func dgAboutController(context: AccountContext, focusKey: String? = nil) -> View
             .aboutTeam(0, 0),
             .profileRow(1, 1, "channel", "канал", "t.me/donutgram", true),
             .profileRow(2, 1, "sourceCode", "исходный код", "github.com/kittenello/Donutgram", true),
-            .profileRow(3, 1, "version", "версия", version, false),
+            .profileRow(3, 1, "pluginDocs", "документация плагинов", "docs.forktg.surf", true),
+            .profileRow(4, 1, "version", "версия", version, false),
         ]
         return result
     }, perform: { key, controller in

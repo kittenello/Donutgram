@@ -258,6 +258,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
     add("about", "О Donutgram", [
         ("channel", "Канал", ""),
         ("sourceCode", "Исходный код", ""),
+        ("pluginDocs", "Документация плагинов", ""),
         ("version", "Версия", "")
     ])
     return result
