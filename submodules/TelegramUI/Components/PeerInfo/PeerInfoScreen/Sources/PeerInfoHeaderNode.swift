@@ -2942,7 +2942,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                 ], spacing: 4.0)
                             ),
                             background: compactMusicAndBalance ? AnyComponent(RoundedRectangle(color: contentButtonBackgroundColor, cornerRadius: 10.0)) : nil,
-                            minSize: CGSize(width: compactMusicAndBalance && currentWalletBalance == nil ? 0.0 : musicBandWidth, height: musicHeight),
+                            minSize: CGSize(width: compactMusicAndBalance ? 0.0 : musicBandWidth, height: musicHeight),
                             contentInsets: compactMusicAndBalance ? UIEdgeInsets(top: 1.0, left: 8.0, bottom: 1.0, right: 8.0) : .zero,
                             action: { [weak self] in
                                 self?.displaySavedMusic?()

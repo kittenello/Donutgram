@@ -2098,6 +2098,21 @@ private func donutgramReadGiftHistory(transaction: Transaction, peerId: EnginePe
     guard let history = transaction.retrieveItemCacheEntry(id: donutgramGiftHistoryEntryId(peerId: peerId))?.get(DonutgramGiftHistory.self) else {
         return []
     }
+    let previousCount = history.entries.count
+    history.entries = ProfileGiftsContext.State.trackedGiftHistory(history.entries)
+    if history.entries.count != previousCount {
+        // The stored value is the full history, so the survivors can take
+        // contiguous positions and point at each other instead of the dropped entries.
+        history.entries = ProfileGiftsContext.State.reindexGiftHistory(history.entries)
+        let index = donutgramGiftHistoryIndex(transaction: transaction)
+        if history.entries.isEmpty {
+            transaction.removeItemCacheEntry(id: donutgramGiftHistoryEntryId(peerId: peerId))
+            donutgramUpdateGiftHistoryIndex(transaction: transaction, index: index, peerId: peerId, checkedAt: nil, size: 0)
+        } else if let entry = CodableEntry(history) {
+            transaction.putItemCacheEntry(id: donutgramGiftHistoryEntryId(peerId: peerId), entry: entry)
+            donutgramUpdateGiftHistoryIndex(transaction: transaction, index: index, peerId: peerId, checkedAt: nil, size: entry.data.count)
+        }
+    }
     history.render(transaction: transaction)
     return history.entries
 }
@@ -3534,16 +3549,14 @@ public final class ProfileGiftsContext {
                 )
             }
 
-            // The snapshot of a gift that is no longer in the profile. Its sale
-            // price, upgrade and transfer options describe a gift the profile
-            // no longer has, so they are dropped rather than offered.
+            // The snapshot of a gift that is no longer in the profile. Its
+            // conversion, upgrade and transfer options describe a gift the
+            // profile no longer has, so they are dropped rather than offered.
+            // Only ordinary gifts are kept as missing, so there is no sale
+            // price to drop.
             public func withoutActions() -> StarGift {
-                var gift = self.gift
-                if case let .unique(uniqueGift) = gift {
-                    gift = .unique(uniqueGift.withResellAmounts(nil))
-                }
                 var result = StarGift(
-                    gift: gift,
+                    gift: self.gift,
                     reference: self.reference,
                     fromPeer: self.fromPeer,
                     date: self.date,
@@ -3705,6 +3718,18 @@ public final class ProfileGiftsContext {
             }.map { $0.element }
         }
 
+        // The history in saved order without missing collectibles: a collectible
+        // that leaves a profile was usually sold or transferred, so it is not
+        // shown as a deleted gift.
+        static func trackedGiftHistory(_ history: [DisappearedGift]) -> [DisappearedGift] {
+            return sortedGiftHistory(history.filter { entry in
+                if entry.isMissing, case .unique = entry.gift.gift {
+                    return false
+                }
+                return true
+            })
+        }
+
         // The list without repeated snapshots of one gift, keeping the first.
         static func distinctGiftsForHistory(_ gifts: [StarGift]) -> [StarGift] {
             var seen: [[AnyHashable]: [Int]] = [:]
@@ -3724,13 +3749,26 @@ public final class ProfileGiftsContext {
             return result
         }
 
-        // Keep the server order of live gifts and insert each missing group into a
-        // gap between live gifts. Anchoring to another inserted gift reverses groups.
-        // Until the list is loaded to its end (`isComplete`), a missing gift whose
-        // neighbours are not loaded yet is left out rather than parked after the
+        // The live gifts in server order, pinned ones first, with each missing
+        // gift inserted into a gap between unpinned live gifts; missing
+        // collectibles are left out (see `trackedGiftHistory`). A gift's slot
+        // comes from its saved neighbours, but it must fit the live gifts' dates
+        // there; otherwise it goes in by date, so the anchors only break ties
+        // among gifts of the same date. Until the list is loaded to its end
+        // (`isComplete`), a missing gift is placed only next to a loaded
+        // neighbour or by date once a strictly older gift is loaded, so that its
+        // slot is final; otherwise it is left out rather than parked after the
         // loaded part, from where it would jump once the rest arrives.
         public static func giftsWithDisappeared(current: [StarGift], history: [DisappearedGift], isComplete: Bool = true) -> [DisappearedGift] {
-            let orderedHistory = sortedGiftHistory(history)
+            let current = current.filter { $0.pinnedToTop } + current.filter { !$0.pinnedToTop }
+            let pinnedCount = current.prefix(while: { $0.pinnedToTop }).count
+            let orderedHistory = trackedGiftHistory(history)
+            if orderedHistory.isEmpty {
+                // Nothing to restore: the live gifts as they are, pins first.
+                return reindexGiftHistory(current.map { gift in
+                    return DisappearedGift(gift: gift, position: 0, previousReference: nil, nextReference: nil, lastSeen: 0, isMissing: false)
+                })
+            }
             let matches = matchGiftHistory(current: current, history: orderedHistory)
             var continuation: [Int?] = Array(repeating: nil, count: orderedHistory.count)
             var liveKeys: [[AnyHashable]: [Int]] = [:]
@@ -3775,13 +3813,13 @@ public final class ProfileGiftsContext {
                 var visited = Set<StarGiftReference>()
                 while let value = reference, visited.insert(value).inserted {
                     if let index = currentIndexByReference[value] {
-                        return index
+                        return index >= pinnedCount ? index : nil
                     }
                     guard let historyIndex = historyIndexByReference[value] else {
                         break
                     }
                     if let index = continuation[historyIndex] {
-                        return index
+                        return index >= pinnedCount ? index : nil
                     }
                     if isUnloaded(historyIndex) {
                         break
@@ -3792,11 +3830,24 @@ public final class ProfileGiftsContext {
                 return nil
             }
 
+            // The slot of a missing gift by its date among the unpinned live gifts,
+            // which come date-descending: in front of the first one not newer than
+            // it. While the list is partly loaded the slot is final only once a
+            // strictly older gift is loaded, as every gift of the same date is then
+            // loaded too; until then a gift of the same date may still arrive.
+            func dateSlot(_ entry: DisappearedGift) -> Int? {
+                let unpinned = current.indices.dropFirst(pinnedCount)
+                if !isComplete && !unpinned.contains(where: { current[$0].date < entry.gift.date }) {
+                    return nil
+                }
+                return unpinned.first(where: { current[$0].date <= entry.gift.date })
+            }
+
             // The nearest entry before (after) each position that continues as a
             // live gift, not looking past a gift that is not loaded yet.
             var previousLive: [Int?] = Array(repeating: nil, count: orderedHistory.count + 1)
             for historyIndex in orderedHistory.indices {
-                if let index = continuation[historyIndex] {
+                if let index = continuation[historyIndex], index >= pinnedCount {
                     previousLive[historyIndex + 1] = index
                 } else if !isUnloaded(historyIndex) {
                     previousLive[historyIndex + 1] = previousLive[historyIndex]
@@ -3804,7 +3855,7 @@ public final class ProfileGiftsContext {
             }
             var nextLive: [Int?] = Array(repeating: nil, count: orderedHistory.count + 1)
             for historyIndex in orderedHistory.indices.reversed() {
-                if let index = continuation[historyIndex] {
+                if let index = continuation[historyIndex], index >= pinnedCount {
                     nextLive[historyIndex] = index
                 } else if !isUnloaded(historyIndex) {
                     nextLive[historyIndex] = nextLive[historyIndex + 1]
@@ -3822,7 +3873,7 @@ public final class ProfileGiftsContext {
                     missingCount += 1
                     continue
                 }
-                let insertionIndex: Int
+                var insertionIndex: Int
                 if let index = anchorIndex(entry.nextReference, next: true) {
                     insertionIndex = index
                 } else if let index = anchorIndex(entry.previousReference, next: false) {
@@ -3831,10 +3882,23 @@ public final class ProfileGiftsContext {
                     insertionIndex = index
                 } else if let index = previousLive[historyIndex] {
                     insertionIndex = index + 1
+                } else if let index = dateSlot(entry) {
+                    insertionIndex = index
                 } else if isComplete {
                     insertionIndex = min(max(0, Int(entry.position) - missingCount), current.count)
                 } else {
                     continue
+                }
+                insertionIndex = max(pinnedCount, insertionIndex)
+                if (insertionIndex > pinnedCount && current[insertionIndex - 1].date < entry.gift.date)
+                    || (insertionIndex < current.count && current[insertionIndex].date > entry.gift.date) {
+                    if let index = dateSlot(entry) {
+                        insertionIndex = index
+                    } else if isComplete {
+                        insertionIndex = current.count
+                    } else {
+                        continue
+                    }
                 }
                 gaps[insertionIndex].append(entry)
                 missingCount += 1
@@ -3842,7 +3906,12 @@ public final class ProfileGiftsContext {
 
             var result: [DisappearedGift] = []
             for index in gaps.indices {
-                result.append(contentsOf: gaps[index])
+                result.append(contentsOf: gaps[index].sorted { lhs, rhs in
+                    if lhs.gift.date != rhs.gift.date {
+                        return lhs.gift.date > rhs.gift.date
+                    }
+                    return lhs.position < rhs.position
+                })
                 if index < liveHistory.count {
                     result.append(liveHistory[index])
                 }
@@ -3850,7 +3919,7 @@ public final class ProfileGiftsContext {
             return reindexGiftHistory(result)
         }
 
-        private static func reindexGiftHistory(_ history: [DisappearedGift]) -> [DisappearedGift] {
+        static func reindexGiftHistory(_ history: [DisappearedGift]) -> [DisappearedGift] {
             var result = history
             for index in result.indices {
                 result[index].position = Int32(index)
@@ -3865,7 +3934,7 @@ public final class ProfileGiftsContext {
         // last seen at the check before this one, which still saw it. Only the
         // `maxDisappearedCount` most recently seen missing gifts are kept.
         static func updatedGiftHistory(current: [StarGift], history: [DisappearedGift], previousCheck: Int32, observedAt: Int32, maxDisappearedCount: Int) -> [DisappearedGift] {
-            var orderedHistory = sortedGiftHistory(history)
+            var orderedHistory = trackedGiftHistory(history)
             let matches = matchGiftHistory(current: current, history: orderedHistory)
             var isContinued = Array(repeating: false, count: orderedHistory.count)
             for case let historyIndex? in matches {

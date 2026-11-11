@@ -27,6 +27,9 @@ public func dgLocalized(_ text: String, languageCode: String) -> String {
 }
 
 private let dgEnglishStrings: [String: String] = [
+    "Блюр сообщений": "Message Bubble Blur",
+    "Блюр сообщений, работает только с кастомными обоями": "Message bubble blur, works only with custom wallpapers",
+    "Фон сообщений": "Message Backgrounds",
     "Усиленное энергосбережение": "Enhanced Power Saving",
     "Чтобы изменить эти настройки, выключите усиленное энергосбережение.": "Turn off Enhanced Power Saving to change these settings.",
     "Полностью отключает анимации, воспроизведение стикеров и эмодзи, автозапуск видео и GIF, эффекты и фоновые предзагрузки.": "Disables animations, sticker and emoji playback, video and GIF autoplay, effects, and background preloading.",
@@ -46,7 +49,7 @@ private let dgEnglishStrings: [String: String] = [
     "Отправляет GIF как видео без звука. Обход не сработает, если в чате запрещена отправка видео.": "Sends GIFs as silent videos. This cannot bypass a ban on sending videos in the chat.",
     "Отправляет стикеры как видео без звука. Обход не сработает, если в чате запрещена отправка видео.": "Sends stickers as silent videos. This cannot bypass a ban on sending videos in the chat.",
     "Открывает чаты и каналы, недоступные из-за ограничений именно на iPhone.": "Opens chats and channels blocked specifically on iPhone.",
-    "Показывает скрытые, проданные и удалённые подарки. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.": "Shows hidden, sold, and deleted gifts. You must have opened the person's profile at least once while the gift was still visible.",
+    "Показывает скрытые и удалённые обычные подарки; NFT не запоминаются. Для этого нужно хотя бы один раз открыть профиль человека, пока подарок ещё виден.": "Shows hidden and deleted regular gifts; NFTs are not remembered. You must have opened the person's profile at least once while the gift was still visible.",
     "Загрузка истории операций…": "Loading transaction history…",
     "Не удалось загрузить кошелёк": "Could not load the wallet",
     "Не удалось загрузить историю операций": "Could not load transaction history",
@@ -431,6 +434,8 @@ private let dgEnglishStrings: [String: String] = [
     "команда Donutgram": "Donutgram team",
     "Канал": "Channel",
     "исходный код": "source code",
+    "документация плагинов": "plugin documentation",
+    "Документация плагинов": "Plugin Documentation",
     "версия": "version",
     "Изменение заработает после перезапуска приложения.": "This takes effect after you restart the app.",
     "Закрыть приложение": "Close App",

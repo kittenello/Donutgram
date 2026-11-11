@@ -10,7 +10,7 @@
 - view message edit history and reply to a saved deleted message with a quote.
 - keep view-once media, including voice and round video messages.
 - keep previously loaded chat history available to read after a ban.
-- keep a local history of previously seen gifts that were hidden, sold, or removed.
+- keep a local history of previously seen regular gifts that were hidden or removed (nfts are not remembered).
 - forward from protected chats, take screenshots in protected chats, and save protected stories.
 - send gifs as silent videos in chats that allow video but restrict gifs.
 - send stickers as videos in chats that allow video but restrict stickers. static stickers become one-second mp4 clips, and animated stickers retain their motion. conversion can be cancelled.
