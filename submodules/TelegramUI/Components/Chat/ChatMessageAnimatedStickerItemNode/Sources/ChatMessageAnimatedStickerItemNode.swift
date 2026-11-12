@@ -899,7 +899,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             var imageHorizontalOffset: CGFloat = 0.0
             if !(telegramFile?.videoThumbnails.isEmpty ?? true) {
                 displaySize = CGSize(width: 240.0, height: 240.0)
-                imageVerticalInset = -20.0
                 imageHorizontalOffset = 12.0
             }
             
@@ -1802,10 +1801,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     strongSelf.contextSourceNode.contentRect = contextContentFrame
                     strongSelf.containerNode.targetNodeForActivationProgressContentRect = strongSelf.contextSourceNode.contentRect
                     
-                    var animationNodeFrame = updatedContentFrame.insetBy(dx: imageInset, dy: imageInset)
-                    if let telegramFile, telegramFile.isPremiumSticker {
-                        animationNodeFrame = animationNodeFrame.offsetBy(dx: 0.0, dy: 20.0)
-                    }
+                    let animationNodeFrame = updatedContentFrame.insetBy(dx: imageInset, dy: imageInset)
                     
                     var file: TelegramMediaFile?
                     if let emojiFile = emojiFile {
