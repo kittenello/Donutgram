@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 import CoreText
+import Display
 import Postbox
 import TelegramCore
 import TextFormat
@@ -18,6 +19,16 @@ final class MentionAndGifTests: XCTestCase {
     /// The message text as the chat bubble renders it before adding the avatars.
     private func rendered(_ text: String, _ entities: [MessageTextEntity]) -> NSAttributedString {
         return stringWithAppliedEntities(text, entities: entities, baseColor: .black, linkColor: .blue, codeBlockTitleColor: .blue, codeBlockAccentColor: .blue, codeBlockBackgroundColor: .lightGray, baseFont: self.font, linkFont: self.font, boldFont: self.font, italicFont: self.font, boldItalicFont: self.font, fixedFont: self.font, blockQuoteFont: self.font, message: nil)
+    }
+
+    private func originalText(_ text: NSAttributedString) -> String {
+        let result = NSMutableAttributedString(attributedString: text)
+        text.enumerateAttribute(originalTextAttributeKey, in: NSRange(location: 0, length: text.length), options: .reverse) { value, range, _ in
+            if let value = value as? OriginalTextAttribute {
+                result.replaceCharacters(in: range, with: value.string)
+            }
+        }
+        return result.string
     }
 
     private func avatarLocations(_ text: NSAttributedString) -> [Int] {
@@ -39,8 +50,8 @@ final class MentionAndGifTests: XCTestCase {
         let range = (raw as NSString).range(of: "@alice")
         let source = self.rendered(raw, [MessageTextEntity(range: range.location ..< NSMaxRange(range), type: .Mention)])
         let result = textWithMentionAvatars(source, peers: [])
-        XCTAssertEqual(result.string, source.string)
-        XCTAssertEqual(result.length, source.length)
+        XCTAssertEqual(self.originalText(result), source.string)
+        XCTAssertEqual(result.length, source.length + 2)
         XCTAssertEqual(self.avatarLocations(result), [range.location])
         XCTAssertNil(result.attribute(self.embeddedKey, at: range.location + 1, effectiveRange: nil))
         XCTAssertNotNil(result.attribute(NSAttributedString.Key(kCTRunDelegateAttributeName as String), at: range.location, effectiveRange: nil))
@@ -51,12 +62,13 @@ final class MentionAndGifTests: XCTestCase {
         let raw = "👩‍💻 Анна"
         let source = self.rendered(raw, [MessageTextEntity(range: 0 ..< (raw as NSString).length, type: .TextMention(peerId: peer.id))])
         let result = textWithMentionAvatars(source, peers: [EnginePeer(peer)])
-        XCTAssertEqual(result.string, source.string)
+        XCTAssertEqual(self.originalText(result), source.string)
         let first = (raw as NSString).rangeOfComposedCharacterSequence(at: 0)
-        for index in 0 ..< NSMaxRange(first) {
-            XCTAssertNotNil(result.attribute(self.embeddedKey, at: index, effectiveRange: nil))
+        XCTAssertEqual(self.avatarLocations(result), [0])
+        XCTAssertEqual((result.string as NSString).substring(with: NSRange(location: 2, length: first.length)), (raw as NSString).substring(with: first))
+        for index in 2 ..< 2 + first.length {
+            XCTAssertNil(result.attribute(self.embeddedKey, at: index, effectiveRange: nil))
         }
-        XCTAssertNil(result.attribute(self.embeddedKey, at: NSMaxRange(first), effectiveRange: nil))
     }
 
     func testMentionAfterRenderedDateGetsItsOwnAvatar() {
@@ -94,14 +106,51 @@ final class MentionAndGifTests: XCTestCase {
         XCTAssertEqual(result, source)
     }
 
-    func testMentionLinkAndFollowingTextStayAtOriginalOffsets() {
+    func testMentionLinksAndFollowingTextSurviveAvatarInsertion() {
         let source = self.rendered("@alice и @bob", [MessageTextEntity(range: 0 ..< 6, type: .Mention), MessageTextEntity(range: 9 ..< 13, type: .Mention)])
         let result = textWithMentionAvatars(source, peers: [])
-        XCTAssertEqual(result.string, source.string)
-        for index in 0 ..< 6 {
+        XCTAssertEqual(self.originalText(result), source.string)
+        for index in 2 ..< 8 {
             XCTAssertEqual(result.attribute(NSAttributedString.Key(TelegramTextAttributes.PeerTextMention), at: index, effectiveRange: nil) as? String, "@alice")
         }
-        XCTAssertEqual(self.avatarLocations(result), [0, 9])
+        XCTAssertEqual(self.avatarLocations(result), [0, 11])
+        XCTAssertEqual(findQuoteRange(layoutString: result, quoteText: "@bob", offset: 9), NSRange(location: 11, length: 6))
+    }
+
+    func testAvatarReservesItsOwnRunBeforeNativeMentionGlyph() {
+        for fontSize in [CGFloat(12.0), 17.0, 26.0] {
+            let font = UIFont.italicSystemFont(ofSize: fontSize)
+            let source = NSMutableAttributedString(attributedString: self.rendered("@alice", [MessageTextEntity(range: 0 ..< 6, type: .Mention)]))
+            source.addAttribute(.font, value: font, range: NSRange(location: 0, length: source.length))
+            let result = textWithMentionAvatars(source, peers: [])
+            let line = CTLineCreateWithAttributedString(result)
+            let avatarWidth = CTLineGetOffsetForStringIndex(line, 1, nil)
+            XCTAssertEqual(avatarWidth, ceil(fontSize) + 3.0, accuracy: 0.01)
+            XCTAssertEqual(CTLineGetOffsetForStringIndex(line, 2, nil), avatarWidth, accuracy: 0.01)
+            XCTAssertNil(result.attribute(self.embeddedKey, at: 2, effectiveRange: nil))
+            XCTAssertNil(result.attribute(NSAttributedString.Key(kCTRunDelegateAttributeName as String), at: 2, effectiveRange: nil))
+            XCTAssertEqual(result.attribute(.font, at: 2, effectiveRange: nil) as? UIFont, font)
+        }
+    }
+
+    func testAvatarFitsLineBesideEmojiAndAtWrappedMention() {
+        let raw = "👩‍💻 text text @alice @bob"
+        let entities = ["@alice", "@bob"].map { name -> MessageTextEntity in
+            let range = (raw as NSString).range(of: name)
+            return MessageTextEntity(range: range.location ..< NSMaxRange(range), type: .Mention)
+        }
+        let text = textWithMentionAvatars(self.rendered(raw, entities), peers: [])
+        for width in [CGFloat(100.0), 240.0] {
+            let layout = InteractiveTextNode.asyncLayout(nil)(InteractiveTextNodeLayoutArguments(attributedString: text, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width, height: 1000.0))).0
+            let items = layout.segments.flatMap(\.embeddedItems)
+            XCTAssertEqual(items.count, 2)
+            for item in items {
+                let top = item.baseline - self.font.capHeight * 0.5 - ceil(self.font.pointSize) * 0.5
+                XCTAssertGreaterThanOrEqual(top, 0.0)
+                XCTAssertLessThanOrEqual(top + ceil(self.font.pointSize), item.rect.height + 0.01)
+                XCTAssertGreaterThanOrEqual(item.rect.width, ceil(self.font.pointSize) + 3.0)
+            }
+        }
     }
 
     func testOrdinarySilentVideosAreNotTreatedAsConvertedGifs() {
