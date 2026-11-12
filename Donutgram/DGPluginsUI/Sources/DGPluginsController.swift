@@ -113,7 +113,6 @@ private final class DGPluginPage {
     var busy = false
     var observer: UUID?
     private var sequence = 0
-    var notice: String?
     var renderedImages: [String: UIImage] = [:]
     var renderedAccent: UIColor?
     private var presentedPages: [String: DGPluginPresentedPage] = [:]
@@ -243,7 +242,6 @@ private final class DGPluginPage {
         }
         switch self.mode {
         case .list:
-            if let notice = self.notice { add(0, .text, "", notice) }
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
             add(0, .toggle, "global", self.tr("Плагины", "Plugins"), value: self.manager.globallyEnabled, icon: "__plugins")
             let installations = self.manager.installations
@@ -256,10 +254,6 @@ private final class DGPluginPage {
             let matches = installations.filter { self.query.isEmpty || ($0.manifest.name + " " + $0.manifest.id + " " + ($0.manifest.author?.name ?? "")).localizedCaseInsensitiveContains(self.query) }
             if matches.isEmpty && !self.query.isEmpty {
                 add(2, .text, "", self.tr("Ничего не найдено", "Nothing found"))
-            }
-            // Nothing else on these screens says where plugins come from, so an empty list does.
-            if installations.isEmpty {
-                add(2, .text, "", self.tr("Плагинов пока нет. Чтобы установить плагин, откройте его файл .donut.js или .dgplugin в чате. Открытие файла не запускает его код.", "No plugins yet. To install one, open its .donut.js or .dgplugin file in a chat. Opening the file never runs its code."))
             }
             for (index, item) in matches.enumerated() {
                 let section = Int32(index + 2)
@@ -554,18 +548,14 @@ private final class DGPluginPage {
     }
 
     private func returnToListAfterRemoval() {
-        let notice = self.tr("Плагин удалён", "Plugin removed")
         if let navigation = self.controller?.navigationController as? NavigationController {
             for (index, candidate) in navigation.viewControllers.enumerated().reversed() {
                 guard let candidate = candidate as? ViewController, let page = dgPluginPages.object(forKey: candidate), case .list = page.mode else { continue }
-                page.notice = notice
-                page.refresh()
                 navigation.setViewControllers(Array(navigation.viewControllers.prefix(index + 1)), animated: true)
                 return
             }
         }
         self.mode = .list
-        self.notice = notice
         self.refresh()
     }
 

@@ -74,7 +74,6 @@ private func dgPluginStoredReason(_ text: String, russian: Bool) -> String { ret
 private final class DGPluginListFixture {
     let manager = DGPluginListFixtureManager()
     var query = ""
-    var notice: String?
     var busy = false
     let russian = false
     func tr(_ ru: String, _ en: String) -> String { return en }
