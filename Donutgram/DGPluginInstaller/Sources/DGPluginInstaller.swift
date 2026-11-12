@@ -180,7 +180,7 @@ public enum DGPluginInstaller {
             func validValue(_ value: DGPluginJSON) -> Bool {
                 switch (type, value) {
                 case ("boolean", .bool): return true
-                case ("string", let .string(string)): return string.count <= maxLength
+                case ("string", let .string(string)): return string.unicodeScalars.count <= maxLength
                 case ("number", let .number(number)): return number >= (minimum ?? -Double.greatestFiniteMagnitude) && number <= (maximum ?? Double.greatestFiniteMagnitude)
                 case ("integer", let .number(number)): return number.rounded() == number && number >= (minimum ?? -Double.greatestFiniteMagnitude) && number <= (maximum ?? Double.greatestFiniteMagnitude)
                 default: return false

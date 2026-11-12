@@ -20,6 +20,7 @@ def main():
         'func report(_ text: String) { FileHandle.standardOutput.write(Data((text + "\\n").utf8)) }',
         "DispatchQueue.global().async {",
         "do {",
+        'if ProcessInfo.processInfo.environment["DG_PLUGIN_QUOTA_CHILD"] != nil { try runMissingAccountQuotaRegression(child: true); ExitProcess(0) }',
         'if let mode = ProcessInfo.processInfo.environment["DG_PLUGIN_RESTART_MODE"] { try runRestartChild(mode: mode); ExitProcess(0) }',
     ]
     for source, classname, name in suites:
@@ -32,6 +33,7 @@ def main():
             lines.append("do { " + invocation + "; try test.tearDownWithError() } catch { try? test.tearDownWithError(); throw error }")
             lines.extend([f'report("{classname}.{method}: passed")', "}"])
     lines.extend([
+        "try runPluginReviewRegressionTests()",
         "try runNativeActionTests()",
         "try runSemanticVersionTests()",
         "try runPersistenceFaultTests()",

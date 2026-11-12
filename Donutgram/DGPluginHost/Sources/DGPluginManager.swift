@@ -67,6 +67,7 @@ private final class DGPluginExecution {
     var pendingTransforms: [String: DGPluginPendingTransform] = [:]
     var transformFailures = 0
     var events: [(String, DGPluginJSON)] = []
+    var uiCallbacks: [DGPluginPendingUICallback] = []
     var eventFailures = 0
     /// Outgoing-message handler failures in a row (a rejection or no result); three stop the plugin.
     var outgoingFailures = 0
@@ -76,6 +77,14 @@ private final class DGPluginExecution {
     var noticeTimes: [TimeInterval] = []
     /// Running estimate of the account storage's encoded size, computed on first use.
     var storageBytes: Int?
+}
+
+private struct DGPluginPendingUICallback {
+    let pageId: String
+    let pageToken: UUID
+    let callbackId: String
+    let value: DGPluginJSON
+    let coalescible: Bool
 }
 
 private struct DGPluginRegisteredTransform {
@@ -115,7 +124,8 @@ private final class DGPluginCoordinator {
     static let interruptedMessage = "the app closed unexpectedly while this plugin was running, so it was turned off"
     let queue = DispatchQueue(label: "donutgram.plugins.host")
     let root: URL
-    var state = DGPluginDeviceState()
+    var state = DGPluginDeviceState() { didSet { stateBytes = nil } }
+    var stateBytes: Int?
     var packages: [String: DGVerifiedPluginPackage] = [:]
     var runningMarkers = Set<DGPluginRunningMarker>()
     var activeAccountKey: String?
@@ -217,6 +227,7 @@ private final class DGPluginCoordinator {
         let data = try JSONEncoder().encode(state)
         guard data.count <= 32 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin state exceeds its limit") }
         try data.write(to: root.appendingPathComponent("state.json"), options: .atomic)
+        stateBytes = data.count
         deferredSaveError = nil
     }
 
@@ -293,6 +304,8 @@ private final class DGPluginCoordinator {
     }
 
     func pruneVersions(_ record: DGPluginStoredRecord) throws {
+        let referenced = Set(state.installations.flatMap { [$0.digest, $0.previous?.digest].compactMap { $0 } })
+        packages = packages.filter { referenced.contains($0.key) }
         let directory = packageURL(record).deletingLastPathComponent()
         let retained = Set([record.digest, record.previous?.digest].compactMap { $0 }.map { $0 + ".package" })
         for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
@@ -484,6 +497,11 @@ public final class DGPluginManager {
     }
 
     private func drainEvents(id: String) {
+        if let execution = executions[id], !execution.busy, !execution.uiCallbacks.isEmpty {
+            let callback = execution.uiCallbacks.removeFirst()
+            deliverUICallback(installationId: id, generation: execution.generation, callback: callback)
+            return
+        }
         guard let execution = executions[id], execution.state == .running, !execution.busy, !execution.events.isEmpty, current(id, execution.generation) else { return }
         let (name, event) = execution.events.removeFirst()
         guard execution.subscriptions.contains(name) else { drainEvents(id: id); return }
@@ -722,7 +740,11 @@ public final class DGPluginManager {
             self.coordinator.queue.async {
                 execution.busy = false
                 execution.pendingTransforms.removeValue(forKey: requestId)
-                guard revision == self.viewModelRevision, self.current(id, execution.generation), execution.transforms[registration.id] != nil else { completion(input, false); return }
+                guard revision == self.viewModelRevision, self.current(id, execution.generation), execution.transforms[registration.id] != nil else {
+                    completion(input, false)
+                    if self.current(id, execution.generation) { self.refreshDeferredViewModels(); self.drainEvents(id: id) }
+                    return
+                }
                 let output: DGPluginJSON
                 if case .success = outcome, let result = pending.result {
                     execution.transformFailures = 0; output = result
@@ -1036,6 +1058,7 @@ public final class DGPluginManager {
                     self.coordinator.publishAll()
                     throw DGPluginError(code: "storage_error", message: "unable to save plugin state; changes may not survive restart")
                 }
+                if !stop { self.invalidateViewModels() }
                 self.coordinator.publishAll()
                 DispatchQueue.main.async { completion(.success(())) }
             } catch { self.complete(completion, error: error) }
@@ -1291,8 +1314,8 @@ public final class DGPluginManager {
             }
             if method == "ui.render" {
                 guard let renderer = nativeRender, case let .object(page) = params, let pageId = page["id"]?.dgString, !pageId.isEmpty, pageId.utf8.count <= 64, !execution.pagesPending.contains(pageId), execution.contributions.isEmpty || execution.contributions[pageId] != nil else { throw DGPluginError(code: "feature_unavailable", message: "one plugin page may be open at a time") }
-                let pageToken = UUID()
                 let previousToken = execution.pageTokens[pageId]
+                let pageToken = previousToken ?? UUID()
                 execution.pageTokens[pageId] = pageToken
                 execution.pagesPending.insert(pageId)
                 execution.contributions[pageId] = .null
@@ -1319,7 +1342,7 @@ public final class DGPluginManager {
                 DispatchQueue.main.async {
                     guard validity() else { self.respond(.failure(DGPluginError(code: "cancelled", message: "page cancelled")), reply); return }
                     let result = renderer(installationId, nativePage, pluginName, validity, assetProvider, { [weak self] callbackId, value in
-                        self?.dispatchUICallback(installationId: installationId, generation: generation, callbackId: callbackId, value: value)
+                        self?.dispatchUICallback(installationId: installationId, generation: generation, pageId: pageId, pageToken: pageToken, page: nativePage, callbackId: callbackId, value: value)
                     }, closed)
                     self.coordinator.queue.async {
                         execution.pagesPending.remove(pageId)
@@ -1385,12 +1408,18 @@ public final class DGPluginManager {
         let record = coordinator.state.installations[index]
         var account = self.account(record)
         let grants = execution.settingsOnly ? settingsPermissions(record) : account.grants
+        var stateDelta = 0
+        var updatedStorageBytes: Int?
         switch method {
-        case "environment.get": return .object(environment)
+        case "environment.get":
+            var currentEnvironment = environment
+            currentEnvironment["executionMode"] = .string(execution.settingsOnly ? "settings" : "normal")
+            return .object(currentEnvironment)
         case "settings.get": return .object(account.settings)
         case "settings.set":
             guard let values = arguments["values"]?.dgObject else { throw DGPluginError(code: "invalid_argument", message: "expected settings values") }
             try DGPluginPolicy.validateSettings(values, manifest: record.manifest)
+            stateDelta = try JSONEncoder().encode(values).count - JSONEncoder().encode(account.settings).count
             account.settings = values
         case "capabilities.has":
             guard let name = arguments["capability"]?.dgString else { throw DGPluginError(code: "invalid_argument", message: "expected capability") }
@@ -1405,6 +1434,7 @@ public final class DGPluginManager {
             if method == "storage.get" { return account.storage[key] ?? .null }
             // The quota is kept as a running estimate per execution, so a write no longer encodes the whole storage.
             var bytes = try execution.storageBytes ?? account.storage.reduce(0) { $0 + (try Self.storageEntryBytes(key: $1.key, value: $1.value)) }
+            let previousBytes = bytes
             if let old = account.storage[key] { bytes -= try Self.storageEntryBytes(key: key, value: old) }
             if method == "storage.remove" { account.storage.removeValue(forKey: key) }
             else {
@@ -1414,7 +1444,9 @@ public final class DGPluginManager {
                 guard bytes <= 5 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin storage quota exceeded") }
                 account.storage[key] = value
             }
-            execution.storageBytes = bytes
+            stateDelta = bytes - previousBytes
+            if account.storage.isEmpty != self.account(record).storage.isEmpty { stateDelta += account.storage.isEmpty ? 1 : -1 }
+            updatedStorageBytes = bytes
         case "ui.command.register":
             guard let id = arguments["id"]?.dgString, id.range(of: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$", options: .regularExpression) != nil, let title = arguments["title"]?.dgString, !title.isEmpty, title.utf16.count <= 100, let placement = arguments["placement"]?.dgString, ["composer", "selection", "messageMenu", "chatToolbar", "settings"].contains(placement), execution.commands.count < 32 || execution.commands.contains(where: { $0.id == id }) else { throw DGPluginError(code: "invalid_argument", message: "invalid command descriptor") }
             guard grants.contains(where: { $0.capability == "ui.contribute" && ($0.scope == placement || $0.scope == "supportedSlots") }) else { throw DGPluginError(code: "scope_denied", message: "command placement was not granted") }
@@ -1467,16 +1499,26 @@ public final class DGPluginManager {
             return .null
         default: return nil
         }
+        let originalBytes = try coordinator.stateBytes ?? JSONEncoder().encode(coordinator.state).count
+        var totalBytes = originalBytes
+        if record.accounts[accountKey] == nil {
+            var candidate = coordinator.state
+            candidate.installations[index].accounts[accountKey] = account
+            totalBytes = try JSONEncoder().encode(candidate).count
+        } else { totalBytes += stateDelta }
+        guard totalBytes <= 31 * 1024 * 1024 || totalBytes <= originalBytes else { throw DGPluginError(code: "quota_exceeded", message: "device plugin storage quota exceeded") }
         coordinator.state.installations[index].accounts[accountKey] = account
+        coordinator.stateBytes = totalBytes
+        if let bytes = updatedStorageBytes { execution.storageBytes = bytes }
         coordinator.scheduleSave()
         // Storage is not part of the published snapshot; settings are.
-        if method == "settings.set" { coordinator.publishAll() }
+        if method == "settings.set" { invalidateViewModels(); coordinator.publishAll() }
         return .null
     }
 
     /// An estimate of one entry's share of the encoded storage object: its quoted key, colon, comma and value.
     private static func storageEntryBytes(key: String, value: DGPluginJSON) throws -> Int {
-        return key.utf8.count + 4 + (try JSONEncoder().encode(value).count)
+        return try JSONEncoder().encode(key).count + 2 + JSONEncoder().encode(value).count
     }
 
     private func respond(_ result: Result<DGPluginJSON, DGPluginError>, _ reply: @escaping (String) -> Void) {
@@ -1489,22 +1531,51 @@ public final class DGPluginManager {
         reply(value)
     }
 
-    private func dispatchUICallback(installationId: String, generation: UUID, callbackId: String, value: DGPluginJSON) {
+    private func dispatchUICallback(installationId: String, generation: UUID, pageId: String, pageToken: UUID, page: DGPluginJSON, callbackId: String, value: DGPluginJSON) {
         coordinator.queue.async {
-            guard self.current(installationId, generation), let execution = self.executions[installationId], !execution.busy, !execution.contributions.isEmpty, callbackId.utf8.count <= 64 else { return }
-            execution.busy = true
-            execution.commandEpoch = UUID()
-            execution.gestureUntil = ProcessInfo.processInfo.systemUptime + 5
-            let payload = DGPluginJSON.object(["id": .string(callbackId), "value": value])
-            guard let data = try? JSONEncoder().encode(payload), data.count <= 65536, let json = String(data: data, encoding: .utf8) else { execution.busy = false; execution.gestureUntil = 0; return }
-            execution.runtime?.dispatch(kind: "ui", payloadJSON: json) { result in
-                self.coordinator.queue.async {
-                    guard self.current(installationId, generation) else { return }
-                    execution.busy = false; execution.gestureUntil = 0
-                    self.refreshDeferredViewModels()
-                    self.drainEvents(id: installationId)
-                    if case let .failure(error) = result, error.code != "runtime_busy", error.code != "plugin_rejected" { self.fail(id: installationId, message: "plugin interface callback exceeded its budget or stopped") }
+            guard self.current(installationId, generation), let execution = self.executions[installationId], execution.pageTokens[pageId] == pageToken, callbackId.utf8.count <= 64 else { return }
+            guard let encoded = try? JSONEncoder().encode(value), encoded.count <= 65000 else { return }
+            func callbackTypes(_ node: DGPluginJSON) -> [String] {
+                if case let .array(children) = node { return children.flatMap(callbackTypes) }
+                guard let object = node.dgObject else { return [] }
+                let own = object["callbackId"]?.dgString == callbackId ? [object["type"]?.dgString ?? ""] : []
+                return own + object.values.flatMap(callbackTypes)
+            }
+            let types = callbackTypes(page)
+            let coalescible = types.count == 1 && types.allSatisfy { ["input", "multiline", "toggle", "slider", "stepper", "select"].contains($0) }
+            let callback = DGPluginPendingUICallback(pageId: pageId, pageToken: pageToken, callbackId: callbackId, value: value, coalescible: coalescible)
+            if execution.busy || !execution.uiCallbacks.isEmpty {
+                if callback.coalescible, let last = execution.uiCallbacks.last, last.coalescible, last.pageToken == pageToken, last.callbackId == callbackId {
+                    execution.uiCallbacks[execution.uiCallbacks.count - 1] = callback
+                } else {
+                    guard execution.uiCallbacks.count < 64 else { self.fail(id: installationId, message: "plugin interface callback queue exceeded its limit"); return }
+                    execution.uiCallbacks.append(callback)
                 }
+                self.drainEvents(id: installationId)
+                return
+            }
+            self.deliverUICallback(installationId: installationId, generation: generation, callback: callback)
+        }
+    }
+
+    private func deliverUICallback(installationId: String, generation: UUID, callback: DGPluginPendingUICallback) {
+        guard self.current(installationId, generation), let execution = executions[installationId], !execution.busy else { return }
+        guard execution.pageTokens[callback.pageId] == callback.pageToken else { drainEvents(id: installationId); return }
+        execution.busy = true
+        execution.commandEpoch = UUID()
+        execution.gestureUntil = ProcessInfo.processInfo.systemUptime + 5
+        let payload = DGPluginJSON.object(["id": .string(callback.callbackId), "value": callback.value])
+        guard let data = try? JSONEncoder().encode(payload), data.count <= 65536, let json = String(data: data, encoding: .utf8) else { execution.busy = false; execution.gestureUntil = 0; drainEvents(id: installationId); return }
+        execution.runtime?.dispatch(kind: "ui", payloadJSON: json) { result in
+            self.coordinator.queue.async {
+                guard self.current(installationId, generation) else { return }
+                execution.busy = false; execution.gestureUntil = 0
+                if case let .failure(error) = result, error.code == "runtime_busy" {
+                    execution.uiCallbacks.insert(callback, at: 0)
+                }
+                self.refreshDeferredViewModels()
+                self.drainEvents(id: installationId)
+                if case let .failure(error) = result, error.code != "runtime_busy", error.code != "plugin_rejected" { self.fail(id: installationId, message: "plugin interface callback exceeded its budget or stopped") }
             }
         }
     }

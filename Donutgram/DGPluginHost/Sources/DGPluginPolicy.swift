@@ -82,7 +82,7 @@ public enum DGPluginPolicy {
             case ("boolean", .bool): valid = true
             case let ("string", .string(text)):
                 let limit = specification["maxLength"]?.dgNumber.map { Int(max(0, min(4096, $0))) } ?? 4096
-                valid = text.utf16.count <= limit
+                valid = text.unicodeScalars.count <= limit
             case let ("number", .number(number)), let ("integer", .number(number)):
                 valid = number.isFinite && (type != "integer" || number.rounded() == number)
                 if let minimum = specification["minimum"]?.dgNumber { valid = valid && number >= minimum }

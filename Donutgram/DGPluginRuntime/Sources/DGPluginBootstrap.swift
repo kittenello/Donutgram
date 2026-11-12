@@ -68,7 +68,7 @@ enum DGPluginBootstrap {
     }),
     settings: Object.freeze({get: () => request('settings.get'), set: (values) => request('settings.set', {values})}),
     capabilities: Object.freeze({has: (capability) => request('capabilities.has', {capability}), list: () => request('capabilities.list')}),
-    environment: Object.freeze({get: () => Promise.resolve(environment)}),
+    environment: Object.freeze({get: () => request('environment.get')}),
     composer: Object.freeze({getActiveDraft: () => request('composer.getActiveDraft'), replaceSelection: method('composer.replaceSelection')}),
     selection: Object.freeze({get: () => request('selection.get')}),
     theme: Object.freeze({get: () => request('theme.get'), contribute: method('theme.contribute'), clear: () => request('theme.clear')}),
