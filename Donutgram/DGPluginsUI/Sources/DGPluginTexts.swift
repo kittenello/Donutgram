@@ -28,6 +28,8 @@ public func dgPluginErrorDescription(_ error: DGPluginError, russian: Bool) -> S
         return tr("У новой версии другой профиль. Удалите старую версию вместе с её данными и установите плагин заново.", "The new version has another profile. Remove the old version with its data and install the plugin again.")
     case "at most four plugin runtimes may run for one account", "active plugin runtime limit reached":
         return tr("Одновременно могут работать не больше четырёх плагинов.", "At most four plugins can run at once.")
+    case "at most two plugin settings screens may be open at once":
+        return tr("Одновременно можно открыть настройки не более двух выключенных плагинов.", "Settings of at most two disabled plugins can be open at once.")
     case "grant required permissions before enabling this plugin", "required permissions were revoked":
         return tr("Сначала выдайте плагину обязательные разрешения.", "Grant the plugin its required permissions first.")
     case "installation limit reached":

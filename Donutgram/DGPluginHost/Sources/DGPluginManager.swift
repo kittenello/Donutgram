@@ -944,7 +944,8 @@ public final class DGPluginManager {
                 }
                 if enabled {
                     guard Self.executionAvailable else { throw DGPluginError(code: "feature_unavailable", message: "external execution is unavailable") }
-                    guard self.executions[id] != nil || self.executions.count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "at most four plugin runtimes may run for one account") }
+                    // Settings sessions of disabled plugins have a limit of their own (see `start`).
+                    guard self.executions[id].map({ !$0.settingsOnly }) == true || self.executions.values.filter({ !$0.settingsOnly }).count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "at most four plugin runtimes may run for one account") }
                     guard self.requiredGranted(record, account) else { throw DGPluginError(code: "permission_denied", message: "grant required permissions before enabling this plugin") }
                     try DGPluginPolicy.validateProfile(record.manifest)
                     if account.failures >= 3 { account.failures = 0 }
@@ -1222,7 +1223,13 @@ public final class DGPluginManager {
                 coordinator.publishAll(); DispatchQueue.main.async { completion(.success(())) }; return
             }
             guard settings || requiredGranted(record, account(record)) else { throw DGPluginError(code: "permission_denied", message: "required permissions were revoked") }
-            guard executions.count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "active plugin runtime limit reached") }
+            // At most four running plugins plus two settings sessions of disabled ones, counted apart: an open settings
+            // screen must not keep a plugin from being turned on, nor four running plugins keep settings from opening.
+            if settings {
+                guard executions.values.filter({ $0.settingsOnly }).count < 2 else { throw DGPluginError(code: "quota_exceeded", message: "at most two plugin settings screens may be open at once") }
+            } else {
+                guard executions.values.filter({ !$0.settingsOnly }).count < 4 else { throw DGPluginError(code: "quota_exceeded", message: "active plugin runtime limit reached") }
+            }
             let package = try coordinator.package(record)
             let execution = DGPluginExecution()
             execution.settingsOnly = settings
