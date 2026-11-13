@@ -42,6 +42,9 @@ private final class DGPluginNetworkOperation {
     private var response = Data()
     private var timer: DispatchSourceTimer?
     private var request: DGPluginPublicRequest?
+    private var attempts: DGPluginNetworkAttempts?
+    private var deadline: TimeInterval = 0
+    private var attemptDeadline: TimeInterval?
     private var keepAlive: DGPluginNetworkOperation?
 
     init(params: DGPluginJSON, allowedOrigins: [String], validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) {
@@ -56,11 +59,12 @@ private final class DGPluginNetworkOperation {
                 self.request = try DGPluginPublicRequest.validated(self.params, allowedOrigins: self.origins)
                 let timer = DispatchSource.makeTimerSource(queue: self.queue)
                 timer.schedule(deadline: .now() + .milliseconds(100), repeating: .milliseconds(100), leeway: .milliseconds(10))
-                let deadline = ProcessInfo.processInfo.systemUptime + 10
+                self.deadline = ProcessInfo.processInfo.systemUptime + 10
                 timer.setEventHandler { [weak self] in
                     guard let self else { return }
                     if !self.current() { self.finish(.failure(DGPluginError(code: "cancelled", message: "public request was cancelled"))) }
-                    else if ProcessInfo.processInfo.systemUptime >= deadline { self.finish(.failure(DGPluginError(code: "timeout", message: "public request exceeded its deadline"))) }
+                    else if ProcessInfo.processInfo.systemUptime >= self.deadline { self.finish(.failure(DGPluginError(code: "timeout", message: "public request exceeded its deadline"))) }
+                    else if let attemptDeadline = self.attemptDeadline, ProcessInfo.processInfo.systemUptime >= attemptDeadline { self.connectNext() }
                 }
                 self.timer = timer
                 timer.resume()
@@ -70,7 +74,9 @@ private final class DGPluginNetworkOperation {
                     self.queue.async {
                         guard self.current() else { self.finish(.failure(DGPluginError(code: "cancelled", message: "public request was cancelled"))); return }
                         switch result {
-                        case let .success(address): self.connect(address: address, request: request)
+                        case let .success(addresses):
+                            self.attempts = DGPluginNetworkAttempts(addresses: addresses, deadline: self.deadline)
+                            self.connectNext()
                         case let .failure(error): self.finish(.failure(error))
                         }
                     }
@@ -90,7 +96,7 @@ private final class DGPluginNetworkOperation {
         return !cancelled && !finished && validity()
     }
 
-    private static func resolve(_ hostname: String) -> Result<String, DGPluginError> {
+    private static func resolve(_ hostname: String) -> Result<[String], DGPluginError> {
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC
         hints.ai_socktype = SOCK_STREAM
@@ -115,8 +121,19 @@ private final class DGPluginNetworkOperation {
             if !result.contains(numeric) { result.append(numeric) }
             entry = item.pointee.ai_next
         }
-        guard let selected = result.first else { return .failure(DGPluginError(code: "network_error", message: "public hostname has no permitted address")) }
-        return .success(selected)
+        guard !result.isEmpty else { return .failure(DGPluginError(code: "network_error", message: "public hostname has no permitted address")) }
+        return .success(result)
+    }
+
+    private func connectNext() {
+        guard current() else { finish(.failure(DGPluginError(code: "cancelled", message: "public request was cancelled"))); return }
+        guard ProcessInfo.processInfo.systemUptime < deadline else { finish(.failure(DGPluginError(code: "timeout", message: "public request exceeded its deadline"))); return }
+        connection?.stateUpdateHandler = nil
+        connection?.cancel()
+        connection = nil
+        guard let attempt = attempts?.next(now: ProcessInfo.processInfo.systemUptime), let request else { finish(.failure(DGPluginError(code: "network_error", message: "all public TLS connections failed"))); return }
+        attemptDeadline = attempt.deadline
+        connect(address: attempt.address, request: request)
     }
 
     private func connect(address: String, request: DGPluginPublicRequest) {
@@ -142,11 +159,15 @@ private final class DGPluginNetworkOperation {
         let connection = NWConnection(host: endpoint, port: 443, using: parameters)
         self.connection = connection
         connection.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
+            guard let self, self.connection === connection else { return }
             guard self.current() else { self.finish(.failure(DGPluginError(code: "cancelled", message: "public request was cancelled"))); return }
             switch state {
-            case .ready: self.send(request)
-            case .failed: self.finish(.failure(DGPluginError(code: "network_error", message: "public TLS connection failed")))
+            case .ready:
+                self.attemptDeadline = nil
+                self.send(request)
+            case .failed:
+                if self.attemptDeadline != nil { self.connectNext() }
+                else { self.finish(.failure(DGPluginError(code: "network_error", message: "public TLS connection failed"))) }
             case .cancelled: self.finish(.failure(DGPluginError(code: "cancelled", message: "public connection cancelled")))
             default: break
             }
