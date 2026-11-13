@@ -386,7 +386,7 @@ private final class DGPluginPage {
 
     private func appendCard(manifest: DGPluginManifest, trust: String, iconKey: String, add: (Int32, DGPluginRow.Kind, String, String, String, Bool, Bool, String) -> Void) {
         let author = manifest.author.map { $0.name + ($0.username.map { " (@\($0))" } ?? "") } ?? self.tr("не указан", "not specified")
-        add(0, .card, "", manifest.name, author + " · " + manifest.version + "\n" + dgPluginTrustNote(trust, hasAuthor: manifest.author != nil, russian: self.russian), false, true, iconKey)
+        add(0, .card, "", manifest.name, author + " · " + manifest.version + "\n" + dgPluginTrustNote(trust, hasAuthor: manifest.author != nil, publisher: self.manager.publisherIdentity(id: iconKey), russian: self.russian), false, true, iconKey)
     }
 
     private func permissionTitle(_ capability: String) -> String {

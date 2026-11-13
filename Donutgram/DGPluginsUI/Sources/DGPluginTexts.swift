@@ -166,11 +166,16 @@ func dgPluginPermissionTitle(_ capability: String, russian: Bool) -> String {
     }
 }
 
-/// What the signature says about a plugin's author. Without one the manifest's author is only a claim: any file can name
-/// any author, so the claim is never shown on its own.
-func dgPluginTrustNote(_ trust: String, hasAuthor: Bool, russian: Bool) -> String {
+/// What the signature says about a plugin. The installer checks it only against the key in the same package and there is
+/// no list of trusted publishers, so a signature proves that updates come from the same key, not who the author is: a
+/// signed plugin names the last characters of its key (`publisher`, "ed25519:" + 64 hex digits) and its manifest's author
+/// stays unconfirmed. Without a signature the author is only a claim, so the claim is never shown on its own.
+func dgPluginTrustNote(_ trust: String, hasAuthor: Bool, publisher: String?, russian: Bool) -> String {
     switch trust {
-    case "signatureVerified", "verified": return dgPluginTr(russian, "Подпись проверена", "Signature verified")
+    case "signatureVerified", "verified":
+        let key: String? = publisher.flatMap { identity in identity.hasPrefix("ed25519:") && identity.count == 72 && identity.dropFirst(8).allSatisfy({ $0.isHexDigit }) ? String(identity.suffix(8)) : nil }
+        let signed = key.map { dgPluginTr(russian, "Подписан ключом …", "Signed with key …") + $0 } ?? dgPluginTr(russian, "Подписан ключом издателя", "Signed with the publisher's key")
+        return hasAuthor ? signed + dgPluginTr(russian, " · автор не подтверждён", " · author not confirmed") : signed
     case "revoked": return dgPluginTr(russian, "Издатель заблокирован на этом устройстве", "Publisher blocked on this device")
     default: return hasAuthor ? dgPluginTr(russian, "Автор не подтверждён: файл без подписи", "Author not confirmed: the file is unsigned") : dgPluginTr(russian, "Файл без подписи", "The file is unsigned")
     }
