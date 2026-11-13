@@ -23,6 +23,7 @@ final class DGPluginHostIntegrationTests: XCTestCase {
                 _ = self.result { manager.remove(id: id, completion: $0) }
             }
             manager.nativeRequest = nil
+            manager.nativeCallbackError = nil
             manager.setAccountActive(false)
         }
     }
@@ -492,6 +493,78 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         }
         XCTAssertFalse(self.manager.interceptsOutgoingMessages)
         XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.enabled, false)
+    }
+
+    func testRejectedUICallbackReportsItsCodeAndKeepsThePluginRunning() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "callback errors")
+        let package = try self.package(permissions: [ui], body: """
+            const cb=api.ui.callback(value=>{const error=Error('private error text');if(value!=='missing')error.code=value;throw error});
+            await api.commands.register({id:'show',title:'show',placement:'settings',run:()=>api.ui.render({id:'page',title:'page',nodes:[{id:'button',type:'button',title:'button',callbackId:cb.id}]})});
+            """)
+        let id = try self.install(package, permissions: [ui])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        var invoke: ((String, DGPluginJSON) -> Void)?
+        var callbackId = ""
+        self.manager.nativeRender = { _, page, _, _, _, callback, _ in
+            invoke = callback
+            if case let .array(nodes)? = page.objectValue?["nodes"] { callbackId = nodes[0].objectValue?["callbackId"]?.stringValue ?? "" }
+            return .success({})
+        }
+        let reported = self.expectation(description: "callback error reported")
+        let mainQueueKey = DispatchSpecificKey<Bool>()
+        DispatchQueue.main.setSpecific(key: mainQueueKey, value: true)
+        var codes: [String] = []
+        self.manager.nativeCallbackError = { installationId, pageId, error in
+            XCTAssertEqual(DispatchQueue.getSpecific(key: mainQueueKey), true)
+            XCTAssertEqual(installationId, id)
+            XCTAssertEqual(pageId, "page")
+            XCTAssertFalse(error.message.contains("private error text"))
+            codes.append(error.code)
+            if codes.count == 2 { reported.fulfill() }
+        }
+        try self.result { self.manager.runCommand(installationId: id, commandId: "show", completion: $0) }.get()
+        let callback = try XCTUnwrap(invoke)
+        callback(callbackId, .string("cancelled"))
+        callback(callbackId, .string("revision_conflict"))
+        callback(callbackId, .string("missing"))
+        self.wait(for: [reported], timeout: 4)
+        XCTAssertEqual(codes, ["revision_conflict", "plugin_error"])
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
+    }
+
+    func testUICallbackErrorUsesOriginalReporterAfterItsPageCloses() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "callback errors")
+        let package = try self.package(permissions: [ui], body: """
+            const cb=api.ui.callback(async()=>{await api.ui.toast('hold')});
+            await api.commands.register({id:'show',title:'show',placement:'settings',run:()=>api.ui.render({id:'page',title:'page',nodes:[{id:'button',type:'button',title:'button',callbackId:cb.id}]})});
+            """)
+        let id = try self.install(package, permissions: [ui])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        var invoke: ((String, DGPluginJSON) -> Void)?
+        var onClose: (() -> Void)?
+        var callbackId = ""
+        self.manager.nativeRender = { _, page, _, _, _, callback, closed in
+            invoke = callback
+            onClose = closed
+            if case let .array(nodes)? = page.objectValue?["nodes"] { callbackId = nodes[0].objectValue?["callbackId"]?.stringValue ?? "" }
+            return .success({})
+        }
+        let reported = self.expectation(description: "closed page callback error reported")
+        self.manager.nativeCallbackError = { _, _, error in
+            XCTAssertEqual(error.code, "scope_denied")
+            reported.fulfill()
+        }
+        try self.result { self.manager.runCommand(installationId: id, commandId: "show", completion: $0) }.get()
+        let requested = self.expectation(description: "callback awaits native request")
+        var reply: ((Result<DGPluginJSON, DGPluginError>) -> Void)?
+        self.manager.nativeRequest = { _, _, _, _, completion in reply = completion; requested.fulfill() }
+        try XCTUnwrap(invoke)(callbackId, .null)
+        self.wait(for: [requested], timeout: 2)
+        onClose?()
+        self.manager.nativeCallbackError = { _, _, _ in XCTFail("callback was routed to a different host") }
+        reply?(.failure(DGPluginError(code: "scope_denied", message: "native operation refused")))
+        self.wait(for: [reported], timeout: 3)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
     }
 
     func testRejectedCommandReportsItsCodeAndKeepsThePluginRunning() throws {

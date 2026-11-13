@@ -30,7 +30,43 @@ struct DGPluginViewAdapterChecks {
         return result
     }
 
+    static func notificationChecks() throws {
+        let store = DGPluginNotificationStore(limit: 3)
+        for index in 0..<1000 {
+            let identifier = "notification-" + String(index)
+            let snapshot = store.snapshot()
+            store.reconcile(snapshot: snapshot, pending: [], delivered: snapshot)
+            try require(store.reserve(identifier), "successful notifications exhausted the resource limit")
+            try require(store.scheduled(identifier), "successful notification was lost")
+            try require(store.snapshot().count <= 3, "notification memory grew beyond its bound")
+        }
+        let cancelled = store.cancel()
+        try require(Set(cancelled) == ["notification-997", "notification-998", "notification-999"], "scope stop lost retained notifications or tried to remove forgotten delivered ones")
+        try require(!store.reserve("after-close"), "closed scope admitted a notification")
+        try require(store.cancel().isEmpty, "scope stop cancelled notifications twice")
+        let pending = DGPluginNotificationStore(limit: 2)
+        try require(pending.reserve("pending") && pending.scheduled("pending"), "pending notification was not retained")
+        try require(pending.reserve("adding"), "in-flight notification was rejected")
+        let snapshot = pending.snapshot()
+        pending.reconcile(snapshot: snapshot, pending: ["pending"], delivered: [])
+        try require(!pending.reserve("overflow"), "pending notification limit was bypassed")
+        try require(pending.scheduled("adding"), "snapshot discarded an in-flight notification")
+        pending.reconcile(snapshot: snapshot, pending: [], delivered: [])
+        try require(pending.snapshot() == ["adding"], "snapshot removed a newer notification or retained a vanished one")
+        try require(pending.reserve("racing-add"), "expired pending quota was not reclaimed")
+        try require(Set(pending.cancel()) == ["adding", "racing-add"], "chat close did not cancel pending and in-flight requests")
+        try require(!pending.scheduled("racing-add"), "late add completion revived a cancelled request")
+        pending.reconcile(snapshot: ["adding"], pending: ["adding"], delivered: [])
+        try require(pending.snapshot().isEmpty, "late center response revived a cancelled request")
+        let failed = DGPluginNotificationStore(limit: 1)
+        try require(failed.reserve("failed"), "failed request reservation was rejected")
+        failed.remove("failed")
+        try require(failed.reserve("retry"), "failed authorization or add consumed quota")
+        print("passed notification retention, pending quota and close/add race checks")
+    }
+
     static func main() throws {
+        try notificationChecks()
         let lifetime = DGPluginChatLifetime()
         try require(!lifetime.snapshot()(), "closed chat accepted an operation")
         lifetime.open()

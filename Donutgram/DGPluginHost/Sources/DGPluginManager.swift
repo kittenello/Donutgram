@@ -85,6 +85,7 @@ private struct DGPluginPendingUICallback {
     let callbackId: String
     let value: DGPluginJSON
     let coalescible: Bool
+    let onError: (DGPluginError) -> Void
 }
 
 private struct DGPluginRegisteredTransform {
@@ -387,6 +388,7 @@ public final class DGPluginManager {
     /// foreground stops every runtime, and reconcile starts a settings session again while one of its screens is open.
     private var settingsOwners: [String: Set<UUID>] = [:]
     private var adapter: ((String, String, DGPluginJSON, @escaping () -> Bool, @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Void)?
+    private var callbackErrorAdapter: ((String, String, DGPluginError) -> Void)?
     private var renderAdapter: ((String, DGPluginJSON, String, @escaping () -> Bool, @escaping (String) -> Data?, @escaping (String, DGPluginJSON) -> Void, @escaping () -> Void) -> Result<() -> Void, DGPluginError>)?
     private var environment: [String: DGPluginJSON] = ["clientVersion": .string(DGPluginClientVersion.current), "locale": .string("en"), "appearance": .string("light"), "lowPowerMode": .bool(false)]
 
@@ -398,6 +400,11 @@ public final class DGPluginManager {
     public var nativeRender: ((String, DGPluginJSON, String, @escaping () -> Bool, @escaping (String) -> Data?, @escaping (String, DGPluginJSON) -> Void, @escaping () -> Void) -> Result<() -> Void, DGPluginError>)? {
         get { snapshotLock.lock(); defer { snapshotLock.unlock() }; return renderAdapter }
         set { snapshotLock.lock(); renderAdapter = newValue; snapshotLock.unlock() }
+    }
+
+    public var nativeCallbackError: ((String, String, DGPluginError) -> Void)? {
+        get { snapshotLock.lock(); defer { snapshotLock.unlock() }; return callbackErrorAdapter }
+        set { snapshotLock.lock(); callbackErrorAdapter = newValue; snapshotLock.unlock() }
     }
 
     public static var executionAvailable: Bool {
@@ -1357,6 +1364,7 @@ public final class DGPluginManager {
                 var renderedPage = page
                 renderedPage["__dgThemeTokens"] = execution.themeTokens
                 let nativePage = DGPluginJSON.object(renderedPage)
+                let reportCallbackError = self.nativeCallbackError
                 let assetProvider = { [weak self] (handle: String) -> Data? in
                     guard let self = self else { return nil }
                     return self.coordinator.queue.sync {
@@ -1376,7 +1384,7 @@ public final class DGPluginManager {
                 DispatchQueue.main.async {
                     guard validity() else { self.respond(.failure(DGPluginError(code: "cancelled", message: "page cancelled")), reply); return }
                     let result = renderer(installationId, nativePage, pluginName, validity, assetProvider, { [weak self] callbackId, value in
-                        self?.dispatchUICallback(installationId: installationId, generation: generation, pageId: pageId, pageToken: pageToken, page: nativePage, callbackId: callbackId, value: value)
+                        self?.dispatchUICallback(installationId: installationId, generation: generation, pageId: pageId, pageToken: pageToken, page: nativePage, callbackId: callbackId, value: value, onError: { error in reportCallbackError?(installationId, pageId, error) })
                     }, closed)
                     self.coordinator.queue.async {
                         execution.pagesPending.remove(pageId)
@@ -1565,7 +1573,7 @@ public final class DGPluginManager {
         reply(value)
     }
 
-    private func dispatchUICallback(installationId: String, generation: UUID, pageId: String, pageToken: UUID, page: DGPluginJSON, callbackId: String, value: DGPluginJSON) {
+    private func dispatchUICallback(installationId: String, generation: UUID, pageId: String, pageToken: UUID, page: DGPluginJSON, callbackId: String, value: DGPluginJSON, onError: @escaping (DGPluginError) -> Void) {
         coordinator.queue.async {
             guard self.current(installationId, generation), let execution = self.executions[installationId], execution.pageTokens[pageId] == pageToken, callbackId.utf8.count <= 64 else { return }
             guard let encoded = try? JSONEncoder().encode(value), encoded.count <= 65000 else { return }
@@ -1577,7 +1585,7 @@ public final class DGPluginManager {
             }
             let types = callbackTypes(page)
             let coalescible = types.count == 1 && types.allSatisfy { ["input", "multiline", "toggle", "slider", "stepper", "select"].contains($0) }
-            let callback = DGPluginPendingUICallback(pageId: pageId, pageToken: pageToken, callbackId: callbackId, value: value, coalescible: coalescible)
+            let callback = DGPluginPendingUICallback(pageId: pageId, pageToken: pageToken, callbackId: callbackId, value: value, coalescible: coalescible, onError: onError)
             if execution.busy || !execution.uiCallbacks.isEmpty {
                 if callback.coalescible, let last = execution.uiCallbacks.last, last.coalescible, last.pageToken == pageToken, last.callbackId == callbackId {
                     execution.uiCallbacks[execution.uiCallbacks.count - 1] = callback
@@ -1606,6 +1614,10 @@ public final class DGPluginManager {
                 execution.busy = false; execution.gestureUntil = 0
                 if case let .failure(error) = result, error.code == "runtime_busy" {
                     execution.uiCallbacks.insert(callback, at: 0)
+                }
+                if case let .failure(error) = result, error.code == "plugin_rejected", error.detail != "cancelled" {
+                    let reportedError = DGPluginError(code: error.detail ?? "plugin_error", message: "the plugin interface reported an error")
+                    DispatchQueue.main.async { callback.onError(reportedError) }
                 }
                 self.refreshDeferredViewModels()
                 self.drainEvents(id: installationId)

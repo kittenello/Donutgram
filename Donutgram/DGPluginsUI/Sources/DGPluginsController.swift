@@ -184,6 +184,13 @@ private final class DGPluginPage {
 
     func bindNativeHost() {
         if case .rendered = self.mode { return }
+        self.manager.nativeCallbackError = { [weak self] installationId, pageId, error in
+            guard let self, let owner = self.controller else { return }
+            let page = self.presentedPages[installationId + ":" + pageId]?.controller
+            let presenter = page.flatMap { $0.isNodeLoaded && $0.view.window != nil ? $0 : nil } ?? owner
+            guard presenter.isNodeLoaded, presenter.view.window != nil else { return }
+            presenter.present(textAlertController(context: self.context, title: self.installation(installationId)?.manifest.name ?? self.tr("Плагин", "Plugin"), text: dgPluginErrorDescription(error, russian: self.russian), actions: [TextAlertAction(type: .defaultAction, title: self.tr("Закрыть", "Close"), action: {})]), in: .window(.root))
+        }
         self.manager.nativeRequest = { [weak self] installationId, method, params, validity, completion in
             guard let self, let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil, validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin management screen is not active"))); return }
             guard method == "ui.toast" else { completion(.failure(DGPluginError(code: "feature_unavailable", message: "this adapter requires an active chat"))); return }

@@ -92,6 +92,14 @@ extension ChatControllerImpl {
         dgBindPluginAccount(context: self.context)
         let manager = DGPluginManager.shared(accountKey: String(self.context.account.id.int64))
         manager.updateEnvironment(locale: self.presentationData.strings.primaryComponent.languageCode, appearance: self.presentationData.theme.overallDarkAppearance ? "dark" : "light")
+        manager.nativeCallbackError = { [weak self, weak manager] installationId, pageId, error in
+            guard let self else { return }
+            let page = self.dgPluginChatState.renderedPages[installationId + ":" + pageId]?.controller
+            let presenter: ViewController = page.flatMap { $0.isNodeLoaded && $0.view.window != nil ? $0 : nil } ?? self
+            guard presenter.isNodeLoaded, presenter.view.window != nil else { return }
+            let name = manager?.installations.first(where: { $0.id == installationId })?.manifest.name ?? self.dgPluginText("Плагин", "Plugin")
+            presenter.present(textAlertController(context: self.context, title: name, text: dgPluginErrorDescription(error, russian: self.dgPluginRussian), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        }
         manager.nativeRequest = { [weak self] installationId, method, params, validity, completion in
             guard let self else { completion(.failure(DGPluginError(code: "cancelled", message: "chat is no longer available"))); return }
             self.dgHandlePluginRequest(installationId: installationId, method: method, params: params, validity: validity, completion: completion)

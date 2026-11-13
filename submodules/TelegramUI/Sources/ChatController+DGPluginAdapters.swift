@@ -21,9 +21,21 @@ private final class DGPluginAdditionalState {
     var picker: DGPluginTextPicker?
     var ownedScopes = Set<String>()
     var scopeResources: [String: () -> Void] = [:]
+    var notifications: [String: DGPluginNotificationStore] = [:]
     var messages: [String: (scope: String, message: EngineMessage, expires: TimeInterval)] = [:]
 
+    func cancelNotifications(scope: String? = nil) {
+        let stores: [DGPluginNotificationStore]
+        if let scope { stores = notifications.removeValue(forKey: scope).map { [$0] } ?? [] }
+        else { stores = Array(notifications.values); notifications.removeAll() }
+        let identifiers = stores.flatMap { $0.cancel() }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
     func releaseScopes() {
+        cancelNotifications()
         let resources = Array(scopeResources.values)
         scopeResources.removeAll()
         for scope in ownedScopes { actions.removeAll(scope: scope) }
@@ -34,6 +46,7 @@ private final class DGPluginAdditionalState {
     }
 
     deinit {
+        cancelNotifications()
         scopeResources.values.forEach { $0() }
         picker?.finish(.failure(DGPluginError(code: "cancelled", message: "chat closed")))
     }
@@ -129,6 +142,7 @@ extension ChatControllerImpl {
             guard let token = manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { [weak self] in
                 guard let self else { return }
                 self.dgAdditionalPluginState.actions.removeAll(scope: scope)
+                self.dgAdditionalPluginState.cancelNotifications(scope: scope)
                 self.dgAdditionalPluginState.files = self.dgAdditionalPluginState.files.filter { $0.value.scope != scope }
                 self.dgAdditionalPluginState.messages = self.dgAdditionalPluginState.messages.filter { $0.value.scope != scope }
                 self.dgAdditionalPluginState.ownedScopes.remove(scope)
@@ -215,43 +229,42 @@ extension ChatControllerImpl {
                 let lifetime = dgPluginChatState.lifetime
                 let chatCurrent = lifetime.snapshot()
                 let notificationCurrent = { chatCurrent() && validity() }
-                var token: UUID?
-                token = manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { [weak lifetime] in
-                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
-                    center.removeDeliveredNotifications(withIdentifiers: [identifier])
-                    if let token { lifetime?.release(token) }
-                })
-                guard let token else { throw DGPluginError(code: "quota_exceeded", message: "notification resource limit reached") }
-                lifetime.own(token) {
-                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
-                    center.removeDeliveredNotifications(withIdentifiers: [identifier])
-                    manager.releaseNativeResource(installationId: installationId, token: token)
-                }
-                guard notificationCurrent() else {
-                    lifetime.release(token)
-                    manager.releaseNativeResource(installationId: installationId, token: token)
-                    completion(.failure(DGPluginError(code: "cancelled", message: "notification context is no longer active")))
-                    return true
-                }
-                center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                    DispatchQueue.main.async {
-                        guard granted, notificationCurrent() else {
-                            lifetime.release(token)
-                            manager.releaseNativeResource(installationId: installationId, token: token)
-                            completion(.failure(DGPluginError(code: "permission_denied", message: "local notifications are not authorized or chat closed")))
-                            return
-                        }
-                        let content = UNMutableNotificationContent(); content.title = pluginName; content.body = text
-                        center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))) { error in
-                            DispatchQueue.main.async {
-                                let current = notificationCurrent()
-                                if error != nil || !current {
-                                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
-                                    center.removeDeliveredNotifications(withIdentifiers: [identifier])
-                                    lifetime.release(token)
-                                    manager.releaseNativeResource(installationId: installationId, token: token)
+                let store: DGPluginNotificationStore
+                if let existing = dgAdditionalPluginState.notifications[scope] { store = existing }
+                else { store = DGPluginNotificationStore(); dgAdditionalPluginState.notifications[scope] = store }
+                let snapshot = store.snapshot()
+                center.getPendingNotificationRequests { pending in
+                    center.getDeliveredNotifications { delivered in
+                        DispatchQueue.main.async {
+                            guard notificationCurrent() else {
+                                completion(.failure(DGPluginError(code: "cancelled", message: "notification context is no longer active")))
+                                return
+                            }
+                            store.reconcile(snapshot: snapshot, pending: Set(pending.map { $0.identifier }), delivered: Set(delivered.map { $0.request.identifier }))
+                            guard store.reserve(identifier) else {
+                                completion(.failure(DGPluginError(code: "quota_exceeded", message: "notification resource limit reached")))
+                                return
+                            }
+                            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                                DispatchQueue.main.async {
+                                    guard granted, notificationCurrent() else {
+                                        store.remove(identifier)
+                                        completion(.failure(DGPluginError(code: "permission_denied", message: "local notifications are not authorized or chat closed")))
+                                        return
+                                    }
+                                    let content = UNMutableNotificationContent(); content.title = pluginName; content.body = text
+                                    center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))) { error in
+                                        DispatchQueue.main.async {
+                                            let scheduled = error == nil && notificationCurrent() && store.scheduled(identifier)
+                                            if !scheduled {
+                                                center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                                                center.removeDeliveredNotifications(withIdentifiers: [identifier])
+                                                store.remove(identifier)
+                                            }
+                                            completion(scheduled ? .success(.null) : .failure(DGPluginError(code: "cancelled", message: "notification was not scheduled")))
+                                        }
+                                    }
                                 }
-                                completion(error == nil && current ? .success(.null) : .failure(DGPluginError(code: "cancelled", message: "notification was not scheduled")))
                             }
                         }
                     }
