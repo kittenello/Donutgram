@@ -86,6 +86,8 @@ private struct DGPluginPendingUICallback {
     let value: DGPluginJSON
     let coalescible: Bool
     let onError: (DGPluginError) -> Void
+    /// When the user acted: a callback's native gesture is counted from here, not from its delivery.
+    let tappedAt: TimeInterval
 }
 
 private struct DGPluginRegisteredTransform {
@@ -1591,6 +1593,7 @@ public final class DGPluginManager {
     }
 
     private func dispatchUICallback(installationId: String, generation: UUID, pageId: String, pageToken: UUID, page: DGPluginJSON, callbackId: String, value: DGPluginJSON, onError: @escaping (DGPluginError) -> Void) {
+        let tappedAt = ProcessInfo.processInfo.systemUptime
         coordinator.queue.async {
             guard self.current(installationId, generation), let execution = self.executions[installationId], execution.pageTokens[pageId] == pageToken, callbackId.utf8.count <= 64 else { return }
             guard let encoded = try? JSONEncoder().encode(value), encoded.count <= 65000 else { return }
@@ -1602,7 +1605,7 @@ public final class DGPluginManager {
             }
             let types = callbackTypes(page)
             let coalescible = types.count == 1 && types.allSatisfy { ["input", "multiline", "toggle", "slider", "stepper", "select"].contains($0) }
-            let callback = DGPluginPendingUICallback(pageId: pageId, pageToken: pageToken, callbackId: callbackId, value: value, coalescible: coalescible, onError: onError)
+            let callback = DGPluginPendingUICallback(pageId: pageId, pageToken: pageToken, callbackId: callbackId, value: value, coalescible: coalescible, onError: onError, tappedAt: tappedAt)
             if execution.busy || !execution.uiCallbacks.isEmpty {
                 if callback.coalescible, let last = execution.uiCallbacks.last, last.coalescible, last.pageToken == pageToken, last.callbackId == callbackId {
                     execution.uiCallbacks[execution.uiCallbacks.count - 1] = callback
@@ -1624,7 +1627,9 @@ public final class DGPluginManager {
         guard execution.pageTokens[callback.pageId] == callback.pageToken else { drainEvents(id: installationId); return }
         execution.busy = true
         execution.commandEpoch = UUID()
-        execution.gestureUntil = ProcessInfo.processInfo.systemUptime + 5
+        // Five seconds from the tap: a callback that waited in the queue behind slow work does not open the
+        // gesture-only methods (draft, selection, file chooser) long after the user acted.
+        execution.gestureUntil = callback.tappedAt + 5
         let payload = DGPluginJSON.object(["id": .string(callback.callbackId), "value": callback.value])
         guard let data = try? JSONEncoder().encode(payload), data.count <= 65536, let json = String(data: data, encoding: .utf8) else { execution.busy = false; execution.gestureUntil = 0; drainEvents(id: installationId); return }
         execution.runtime?.dispatch(kind: "ui", payloadJSON: json) { result in
