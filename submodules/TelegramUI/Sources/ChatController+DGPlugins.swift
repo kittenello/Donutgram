@@ -27,6 +27,8 @@ final class DGPluginChatState {
     var selectedMessages: [String: EngineMessage] = [:]
     var renderedPages: [String: DGPluginChatRenderedPage] = [:]
     var outgoingSendPending = false
+    /// The alert of the last failed page callback. While it is on screen, further failures are not stacked on it.
+    weak var callbackErrorAlert: ViewController?
 }
 
 final class DGPluginChatRenderedPage {
@@ -94,11 +96,15 @@ extension ChatControllerImpl {
         manager.updateEnvironment(locale: self.presentationData.strings.primaryComponent.languageCode, appearance: self.presentationData.theme.overallDarkAppearance ? "dark" : "light")
         manager.nativeCallbackError = { [weak self, weak manager] installationId, pageId, error in
             guard let self else { return }
+            // One alert at a time: a page whose handler fails on every keystroke would stack them.
+            if let shown = self.dgPluginChatState.callbackErrorAlert, shown.isNodeLoaded, shown.view.window != nil { return }
             let page = self.dgPluginChatState.renderedPages[installationId + ":" + pageId]?.controller
             let presenter: ViewController = page.flatMap { $0.isNodeLoaded && $0.view.window != nil ? $0 : nil } ?? self
             guard presenter.isNodeLoaded, presenter.view.window != nil else { return }
             let name = manager?.installations.first(where: { $0.id == installationId })?.manifest.name ?? self.dgPluginText("Плагин", "Plugin")
-            presenter.present(textAlertController(context: self.context, title: name, text: dgPluginErrorDescription(error, russian: self.dgPluginRussian), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            let alert = textAlertController(context: self.context, title: name, text: dgPluginErrorDescription(error, russian: self.dgPluginRussian), actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})])
+            self.dgPluginChatState.callbackErrorAlert = alert
+            presenter.present(alert, in: .window(.root))
         }
         manager.nativeRequest = { [weak self] installationId, method, params, validity, completion in
             guard let self else { completion(.failure(DGPluginError(code: "cancelled", message: "chat is no longer available"))); return }

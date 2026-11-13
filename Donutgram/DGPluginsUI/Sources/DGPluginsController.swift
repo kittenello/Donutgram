@@ -116,6 +116,8 @@ private final class DGPluginPage {
     var renderedImages: [String: UIImage] = [:]
     var renderedAccent: UIColor?
     private var presentedPages: [String: DGPluginPresentedPage] = [:]
+    /// The alert of the last failed page callback. While it is on screen, further failures are not stacked on it.
+    private weak var callbackErrorAlert: ViewController?
     private var pendingRemoval: DGPluginInstallation?
     private let settingsOwner = UUID()
     private var settingsPrepared = false
@@ -186,10 +188,14 @@ private final class DGPluginPage {
         if case .rendered = self.mode { return }
         self.manager.nativeCallbackError = { [weak self] installationId, pageId, error in
             guard let self, let owner = self.controller else { return }
+            // One alert at a time: a page whose handler fails on every keystroke would stack them.
+            if let shown = self.callbackErrorAlert, shown.isNodeLoaded, shown.view.window != nil { return }
             let page = self.presentedPages[installationId + ":" + pageId]?.controller
             let presenter = page.flatMap { $0.isNodeLoaded && $0.view.window != nil ? $0 : nil } ?? owner
             guard presenter.isNodeLoaded, presenter.view.window != nil else { return }
-            presenter.present(textAlertController(context: self.context, title: self.installation(installationId)?.manifest.name ?? self.tr("Плагин", "Plugin"), text: dgPluginErrorDescription(error, russian: self.russian), actions: [TextAlertAction(type: .defaultAction, title: self.tr("Закрыть", "Close"), action: {})]), in: .window(.root))
+            let alert = textAlertController(context: self.context, title: self.installation(installationId)?.manifest.name ?? self.tr("Плагин", "Plugin"), text: dgPluginErrorDescription(error, russian: self.russian), actions: [TextAlertAction(type: .defaultAction, title: self.tr("Закрыть", "Close"), action: {})])
+            self.callbackErrorAlert = alert
+            presenter.present(alert, in: .window(.root))
         }
         self.manager.nativeRequest = { [weak self] installationId, method, params, validity, completion in
             guard let self, let controller = self.controller, controller.isNodeLoaded, controller.view.window != nil, validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "plugin management screen is not active"))); return }
