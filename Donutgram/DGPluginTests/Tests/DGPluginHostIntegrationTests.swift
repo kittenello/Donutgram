@@ -818,6 +818,24 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.state, .running)
     }
 
+    func testLaterActivationFailureKeepsUpdatedVersion() throws {
+        let pluginId = "dev.example.confirmed-" + UUID().uuidString.lowercased()
+        let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "persistent state")
+        let v1 = try self.package(id: pluginId, permissions: [storage], body: "")
+        let id = try self.install(v1, permissions: [storage])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let v2 = try self.package(id: pluginId, version: "2.0.0", permissions: [storage], body: "const runs=(await api.storage.get('runs'))||0;await api.storage.set('runs',runs+1);if(runs>=1)throw Error('later activation failed');")
+        XCTAssertEqual(try self.result { self.manager.install(v2, completion: $0) }.get(), id)
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        try self.result { self.manager.setEnabled(id: id, enabled: false, completion: $0) }.get()
+        XCTAssertThrowsError(try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get())
+        let kept = try XCTUnwrap(self.manager.installations.first(where: { $0.id == id }))
+        XCTAssertEqual(kept.manifest.version, "2.0.0")
+        XCTAssertEqual(kept.digest, v2.digest)
+        XCTAssertFalse(kept.enabled)
+        XCTAssertTrue(self.manager.canRollback(id: id))
+    }
+
     func testRollbackCannotResurrectRevokedGrants() throws {
         let pluginId = "dev.example.revoke-" + UUID().uuidString.lowercased()
         let storage = DGPluginPermission(capability: "storage.local", scope: "pluginAccount", reason: "persistent state")

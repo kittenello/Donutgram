@@ -24,6 +24,9 @@ private struct DGPluginStoredRecord: Codable {
     var removing = false
     var accounts: [String: DGPluginAccountRecord] = [:]
     var previous: DGPluginPreviousVersion?
+    /// True from an update until the updated version first activates; only then does a failed activation roll back.
+    /// Optional so that state files written before it existed still decode.
+    var updateUnconfirmed: Bool?
 }
 
 private struct DGPluginPreviousVersion: Codable {
@@ -884,6 +887,7 @@ public final class DGPluginManager {
                     self.coordinator.stopAll(id: existing.id)
                     record = existing
                     record.previous = DGPluginPreviousVersion(manifest: existing.manifest, digest: existing.digest, publisherIdentity: existing.publisherIdentity, trust: existing.trust, fileName: existing.fileName, accounts: existing.accounts)
+                    record.updateUnconfirmed = true
                     let allowed = Set((package.manifest.permissions + package.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
                     for key in record.accounts.keys {
                         record.accounts[key]?.enabled = false
@@ -1062,7 +1066,7 @@ public final class DGPluginManager {
         let current = coordinator.state.installations[index]
         guard previous.publisherIdentity == current.publisherIdentity, previous.manifest.profile == current.manifest.profile, !(coordinator.state.revokedPublishers ?? []).contains(previous.publisherIdentity) else { throw DGPluginError(code: "permission_denied", message: "previous version is not eligible for rollback") }
         var restored = current
-        restored.manifest = previous.manifest; restored.digest = previous.digest; restored.publisherIdentity = previous.publisherIdentity; restored.trust = previous.trust; restored.fileName = previous.fileName; restored.previous = nil
+        restored.manifest = previous.manifest; restored.digest = previous.digest; restored.publisherIdentity = previous.publisherIdentity; restored.trust = previous.trust; restored.fileName = previous.fileName; restored.previous = nil; restored.updateUnconfirmed = nil
         restored.accounts = previous.accounts
         for key in restored.accounts.keys {
             let retained = Set((current.accounts[key]?.grants ?? []).map(DGPluginPolicy.permissionKey))
@@ -1111,7 +1115,7 @@ public final class DGPluginManager {
                 try action(record, &account)
                 if stop { self.stop(id: id) }
                 self.coordinator.state.installations[index].accounts[self.accountKey] = account
-                if clearPrevious { self.coordinator.state.installations[index].previous = nil }
+                if clearPrevious { self.coordinator.state.installations[index].previous = nil; self.coordinator.state.installations[index].updateUnconfirmed = nil }
                 do { try self.coordinator.persist() } catch {
                     if !stop { self.coordinator.state.installations[index] = record }
                     self.coordinator.publishAll()
@@ -1243,6 +1247,11 @@ public final class DGPluginManager {
                         self.emitNativeEvent(name: "plugin.activated", payload: .object([:]), installationId: id)
                         self.emitNativeEvent(name: "account.contextChanged", payload: .object(["active": .bool(true)]), installationId: id)
                         self.emitNativeEvent(name: "app.foreground", payload: .object(["active": .bool(true)]), installationId: id)
+                        // The updated version has started once: a later failed activation no longer rolls it back.
+                        if !execution.settingsOnly, let index = self.coordinator.state.installations.firstIndex(where: { $0.id == id }), self.coordinator.state.installations[index].updateUnconfirmed == true {
+                            self.coordinator.state.installations[index].updateUnconfirmed = nil
+                            try? self.coordinator.persist()
+                        }
                         self.coordinator.publishAll()
                         // Ten seconds cover activate() and the events delivered right after it; a crash later is not
                         // taken for this plugin's, so its marker goes.
@@ -1270,7 +1279,7 @@ public final class DGPluginManager {
         if executions[id]?.settingsOnly == true { stop(id: id); coordinator.publishAll(); return }
         let activationFailed = executions[id]?.state == .starting
         stop(id: id)
-        if activationFailed, let record = coordinator.state.installations.first(where: { $0.id == id }), record.previous != nil { try? restorePrevious(id: id) }
+        if activationFailed, let record = coordinator.state.installations.first(where: { $0.id == id }), record.previous != nil, record.updateUnconfirmed == true { try? restorePrevious(id: id) }
         if let index = coordinator.state.installations.firstIndex(where: { $0.id == id }) {
             var account = self.account(coordinator.state.installations[index])
             account.failures += 1; account.lastError = message; account.enabled = false

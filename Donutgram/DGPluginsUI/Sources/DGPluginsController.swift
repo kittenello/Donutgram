@@ -466,7 +466,7 @@ private final class DGPluginPage {
             }
         } else if key.hasPrefix("rollback:") {
             let id = String(key.dropFirst(9))
-            self.confirm(title: self.tr("Вернуться к предыдущей версии?", "Restore previous version?"), text: self.tr("Плагин будет остановлен. Проверьте разрешения перед повторным включением.", "The plugin will stop. Review permissions before enabling it again."), destructive: false) { [weak self] in
+            self.confirm(title: self.tr("Вернуться к предыдущей версии?", "Restore previous version?"), text: self.tr("Плагин будет остановлен, а его настройки и данные вернутся к состоянию на момент обновления. Проверьте разрешения перед повторным включением.", "The plugin will stop, and its settings and data will return to what they were at the update. Review permissions before enabling it again."), destructive: false) { [weak self] in
                 self?.manager.rollback(id: id) { [weak self] result in self?.complete(result) }
             }
         } else if key.hasPrefix("publisher:") {
