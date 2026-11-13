@@ -25,7 +25,7 @@ static void check(bool value, const char *message) {
     if (!value) { std::fprintf(stderr, "FAIL: %s\n", message); std::exit(1); }
 }
 
-static void request(void *opaque, const char *json) {
+static void request(void *opaque, int64_t, const char *json) {
     auto *state = static_cast<Requests *>(opaque);
     const char *id = std::strstr(json, "\"id\":");
     check(id != nullptr, "request id");

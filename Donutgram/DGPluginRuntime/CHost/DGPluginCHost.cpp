@@ -229,7 +229,7 @@ static JSValue requestNative(JSContext *ctx, JSValueConst, int argc, JSValueCons
         JS_FreeCString(ctx, json);
         return JS_ThrowRangeError(ctx, "request_limit");
     }
-    h->request(h->opaque, json);
+    h->request(h->opaque, static_cast<int64_t>(number), json);
     JS_FreeCString(ctx, json);
     return JS_UNDEFINED;
 }

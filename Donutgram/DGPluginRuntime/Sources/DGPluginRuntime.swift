@@ -19,11 +19,10 @@ private final class DGPluginRequestContext: @unchecked Sendable {
         self.request = request
     }
 
-    func receive(_ json: String) {
-        guard let data = json.data(using: .utf8),
-              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let id = value["id"] as? NSNumber else { return }
-        self.request(json) { [weak self] response in self?.reply?(id.int64Value, response) }
+    /// `id` is the one the C host validated and now waits on, so every request is forwarded and gets an answer,
+    /// including one the host's JSON decoder later refuses.
+    func receive(id: Int64, json: String) {
+        self.request(json) { [weak self] response in self?.reply?(id, response) }
     }
 }
 
@@ -80,9 +79,9 @@ public final class DGPluginRuntime {
         self.thread = DGPluginRuntimeThread(name: "donutgram.plugin.runtime")
         let callbackContext = self.context
         let created: OpaquePointer? = self.thread.sync {
-            dgjs_create({ opaque, json in
+            dgjs_create({ opaque, id, json in
                 guard let opaque, let json else { return }
-                Unmanaged<DGPluginRequestContext>.fromOpaque(opaque).takeUnretainedValue().receive(String(cString: json))
+                Unmanaged<DGPluginRequestContext>.fromOpaque(opaque).takeUnretainedValue().receive(id: id, json: String(cString: json))
             }, Unmanaged.passUnretained(callbackContext).toOpaque())
         }
         guard let created else { throw DGPluginRuntimeError("runtime_unavailable") }

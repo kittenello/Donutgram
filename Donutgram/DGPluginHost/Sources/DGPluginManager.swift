@@ -1326,7 +1326,10 @@ public final class DGPluginManager {
 
     private func handle(_ request: String, installationId: String, generation: UUID, reply: @escaping (String) -> Void) {
         do {
-            guard request.utf8.count <= 262144, let data = request.data(using: .utf8), case let .object(envelope) = try JSONDecoder().decode(DGPluginJSON.self, from: data), let method = envelope["method"]?.dgString, let rule = DGPluginPolicy.methods[method] else { throw DGPluginError(code: "feature_unavailable", message: "unknown plugin method") }
+            guard request.utf8.count <= 262144, let data = request.data(using: .utf8) else { throw DGPluginError(code: "feature_unavailable", message: "unknown plugin method") }
+            let decoded: DGPluginJSON
+            do { decoded = try JSONDecoder().decode(DGPluginJSON.self, from: data) } catch { throw DGPluginError(code: "invalid_argument", message: "plugin request is not valid JSON text; a string cut inside an emoji is one cause") }
+            guard case let .object(envelope) = decoded, let method = envelope["method"]?.dgString, let rule = DGPluginPolicy.methods[method] else { throw DGPluginError(code: "feature_unavailable", message: "unknown plugin method") }
             let params = envelope["params"] ?? .object([:])
             guard case .object = params else { throw DGPluginError(code: "invalid_argument", message: "method parameters must be an object") }
             guard current(installationId, generation), let execution = executions[installationId], let index = coordinator.state.installations.firstIndex(where: { $0.id == installationId }) else { throw DGPluginError(code: "plugin_disabled", message: "plugin execution is no longer current") }

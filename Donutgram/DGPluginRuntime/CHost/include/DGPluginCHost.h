@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 typedef struct DGJSHost DGJSHost;
-typedef void (*DGJSRequest)(void *, const char *);
+typedef void (*DGJSRequest)(void *, int64_t request_id, const char *json);
 DGJSHost *dgjs_create(DGJSRequest request, void *opaque);
 int dgjs_add_file(DGJSHost *, const char *, const uint8_t *, size_t);
 int dgjs_start(DGJSHost *, const char *entry, const char *bootstrap, const char *environment);

@@ -215,6 +215,16 @@ private enum DGPluginReviewRegressions {
         try result { m.remove(id:id, completion:$0) }
         log("render after close passed")
     }
+    static func undecodableRequestProbe() throws {
+        let m = manager("undecodable-request")
+        m.nativeRequest = { _, _, _, _, completion in completion(.success(.null)) }
+        // Half of an emoji: JSON.stringify writes it as a lone surrogate escape, which the host's JSON decoder may refuse.
+        // Either way the request is answered, so the command ends instead of waiting out the native-wait limit.
+        let id = try install(m, package("await api.commands.register({id:'cut',title:'cut',placement:'settings',run:async()=>{try{await api.ui.toast(String.fromCharCode(0xd83d))}catch(e){}}});", permissions:[ui]))
+        try result { m.runCommand(installationId:id, commandId:"cut", completion:$0) }
+        try result { m.remove(id:id, completion:$0) }
+        log("undecodable request passed")
+    }
     static func defaultsProbe() throws {
         let schema: DGPluginJSON = .object(["type": .string("object"), "properties": .object(["label": .object(["type": .string("string"), "title": .string("label"), "maxLength": .number(1), "default": .string("😀")]), "enabled": .object(["type": .string("boolean"), "title": .string("enabled"), "default": .bool(true)])])])
         let p = try package("",permissions:[],schema:schema)
@@ -277,6 +287,7 @@ func runPluginReviewRegressionTests() throws {
     try DGPluginReviewRegressions.pageLifetimeProbe()
     try DGPluginReviewRegressions.callbackOverflowProbe()
     try DGPluginReviewRegressions.renderAfterCloseProbe()
+    try DGPluginReviewRegressions.undecodableRequestProbe()
     try DGPluginReviewRegressions.defaultsProbe()
     try DGPluginReviewRegressions.environmentProbe()
     try DGPluginReviewRegressions.packageCacheProbe()

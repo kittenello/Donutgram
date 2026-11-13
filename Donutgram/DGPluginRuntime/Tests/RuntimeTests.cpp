@@ -11,7 +11,7 @@
 #include <cstring>
 
 struct Requests { std::vector<long long> ids; unsigned count = 0; };
-static void request(void *opaque, const char *json) {
+static void request(void *opaque, int64_t, const char *json) {
     auto *requests = static_cast<Requests *>(opaque);
     requests->count++;
     const char *id = strstr(json, "\"id\":");
