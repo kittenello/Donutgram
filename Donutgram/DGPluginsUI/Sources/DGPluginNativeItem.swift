@@ -244,7 +244,11 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         guard let item, case let .multiline(_, _, limit) = item.content else { return false }
         let current = textView.text as NSString
-        return range.location >= 0 && range.length >= 0 && range.location <= current.length && range.length <= current.length - range.location && current.length - range.length + text.utf16.count <= limit
+        guard range.location >= 0 && range.length >= 0 && range.location <= current.length && range.length <= current.length - range.location else { return false }
+        // A setting passes its schema's maxLength, which is validated in Unicode scalars; a page drawn by a plugin passes
+        // 4096, validated in UTF-16 units.
+        let updated = current.replacingCharacters(in: range, with: text)
+        return updated.unicodeScalars.count <= limit && updated.utf16.count <= 4096
     }
 
     func textViewDidChange(_ textView: UITextView) { self.item?.textUpdated(textView.text) }
