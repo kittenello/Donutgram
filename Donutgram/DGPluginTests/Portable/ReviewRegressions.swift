@@ -164,6 +164,32 @@ private enum DGPluginReviewRegressions {
         try result { m.remove(id:id, completion:$0) }
         log("page lifetime passed")
     }
+    static func callbackOverflowProbe() throws {
+        let m = manager("callback-overflow")
+        var invoke: ((String, DGPluginJSON) -> Void)?
+        var callbackId = ""
+        var reply: ((Result<DGPluginJSON, DGPluginError>) -> Void)?
+        let entered = DispatchSemaphore(value: 0)
+        m.nativeRender = { _, page, _, _, _, callback, _ in
+            invoke = callback
+            if case let .array(nodes)? = page.objectValue?["nodes"] { callbackId = nodes[0].objectValue?["callbackId"]?.stringValue ?? "" }
+            return .success({})
+        }
+        m.nativeRequest = { _, _, _, _, completion in reply = completion; entered.signal() }
+        let id = try install(m, package("let taps=0;const cb=api.ui.callback(async()=>{if(++taps===1)await api.ui.toast('wait')});await api.commands.register({id:'show',title:'show',placement:'settings',run:()=>api.ui.render({id:'page',title:'page',nodes:[{id:'button',type:'button',title:'button',callbackId:cb.id}]})});await api.commands.register({id:'verify',title:'verify',placement:'settings',run:()=>{if(taps!==65)throw Error(String(taps))}});", permissions:[ui]))
+        try result { m.runCommand(installationId:id, commandId:"show", completion:$0) }
+        invoke?(callbackId, .null)
+        guard entered.wait(timeout:.now() + 4) == .success else { throw DGPluginError(code:"regression",message:"first tap not delivered") }
+        // 80 taps while the first waits: 64 queue, the rest are dropped, and the plugin stays on.
+        for _ in 0..<80 { invoke?(callbackId, .null) }
+        Thread.sleep(forTimeInterval:0.1)
+        reply?(.success(.null))
+        Thread.sleep(forTimeInterval:1.0)
+        guard m.installations.first(where: { $0.id == id })?.state == .running else { throw DGPluginError(code:"regression",message:"taps on a busy page turned the plugin off") }
+        try result { m.runCommand(installationId:id, commandId:"verify", completion:$0) }
+        try result { m.remove(id:id, completion:$0) }
+        log("callback overflow passed")
+    }
     static func defaultsProbe() throws {
         let schema: DGPluginJSON = .object(["type": .string("object"), "properties": .object(["label": .object(["type": .string("string"), "title": .string("label"), "maxLength": .number(1), "default": .string("😀")]), "enabled": .object(["type": .string("boolean"), "title": .string("enabled"), "default": .bool(true)])])])
         let p = try package("",permissions:[],schema:schema)
@@ -224,6 +250,7 @@ func runPluginReviewRegressionTests() throws {
     try DGPluginReviewRegressions.transformInvalidationDrainProbe()
     try DGPluginReviewRegressions.sharedCallbackProbe()
     try DGPluginReviewRegressions.pageLifetimeProbe()
+    try DGPluginReviewRegressions.callbackOverflowProbe()
     try DGPluginReviewRegressions.defaultsProbe()
     try DGPluginReviewRegressions.environmentProbe()
     try DGPluginReviewRegressions.packageCacheProbe()

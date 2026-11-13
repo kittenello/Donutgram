@@ -1607,7 +1607,9 @@ public final class DGPluginManager {
                 if callback.coalescible, let last = execution.uiCallbacks.last, last.coalescible, last.pageToken == pageToken, last.callbackId == callbackId {
                     execution.uiCallbacks[execution.uiCallbacks.count - 1] = callback
                 } else {
-                    guard execution.uiCallbacks.count < 64 else { self.fail(id: installationId, message: "plugin interface callback queue exceeded its limit"); return }
+                    // A full queue drops the new callback, as a busy plugin always did. It fills from the user's taps
+                    // while a handler waits (on the network, say), which is no reason to turn the plugin off.
+                    guard execution.uiCallbacks.count < 64 else { return }
                     execution.uiCallbacks.append(callback)
                 }
                 self.drainEvents(id: installationId)
