@@ -852,6 +852,9 @@ private let dgPluginDocumentIconQueue = Queue(name: "donutgram.plugin.document-i
 public func dgPluginDocumentIcon(context: AccountContext, file: TelegramMediaFile) -> Signal<UIImage?, NoError> {
     let name = file.fileName ?? ""
     guard name.lowercased().hasSuffix(".donut.js") || name.lowercased().hasSuffix(".dgplugin") else { return .single(nil) }
+    // Keyed by the resource, so a known file is neither read nor parsed again; a hit still arrives asynchronously.
+    let key = EngineMediaResource.Id(file.resource.id).stringRepresentation as NSString
+    if let image = dgPluginDocumentIconCache.object(forKey: key) { return Signal<UIImage?, NoError>.single(image) |> deliverOn(dgPluginDocumentIconQueue) }
     return context.engine.resources.data(resource: EngineMediaResource(file.resource))
     |> filter { $0.isComplete }
     |> take(1)
@@ -862,12 +865,10 @@ public func dgPluginDocumentIcon(context: AccountContext, file: TelegramMediaFil
             defer { try? handle.close() }
             let bytes = try handle.read(upToCount: 8 * 1024 * 1024 + 1) ?? Data()
             guard bytes.count <= 8 * 1024 * 1024 else { return nil }
-            let digest = DGPluginInstaller.digest(bytes)
-            if let image = dgPluginDocumentIconCache.object(forKey: digest as NSString) { return image }
             let package = try DGPluginInstaller.preview(data: bytes, fileName: name)
             let image = dgPluginIcon(data: package.iconData, id: package.manifest.id, name: package.manifest.name, size: 44)
             let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 44 * 44 * 4
-            dgPluginDocumentIconCache.setObject(image, forKey: digest as NSString, cost: cost)
+            dgPluginDocumentIconCache.setObject(image, forKey: key, cost: cost)
             return image
         } catch { return nil }
     }
