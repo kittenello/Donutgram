@@ -1,6 +1,10 @@
 import Foundation
 
 public final class DGPluginNotificationStore {
+    public let identifierPrefix = "donutgram.plugin." + UUID().uuidString.lowercased() + "."
+
+    public func owns(_ identifier: String) -> Bool { identifier.hasPrefix(identifierPrefix) }
+
     private enum State { case submitting, pending, delivered }
     private let lock = NSLock()
     private var active = true

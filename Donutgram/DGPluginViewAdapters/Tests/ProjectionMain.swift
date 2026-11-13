@@ -33,7 +33,7 @@ struct DGPluginViewAdapterChecks {
     static func notificationChecks() throws {
         let store = DGPluginNotificationStore(limit: 3)
         for index in 0..<1000 {
-            let identifier = "notification-" + String(index)
+            let identifier = store.identifierPrefix + String(index)
             let snapshot = store.snapshot()
             store.reconcile(snapshot: snapshot, pending: [], delivered: snapshot)
             try require(store.reserve(identifier), "successful notifications exhausted the resource limit")
@@ -41,7 +41,15 @@ struct DGPluginViewAdapterChecks {
             try require(store.snapshot().count <= 3, "notification memory grew beyond its bound")
         }
         let cancelled = store.cancel()
-        try require(Set(cancelled) == ["notification-997", "notification-998", "notification-999"], "scope stop lost retained notifications or tried to remove forgotten delivered ones")
+        try require(Set(cancelled) == Set((997..<1000).map { store.identifierPrefix + String($0) }), "scope stop lost retained notifications")
+        let replacement = DGPluginNotificationStore(limit: 3)
+        let delivered = (0..<1000).map { store.identifierPrefix + String($0) }
+        let foreign = [replacement.identifierPrefix + "new", "telegram.native", "donutgram.plugin.unrelated"]
+        let centerIdentifiers = delivered + foreign
+        let removed = centerIdentifiers.filter { store.owns($0) }
+        try require(removed == delivered, "scope stop could not find forgotten delivered notifications")
+        try require(centerIdentifiers.filter { !store.owns($0) } == foreign, "late cancellation removed another scope or native notification")
+        try require(!store.owns(String(store.identifierPrefix.dropLast())), "scope identifier boundary was not enforced")
         try require(!store.reserve("after-close"), "closed scope admitted a notification")
         try require(store.cancel().isEmpty, "scope stop cancelled notifications twice")
         let pending = DGPluginNotificationStore(limit: 2)

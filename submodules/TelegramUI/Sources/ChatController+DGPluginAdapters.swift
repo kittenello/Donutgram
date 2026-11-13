@@ -32,6 +32,13 @@ private final class DGPluginAdditionalState {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        guard !stores.isEmpty else { return }
+        center.getPendingNotificationRequests { pending in
+            center.removePendingNotificationRequests(withIdentifiers: pending.map { $0.identifier }.filter { identifier in stores.contains { $0.owns(identifier) } })
+            center.getDeliveredNotifications { delivered in
+                center.removeDeliveredNotifications(withIdentifiers: delivered.map { $0.request.identifier }.filter { identifier in stores.contains { $0.owns(identifier) } })
+            }
+        }
     }
 
     func releaseScopes() {
@@ -225,13 +232,13 @@ extension ChatControllerImpl {
             case "notifications.local":
                 guard Set(arguments.keys) == ["text"], let text = arguments["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { throw DGPluginError(code: "invalid_argument", message: "invalid local notification text") }
                 let center = UNUserNotificationCenter.current()
-                let identifier = "donutgram.plugin." + UUID().uuidString.lowercased()
                 let lifetime = dgPluginChatState.lifetime
                 let chatCurrent = lifetime.snapshot()
                 let notificationCurrent = { chatCurrent() && validity() }
                 let store: DGPluginNotificationStore
                 if let existing = dgAdditionalPluginState.notifications[scope] { store = existing }
                 else { store = DGPluginNotificationStore(); dgAdditionalPluginState.notifications[scope] = store }
+                let identifier = store.identifierPrefix + UUID().uuidString.lowercased()
                 let snapshot = store.snapshot()
                 center.getPendingNotificationRequests { pending in
                     center.getDeliveredNotifications { delivered in
