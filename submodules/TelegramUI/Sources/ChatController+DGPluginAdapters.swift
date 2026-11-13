@@ -245,6 +245,8 @@ extension ChatControllerImpl {
                 if let existing = dgAdditionalPluginState.notifications[scope] { store = existing }
                 else { store = DGPluginNotificationStore(); dgAdditionalPluginState.notifications[scope] = store }
                 let identifier = store.identifierPrefix + UUID().uuidString.lowercased()
+                // The notice title says it is a plugin's, so a plugin named «Telegram» cannot pass for Telegram.
+                let title = dgPluginNoticeTitle(pluginName: manager.installations.first(where: { $0.id == installationId })?.manifest.name, russian: dgPluginRussian)
                 let snapshot = store.snapshot()
                 center.getPendingNotificationRequests { pending in
                     center.getDeliveredNotifications { delivered in
@@ -265,7 +267,7 @@ extension ChatControllerImpl {
                                         completion(.failure(DGPluginError(code: "permission_denied", message: "local notifications are not authorized or chat closed")))
                                         return
                                     }
-                                    let content = UNMutableNotificationContent(); content.title = pluginName; content.body = text
+                                    let content = UNMutableNotificationContent(); content.title = title; content.body = text
                                     center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))) { error in
                                         DispatchQueue.main.async {
                                             let scheduled = error == nil && notificationCurrent() && store.scheduled(identifier)

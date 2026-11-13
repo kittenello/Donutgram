@@ -1,7 +1,11 @@
 import Foundation
 
 public final class DGPluginNotificationStore {
-    public let identifierPrefix = "donutgram.plugin." + UUID().uuidString.lowercased() + "."
+    public static let identifierNamespace = "donutgram.plugin."
+    public let identifierPrefix = DGPluginNotificationStore.identifierNamespace + UUID().uuidString.lowercased() + "."
+
+    /// True for a notification some plugin scheduled, whichever store owns it.
+    public static func isPluginNotification(_ identifier: String) -> Bool { identifier.hasPrefix(identifierNamespace) }
 
     public func owns(_ identifier: String) -> Bool { identifier.hasPrefix(identifierPrefix) }
 
