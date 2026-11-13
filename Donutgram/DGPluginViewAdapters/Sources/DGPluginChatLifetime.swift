@@ -7,10 +7,11 @@ public final class DGPluginChatLifetime {
 
     public init() {}
 
+    /// Opening a chat that is already open changes nothing. A swipe back that the user cancels ends with
+    /// viewDidAppear alone, and it must not cancel what plugins are doing in the chat.
     public func open() {
-        self.close()
         self.lock.lock()
-        self.generation = UUID()
+        if self.generation == nil { self.generation = UUID() }
         self.lock.unlock()
     }
 

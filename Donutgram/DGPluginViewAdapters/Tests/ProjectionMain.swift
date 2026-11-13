@@ -84,6 +84,13 @@ struct DGPluginViewAdapterChecks {
         try require(!firstVisit(), "closed chat kept a pending operation")
         lifetime.open()
         try require(!firstVisit() && lifetime.snapshot()(), "reopened chat revived a stale operation")
+        let secondVisit = lifetime.snapshot()
+        let pendingAcrossReopen = UUID()
+        var reopenCancelled = false
+        lifetime.own(pendingAcrossReopen) { reopenCancelled = true }
+        lifetime.open()
+        try require(secondVisit() && !reopenCancelled, "opening an open chat (a cancelled swipe back) cancelled its operations")
+        lifetime.release(pendingAcrossReopen)
         var cancelledResources = 0
         let finishedResource = UUID()
         lifetime.own(finishedResource) { cancelledResources += 100 }

@@ -8565,13 +8565,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        // Not in viewWillDisappear: that runs when a swipe back begins, also one the user then cancels.
+        self.dgPluginChatClosing()
         self.dgPluginChatClosed()
         self.forwardSideListAppearance(.didDisappear, animated: animated)
     }
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        self.dgPluginChatClosing()
         self.forwardSideListAppearance(.willDisappear, animated: animated)
 
         self.walletTransferAnimationsVisible = false
