@@ -163,7 +163,9 @@ extension ChatControllerImpl {
     }
 
     func dgPluginSafeComposer() -> Bool {
+        // A secret chat's draft and selection stay closed to plugins, as its messages are in `dgPluginSafeMessage`.
         guard self.isNodeLoaded, self.view.window != nil, self.presentationInterfaceState.interfaceState.editMessage == nil,
+              self.chatLocation.peerId?.namespace != Namespaces.Peer.SecretChat,
               let peer = self.presentationInterfaceState.renderedPeer?.chatMainPeer, !EnginePeer(peer).isService else { return false }
         return true
     }
