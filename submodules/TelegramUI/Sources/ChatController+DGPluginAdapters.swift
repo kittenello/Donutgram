@@ -138,6 +138,12 @@ extension ChatControllerImpl {
         return text.substring(with: NSRange(location: range.lowerBound, length: range.count))
     }
 
+    /// The reply to the open thread's root that files a message into it, as `transformEnqueueMessages` adds it.
+    private func dgPluginThreadReply() -> EngineMessageReplySubject? {
+        guard case let .replyThread(replyThreadMessage) = chatLocation, let effectiveMessageId = replyThreadMessage.effectiveMessageId else { return nil }
+        return EngineMessageReplySubject(messageId: effectiveMessageId, quote: nil, innerSubject: nil)
+    }
+
     func dgHandleAdditionalPluginRequest(installationId: String, method: String, params: DGPluginJSON, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void) -> Bool {
         let supported: Set<String> = ["messages.read", "messages.send", "messages.edit", "messages.delete", "chats.metadata", "peers.read", "navigation.open", "notifications.local", "files.pick", "files.read", "messages.prepare", "messages.sendInteractive", "messages.compose", "translation.request"]
         guard supported.contains(method) else { return false }
@@ -318,6 +324,7 @@ extension ChatControllerImpl {
         guard dgPluginSafeComposer(), let peerId = chatLocation.peerId else { throw DGPluginError(code: "scope_denied", message: "an active chat is required") }
         let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
         let threadId = chatLocation.threadId
+        let threadReply = dgPluginThreadReply()
         let lifetime = dgPluginChatState.lifetime
         let chatCurrent = lifetime.snapshot()
         let sendCurrent = { chatCurrent() && validity() }
@@ -365,7 +372,7 @@ extension ChatControllerImpl {
         lifetime.own(token) { finish(.failure(DGPluginError(code: "cancelled", message: "chat closed"))) }
         guard sendCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "message action is no longer current"))); return }
         if method == "messages.send", let text {
-            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: text, sendAsPeerId: presentationInterfaceState.currentSendAsPeerId, isCurrent: sendCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, threadReply: threadReply, text: text, sendAsPeerId: presentationInterfaceState.currentSendAsPeerId, isCurrent: sendCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                 finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "message was not queued")))
             }))
         } else if let messageId {
@@ -409,6 +416,7 @@ extension ChatControllerImpl {
         let text = try store.preview(handle: handle, scope: scope, recipient: recipient)
         let draft = presentationInterfaceState.interfaceState.effectiveInputState
         let threadId = chatLocation.threadId
+        let threadReply = dgPluginThreadReply()
         // The identity the user confirms is the one the message is sent with: captured now, not re-read later.
         let sendAsPeerId = presentationInterfaceState.currentSendAsPeerId
         let identity = sendAsPeerId.flatMap { id in id == context.account.peerId ? nil : presentationInterfaceState.sendAsPeers?.first(where: { $0.peer.id == id })?.peer.compactDisplayTitle }
@@ -432,7 +440,7 @@ extension ChatControllerImpl {
                         guard applied else { throw DGPluginError(code: "conflict", message: "draft was not changed because the native confirmation became stale") }
                         finish(.success(.object(["status": .string("draftPrepared")])))
                     } else {
-                        resources.add((self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, sendAsPeerId: sendAsPeerId, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+                        resources.add((self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, threadReply: threadReply, text: approvedText, sendAsPeerId: sendAsPeerId, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                             finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "ordinary unpaid message was not queued")))
                         }))
                     }
