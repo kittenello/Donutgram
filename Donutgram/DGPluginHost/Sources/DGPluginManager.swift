@@ -384,6 +384,7 @@ public final class DGPluginManager {
     private var snapshotCommands: [DGPluginCommandDescriptor] = []
     private var snapshotIcons: [String: Data] = [:]
     private var snapshotEnabled = true
+    private var snapshotPowerSaving = false
     private var snapshotRollbackIds = Set<String>()
     private var snapshotPersistenceError: String?
     private var snapshotTransformSlots = Set<String>()
@@ -560,6 +561,8 @@ public final class DGPluginManager {
     public var installations: [DGPluginInstallation] { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotInstallations }
     public var commands: [DGPluginCommandDescriptor] { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotCommands }
     public var globallyEnabled: Bool { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotEnabled }
+    /// True while power saving keeps every plugin stopped; they start again when it turns off.
+    public var pausedByPowerSaving: Bool { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotPowerSaving }
     public func iconData(id: String) -> Data? { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotIcons[id] }
     public func canRollback(id: String) -> Bool { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotRollbackIds.contains(id) }
     public var persistenceError: String? { snapshotLock.lock(); defer { snapshotLock.unlock() }; return snapshotPersistenceError }
@@ -856,7 +859,7 @@ public final class DGPluginManager {
         snapshotLock.lock()
         snapshotTransformSlots = transformSlots; snapshotViewRevision = viewModelRevision
         snapshotIntercepts = intercepts; snapshotPublishers = publishers; snapshotDiagnostics = diagnostics
-        snapshotInstallations = values; snapshotCommands = commands; snapshotIcons = icons; snapshotEnabled = coordinator.state.globallyEnabled
+        snapshotInstallations = values; snapshotCommands = commands; snapshotIcons = icons; snapshotEnabled = coordinator.state.globallyEnabled; snapshotPowerSaving = coordinator.powerSaving
         snapshotRollbackIds = Set(coordinator.state.installations.filter { $0.previous != nil && !$0.removing }.map { $0.id })
         snapshotPersistenceError = coordinator.persistenceError ?? coordinator.deferredSaveError
         let callbacks = Array(observers.values)

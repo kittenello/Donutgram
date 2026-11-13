@@ -68,6 +68,7 @@ private final class DGPluginInputFixture {
 private final class DGPluginListFixtureManager {
     var installations: [DGPluginInstallation] = []
     var globallyEnabled = true
+    var pausedByPowerSaving = false
     var persistenceError: String?
 }
 private func dgPluginStoredReason(_ text: String, russian: Bool) -> String { return text }

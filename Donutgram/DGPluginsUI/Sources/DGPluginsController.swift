@@ -255,6 +255,7 @@ private final class DGPluginPage {
         }
         switch self.mode {
         case .list:
+            if self.manager.pausedByPowerSaving { add(0, .text, "", self.tr("Плагины приостановлены: включено энергосбережение. Они запустятся, когда оно выключится.", "Plugins are paused while power saving is on. They start again when it turns off.")) }
             if let error = self.manager.persistenceError { add(0, .text, "", dgPluginStoredReason(error, russian: self.russian)) }
             add(0, .toggle, "global", self.tr("Плагины", "Plugins"), value: self.manager.globallyEnabled, icon: "__plugins")
             let installations = self.manager.installations
@@ -399,6 +400,7 @@ private final class DGPluginPage {
 
     private func stateText(_ item: DGPluginInstallation) -> String {
         if !self.manager.globallyEnabled { return self.tr("выполнение остановлено для всех плагинов", "all plugin execution is stopped") }
+        if item.enabled && item.state == .installedDisabled && self.manager.pausedByPowerSaving { return self.tr("приостановлен: энергосбережение", "paused: power saving") }
         switch item.state {
         case .running: return self.tr("работает", "running")
         case .starting: return self.tr("запускается", "starting")
