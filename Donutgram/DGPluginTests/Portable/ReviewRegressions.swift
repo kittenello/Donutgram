@@ -190,6 +190,31 @@ private enum DGPluginReviewRegressions {
         try result { m.remove(id:id, completion:$0) }
         log("callback overflow passed")
     }
+    static func renderAfterCloseProbe() throws {
+        let m = manager("render-after-close")
+        var invoke: ((String, DGPluginJSON) -> Void)?
+        var closeShown: (() -> Void)?
+        var callbackId = ""
+        var renders = 0
+        let tapped = DispatchSemaphore(value: 0)
+        m.nativeRender = { _, page, _, _, _, callback, onClose in
+            renders += 1
+            // The user closed the first page just before the second render reached the screen: its close reaches the
+            // host first, and the renderer shows a new page.
+            if renders == 2 { closeShown?() }
+            invoke = callback; closeShown = onClose
+            if case let .array(nodes)? = page.objectValue?["nodes"] { callbackId = nodes[0].objectValue?["callbackId"]?.stringValue ?? "" }
+            return .success({})
+        }
+        m.nativeRequest = { _, _, _, _, completion in completion(.success(.null)); tapped.signal() }
+        let id = try install(m, package("const cb=api.ui.callback(()=>api.ui.toast('tap'));const page={id:'page',title:'page',nodes:[{id:'button',type:'button',title:'button',callbackId:cb.id}]};await api.commands.register({id:'show',title:'show',placement:'settings',run:()=>api.ui.render(page)});", permissions:[ui]))
+        try result { m.runCommand(installationId:id, commandId:"show", completion:$0) }
+        try result { m.runCommand(installationId:id, commandId:"show", completion:$0) }
+        invoke?(callbackId, .null)
+        guard tapped.wait(timeout:.now() + 4) == .success else { throw DGPluginError(code:"regression",message:"a page shown after a close lost its callbacks") }
+        try result { m.remove(id:id, completion:$0) }
+        log("render after close passed")
+    }
     static func defaultsProbe() throws {
         let schema: DGPluginJSON = .object(["type": .string("object"), "properties": .object(["label": .object(["type": .string("string"), "title": .string("label"), "maxLength": .number(1), "default": .string("😀")]), "enabled": .object(["type": .string("boolean"), "title": .string("enabled"), "default": .bool(true)])])])
         let p = try package("",permissions:[],schema:schema)
@@ -251,6 +276,7 @@ func runPluginReviewRegressionTests() throws {
     try DGPluginReviewRegressions.sharedCallbackProbe()
     try DGPluginReviewRegressions.pageLifetimeProbe()
     try DGPluginReviewRegressions.callbackOverflowProbe()
+    try DGPluginReviewRegressions.renderAfterCloseProbe()
     try DGPluginReviewRegressions.defaultsProbe()
     try DGPluginReviewRegressions.environmentProbe()
     try DGPluginReviewRegressions.packageCacheProbe()

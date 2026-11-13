@@ -60,6 +60,8 @@ private final class DGPluginExecution {
     var pageTokens: [String: UUID] = [:]
     var pageCleanup: [String: () -> Void] = [:]
     var pagesPending = Set<String>()
+    /// Pages that closed while a render of the same id was on its way: they share its token, so the render decides.
+    var pagesClosedDuringRender = Set<String>()
     var networkRequests: [UUID: () -> Void] = [:]
     var networkCount = 0
     var nativeCleanup: [UUID: () -> Void] = [:]
@@ -1395,6 +1397,9 @@ public final class DGPluginManager {
                     guard let self = self else { return }
                     self.coordinator.queue.async {
                         guard self.current(installationId, generation), execution.pageTokens[pageId] == pageToken else { return }
+                        // A render of the same id is on its way: the page that closed is the one it replaces. Dropping the
+                        // shared token now would leave the page that render shows dead; its outcome decides instead.
+                        if execution.pagesPending.contains(pageId) { execution.pagesClosedDuringRender.insert(pageId); return }
                         execution.pageTokens.removeValue(forKey: pageId)
                         execution.pageCleanup.removeValue(forKey: pageId)
                         execution.contributions.removeValue(forKey: pageId)
@@ -1407,6 +1412,8 @@ public final class DGPluginManager {
                     }, closed)
                     self.coordinator.queue.async {
                         execution.pagesPending.remove(pageId)
+                        // A page shown now is a new one (the closed page was no longer there to update) and keeps the token.
+                        let replacedPageClosed = execution.pagesClosedDuringRender.remove(pageId) != nil
                         switch result {
                         case let .success(cleanup):
                             guard self.current(installationId, generation) else { DispatchQueue.main.async(execute: cleanup); self.respond(.failure(DGPluginError(code: "cancelled", message: "plugin stopped")), reply); return }
@@ -1414,8 +1421,8 @@ public final class DGPluginManager {
                             execution.contributions[pageId] = .null
                             self.respond(.success(.string(pageId)), reply)
                         case let .failure(error):
-                            if let previousToken { execution.pageTokens[pageId] = previousToken }
-                            else { execution.pageTokens.removeValue(forKey: pageId); execution.contributions.removeValue(forKey: pageId) }
+                            if let previousToken, !replacedPageClosed { execution.pageTokens[pageId] = previousToken }
+                            else { execution.pageTokens.removeValue(forKey: pageId); execution.pageCleanup.removeValue(forKey: pageId); execution.contributions.removeValue(forKey: pageId) }
                             self.respond(.failure(error), reply)
                         }
                     }
