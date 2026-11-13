@@ -35,6 +35,7 @@ def main():
             lines.extend([f'report("{classname}.{method}: passed")', "}"])
     lines.extend([
         "try runDeferredSaveRegressions()",
+        "try runViewModelCallbackRegressions()",
         "try runPluginReviewRegressionTests()",
         "try runNativeActionTests()",
         "try runSemanticVersionTests()",

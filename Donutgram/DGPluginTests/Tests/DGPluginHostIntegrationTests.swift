@@ -789,11 +789,13 @@ final class DGPluginHostIntegrationTests: XCTestCase {
             reply = completion; validity = valid; requested.fulfill()
         }
         let input: DGPluginJSON = .object(["panes": .array([.object(["id": .string("media"), "empty": .bool(true)])])])
-        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { XCTFail("revoked transform posted stale output") }), input)
+        let invalidated = self.expectation(description: "revoked transform consumer refreshed")
+        XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { invalidated.fulfill() }), input)
         self.wait(for: [requested], timeout: 2)
         try self.result { self.manager.setGrants(id: id, permissions: [], completion: $0) }.get()
         XCTAssertEqual(validity?(), false)
         reply?(.success(.null))
+        self.wait(for: [invalidated], timeout: 2)
         try self.result { self.manager.setEnabled(id: id, enabled: false, completion: $0) }.get()
         XCTAssertEqual(self.manager.transformedViewModel(slot: "profile", input: input, update: { XCTFail("stale transform repopulated cache") }), input)
     }

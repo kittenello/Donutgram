@@ -386,8 +386,8 @@ public final class DGPluginManager {
     private var snapshotDiagnostics: [String: [String]] = [:]
     private var viewModelCache: [String: DGPluginJSON] = [:]
     private var viewModelRevision: UInt64 = 0
-    private var pendingViewModels = Set<String>()
-    private var deferredViewUpdates: [String: () -> Void] = [:]
+    private var pendingViewModels: [String: [() -> Void]] = [:]
+    private var deferredViewUpdates: [String: [() -> Void]] = [:]
     private var observers: [UUID: () -> Void] = [:]
     private var executions: [String: DGPluginExecution] = [:]
     /// The open settings screens of each installation. They belong to the manager, not to a runtime: leaving the
@@ -717,8 +717,16 @@ public final class DGPluginManager {
         snapshotLock.lock(); let cached = viewModelCache[key]; snapshotLock.unlock()
         if let cached { return cached }
         coordinator.queue.async {
-            guard !self.pendingViewModels.contains(key), self.pendingViewModels.count < 8 else { return }
-            self.pendingViewModels.insert(key)
+            if self.pendingViewModels[key] != nil {
+                self.pendingViewModels[key]?.append(update)
+                return
+            }
+            if self.deferredViewUpdates[key] != nil {
+                self.deferredViewUpdates[key]?.append(update)
+                return
+            }
+            guard self.pendingViewModels.count < 8, self.pendingViewModels.count + self.deferredViewUpdates.count < 16 else { return }
+            self.pendingViewModels[key] = [update]
             let revision = self.viewModelRevision
             let registrations = self.executions.flatMap { id, execution -> [(String, DGPluginExecution, DGPluginRegisteredTransform)] in
                 guard execution.state == .running, self.current(id, execution.generation), let record = self.coordinator.state.installations.first(where: { $0.id == id }), record.manifest.profile == "localPrivate", self.account(record).grants.contains(where: { $0.capability == "ui.transform" && $0.scope == slot }) else { return [] }
@@ -728,17 +736,20 @@ public final class DGPluginManager {
                 return (lhs.0, lhs.2.id) < (rhs.0, rhs.2.id)
             }
             self.applyViewTransforms(registrations, index: 0, slot: slot, input: input, revision: revision) { result, deferred in
-                self.pendingViewModels.remove(key)
-                guard revision == self.viewModelRevision else { return }
+                let updates = self.pendingViewModels.removeValue(forKey: key) ?? []
+                guard revision == self.viewModelRevision else {
+                    DispatchQueue.main.async { updates.forEach { $0() } }
+                    return
+                }
                 if deferred {
-                    if self.deferredViewUpdates.count < 16 { self.deferredViewUpdates[key] = update }
+                    self.deferredViewUpdates[key] = updates
                     return
                 }
                 self.snapshotLock.lock()
                 if self.viewModelCache.count >= 32 { self.viewModelCache.removeAll() }
                 self.viewModelCache[key] = result
                 self.snapshotLock.unlock()
-                if result != input { DispatchQueue.main.async(execute: update) }
+                if result != input { DispatchQueue.main.async { updates.forEach { $0() } } }
             }
         }
         return input
@@ -791,7 +802,7 @@ public final class DGPluginManager {
     }
 
     private func refreshDeferredViewModels() {
-        let callbacks = Array(deferredViewUpdates.values); deferredViewUpdates.removeAll()
+        let callbacks = deferredViewUpdates.values.flatMap { $0 }; deferredViewUpdates.removeAll()
         if !callbacks.isEmpty { DispatchQueue.main.async { callbacks.forEach { $0() } } }
     }
 
