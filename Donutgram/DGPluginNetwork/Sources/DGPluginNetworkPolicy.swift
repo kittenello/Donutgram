@@ -44,7 +44,10 @@ public enum DGPluginPublicAddress {
     public static func isAllowed(_ address: String) -> Bool {
         if address.contains(":") { return allowedIPv6(address) }
         guard let bytes = ipv4(address) else { return false }
-        let value = bytes.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        return allowedIPv4(bytes.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) })
+    }
+
+    private static func allowedIPv4(_ value: UInt32) -> Bool {
         let blocked: [(UInt32, Int)] = [
             (0x00000000, 8), (0x0a000000, 8), (0x64400000, 10), (0x7f000000, 8),
             (0xa9fe0000, 16), (0xac100000, 12), (0xc0000000, 24), (0xc0000200, 24),
@@ -85,7 +88,11 @@ public enum DGPluginPublicAddress {
             guard let last = groups(compressed[1]), first.count + last.count < 8 else { return false }
             words = first + Array(repeating: 0, count: 8 - first.count - last.count) + last
         } else { words = first }
-        guard words.count == 8, words[0] & 0xe000 == 0x2000 else { return false }
+        guard words.count == 8 else { return false }
+        // DNS64 on an IPv6-only network answers for an IPv4-only host inside 64:ff9b::/96. Only that well-known prefix
+        // is accepted, and only when the IPv4 address it embeds is allowed itself.
+        if words[0] == 0x0064 && words[1] == 0xff9b && words[2 ... 5].allSatisfy({ $0 == 0 }) { return allowedIPv4((UInt32(words[6]) << 16) | UInt32(words[7])) }
+        guard words[0] & 0xe000 == 0x2000 else { return false }
         if words[0] == 0x2001 && words[1] < 0x0200 { return false }
         if words[0] == 0x2001 && words[1] == 0x0db8 { return false }
         if words[0] == 0x2002 { return false }
