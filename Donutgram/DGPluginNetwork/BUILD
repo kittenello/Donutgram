@@ -3,7 +3,6 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library", "swift_test")
 swift_library(
     name = "DGPluginNetwork",
     module_name = "DGPluginNetwork",
-    copts = ["-enable-testing"],
     srcs = glob(["Sources/**/*.swift"]),
     deps = ["//Donutgram/DGPluginModel"],
     visibility = ["//visibility:public"],

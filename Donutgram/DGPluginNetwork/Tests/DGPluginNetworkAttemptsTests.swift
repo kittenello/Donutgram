@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import DGPluginNetwork
+import DGPluginNetwork
 
 final class DGPluginNetworkAttemptsTests: XCTestCase {
     func testFallbackOrderAndSharedDeadline() {

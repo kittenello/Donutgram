@@ -12,7 +12,7 @@ $modelSources = @(Get-ChildItem -LiteralPath (Join-Path $repository 'Donutgram/D
 $networkSources = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Sources') -Filter '*.swift' | ForEach-Object { $_.FullName })
 & $Swiftc -sdk $Sdk -swift-version 5 -emit-library -emit-module -module-name DGPluginModel -emit-module-path (Join-Path $BuildPath 'DGPluginModel.swiftmodule') -o (Join-Path $BuildPath 'DGPluginModel.dll') @modelSources
 if ($LASTEXITCODE -ne 0) { throw 'model compilation failed' }
-& $Swiftc -sdk $Sdk -swift-version 5 -I $BuildPath -L $BuildPath -lDGPluginModel -emit-library -emit-module -enable-testing -module-name DGPluginNetwork -emit-module-path (Join-Path $BuildPath 'DGPluginNetwork.swiftmodule') -o (Join-Path $BuildPath 'DGPluginNetwork.dll') @networkSources
+& $Swiftc -sdk $Sdk -swift-version 5 -I $BuildPath -L $BuildPath -lDGPluginModel -emit-library -emit-module -module-name DGPluginNetwork -emit-module-path (Join-Path $BuildPath 'DGPluginNetwork.swiftmodule') -o (Join-Path $BuildPath 'DGPluginNetwork.dll') @networkSources
 if ($LASTEXITCODE -ne 0) { throw 'network helper compilation failed' }
 $testSource = ((Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Tests') -Filter '*Tests.swift' | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName) }) -join "`n").Replace("import XCTest`r`n", '').Replace("import XCTest`n", '')
 [System.IO.File]::WriteAllText((Join-Path $BuildPath 'NetworkTests.swift'), $testSource)
