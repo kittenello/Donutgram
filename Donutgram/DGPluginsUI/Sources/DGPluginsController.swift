@@ -123,6 +123,10 @@ private final class DGPluginPage {
     private var settingsPrepared = false
     private var settingsLoading = false
     private var enableRequests: [String: UUID] = [:]
+    /// Text typed into a string setting, by setting key, shown until its delayed save completes: a snapshot published for
+    /// an older keystroke must not replace what the user has typed since.
+    private var settingDrafts: [String: String] = [:]
+    private var settingDraftSaves: [String: DispatchWorkItem] = [:]
 
     init(context: AccountContext, mode: DGPluginPageMode) {
         self.context = context
@@ -133,6 +137,13 @@ private final class DGPluginPage {
     }
 
     deinit {
+        // Text still waiting for its delayed save is saved now; nothing created here may capture `self`.
+        if case let .settings(id) = self.mode, let digest = self.manager.installations.first(where: { $0.id == id })?.digest {
+            for (setting, save) in self.settingDraftSaves {
+                save.cancel()
+                if let text = self.settingDrafts[setting] { self.manager.updateSetting(id: id, key: setting, value: .string(text), reviewedDigest: digest) { _ in } }
+            }
+        }
         if case let .settings(id) = self.mode { self.manager.closeSettings(id: id, owner: self.settingsOwner) }
         if case let .rendered(state) = self.mode { state.close() }
         if let observer = self.observer { self.manager.removeObserver(observer) }
@@ -180,6 +191,7 @@ private final class DGPluginPage {
 
     func closeSettings() {
         guard case let .settings(id) = self.mode else { return }
+        for (setting, save) in self.settingDraftSaves { save.cancel(); self.saveSettingDraft(setting) }
         self.settingsPrepared = false
         self.manager.closeSettings(id: id, owner: self.settingsOwner)
     }
@@ -336,7 +348,7 @@ private final class DGPluginPage {
                     add(section, .toggle, "setting:" + key, title, value: value == .bool(true))
                 case "string":
                     let limit = Int(min(4096, max(0, schema["maxLength"]?.uiNumberValue ?? 4096)))
-                    rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .multiline, key: "setting:" + key, title: title, detail: self.settingText(value), maxText: limit))
+                    rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .multiline, key: "setting:" + key, title: title, detail: self.settingDrafts[key] ?? self.settingText(value), maxText: limit))
                 case "number", "integer":
                     let integer = schema["type"]?.stringValue == "integer"
                     let minimum = integer ? ceil(schema["minimum"]?.uiNumberValue ?? -1000000) : (schema["minimum"]?.uiNumberValue ?? -1000000)
@@ -539,9 +551,27 @@ private final class DGPluginPage {
             guard let number = Double(value), number.isFinite else { return }
             if schema?["type"]?.stringValue == "integer" && number.rounded() != number { return }
             updated = .number(number)
-        default: updated = .string(String(value.prefix(4096)))
+        default:
+            // Text is saved 0.4 s after the last keystroke, not with a full state write per keystroke.
+            self.settingDrafts[setting] = String(value.prefix(4096))
+            self.settingDraftSaves[setting]?.cancel()
+            let save = DispatchWorkItem { [weak self] in self?.saveSettingDraft(setting) }
+            self.settingDraftSaves[setting] = save
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: save)
+            return
         }
         self.manager.updateSetting(id: id, key: setting, value: updated, reviewedDigest: item.digest) { [weak self] result in self?.complete(result) }
+    }
+
+    private func saveSettingDraft(_ setting: String) {
+        self.settingDraftSaves.removeValue(forKey: setting)
+        guard case let .settings(id) = self.mode, let item = self.installation(id), let text = self.settingDrafts[setting] else { return }
+        self.manager.updateSetting(id: id, key: setting, value: .string(text), reviewedDigest: item.digest) { [weak self] result in
+            guard let self else { return }
+            // A newer draft typed while this one was saving stays shown.
+            if self.settingDrafts[setting] == text { self.settingDrafts.removeValue(forKey: setting) }
+            self.complete(result)
+        }
     }
 
     func number(_ key: String, _ value: Double) {
