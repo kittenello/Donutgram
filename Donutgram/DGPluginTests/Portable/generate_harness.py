@@ -20,6 +20,7 @@ def main():
         'func report(_ text: String) { FileHandle.standardOutput.write(Data((text + "\\n").utf8)) }',
         "DispatchQueue.global().async {",
         "do {",
+        'if let mode = ProcessInfo.processInfo.environment["DG_PLUGIN_RECOVERY_CHILD"] { try runInterruptedRecoveryChild(mode: mode); ExitProcess(0) }',
         'if ProcessInfo.processInfo.environment["DG_PLUGIN_QUOTA_CHILD"] != nil { try runMissingAccountQuotaRegression(child: true); ExitProcess(0) }',
         'if let mode = ProcessInfo.processInfo.environment["DG_PLUGIN_RESTART_MODE"] { try runRestartChild(mode: mode); ExitProcess(0) }',
     ]
@@ -38,6 +39,8 @@ def main():
         "try runSemanticVersionTests()",
         "try runPersistenceFaultTests()",
         "try runDurableRemovalRestartTests()",
+        "try runInterruptedRecoveryTests()",
+        "try runMarkerWriteFailureTests()",
         "try runGeneratedArchiveTests(directory: URL(fileURLWithPath: CommandLine.arguments[1]))",
         'report("all portable production checks passed")',
         "ExitProcess(0)",

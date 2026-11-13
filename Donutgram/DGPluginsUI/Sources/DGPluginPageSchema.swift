@@ -1,6 +1,12 @@
 import Foundation
 import DGPluginModel
 
+func dgPluginNumericControlValue(_ raw: Double, minimum: Double, maximum: Double, step: Double) -> Double {
+    let lastStep = floor((maximum - minimum) / step + 1e-7)
+    let index = min(lastStep, max(0, ((raw - minimum) / step).rounded()))
+    return min(maximum, max(minimum, minimum + index * step))
+}
+
 func dgPluginNativePageEnvelope(_ value: DGPluginJSON) -> (page: DGPluginJSON, accent: String?) {
     guard var object = value.objectValue else { return (value, nil) }
     let tokens = object.removeValue(forKey: "__dgThemeTokens")?.objectValue

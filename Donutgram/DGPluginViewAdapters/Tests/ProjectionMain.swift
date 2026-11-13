@@ -31,6 +31,32 @@ struct DGPluginViewAdapterChecks {
     }
 
     static func main() throws {
+        let lifetime = DGPluginChatLifetime()
+        try require(!lifetime.snapshot()(), "closed chat accepted an operation")
+        lifetime.open()
+        let firstVisit = lifetime.snapshot()
+        try require(firstVisit(), "open chat rejected an operation")
+        lifetime.close()
+        try require(!firstVisit(), "closed chat kept a pending operation")
+        lifetime.open()
+        try require(!firstVisit() && lifetime.snapshot()(), "reopened chat revived a stale operation")
+        var cancelledResources = 0
+        let finishedResource = UUID()
+        lifetime.own(finishedResource) { cancelledResources += 100 }
+        lifetime.release(finishedResource)
+        lifetime.own(UUID()) { cancelledResources += 1 }
+        lifetime.own(UUID()) { cancelledResources += 1 }
+        lifetime.close()
+        try require(cancelledResources == 2, "chat close did not cancel all pending resources exactly once")
+        lifetime.close()
+        try require(cancelledResources == 2, "chat close cancelled resources twice")
+        lifetime.own(UUID()) { cancelledResources += 1 }
+        try require(cancelledResources == 3, "closed chat retained a new resource")
+        var abandoned: DGPluginChatLifetime? = DGPluginChatLifetime()
+        abandoned?.open()
+        abandoned?.own(UUID()) { cancelledResources += 1 }
+        abandoned = nil
+        try require(cancelledResources == 4, "chat destruction retained a pending resource")
         var now = 100.0
         let confirmation = DGPluginConfirmationState(timeout: 45, clock: { now })
         try require(confirmation.isCurrent() && confirmation.accept(), "fresh confirmation was unavailable")
@@ -74,6 +100,6 @@ struct DGPluginViewAdapterChecks {
                 transitions += 1
             }
         }
-        print("passed 16 native projection/confirmation checks and \(transitions) real stable-merge transitions")
+        print("passed 24 native projection/confirmation checks and \(transitions) real stable-merge transitions")
     }
 }

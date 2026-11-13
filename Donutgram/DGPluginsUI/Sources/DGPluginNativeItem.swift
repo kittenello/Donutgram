@@ -234,7 +234,7 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
         guard let item, case let .number(_, _, minimum, maximum, step, _) = item.content else { return }
         let fromSlider = sender === self.slider
         let raw = fromSlider ? minimum + Double(self.slider.value) * (maximum - minimum) : self.stepper.value
-        let value = min(maximum, max(minimum, fromSlider ? minimum + ((raw - minimum) / step).rounded() * step : raw))
+        let value = dgPluginNumericControlValue(raw, minimum: minimum, maximum: maximum, step: step)
         self.slider.value = Float((value - minimum) / (maximum - minimum))
         self.stepper.value = value
         self.subtitleLabel.text = String(format: "%g", value)

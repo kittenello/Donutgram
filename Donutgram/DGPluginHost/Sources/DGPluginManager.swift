@@ -193,6 +193,7 @@ private final class DGPluginCoordinator {
                 state.installations.removeAll(where: { $0.removing })
                 if recoverInterruptedRuns() { changed = true }
                 if changed { try persist() }
+                try? FileManager.default.removeItem(at: runningMarkersURL)
             }
         } catch {
             startupError = DGPluginError(code: "storage_error", message: "plugin state requires recovery; execution is stopped")
@@ -239,7 +240,6 @@ private final class DGPluginCoordinator {
     func recoverInterruptedRuns() -> Bool {
         let url = runningMarkersURL
         guard let data = try? Data(contentsOf: url) else { return false }
-        try? FileManager.default.removeItem(at: url)
         guard data.count <= 65536, let markers = try? JSONDecoder().decode([DGPluginRunningMarker].self, from: data) else { return false }
         let entry = ISO8601DateFormatter().string(from: Date()) + " " + Self.interruptedMessage
         var changed = false
@@ -256,21 +256,27 @@ private final class DGPluginCoordinator {
         return changed
     }
 
-    func markRunning(_ marker: DGPluginRunningMarker) {
+    func markRunning(_ marker: DGPluginRunningMarker) throws {
         guard runningMarkers.insert(marker).inserted else { return }
-        writeRunningMarkers()
+        do { try writeRunningMarkers() }
+        catch { runningMarkers.remove(marker); throw error }
     }
 
     func clearRunning(_ marker: DGPluginRunningMarker) {
         guard runningMarkers.remove(marker) != nil else { return }
-        writeRunningMarkers()
+        try? writeRunningMarkers()
     }
 
-    private func writeRunningMarkers() {
+    private func writeRunningMarkers() throws {
+        try testFailure("runningWrite")
         let url = runningMarkersURL
-        guard !runningMarkers.isEmpty else { try? FileManager.default.removeItem(at: url); return }
+        guard !runningMarkers.isEmpty else {
+            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            return
+        }
         let markers = runningMarkers.sorted { ($0.account, $0.installation) < ($1.account, $1.installation) }
-        if let data = try? JSONEncoder().encode(markers) { try? data.write(to: url, options: .atomic) }
+        let data = try JSONEncoder().encode(markers)
+        try data.write(to: url, options: .atomic)
     }
 
     func packageURL(_ record: DGPluginStoredRecord) -> URL {
@@ -952,11 +958,26 @@ public final class DGPluginManager {
     }
 
     public func setGrants(id: String, permissions: [DGPluginPermission], completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+        updateGrants(id: id, completion: completion) { _, _ in permissions }
+    }
+
+    public func setGrant(id: String, permission: DGPluginPermission, granted: Bool, reviewedDigest: String, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+        updateGrants(id: id, completion: completion) { record, current in
+            guard record.digest == reviewedDigest else { throw DGPluginError(code: "revision_conflict", message: "plugin package changed; review permissions again") }
+            let identity = DGPluginPolicy.permissionKey(permission)
+            var updated = current.filter { DGPluginPolicy.permissionKey($0) != identity }
+            if granted { updated.append(permission) }
+            return updated
+        }
+    }
+
+    private func updateGrants(id: String, completion: @escaping (Result<Void, DGPluginError>) -> Void, update: @escaping (DGPluginStoredRecord, [DGPluginPermission]) throws -> [DGPluginPermission]) {
         coordinator.queue.async {
             do {
                 guard let index = self.coordinator.state.installations.firstIndex(where: { $0.id == id && !$0.removing }) else { throw DGPluginError(code: "stale_handle", message: "installation is unavailable") }
                 let record = self.coordinator.state.installations[index]
                 var account = self.account(record)
+                let permissions = try update(record, account.grants)
                 let declared = Set((record.manifest.permissions + record.manifest.optionalPermissions).map(DGPluginPolicy.permissionKey))
                 guard permissions.allSatisfy({ declared.contains(DGPluginPolicy.permissionKey($0)) }) else { throw DGPluginError(code: "permission_denied", message: "permission was not declared by this package") }
                 account.grants = permissions
@@ -980,6 +1001,16 @@ public final class DGPluginManager {
 
     public func updateSettings(id: String, values: [String: DGPluginJSON], completion: @escaping (Result<Void, DGPluginError>) -> Void) {
         mutate(id: id, stop: false, completion: completion) { record, account in
+            try DGPluginPolicy.validateSettings(values, manifest: record.manifest)
+            account.settings = values
+        }
+    }
+
+    public func updateSetting(id: String, key: String, value: DGPluginJSON, reviewedDigest: String, completion: @escaping (Result<Void, DGPluginError>) -> Void) {
+        mutate(id: id, stop: false, completion: completion) { record, account in
+            guard record.digest == reviewedDigest else { throw DGPluginError(code: "revision_conflict", message: "plugin package changed; reopen settings") }
+            var values = account.settings
+            values[key] = value
             try DGPluginPolicy.validateSettings(values, manifest: record.manifest)
             account.settings = values
         }
@@ -1160,8 +1191,8 @@ public final class DGPluginManager {
             let package = try coordinator.package(record)
             let execution = DGPluginExecution()
             execution.settingsOnly = settings
+            if !execution.settingsOnly { try coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id)) }
             executions[id] = execution
-            if !execution.settingsOnly { coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id)) }
             var runtimeEnvironment = environment
             runtimeEnvironment["executionMode"] = .string(execution.settingsOnly ? "settings" : "normal")
             let environmentJSON = String(data: try JSONEncoder().encode(DGPluginJSON.object(runtimeEnvironment)), encoding: .utf8) ?? "{}"
@@ -1171,7 +1202,10 @@ public final class DGPluginManager {
             })
             execution.runtime = runtime
             runtime.start { [weak self, weak execution] result in
-                guard let self = self, let execution = execution else { return }
+                guard let self = self, let execution = execution else {
+                    DispatchQueue.main.async { completion(.failure(DGPluginError(code: "cancelled", message: "activation was cancelled"))) }
+                    return
+                }
                 self.coordinator.queue.async {
                     guard self.current(id, execution.generation) else { DispatchQueue.main.async { completion(.failure(DGPluginError(code: "cancelled", message: "activation was cancelled"))) }; return }
                     switch result {

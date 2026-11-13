@@ -31,28 +31,62 @@
         const run = handler || descriptor.run;
         if (typeof run !== 'function') throw error('invalid_command');
         const value = {id: descriptor.id, title: descriptor.title, placement: descriptor.placement};
-        await request('ui.command.register', value);
-        commands.set(value.id, run);
+        const registration = {handler: run};
+        commands.set(value.id, registration);
+        try { await request('ui.command.register', value); }
+        catch (failure) { if (commands.get(value.id) === registration) commands.delete(value.id); throw failure; }
         let disposed = false;
-        return Object.freeze({dispose: async () => {
-          if (disposed) return;
-          disposed = true;
-          commands.delete(value.id);
-          await request('ui.command.unregister', {id: value.id});
+        let disposing = null;
+        return Object.freeze({dispose: () => {
+          if (disposed) return Promise.resolve();
+          if (disposing) return disposing;
+          disposing = request('ui.command.unregister', {id: value.id}).then(() => {
+            disposed = true;
+            if (commands.get(value.id) === registration) commands.delete(value.id);
+          }).finally(() => { disposing = null; });
+          return disposing;
         }});
       }
     }),
     events: Object.freeze({
       async on(name, handler) {
-        if (typeof name !== 'string' || typeof handler !== 'function' || listeners.size >= 64) throw error('invalid_event');
-        await request('events.subscribe', {name});
-        if (!listeners.has(name)) listeners.set(name, new Set());
-        const handlers = listeners.get(name);
-        if (handlers.size >= 16) throw error('event_limit');
-        handlers.add(handler);
-        return Object.freeze({dispose: async () => {
-          handlers.delete(handler);
-          if (!handlers.size) { listeners.delete(name); await request('events.unsubscribe', {name}); }
+        if (typeof name !== 'string' || typeof handler !== 'function') throw error('invalid_event');
+        let group = listeners.get(name);
+        while (group && group.closing) {
+          try { await group.closing; } catch (_) {}
+          group = listeners.get(name);
+        }
+        if (!group) {
+          if (listeners.size >= 64) throw error('invalid_event');
+          group = {handlers: new Set(), ready: null, closing: null};
+          listeners.set(name, group);
+          group.ready = request('events.subscribe', {name}).catch(failure => {
+            if (listeners.get(name) === group) listeners.delete(name);
+            throw failure;
+          });
+        }
+        if (group.handlers.size >= 16) throw error('event_limit');
+        const registration = {handler};
+        group.handlers.add(registration);
+        try { await group.ready; }
+        catch (failure) { group.handlers.delete(registration); throw failure; }
+        let disposed = false;
+        let disposing = null;
+        return Object.freeze({dispose: () => {
+          if (disposed) return Promise.resolve();
+          if (disposing) return disposing;
+          if (group.handlers.size > 1) {
+            disposed = true;
+            group.handlers.delete(registration);
+            return Promise.resolve();
+          }
+          disposing = request('events.unsubscribe', {name}).then(() => {
+            disposed = true;
+            group.handlers.delete(registration);
+            if (listeners.get(name) === group) listeners.delete(name);
+          }).finally(() => { group.closing = null; disposing = null; });
+          group.closing = disposing;
+          return disposing;
         }});
       }
     }),
@@ -95,11 +129,15 @@
         try { await request(family + '.register', value); }
         catch (failure) { if (transforms.get(value.id) === registration) transforms.delete(value.id); throw failure; }
         let disposed = false;
-        return Object.freeze({dispose: async () => {
-          if (disposed) return;
-          disposed = true;
-          if (transforms.get(value.id) === registration) transforms.delete(value.id);
-          await request(family + '.unregister', {id: value.id});
+        let disposing = null;
+        return Object.freeze({dispose: () => {
+          if (disposed) return Promise.resolve();
+          if (disposing) return disposing;
+          disposing = request(family + '.unregister', {id: value.id}).then(() => {
+            disposed = true;
+            if (transforms.get(value.id) === registration) transforms.delete(value.id);
+          }).finally(() => { disposing = null; });
+          return disposing;
         }});
       }
     }),
@@ -139,9 +177,9 @@
   expose('__dgDispatch', async (kind, payload) => {
     if (!activated) throw error('not_active');
     if (kind === 'command') {
-      const run = commands.get(payload.id);
-      if (!run) throw error('command_not_found');
-      await run(payload.input);
+      const registration = commands.get(payload.id);
+      if (!registration) throw error('command_not_found');
+      await registration.handler(payload.input);
     } else if (kind === 'ui') {
       const handler = callbacks.get(payload.id);
       if (!handler) throw error('callback_not_found');
@@ -152,8 +190,10 @@
       const value = await registration.handler(payload.input);
       await request(registration.family + '.result', {requestId: payload.requestId, value});
     } else if (kind === 'event') {
-      const handlers = listeners.get(payload.name);
-      if (handlers) for (const handler of handlers) await handler(payload.payload);
+      const group = listeners.get(payload.name);
+      if (group) for (const registration of Array.from(group.handlers)) {
+        if (group.handlers.has(registration)) await registration.handler(payload.payload);
+      }
     } else throw error('invalid_event');
   });
 })();

@@ -62,7 +62,7 @@ try {
     $fixtures = Join-Path $BuildPath 'fixtures'
     python Donutgram/DGPluginTests/hostile-fixtures/generate_archives.py $fixtures
     if ($LASTEXITCODE -ne 0) { throw 'archive fixture generation failed' }
-    & $Swiftc -sdk $Sdk -swift-version 5 -I $BuildPath -L $BuildPath -lDGPluginModel -lDGPluginInstaller -lDGPluginHost -lDGPluginRuntime -lDGPluginNetwork -o (Join-Path $BuildPath 'production-tests.exe') (Join-Path $PSScriptRoot 'Assertions.swift') (Join-Path $PSScriptRoot 'AdditionalTests.swift') (Join-Path $PSScriptRoot 'ReviewRegressions.swift') (Join-Path $BuildPath 'installer-tests.swift') (Join-Path $BuildPath 'policy-tests.swift') (Join-Path $BuildPath 'host-tests.swift') (Join-Path $BuildPath 'main.swift')
+    & $Swiftc -sdk $Sdk -swift-version 5 -I $BuildPath -L $BuildPath -lDGPluginModel -lDGPluginInstaller -lDGPluginHost -lDGPluginRuntime -lDGPluginNetwork -o (Join-Path $BuildPath 'production-tests.exe') (Join-Path $PSScriptRoot 'Assertions.swift') (Join-Path $PSScriptRoot 'AdditionalTests.swift') (Join-Path $PSScriptRoot 'ReviewRegressions.swift') (Join-Path $PSScriptRoot 'HostLifecycleRegressions.swift') (Join-Path $BuildPath 'installer-tests.swift') (Join-Path $BuildPath 'policy-tests.swift') (Join-Path $BuildPath 'host-tests.swift') (Join-Path $BuildPath 'main.swift')
     if ($LASTEXITCODE -ne 0) { throw 'production test compilation failed' }
     $previousPath = $env:PATH
     $previousRoot = $env:DG_PLUGIN_TEST_ROOT

@@ -20,7 +20,23 @@ private final class DGPluginAdditionalState {
     var files: [String: (scope: String, text: String, expires: TimeInterval)] = [:]
     var picker: DGPluginTextPicker?
     var ownedScopes = Set<String>()
+    var scopeResources: [String: () -> Void] = [:]
     var messages: [String: (scope: String, message: EngineMessage, expires: TimeInterval)] = [:]
+
+    func releaseScopes() {
+        let resources = Array(scopeResources.values)
+        scopeResources.removeAll()
+        for scope in ownedScopes { actions.removeAll(scope: scope) }
+        ownedScopes.removeAll()
+        files.removeAll()
+        messages.removeAll()
+        resources.forEach { $0() }
+    }
+
+    deinit {
+        scopeResources.values.forEach { $0() }
+        picker?.finish(.failure(DGPluginError(code: "cancelled", message: "chat closed")))
+    }
 }
 
 private final class DGPluginTextPicker: NSObject, UIDocumentPickerDelegate {
@@ -74,6 +90,12 @@ extension ChatControllerImpl {
         DGPluginManager.shared(accountKey: String(context.account.id.int64)).emitNativeEvent(name: "chat.closed", payload: .object(["hasActiveChat": .bool(false)]))
     }
 
+    func dgPluginChatClosing() {
+        dgPluginChatState.lifetime.close()
+        dgPluginChatState.outgoingSendPending = false
+        dgAdditionalPluginState.releaseScopes()
+    }
+
     func dgPluginComposerChanged() {
         guard dgPluginSafeComposer() else { return }
         DGPluginManager.shared(accountKey: String(context.account.id.int64)).emitNativeEvent(name: "composer.changed", payload: .object(["metadataOnly": .bool(true)]))
@@ -104,14 +126,16 @@ extension ChatControllerImpl {
         let arguments = params.objectValue ?? [:]
         let pluginName = manager.installations.first(where: { $0.id == installationId })?.manifest.name ?? dgPluginText("Плагин", "Plugin")
         if !dgAdditionalPluginState.ownedScopes.contains(scope) {
-            guard manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { [weak self] in
+            guard let token = manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { [weak self] in
                 guard let self else { return }
                 self.dgAdditionalPluginState.actions.removeAll(scope: scope)
                 self.dgAdditionalPluginState.files = self.dgAdditionalPluginState.files.filter { $0.value.scope != scope }
                 self.dgAdditionalPluginState.messages = self.dgAdditionalPluginState.messages.filter { $0.value.scope != scope }
                 self.dgAdditionalPluginState.ownedScopes.remove(scope)
-            }) != nil else { completion(.failure(DGPluginError(code: "quota_exceeded", message: "native scope resource limit reached"))); return true }
+                self.dgAdditionalPluginState.scopeResources.removeValue(forKey: scope)
+            }) else { completion(.failure(DGPluginError(code: "quota_exceeded", message: "native scope resource limit reached"))); return true }
             dgAdditionalPluginState.ownedScopes.insert(scope)
+            dgAdditionalPluginState.scopeResources[scope] = { manager.releaseNativeResource(installationId: installationId, token: token) }
         }
         do {
             switch method {
@@ -137,16 +161,22 @@ extension ChatControllerImpl {
                 completion(.success(.null))
             case "files.pick":
                 guard arguments.isEmpty, dgAdditionalPluginState.picker == nil else { throw DGPluginError(code: "conflict", message: "a text-file chooser is already open") }
+                let lifetime = dgPluginChatState.lifetime
+                let chatCurrent = lifetime.snapshot()
+                let pickerCurrent = { chatCurrent() && validity() }
                 var token: UUID?
                 let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.plainText, .json], asCopy: true)
-                let delegate = DGPluginTextPicker(validity: validity) { [weak self] result in
-                    if let token { manager.releaseNativeResource(installationId: installationId, token: token) }
+                let delegate = DGPluginTextPicker(validity: pickerCurrent) { [weak self, weak lifetime] result in
+                    if let token {
+                        lifetime?.release(token)
+                        manager.releaseNativeResource(installationId: installationId, token: token)
+                    }
                     guard let self else { completion(.failure(DGPluginError(code: "cancelled", message: "chat closed"))); return }
                     self.dgAdditionalPluginState.picker = nil
                     switch result {
                     case let .failure(error): completion(.failure(error))
                     case let .success((name, text)):
-                        guard validity() else { completion(.failure(DGPluginError(code: "cancelled", message: "file permission revoked"))); return }
+                        guard pickerCurrent() else { completion(.failure(DGPluginError(code: "cancelled", message: "file permission revoked or chat closed"))); return }
                         self.dgAdditionalPluginState.files = self.dgAdditionalPluginState.files.filter { $0.value.expires >= ProcessInfo.processInfo.systemUptime }
                         guard self.dgAdditionalPluginState.files.count < 4 else { completion(.failure(DGPluginError(code: "quota_exceeded", message: "too many selected file handles"))); return }
                         let handle = UUID().uuidString.lowercased()
@@ -156,8 +186,10 @@ extension ChatControllerImpl {
                 }
                 picker.delegate = delegate; picker.allowsMultipleSelection = false; delegate.controller = picker
                 token = manager.ownNativeResource(installationId: installationId, scope: scope) { [weak delegate] in delegate?.finish(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))) }
-                guard token != nil else { throw DGPluginError(code: "quota_exceeded", message: "native resource limit reached") }
+                guard let token else { throw DGPluginError(code: "quota_exceeded", message: "native resource limit reached") }
                 dgAdditionalPluginState.picker = delegate
+                lifetime.own(token) { [weak delegate] in delegate?.finish(.failure(DGPluginError(code: "cancelled", message: "chat closed"))) }
+                guard pickerCurrent() else { delegate.finish(.failure(DGPluginError(code: "cancelled", message: "file selection is no longer current"))); return true }
                 present(picker, animated: true)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 45) { [weak delegate] in delegate?.finish(.failure(DGPluginError(code: "timeout", message: "file selection timed out"))) }
             case "files.read":
@@ -169,31 +201,56 @@ extension ChatControllerImpl {
                 try dgPluginDirectMessageAction(installationId: installationId, scope: scope, method: method, arguments: arguments, validity: validity, completion: completion)
             case "translation.request":
                 guard Set(arguments.keys).isSubset(of: ["targetLanguage", "text"]), let language = arguments["targetLanguage"]?.stringValue, language.range(of: "^[A-Za-z]{2,3}(-[A-Za-z]{2,8})?$", options: .regularExpression) != nil, let text = dgPluginSelectedText(installationId: installationId), !text.isEmpty, text.utf16.count <= 4096, arguments["text"] == nil || arguments["text"] == .string(text) else { throw DGPluginError(code: "scope_denied", message: "translation requires the exact native text selection") }
-                dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: dgPluginText("Перевести через Telegram · ", "Translate with Telegram · ") + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
+                dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: dgPluginText("Перевести через Telegram · ", "Translate with Telegram · ") + language + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent, resources in
                     guard let self, confirmationCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "translation cancelled"))); return }
-                    let disposable = (self.context.engine.messages.translate(text: text, toLang: language) |> take(1) |> deliverOnMainQueue).start(next: { translated in
+                    resources.add((self.context.engine.messages.translate(text: text, toLang: language) |> take(1) |> deliverOnMainQueue).start(next: { translated in
                         guard confirmationCurrent(), let translated else { finish(.failure(DGPluginError(code: "cancelled", message: "translation is unavailable or was cancelled"))); return }
                         finish(.success(.object(["text": .string(translated.0), "service": .string("telegram"), "targetLanguage": .string(language)])))
-                    }, error: { _ in finish(.failure(DGPluginError(code: "service_error", message: "telegram translation failed"))) })
-                    guard manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { disposable.dispose() }) != nil else {
-                        disposable.dispose()
-                        finish(.failure(DGPluginError(code: "quota_exceeded", message: "translation resource limit reached")))
-                        return
-                    }
+                    }, error: { _ in finish(.failure(DGPluginError(code: "service_error", message: "telegram translation failed"))) }))
                 }
             case "notifications.local":
                 guard Set(arguments.keys) == ["text"], let text = arguments["text"]?.stringValue, !text.isEmpty, text.utf16.count <= 512 else { throw DGPluginError(code: "invalid_argument", message: "invalid local notification text") }
                 let center = UNUserNotificationCenter.current()
                 let identifier = "donutgram.plugin." + UUID().uuidString.lowercased()
-                guard manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { center.removePendingNotificationRequests(withIdentifiers: [identifier]); center.removeDeliveredNotifications(withIdentifiers: [identifier]) }) != nil else { throw DGPluginError(code: "quota_exceeded", message: "notification resource limit reached") }
+                let lifetime = dgPluginChatState.lifetime
+                let chatCurrent = lifetime.snapshot()
+                let notificationCurrent = { chatCurrent() && validity() }
+                var token: UUID?
+                token = manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: { [weak lifetime] in
+                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                    center.removeDeliveredNotifications(withIdentifiers: [identifier])
+                    if let token { lifetime?.release(token) }
+                })
+                guard let token else { throw DGPluginError(code: "quota_exceeded", message: "notification resource limit reached") }
+                lifetime.own(token) {
+                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                    center.removeDeliveredNotifications(withIdentifiers: [identifier])
+                    manager.releaseNativeResource(installationId: installationId, token: token)
+                }
+                guard notificationCurrent() else {
+                    lifetime.release(token)
+                    manager.releaseNativeResource(installationId: installationId, token: token)
+                    completion(.failure(DGPluginError(code: "cancelled", message: "notification context is no longer active")))
+                    return true
+                }
                 center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
                     DispatchQueue.main.async {
-                        guard granted, validity() else { completion(.failure(DGPluginError(code: "permission_denied", message: "local notifications are not authorized"))); return }
+                        guard granted, notificationCurrent() else {
+                            lifetime.release(token)
+                            manager.releaseNativeResource(installationId: installationId, token: token)
+                            completion(.failure(DGPluginError(code: "permission_denied", message: "local notifications are not authorized or chat closed")))
+                            return
+                        }
                         let content = UNMutableNotificationContent(); content.title = pluginName; content.body = text
                         center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))) { error in
                             DispatchQueue.main.async {
-                                let current = validity()
-                                if !current { center.removePendingNotificationRequests(withIdentifiers: [identifier]); center.removeDeliveredNotifications(withIdentifiers: [identifier]) }
+                                let current = notificationCurrent()
+                                if error != nil || !current {
+                                    center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                                    center.removeDeliveredNotifications(withIdentifiers: [identifier])
+                                    lifetime.release(token)
+                                    manager.releaseNativeResource(installationId: installationId, token: token)
+                                }
                                 completion(error == nil && current ? .success(.null) : .failure(DGPluginError(code: "cancelled", message: "notification was not scheduled")))
                             }
                         }
@@ -206,24 +263,33 @@ extension ChatControllerImpl {
         return true
     }
 
-    private func dgPluginConfirm(installationId: String, scope: String, title: String, text: String, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void, accepted: @escaping (@escaping (Result<DGPluginJSON, DGPluginError>) -> Void, @escaping () -> Bool) -> Void) {
+    private func dgPluginConfirm(installationId: String, scope: String, title: String, text: String, validity: @escaping () -> Bool, completion: @escaping (Result<DGPluginJSON, DGPluginError>) -> Void, accepted: @escaping (@escaping (Result<DGPluginJSON, DGPluginError>) -> Void, @escaping () -> Bool, DisposableSet) -> Void) {
         let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
         let state = DGPluginConfirmationState()
+        let lifetime = dgPluginChatState.lifetime
+        let chatCurrent = lifetime.snapshot()
+        let resources = DisposableSet()
         var token: UUID?
         var alert: ViewController?
-        let finish: (Result<DGPluginJSON, DGPluginError>) -> Void = { result in
+        let finish: (Result<DGPluginJSON, DGPluginError>) -> Void = { [weak lifetime] result in
             guard state.finish() else { return }
-            if let token { manager.releaseNativeResource(installationId: installationId, token: token) }
+            resources.dispose()
+            if let token {
+                lifetime?.release(token)
+                manager.releaseNativeResource(installationId: installationId, token: token)
+            }
             alert?.dismiss(); alert = nil; completion(result)
         }
-        let confirmationCurrent = { state.isCurrent() && validity() }
+        let confirmationCurrent = { state.isCurrent() && chatCurrent() && validity() }
         let controller = textAlertController(context: context, title: title, text: text, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: { finish(.failure(DGPluginError(code: "cancelled", message: "native action cancelled"))) }), TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {
             guard state.accept(), confirmationCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "native action is no longer current"))); return }
-            accepted(finish, confirmationCurrent)
+            accepted(finish, confirmationCurrent, resources)
         })], dismissOnOutsideTap: false)
         alert = controller
         token = manager.ownNativeResource(installationId: installationId, scope: scope) { finish(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))) }
-        guard token != nil else { finish(.failure(DGPluginError(code: "quota_exceeded", message: "native action resource limit reached"))); return }
+        guard let token else { finish(.failure(DGPluginError(code: "quota_exceeded", message: "native action resource limit reached"))); return }
+        lifetime.own(token) { finish(.failure(DGPluginError(code: "cancelled", message: "chat closed"))) }
+        guard confirmationCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "native confirmation is no longer current"))); return }
         present(controller, in: .window(.root))
         DispatchQueue.main.asyncAfter(deadline: .now() + 45) { finish(.failure(DGPluginError(code: "timeout", message: "native confirmation expired"))) }
     }
@@ -232,9 +298,12 @@ extension ChatControllerImpl {
         guard dgPluginSafeComposer(), let peerId = chatLocation.peerId else { throw DGPluginError(code: "scope_denied", message: "an active chat is required") }
         let manager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
         let threadId = chatLocation.threadId
+        let lifetime = dgPluginChatState.lifetime
+        let chatCurrent = lifetime.snapshot()
+        let sendCurrent = { chatCurrent() && validity() }
         let current = { [weak self] in
             guard let self else { return false }
-            return validity() && self.dgPluginSafeComposer() && self.chatLocation.peerId == peerId && self.chatLocation.threadId == threadId
+            return sendCurrent() && self.dgPluginSafeComposer() && self.chatLocation.peerId == peerId && self.chatLocation.threadId == threadId
         }
         let text = arguments["text"]?.stringValue
         if method != "messages.delete" {
@@ -259,19 +328,24 @@ extension ChatControllerImpl {
         let disposable = DisposableSet()
         var token: UUID?
         var finished = false
-        let finish: (Result<DGPluginJSON, DGPluginError>) -> Void = { result in
+        let finish: (Result<DGPluginJSON, DGPluginError>) -> Void = { [weak lifetime] result in
             guard !finished else { return }
             finished = true
             disposable.dispose()
-            if let token { manager.releaseNativeResource(installationId: installationId, token: token) }
+            if let token {
+                lifetime?.release(token)
+                manager.releaseNativeResource(installationId: installationId, token: token)
+            }
             completion(result)
         }
         token = manager.ownNativeResource(installationId: installationId, scope: scope, cleanup: {
             DispatchQueue.main.async { finish(.failure(DGPluginError(code: "cancelled", message: "plugin stopped"))) }
         })
-        guard token != nil else { throw DGPluginError(code: "quota_exceeded", message: "native resource limit reached") }
+        guard let token else { throw DGPluginError(code: "quota_exceeded", message: "native resource limit reached") }
+        lifetime.own(token) { finish(.failure(DGPluginError(code: "cancelled", message: "chat closed"))) }
+        guard sendCurrent() else { finish(.failure(DGPluginError(code: "cancelled", message: "message action is no longer current"))); return }
         if method == "messages.send", let text {
-            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: text, sendAsPeerId: presentationInterfaceState.currentSendAsPeerId, isCurrent: validity) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+            disposable.add((context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: text, sendAsPeerId: presentationInterfaceState.currentSendAsPeerId, isCurrent: sendCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                 finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "message was not queued")))
             }))
         } else if let messageId {
@@ -320,9 +394,9 @@ extension ChatControllerImpl {
         let identity = sendAsPeerId.flatMap { id in id == context.account.peerId ? nil : presentationInterfaceState.sendAsPeers?.first(where: { $0.peer.id == id })?.peer.compactDisplayTitle }
         let action = method == "messages.compose" ? dgPluginText("Вставить в поле ввода", "Insert into the input field") : dgPluginText("Отправить сообщение", "Send message")
         let identityText = method == "messages.compose" ? "" : identity.map { dgPluginText(" · от имени ", " · as ") + String($0.prefix(128)) } ?? ""
-        dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + identityText + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent in
+        dgPluginConfirm(installationId: installationId, scope: scope, title: pluginName, text: action + " · " + title + identityText + "\n\n" + text, validity: validity, completion: completion) { [weak self] finish, confirmationCurrent, resources in
             guard let self, confirmationCurrent(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.dgPluginSafeComposer(), self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "cancelled", message: "recipient, price or account changed"))); return }
-            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.SendPaidMessageStars(id: peerId)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] price in
+            resources.add((self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.SendPaidMessageStars(id: peerId)) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] price in
                 guard let self, confirmationCurrent(), price == nil, self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId, self.presentationInterfaceState.sendPaidMessageStars == nil else { store.cancel(handle: handle); finish(.failure(DGPluginError(code: "permission_denied", message: "paid or stale recipient is not allowed"))); return }
                 do {
                     let approvedText = try store.consume(handle: handle, scope: scope, recipient: recipient, paidRecipient: price != nil)
@@ -338,13 +412,13 @@ extension ChatControllerImpl {
                         guard applied else { throw DGPluginError(code: "conflict", message: "draft was not changed because the native confirmation became stale") }
                         finish(.success(.object(["status": .string("draftPrepared")])))
                     } else {
-                        let _ = (self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, sendAsPeerId: sendAsPeerId, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
+                        resources.add((self.context.engine.messages.enqueueConfirmedUnpaidPluginText(to: peerId, threadId: threadId, text: approvedText, sendAsPeerId: sendAsPeerId, isCurrent: confirmationCurrent) |> take(1) |> deliverOnMainQueue).start(next: { queued in
                             finish(queued ? .success(.object(["status": .string("queued")])) : .failure(DGPluginError(code: "send_failed", message: "ordinary unpaid message was not queued")))
-                        })
+                        }))
                     }
                 } catch let error as DGPluginError { finish(.failure(error)) }
                 catch { finish(.failure(DGPluginError(code: "invalid_argument", message: "native confirmation failed"))) }
-            })
+            }))
         }
     }
 }

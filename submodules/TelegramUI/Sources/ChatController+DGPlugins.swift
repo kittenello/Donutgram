@@ -9,6 +9,7 @@ import UndoUI
 import DGPluginModel
 import DGPluginHost
 import DGPluginsUI
+import DGPluginViewAdapters
 
 private let dgPluginNoticeTag = "donutgram.plugin.notice"
 
@@ -21,6 +22,7 @@ struct DGPluginDraftSnapshot {
 }
 
 final class DGPluginChatState {
+    let lifetime = DGPluginChatLifetime()
     var drafts: [String: DGPluginDraftSnapshot] = [:]
     var selectedMessages: [String: EngineMessage] = [:]
     var renderedPages: [String: DGPluginChatRenderedPage] = [:]
@@ -46,10 +48,11 @@ extension ChatControllerImpl {
         let text = draft.content.plainText
         guard !text.isEmpty, text.utf16.count <= 4096, draft.content.isEntityExpressible(options: []) else { return false }
         let threadId = self.chatLocation.threadId
+        let chatCurrent = self.dgPluginChatState.lifetime.snapshot()
         self.dgPluginChatState.outgoingSendPending = true
         self.dgBindChatPlugins()
         manager.interceptOutgoingText(text, namingPlugin: { [weak self] result, pluginName in
-            guard let self else { return }
+            guard let self, chatCurrent() else { return }
             self.dgPluginChatState.outgoingSendPending = false
             guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
                   self.presentationInterfaceState.interfaceState.effectiveInputState == draft,
@@ -73,7 +76,7 @@ extension ChatControllerImpl {
                 }
                 self.dgPluginChatState.outgoingSendPending = true
                 DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
+                    guard let self, chatCurrent() else { return }
                     self.dgPluginChatState.outgoingSendPending = false
                     guard self.dgPluginSafeComposer(), self.chatLocation.peerId == peerId, self.chatLocation.threadId == threadId,
                           self.presentationInterfaceState.interfaceState.effectiveInputState == expected,

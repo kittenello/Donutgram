@@ -471,9 +471,7 @@ private final class DGPluginPage {
             guard case let .array(choices)? = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue?[setting]?.objectValue?["enum"], choices.count <= 32 else { return }
             let actions = choices.map { choice in
                 TextAlertAction(type: .genericAction, title: self.settingText(choice), action: { [weak self] in
-                    var values = item.settings
-                    values[setting] = choice
-                    self?.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
+                    self?.manager.updateSetting(id: id, key: setting, value: choice, reviewedDigest: item.digest) { [weak self] result in self?.complete(result) }
                 })
             } + [TextAlertAction(type: .defaultAction, title: self.tr("Отмена", "Cancel"), action: {})]
             self.controller?.present(textAlertController(context: self.context, title: setting, text: "", actions: actions), in: .window(.root))
@@ -505,16 +503,11 @@ private final class DGPluginPage {
         } else if key.hasPrefix("grant:"), case let .permissions(id) = self.mode, let item = self.installation(id), let index = Int(key.dropFirst(6)) {
             let requested = item.manifest.permissions + item.manifest.optionalPermissions
             guard requested.indices.contains(index) else { return }
-            let identity = DGPluginPolicy.permissionKey(requested[index])
-            var grants = item.grants.filter { DGPluginPolicy.permissionKey($0) != identity }
-            if value { grants.append(requested[index]) }
-            self.manager.setGrants(id: id, permissions: grants) { [weak self] result in
+            self.manager.setGrant(id: id, permission: requested[index], granted: value, reviewedDigest: item.digest) { [weak self] result in
                 self?.complete(result)
             }
         } else if key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) {
-            var values = item.settings
-            values[String(key.dropFirst(8))] = .bool(value)
-            self.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
+            self.manager.updateSetting(id: id, key: String(key.dropFirst(8)), value: .bool(value), reviewedDigest: item.digest) { [weak self] result in self?.complete(result) }
         }
     }
 
@@ -524,15 +517,15 @@ private final class DGPluginPage {
         guard key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) else { return }
         let setting = String(key.dropFirst(8))
         let schema = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue?[setting]?.objectValue
-        var values = item.settings
+        let updated: DGPluginJSON
         switch schema?["type"]?.stringValue {
         case "number", "integer":
             guard let number = Double(value), number.isFinite else { return }
             if schema?["type"]?.stringValue == "integer" && number.rounded() != number { return }
-            values[setting] = .number(number)
-        default: values[setting] = .string(String(value.prefix(4096)))
+            updated = .number(number)
+        default: updated = .string(String(value.prefix(4096)))
         }
-        self.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
+        self.manager.updateSetting(id: id, key: setting, value: updated, reviewedDigest: item.digest) { [weak self] result in self?.complete(result) }
     }
 
     func number(_ key: String, _ value: Double) {
@@ -541,9 +534,7 @@ private final class DGPluginPage {
             state.invoke(node, value: .number(value))
             self.refresh()
         } else if key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) {
-            var values = item.settings
-            values[String(key.dropFirst(8))] = .number(value)
-            self.manager.updateSettings(id: id, values: values) { [weak self] result in self?.complete(result) }
+            self.manager.updateSetting(id: id, key: String(key.dropFirst(8)), value: .number(value), reviewedDigest: item.digest) { [weak self] result in self?.complete(result) }
         }
     }
 

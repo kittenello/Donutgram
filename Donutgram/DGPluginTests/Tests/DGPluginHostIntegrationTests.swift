@@ -35,11 +35,108 @@ final class DGPluginHostIntegrationTests: XCTestCase {
         return result ?? .failure(DGPluginError(code: "test_timeout", message: "host operation did not complete"))
     }
 
-    private func package(id: String = "dev.example.test-" + UUID().uuidString.lowercased(), version: String = "1.0.0", profile: String = "localPrivate", permissions: [DGPluginPermission] = [], optionalPermissions: [DGPluginPermission] = [], body: String) throws -> DGVerifiedPluginPackage {
-        let manifest = DGPluginManifest(id: id, name: "host test", version: version, description: "host integration fixture", permissions: permissions, optionalPermissions: optionalPermissions, profile: profile)
+    private func package(id: String = "dev.example.test-" + UUID().uuidString.lowercased(), version: String = "1.0.0", profile: String = "localPrivate", permissions: [DGPluginPermission] = [], optionalPermissions: [DGPluginPermission] = [], schema: DGPluginJSON? = nil, body: String) throws -> DGVerifiedPluginPackage {
+        let manifest = DGPluginManifest(id: id, name: "host test", version: version, description: "host integration fixture", permissions: permissions, optionalPermissions: optionalPermissions, settingsSchema: schema, profile: profile)
         let json = String(data: try JSONEncoder().encode(manifest), encoding: .utf8)!
         let source = "const _plugin = \"donutgram\";\nconst manifest = " + json + ";\nexport default definePlugin(manifest,{async activate(api){" + body + "}});"
         return try DGPluginInstaller.preview(data: Data(source.utf8), fileName: "fixture.donut.js")
+    }
+
+    func testSingleSettingUpdatesMergeWithCurrentAccountValues() throws {
+        let schema: DGPluginJSON = .object(["type": .string("object"), "properties": .object(["first": .object(["type": .string("boolean"), "title": .string("first"), "default": .bool(false)]), "second": .object(["type": .string("boolean"), "title": .string("second"), "default": .bool(false)])])])
+        let package = try self.package(schema: schema, body: "")
+        let id = try self.install(package)
+        let completed = [self.expectation(description: "first setting saved"), self.expectation(description: "second setting saved")]
+        for (index, key) in ["first", "second"].enumerated() {
+            self.manager.updateSetting(id: id, key: key, value: .bool(true), reviewedDigest: package.digest) { result in
+                if case let .failure(error) = result { XCTFail(error.message) }
+                completed[index].fulfill()
+            }
+        }
+        self.wait(for: completed, timeout: 5)
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.settings, ["first": .bool(true), "second": .bool(true)])
+        XCTAssertThrowsError(try self.result { self.manager.updateSetting(id: id, key: "first", value: .bool(false), reviewedDigest: "stale", completion: $0) }.get())
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.settings["first"], .bool(true))
+    }
+
+    func testSingleGrantUpdatesRetainOtherQueuedChanges() throws {
+        let first = DGPluginPermission(capability: "composer.read", scope: "activeComposer", reason: "first")
+        let second = DGPluginPermission(capability: "messages.selection.read", scope: "activeSelection", reason: "second")
+        let package = try self.package(optionalPermissions: [first, second], body: "")
+        let id = try self.install(package)
+        let completed = [self.expectation(description: "first grant saved"), self.expectation(description: "second grant saved")]
+        for (index, permission) in [first, second].enumerated() {
+            self.manager.setGrant(id: id, permission: permission, granted: true, reviewedDigest: package.digest) { result in
+                if case let .failure(error) = result { XCTFail(error.message) }
+                completed[index].fulfill()
+            }
+        }
+        self.wait(for: completed, timeout: 5)
+        let expected = Set([first, second].map(DGPluginPolicy.permissionKey))
+        XCTAssertEqual(Set((self.manager.installations.first(where: { $0.id == id })?.grants ?? []).map(DGPluginPolicy.permissionKey)), expected)
+        try self.result { self.manager.setGrant(id: id, permission: first, granted: false, reviewedDigest: package.digest, completion: $0) }.get()
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.grants, [second])
+        XCTAssertThrowsError(try self.result { self.manager.setGrant(id: id, permission: second, granted: false, reviewedDigest: "stale", completion: $0) }.get())
+        XCTAssertEqual(self.manager.installations.first(where: { $0.id == id })?.grants, [second])
+    }
+
+    func testStoppingActivationAlwaysCompletesItsEnableRequest() throws {
+        let package = try self.package(body: "while(true){}")
+        let id = try self.install(package)
+        let completed = self.expectation(description: "cancelled activation completed")
+        var completions = 0
+        self.manager.setEnabled(id: id, enabled: true) { result in
+            completions += 1
+            if case let .failure(error) = result { XCTAssertEqual(error.code, "cancelled") }
+            else { XCTFail("stopped activation succeeded") }
+            completed.fulfill()
+        }
+        self.manager.setForegroundActive(false)
+        self.wait(for: [completed], timeout: 5)
+        XCTAssertEqual(completions, 1)
+        XCTAssertNil(self.manager.nativeScope(installationId: id))
+    }
+
+    func testSelectedFileReadSurvivesPickerWaitWithoutRenewingOtherGestures() throws {
+        let ui = DGPluginPermission(capability: "ui.contribute", scope: "settings", reason: "file command")
+        let files = DGPluginPermission(capability: "files.userSelected", scope: "selectedFile", reason: "selected file")
+        let composer = DGPluginPermission(capability: "composer.read", scope: "activeComposer", reason: "gesture test")
+        let package = try self.package(permissions: [ui, files, composer], body: """
+            await api.commands.register({id:'file',title:'file',placement:'settings',run:async()=>{
+                const file=await api.files.pick();
+                let denied=false;try{await api.composer.getActiveDraft()}catch(e){denied=e.code==='permission_denied'}
+                if(!denied)throw Error('picker renewed unrelated gesture');
+                const value=await api.files.read({handle:file.handle});
+                if(value.text!=='selected text')throw Error('selected file unreadable');
+            }});
+            """)
+        let id = try self.install(package, permissions: [ui, files, composer])
+        try self.result { self.manager.setEnabled(id: id, enabled: true, completion: $0) }.get()
+        let picked = self.expectation(description: "native picker remained current after gesture timeout")
+        let read = self.expectation(description: "selected handle reached file adapter")
+        self.manager.nativeRequest = { _, method, params, valid, completion in
+            if method == "files.pick" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.2) {
+                    XCTAssertTrue(valid())
+                    completion(.success(.object(["handle": .string("selected-file")])))
+                    picked.fulfill()
+                }
+            } else if method == "files.read" {
+                XCTAssertTrue(valid())
+                XCTAssertEqual(params.objectValue?["handle"], .string("selected-file"))
+                completion(.success(.object(["text": .string("selected text")])))
+                read.fulfill()
+            } else {
+                XCTFail("expired gesture reached native adapter: " + method)
+                completion(.failure(DGPluginError(code: "permission_denied", message: "expired gesture")))
+            }
+        }
+        let completed = self.expectation(description: "file command completed")
+        self.manager.runCommand(installationId: id, commandId: "file") { result in
+            if case let .failure(error) = result { XCTFail("file command failed: " + error.code) }
+            completed.fulfill()
+        }
+        self.wait(for: [picked, read, completed], timeout: 9)
     }
 
     func testDisabledSettingsKeepChatHandlersAndSavedEnableStateOff() throws {

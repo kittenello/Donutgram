@@ -8114,6 +8114,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        self.dgPluginChatState.lifetime.open()
         self.dgBindChatPlugins()
         self.dgPluginChatOpened()
         self.forwardSideListAppearance(.didAppear, animated: animated)
@@ -8570,6 +8571,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        self.dgPluginChatClosing()
         self.forwardSideListAppearance(.willDisappear, animated: animated)
 
         self.walletTransferAnimationsVisible = false

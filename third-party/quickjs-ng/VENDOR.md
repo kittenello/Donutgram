@@ -303,7 +303,7 @@ Re-apply these after upgrading; `git diff 55b3934a98 -- third-party/quickjs-ng/q
         operation (the plugin host grants eight million per operation). Zero, the default every widget runtime keeps,
         leaves every changed site as upstream's. Charged: property and length traversal, string buffer writes, sort
         comparisons (`js_native_sort`), string search and trim, BigInt multiplication, division and conversion,
-        source and JSON tokenization, and the regexp timeout callback. Sparse huge lengths and quadratic estimates are
+        source and JSON tokenization, unicode normalization and final-sigma scans, and the regexp timeout callback. Sparse huge lengths and quadratic estimates are
         refused before the native operation starts. Entering a C function polls the interrupt handler, and so does
         every 1,024th charged unit. Running out stops the runtime through change 10's latch; resetting the allowance
         never clears it.

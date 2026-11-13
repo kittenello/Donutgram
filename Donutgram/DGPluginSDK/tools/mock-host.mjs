@@ -47,7 +47,7 @@ const rules = {
   'navigation.open': ['navigation.open', 'safeScreens', true],
   'notifications.local': ['notifications.local', 'pluginAccount', true],
   'files.pick': ['files.userSelected', 'selectedFile', true],
-  'files.read': ['files.userSelected', 'selectedFile', true],
+  'files.read': ['files.userSelected', 'selectedFile'],
   'translation.request': ['translation.request', 'selectedText', true],
   'messages.prepare': ['messages.sendInteractive', 'chosenRecipient', true],
   'messages.sendInteractive': ['messages.sendInteractive', 'chosenRecipient', true],

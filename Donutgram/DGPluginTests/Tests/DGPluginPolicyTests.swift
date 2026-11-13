@@ -44,9 +44,12 @@ final class DGPluginPolicyTests: XCTestCase {
 
     func testUnavailableAdaptersFailClosed() {
         XCTAssertNil(DGPluginPolicy.methods["ui.transform"])
-        for method in ["composer.getActiveDraft", "composer.replaceSelection", "selection.get", "messages.read", "peers.read", "chats.metadata", "messages.prepare", "messages.sendInteractive", "navigation.open", "files.pick", "files.read", "notifications.local", "translation.request"] {
+        for method in ["composer.getActiveDraft", "composer.replaceSelection", "selection.get", "messages.read", "peers.read", "chats.metadata", "messages.prepare", "messages.sendInteractive", "navigation.open", "files.pick", "notifications.local", "translation.request"] {
             XCTAssertEqual(DGPluginPolicy.methods[method]?.requiresGesture, true, method)
         }
+        XCTAssertEqual(DGPluginPolicy.methods["files.read"]?.requiresGesture, false)
+        XCTAssertEqual(DGPluginPolicy.methods["files.read"]?.capability, "files.userSelected")
+        XCTAssertEqual(DGPluginPolicy.methods["files.read"]?.scope, "selectedFile")
     }
 
     func testProfileSeparationIncludesOptionalPermissions() {

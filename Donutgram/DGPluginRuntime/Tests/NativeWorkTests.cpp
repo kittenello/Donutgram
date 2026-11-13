@@ -67,7 +67,46 @@ int main(int argc, char **argv) {
         Requests requests;
         DGJSHost *host = dgjs_create(request, &requests);
         check(host != nullptr, "create production runtime");
-        if (name == "detached_wait") {
+        if (name == "transforms_lifecycle" || name == "transforms_retry" || name == "commands_lifecycle" || name == "commands_retry" || name == "commands_limit" || name == "events_lifecycle" || name == "events_retry" || name == "events_limit" || name == "unicode_values") {
+            const std::vector<std::pair<std::string, std::string>> fixtures = {
+                {"transforms_lifecycle", R"JS(definePlugin({async activate(api){const owned=await api.transforms.register({id:'same',slot:'profile'},()=>({hide:['old']}));const closing=owned.dispose();if(owned.dispose()!==closing)throw Error('concurrent dispose');let denied=false;try{await api.transforms.register({id:'same',slot:'profile'},()=>({hide:['racing']}))}catch(e){denied=e.code==='transform_limit'}if(!denied)throw Error('unregister race');await closing;await api.transforms.register({id:'same',slot:'profile'},()=>({hide:['new']}));await owned.dispose()}}))JS"},
+                {"transforms_retry", R"JS(definePlugin({async activate(api){let denied=false;try{await api.transforms.register({id:'retry',slot:'profile'},()=>({hide:[]}))}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('register denial');const owned=await api.transforms.register({id:'retry',slot:'profile'},()=>({hide:[]}));denied=false;try{await owned.dispose()}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('dispose denial');await owned.dispose();await owned.dispose()}}))JS"},
+                {"commands_lifecycle", R"JS(definePlugin({async activate(api){const first=api.commands.register({id:'same'},()=>{});let denied=false;try{await api.commands.register({id:'same'},()=>{})}catch(e){denied=e.code==='invalid_command'}if(!denied)throw Error('concurrent duplicate');const owned=await first;const closing=owned.dispose();denied=false;try{await api.commands.register({id:'same'},()=>{})}catch(e){denied=e.code==='invalid_command'}if(!denied)throw Error('unregister race');await closing;await owned.dispose();await api.commands.register({id:'same'},()=>api.storage.set('command','new'));await owned.dispose()}}))JS"},
+                {"commands_retry", R"JS(definePlugin({async activate(api){let denied=false;try{await api.commands.register({id:'retry'},()=>{})}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('register denial');const owned=await api.commands.register({id:'retry'},()=>{});denied=false;try{await owned.dispose()}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('dispose denial');await owned.dispose();await owned.dispose()}}))JS"},
+                {"commands_limit", R"JS(definePlugin({async activate(api){const owned=[];for(let i=0;i<64;i++)owned.push(api.commands.register({id:'c'+i},()=>{}));let denied=false;try{await api.commands.register({id:'overflow'},()=>{})}catch(e){denied=e.code==='invalid_command'}if(!denied)throw Error('command quota');await Promise.all(owned)}}))JS"},
+                {"events_lifecycle", R"JS(definePlugin({async activate(api){const handler=()=>api.storage.set('event',true);const [a,b]=await Promise.all([api.events.on('theme.changed',handler),api.events.on('theme.changed',handler)]);await a.dispose();await a.dispose();api.ui.callback(async()=>{const closing=b.dispose();const next=api.events.on('theme.changed',handler);await closing;await next;await b.dispose();await b.dispose()})}}))JS"},
+                {"events_retry", R"JS(definePlugin({async activate(api){let denied=false;try{await api.events.on('theme.changed',()=>{})}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('subscribe denial');const owned=await api.events.on('theme.changed',()=>{});denied=false;try{await owned.dispose()}catch(e){denied=e.code==='permission_denied'}if(!denied)throw Error('unsubscribe denial');await owned.dispose();await owned.dispose()}}))JS"},
+                {"events_limit", R"JS(definePlugin({async activate(api){const owned=[];for(let i=0;i<16;i++)owned.push(api.events.on('shared',()=>{}));let denied=false;try{await api.events.on('shared',()=>{})}catch(e){denied=e.code==='event_limit'}if(!denied)throw Error('listener quota');for(let i=0;i<63;i++)owned.push(api.events.on('event'+i,()=>{}));denied=false;try{await api.events.on('overflow',()=>{})}catch(e){denied=e.code==='invalid_event'}if(!denied)throw Error('event quota');await Promise.all(owned)}}))JS"},
+                {"unicode_values", R"JS(definePlugin({activate(){for(const [input,form,expected] of [['e\u0301','NFC','\u00e9'],['\u00e9','NFD','e\u0301'],['\ufb01','NFKC','fi'],['\uac01','NFD','\u1100\u1161\u11a8'],['a\u0315\u0300','NFD','a\u0300\u0315']])if(input.normalize(form)!==expected)throw Error('normalization value');if('e\u0301'.localeCompare('\u00e9')!==0||'\u039f\u03a3'.toLowerCase()!=='\u03bf\u03c2'||'\u039f\u03a3\u0391'.toLowerCase()!=='\u03bf\u03c3\u03b1'||'\u00df'.toUpperCase()!=='SS')throw Error('case value')}}))JS"}
+            };
+            for (const auto &fixture : fixtures) if (fixture.first == name) add(host, fixture.second);
+            size_t replied = 0;
+            auto drive = [&](int status) {
+                while (status > 0) {
+                    const auto ids = requests.ids;
+                    while (replied < ids.size()) {
+                        const size_t index = replied++;
+                        const bool denied = (name == "commands_retry" || name == "events_retry" || name == "transforms_retry") && (index == 0 || index == 2);
+                        check(dgjs_reply(host, ids[index], denied ? "{\"error\":{\"code\":\"permission_denied\"}}" : "{\"result\":null}") == 0, "registration native response accepted");
+                    }
+                    status = dgjs_pump(host);
+                }
+                return status;
+            };
+            check(drive(dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 0, "registration lifecycle activation succeeds");
+            const size_t expected = name == "commands_lifecycle" || name == "transforms_lifecycle" ? 3 : name == "commands_retry" || name == "events_retry" || name == "transforms_retry" ? 4 : name == "commands_limit" || name == "events_limit" ? 64 : name == "events_lifecycle" ? 1 : 0;
+            check(requests.ids.size() == expected, "only required native registrations and disposals occur");
+            if (name == "transforms_lifecycle") {
+                check(drive(dgjs_dispatch(host, "transform", "{\"id\":\"same\",\"input\":{},\"requestId\":\"after\"}")) == 0 && requests.ids.size() == 4 && requests.envelopes.back().find("\"hide\":[\"new\"]") != std::string::npos, "stale transform disposal preserves the new handler");
+            } else if (name == "commands_lifecycle") {
+                check(drive(dgjs_dispatch(host, "command", "{\"id\":\"same\"}")) == 0 && requests.ids.size() == 4 && requests.envelopes.back().find("\"value\":\"new\"") != std::string::npos, "stale command disposal preserves the new handler");
+            } else if (name == "events_lifecycle") {
+                check(drive(dgjs_dispatch(host, "event", "{\"name\":\"theme.changed\"}")) == 0 && requests.ids.size() == 2, "same handler registrations have independent ownership");
+                check(drive(dgjs_dispatch(host, "ui", "{\"id\":\"callback.1\"}")) == 0 && requests.ids.size() == 4, "resubscribe waits for pending unsubscribe");
+                check(requests.envelopes[2].find("events.unsubscribe") != std::string::npos && requests.envelopes[3].find("events.subscribe") != std::string::npos, "native subscription operations retain lifecycle order");
+                check(drive(dgjs_dispatch(host, "event", "{\"name\":\"theme.changed\"}")) == 0 && requests.ids.size() == 5, "stale event disposal preserves the new subscription");
+            }
+        } else if (name == "detached_wait") {
             add(host, "definePlugin({activate(api){api.storage.get('old').then(async()=>{await api.storage.set('done',true)})}})");
             check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "detached native promises keep their originating operation pending");
             check(requests.ids.size() == 1, "one detached originating request");
@@ -110,8 +149,8 @@ int main(int argc, char **argv) {
             int status = 0;
             for (int i = 0; i < 80 && status == 0; ++i) status = settle(host, dgjs_dispatch(host, "ui", "{\"id\":\"callback.1\",\"value\":null}"));
             check(status < 0 && std::strcmp(dgjs_error(host), "cpu_budget_exceeded") == 0, "thread cpu is bounded across individually valid callbacks");
-        } else if (name == "stop_join" || name == "stop_regexp") {
-            std::string operation = name == "stop_join" ? "Array.prototype.join.call({length:7000000},'');" : "/^(a+)+$/.test('a'.repeat(30)+'!');";
+        } else if (name == "stop_join" || name == "stop_regexp" || name == "stop_unicode") {
+            std::string operation = name == "stop_join" ? "Array.prototype.join.call({length:7000000},'');" : name == "stop_unicode" ? "('\\u0315'.repeat(20000)+'\\u0300'.repeat(20000)).normalize();" : "/^(a+)+$/.test('a'.repeat(30)+'!');";
             add(host, "definePlugin({activate(api){api.storage.get('begin');" + operation + "}})");
             // The join is charged most of its work budget up front and ends by itself with native_work_limit a few
             // milliseconds after the request, so a timed stop can come too late. Its request waits until the stop has been
@@ -128,6 +167,7 @@ int main(int argc, char **argv) {
             int status = dgjs_start(host, "main.js", bootstrap.c_str(), "{}");
             stopper.join();
             check(status < 0 && std::strcmp(dgjs_error(host), "cancelled") == 0, "external stop interrupts native work while executing");
+            if (name == "stop_unicode") check(std::chrono::steady_clock::now() - start < std::chrono::milliseconds(500), "unicode cancellation is observed inside normalization");
         } else if (name == "compile") {
             std::string source;
             for (int i = 0; i < 45000; ++i) source += "let a" + std::to_string(i) + "=" + std::to_string(i) + ";";
@@ -188,6 +228,9 @@ int main(int argc, char **argv) {
             check(status == 0 && replied == 11, "typed wrappers propagate native errors through real bridge");
         } else {
             const std::vector<std::pair<std::string, std::string>> fixtures = {
+                {"unicode_normalize", "('\\u0315'.repeat(20000)+'\\u0300'.repeat(20000)).normalize('NFD');"},
+                {"unicode_locale", "('\\u0315'.repeat(20000)+'\\u0300'.repeat(20000)).localeCompare('a');"},
+                {"unicode_case", "const x='A\\u03a3'+'\\u0345'.repeat(500000);for(;;)x.toLowerCase();"},
                 {"join", "Array.prototype.join.call({length:2**40},'');"},
                 {"reverse", "Array.prototype.reverse.call({length:2**40});"},
                 {"sparse_sort", "Array.prototype.sort.call({length:2**40});"},
@@ -212,6 +255,7 @@ int main(int argc, char **argv) {
                 add(host, "definePlugin({async activate(api){" + fixture.second + "}})");
                 int status = settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}"));
                 check(status < 0, "hostile native work or unresolved pure promise must fail");
+                if (name == "unicode_normalize" || name == "unicode_locale") check(std::strcmp(dgjs_error(host), "native_work_limit") == 0, "unicode work stops inside the helper before the operation returns");
                 std::printf("%s: %s\n", name.c_str(), dgjs_error(host));
                 check(dgjs_dispatch(host, "event", "{\"name\":\"x\"}") < 0, "stop is irreversible");
             }

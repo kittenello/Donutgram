@@ -4,6 +4,9 @@ import sys
 
 
 CASES = [
+    "transforms_lifecycle", "transforms_retry",
+    "commands_lifecycle", "commands_retry", "commands_limit", "events_lifecycle", "events_retry", "events_limit",
+    "unicode_normalize", "unicode_locale", "unicode_case", "unicode_values", "stop_unicode",
     "join", "reverse", "sparse_sort", "regexp", "replace", "sort",
     "typed_sort", "regexp_linear", "stringify", "parse", "repeat", "trim", "bigint", "pending_storm",
     "pure_promise", "caught_join", "native_wait", "wait_cancel", "detached_wait",

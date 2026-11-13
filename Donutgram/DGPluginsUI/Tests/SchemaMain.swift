@@ -34,6 +34,16 @@ struct DGPluginPageSchemaTests {
     }
 
     static func main() throws {
+        for (minimum, maximum, step) in [(0.0, 1.0, 0.3), (-2.0, 0.0, 0.3), (0.0, 1.0, 0.1)] {
+            for index in 0...1000 {
+                let raw = minimum + Double(index) / 1000 * (maximum - minimum)
+                let value = dgPluginNumericControlValue(raw, minimum: minimum, maximum: maximum, step: step)
+                let position = (value - minimum) / step
+                guard value >= minimum, value <= maximum, abs(position.rounded() - position) <= 1e-6 else { throw DGPluginError(code: "test_failure", message: "numeric control emitted off-grid value") }
+            }
+        }
+        guard abs(dgPluginNumericControlValue(1, minimum: 0, maximum: 1, step: 0.3) - 0.9) < 1e-9 else { throw DGPluginError(code: "test_failure", message: "slider exceeded its last valid step") }
+        passed += 1
         try accepts("plain text", page([node("text", fields: ["text": .string("hello")])]))
         try accepts("markdown remains data", page([node("markdown", fields: ["text": .string("# heading\n**bold** <script> literal [label](https://example.org)")])]))
         try accepts("multiline text", page([node("multiline", fields: ["value": .string("one\ntwo"), "callbackId": .string("callback.1")])]))

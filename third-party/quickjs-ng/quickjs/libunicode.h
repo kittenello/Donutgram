@@ -111,7 +111,8 @@ bool lre_is_white_space(uint32_t c);
 
 int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
                       UnicodeNormalizationEnum n_type,
-                      void *opaque, void *(*realloc_func)(void *opaque, void *ptr, size_t size));
+                      void *opaque, void *(*realloc_func)(void *opaque, void *ptr, size_t size),
+                      int (*work_func)(void *opaque, uint64_t units));
 
 /* Unicode character range functions */
 

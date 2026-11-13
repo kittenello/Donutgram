@@ -48551,7 +48551,7 @@ static int string_prevc(JSString *p, int *pidx)
     return c;
 }
 
-static bool test_final_sigma(JSString *p, int sigma_pos)
+static int test_final_sigma(JSContext *ctx, JSString *p, int sigma_pos)
 {
     int k, c1;
 
@@ -48559,6 +48559,8 @@ static bool test_final_sigma(JSString *p, int sigma_pos)
        a cased letter */
     k = sigma_pos;
     for(;;) {
+        if (js_native_work(ctx, 1))
+            return -1;
         c1 = string_prevc(p, &k);
         if (!lre_is_case_ignorable(c1))
             break;
@@ -48570,6 +48572,8 @@ static bool test_final_sigma(JSString *p, int sigma_pos)
        no cased letter */
     k = sigma_pos + 1;
     for(;;) {
+        if (js_native_work(ctx, 1))
+            return -1;
         if (k >= p->len)
             return true;
         c1 = string_getc(p, &k);
@@ -48587,11 +48591,24 @@ static int to_utf32_buf(JSContext *ctx, JSString *p, uint32_t **pbuf)
     j = -1;
     n = p->len;
     b = js_malloc(ctx, max_int(1, n) * sizeof(*b));
-    if (b)
-        for (i = j = 0; i < n;)
+    if (b) {
+        for (i = j = 0; i < n;) {
+            if (js_native_work(ctx, 1)) {
+                js_free(ctx, b);
+                b = NULL;
+                j = -1;
+                break;
+            }
             b[j++] = string_getc(p, &i);
+        }
+    }
     *pbuf = b;
     return j;
+}
+
+static int js_unicode_work(void *opaque, uint64_t units)
+{
+    return js_native_work(opaque, units);
 }
 
 static JSValue js_string_localeCompare(JSContext *ctx, JSValueConst this_val,
@@ -48623,7 +48640,8 @@ static JSValue js_string_localeCompare(JSContext *ctx, JSValueConst this_val,
 
     // TODO(bnoordhuis) skip normalization when input is latin1
     an = unicode_normalize(&ts, as, an, UNICODE_NFC, ctx,
-                           (DynBufReallocFunc *)js_realloc);
+                           (DynBufReallocFunc *)js_realloc,
+                           ctx->rt->native_work_limit ? js_unicode_work : NULL);
     if (an == -1)
         goto exception;
     js_free(ctx, as);
@@ -48631,16 +48649,20 @@ static JSValue js_string_localeCompare(JSContext *ctx, JSValueConst this_val,
 
     // TODO(bnoordhuis) skip normalization when input is latin1
     bn = unicode_normalize(&ts, bs, bn, UNICODE_NFC, ctx,
-                           (DynBufReallocFunc *)js_realloc);
+                           (DynBufReallocFunc *)js_realloc,
+                           ctx->rt->native_work_limit ? js_unicode_work : NULL);
     if (bn == -1)
         goto exception;
     js_free(ctx, bs);
     bs = ts;
 
     n = min_int(an, bn);
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i++) {
+        if (js_native_work(ctx, 1))
+            goto exception;
         if (as[i] != bs[i])
             break;
+    }
     if (i < n)
         cmp = compare_u32(as[i], bs[i]);
     else
@@ -48661,7 +48683,7 @@ static JSValue js_string_toLowerCase(JSContext *ctx, JSValueConst this_val,
     JSValue val;
     StringBuffer b_s, *b = &b_s;
     JSString *p;
-    int i, c, j, l;
+    int i, c, j, l, final_sigma;
     uint32_t res[LRE_CC_RES_LEN_MAX];
 
     val = JS_ToStringCheckObject(ctx, this_val);
@@ -48673,8 +48695,13 @@ static JSValue js_string_toLowerCase(JSContext *ctx, JSValueConst this_val,
     if (string_buffer_init(ctx, b, p->len))
         goto fail;
     for(i = 0; i < p->len;) {
+        if (js_native_work(ctx, 1))
+            goto fail;
         c = string_getc(p, &i);
-        if (c == 0x3a3 && to_lower && test_final_sigma(p, i - 1)) {
+        final_sigma = c == 0x3a3 && to_lower ? test_final_sigma(ctx, p, i - 1) : 0;
+        if (final_sigma < 0)
+            goto fail;
+        if (final_sigma) {
             res[0] = 0x3c2; /* final sigma */
             l = 1;
         } else {
@@ -48773,7 +48800,8 @@ static JSValue js_string_normalize(JSContext *ctx, JSValueConst this_val,
     }
 
     out_len = unicode_normalize(&out_buf, buf, buf_len, n_type,
-                                ctx->rt, (DynBufReallocFunc *)js_realloc_rt);
+                                ctx, (DynBufReallocFunc *)js_realloc,
+                                ctx->rt->native_work_limit ? js_unicode_work : NULL);
     js_free(ctx, buf);
     if (out_len < 0)
         return JS_EXCEPTION;
