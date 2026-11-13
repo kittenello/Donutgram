@@ -35,6 +35,16 @@ final class DGPluginNetworkTests: XCTestCase {
         XCTAssertThrowsError(try DGPluginHTTPResponse.parse(prefix + Data("llo!".utf8), method: "GET", endOfStream: true))
     }
 
+    func testRepeatedResponseMetadataAndStrictFraming() throws {
+        let wire = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\nVary: Accept\r\nVary: Origin\r\nCache-Control: public\r\nCache-Control: max-age=60\r\n\r\nok"
+        let response = try XCTUnwrap(DGPluginHTTPResponse.parse(Data(wire.utf8), method: "GET", endOfStream: true))
+        XCTAssertEqual(response.body, Data("ok".utf8))
+        XCTAssertEqual(response.headers, ["cache-control": "public, max-age=60"])
+        for header in ["Content-Length: 0\r\ncOnTeNt-LeNgTh: 0", "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked", "Content-Encoding: identity\r\nContent-Encoding: gzip"] {
+            XCTAssertThrowsError(try DGPluginHTTPResponse.parse(Data(("HTTP/1.1 200 OK\r\n" + header + "\r\n\r\n").utf8), method: "GET", endOfStream: true))
+        }
+    }
+
     func testChunkedBodyAndClosureFraming() throws {
         let prefix = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
         let wire = Data((prefix + "2\r\nhe\r\n3\r\nllo\r\n0\r\n\r\n").utf8)

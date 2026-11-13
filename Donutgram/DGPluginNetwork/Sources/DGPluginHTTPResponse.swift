@@ -32,9 +32,14 @@ public struct DGPluginHTTPResponse {
             guard !line.isEmpty, let colon = line.firstIndex(of: ":") else { throw DGPluginError(code: "invalid_response", message: "malformed response header") }
             let name = String(line[..<colon]).lowercased()
             let rawValue = line[line.index(after: colon)...]
-            guard !name.isEmpty, name.utf8.count <= 128, name.unicodeScalars.allSatisfy(token.contains), headers[name] == nil,
+            guard !name.isEmpty, name.utf8.count <= 128, name.unicodeScalars.allSatisfy(token.contains), (headers[name] == nil || !["content-length", "transfer-encoding", "content-encoding", "content-type", "etag", "last-modified"].contains(name)),
                   rawValue.unicodeScalars.allSatisfy({ $0.value == 9 || ($0.value >= 32 && $0.value <= 126) }) else { throw DGPluginError(code: "invalid_response", message: "ambiguous response headers") }
-            headers[name] = rawValue.trimmingCharacters(in: .whitespaces)
+            let value = rawValue.trimmingCharacters(in: .whitespaces)
+            if name == "cache-control", let previous = headers[name] {
+                headers[name] = previous + ", " + value
+            } else {
+                headers[name] = value
+            }
         }
         guard headers["content-encoding"] == nil || headers["content-encoding"]?.lowercased() == "identity" else { throw DGPluginError(code: "invalid_response", message: "compressed responses are not accepted") }
         guard headers["transfer-encoding"] == nil || headers["transfer-encoding"]?.lowercased() == "chunked", headers["transfer-encoding"] == nil || headers["content-length"] == nil else { throw DGPluginError(code: "invalid_response", message: "ambiguous response framing") }
