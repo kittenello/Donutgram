@@ -128,7 +128,9 @@ int main(int argc, char **argv) {
                 check(dgjs_pump(host) < 0 && dgjs_reply(host, requests.ids.front(), "{\"result\":null}") < 0, "stop invalidates wait and late native reply");
             }
         } else if (name == "cumulative_active") {
-            add(host, "definePlugin({async activate(api){await api.storage.get('a');let until=Date.now()+700;while(Date.now()<until){}await api.storage.get('b');until=Date.now()+700;while(Date.now()<until){}}})");
+            // The inner loops do no native work: a bare Date.now() loop spends the operation's native work limit in about
+            // the time the CPU budget runs out, and the two would race for the error.
+            add(host, "definePlugin({async activate(api){await api.storage.get('a');let until=Date.now()+700;while(Date.now()<until){for(let i=0;i<64;i++){}}await api.storage.get('b');until=Date.now()+700;while(Date.now()<until){for(let i=0;i<64;i++){}}}})");
             check(settle(host, dgjs_start(host, "main.js", bootstrap.c_str(), "{}")) == 2, "first native wait");
             check(dgjs_reply(host, requests.ids.back(), "{\"result\":null}") == 0, "first reply");
             check(settle(host, dgjs_pump(host)) == 2, "second native wait");

@@ -44,6 +44,8 @@ struct DGJSHost {
     uint64_t opCpuUsed = 0;
     uint64_t opCpuBudget = 0;
     uint64_t cpuSliceStart = 0;
+    // When interrupt() last read the thread's CPU clock (or the current slice began).
+    std::chrono::steady_clock::time_point cpuCheckedAt;
     unsigned cpuSliceDepth = 0;
     bool cpuClockAvailable = false;
     std::set<int64_t> pendingNative;
@@ -107,6 +109,7 @@ struct ExecutionSlice {
             auto now = std::chrono::steady_clock::now();
             if (now - h->cpuWindowStart >= std::chrono::seconds(60)) { h->cpuWindowStart = now; h->cpuWindowUsed = 0; }
             h->cpuClockAvailable = threadCPU(h->cpuSliceStart);
+            h->cpuCheckedAt = now;
             if (!h->cpuClockAvailable) fail(h, "cpu_clock_unavailable");
         }
     }
@@ -155,13 +158,22 @@ static int interrupt(JSRuntime *, void *opaque) {
     auto *h = static_cast<DGJSHost *>(opaque);
     if (h->stopped.load()) { if (!h->error) h->error = "cancelled"; JS_SetStopped(h->runtime); return 1; }
     if (JS_IsStopped(h->runtime)) { fail(h, "native_work_limit"); return 1; }
-    uint64_t cpuNow;
-    if (h->cpuClockAvailable && threadCPU(cpuNow) && cpuNow >= h->cpuSliceStart) {
-        uint64_t slice = cpuNow - h->cpuSliceStart;
+    // The engine polls this on entry to every C function, and reading the thread's CPU clock is a system call charged to
+    // the plugin's own budget, so the clock is read at most once a millisecond. Thread CPU time cannot grow faster than
+    // wall time, so a budget is exceeded by at most that millisecond. The time of the slices that already ended is
+    // checked on every call: a slice begins with a fresh reading, so many short slices would otherwise never be checked.
+    auto now = std::chrono::steady_clock::now();
+    if (h->cpuClockAvailable) {
+        uint64_t slice = 0;
+        uint64_t cpuNow;
+        if (now - h->cpuCheckedAt >= std::chrono::milliseconds(1)) {
+            h->cpuCheckedAt = now;
+            if (threadCPU(cpuNow) && cpuNow >= h->cpuSliceStart) slice = cpuNow - h->cpuSliceStart;
+        }
         if (h->cpuWindowUsed + slice >= 2000000000) { fail(h, "cpu_budget_exceeded"); return 1; }
         if (h->opCpuBudget && h->opCpuUsed + slice >= h->opCpuBudget) { fail(h, "execution_timeout"); return 1; }
     }
-    if (std::chrono::steady_clock::now() >= h->deadline) {
+    if (now >= h->deadline) {
         fail(h, "execution_timeout");
         return 1;
     }
