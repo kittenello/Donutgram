@@ -34,6 +34,7 @@ def main():
             lines.append("do { " + invocation + "; try test.tearDownWithError() } catch { try? test.tearDownWithError(); throw error }")
             lines.extend([f'report("{classname}.{method}: passed")', "}"])
     lines.extend([
+        "try runDeferredSaveRegressions()",
         "try runPluginReviewRegressionTests()",
         "try runNativeActionTests()",
         "try runSemanticVersionTests()",

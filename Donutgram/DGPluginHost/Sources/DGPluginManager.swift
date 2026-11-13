@@ -144,6 +144,7 @@ private final class DGPluginCoordinator {
     /// Set when a deferred save of plugin-written data failed; cleared by the next successful save.
     var deferredSaveError: String?
     private var savePending = false
+    private var saveScheduled = false
     #if DG_PLUGIN_TESTS
     var testIOFailure: String?
     #endif
@@ -206,15 +207,21 @@ private final class DGPluginCoordinator {
     /// call: every save writes the whole state file. Management operations keep saving at once, and leaving the
     /// foreground saves what is pending.
     func scheduleSave() {
-        guard !savePending else { return }
         savePending = true
-        queue.asyncAfter(deadline: .now() + 0.5) { self.saveIfPending() }
+        guard !saveScheduled else { return }
+        saveScheduled = true
+        queue.asyncAfter(deadline: .now() + 0.5) {
+            self.saveScheduled = false
+            self.saveIfPending()
+        }
     }
 
     func saveIfPending() {
         guard savePending else { return }
+        let recovering = deferredSaveError != nil
         do {
             try persist()
+            if recovering { publishAll() }
         } catch {
             deferredSaveError = "unable to save plugin data; its latest changes may be lost after a restart"
             publishAll()
@@ -224,11 +231,10 @@ private final class DGPluginCoordinator {
     func persist() throws {
         guard startupError == nil else { throw startupError! }
         try testFailure("persist")
-        // This write contains everything a deferred save was waiting for.
-        savePending = false
         let data = try JSONEncoder().encode(state)
         guard data.count <= 32 * 1024 * 1024 else { throw DGPluginError(code: "quota_exceeded", message: "plugin state exceeds its limit") }
         try data.write(to: root.appendingPathComponent("state.json"), options: .atomic)
+        savePending = false
         stateBytes = data.count
         deferredSaveError = nil
     }
