@@ -352,6 +352,7 @@ private final class DGPluginPage {
             }
         case let .rendered(state):
             guard state.validity() else { add(0, .text, "", self.tr("Плагин остановлен или доступ отозван. Закройте эту страницу.", "The plugin stopped or permission was revoked. Close this page.")); break }
+            add(0, .text, "", self.tr("Страница плагина «", "A page of the plugin “") + state.pluginName + self.tr("». Не вводите здесь коды входа и пароли от Telegram.", "”. Do not enter Telegram login codes or passwords here."))
             var section: Int32 = 1
             func append(_ nodes: [DGPluginRenderNode]) {
                 for node in nodes {
