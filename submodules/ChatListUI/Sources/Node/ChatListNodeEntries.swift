@@ -98,6 +98,7 @@ public enum ChatListNodeEntryPromoInfo: Equatable {
 enum ChatListNodeEntry: Comparable, Identifiable {
     struct PeerEntryData: Equatable {
         var index: EngineChatList.Item.Index
+        var pluginLocalRank: Int? = nil
         var presentationData: ChatListPresentationData
         var messages: [EngineMessage]
         var readState: EnginePeerReadCounters?
@@ -494,6 +495,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
     }
     
     static func <(lhs: ChatListNodeEntry, rhs: ChatListNodeEntry) -> Bool {
+        if case let .PeerEntry(left) = lhs, case let .PeerEntry(right) = rhs, let leftRank = left.pluginLocalRank, let rightRank = right.pluginLocalRank { return leftRank < rightRank }
         return lhs.sortIndex < rhs.sortIndex
     }
     

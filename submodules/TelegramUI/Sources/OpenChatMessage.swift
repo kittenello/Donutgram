@@ -1,4 +1,5 @@
 import Foundation
+import DGPluginsUI
 import MediaPlayer
 import AVFAudio
 import Display
@@ -241,6 +242,12 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                 if immediateShare {
                     let controller = params.context.sharedContext.makeShareScreen(context: params.context, params: ShareControllerParams(subject: .media(.standalone(media: file), nil), immediateExternalShare: true))
                     params.present(controller, nil, .window(.root))
+                } else if dgOpenPluginDocument(context: params.context, file: .message(message: MessageReference(params.message), media: file), present: { controller in
+                    params.present(controller, nil, .window(.root))
+                }, presentOverlay: { controller in
+                    params.present(controller, nil, .window(.root))
+                }) {
+                    return true
                 } else if let rootController = params.navigationController?.view.window?.rootViewController {
                     let proceed = {
                         let canShare = !params.message.isCopyProtected() && !params.copyProtected

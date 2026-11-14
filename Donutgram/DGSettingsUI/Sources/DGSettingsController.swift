@@ -13,6 +13,8 @@ import UndoUI
 import ContextUI
 import AppBundle
 import DGSimpleSettings
+import DGPluginsUI
+import DGPluginHost
 
 struct DGListState: Equatable {
     var revision: Int = 0
@@ -402,6 +404,13 @@ func dgAppVersion() -> String {
 /// «Вкл»/«Выкл» for a feature, a count for a list, a level, an icon or a version as it is, nothing otherwise.
 public func dgSettingsController(context: AccountContext, focusKey: String? = nil) -> ViewController {
     let s = DGSimpleSettings.shared
+    dgBindPluginAccount(context: context)
+    let pluginManager = DGPluginManager.shared(accountKey: String(context.account.id.int64))
+    let pluginUpdates = Signal<Void, NoError> { subscriber in
+        let observer = pluginManager.observe { subscriber.putNext(()) }
+        subscriber.putNext(())
+        return ActionDisposable { pluginManager.removeObserver(observer) }
+    }
     let accountId = context.account.peerId.toInt64()
     let bindings = context.sharedContext.applicationBindings
     return dgController(context: context, page: .root, title: "Настройки Donutgram", focusKey: focusKey, entries: {
@@ -437,11 +446,17 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         entries.append(.header(20, 2, "МЕДИА И СЕТЬ"))
         entries.append(.rootRow(21, 2, "media", "Запись и воспроизведение", "", "Microphone", 0xFF453A))
         entries.append(.rootRow(22, 2, "downloads", "Загрузки и сеть", acceleration, "Download", 0x34C759))
-        entries.append(.header(30, 3, "ПРОЧЕЕ"))
-        entries.append(.rootRow(31, 3, "adsAndGifts", "Реклама и подарки", "", "Gift", 0xAF52DE))
-        entries.append(.rootRow(32, 3, "about", "О Donutgram", dgAppVersion(), "Faq", 0x0A84FF))
+        entries.append(.header(25, 3, "РАСШИРЕНИЯ"))
+        // «2 из 3» plugins running, «Выкл» when execution is stopped for all, nothing when none is installed
+        // (dgLocalized translates both forms).
+        let installedPlugins = pluginManager.installations
+        let pluginStatus = installedPlugins.isEmpty ? "" : (pluginManager.globallyEnabled ? "\(installedPlugins.filter { $0.state == .running }.count) из \(installedPlugins.count)" : "Выкл")
+        entries.append(.rootRow(26, 3, "plugins", "Плагины", pluginStatus, "Bot", 0x5E5CE6))
+        entries.append(.header(30, 4, "ПРОЧЕЕ"))
+        entries.append(.rootRow(31, 4, "adsAndGifts", "Реклама и подарки", "", "Gift", 0xAF52DE))
+        entries.append(.rootRow(32, 4, "about", "О Donutgram", dgAppVersion(), "Faq", 0x0A84FF))
         return entries
-    }, select: { key in
+    }, additionalUpdates: pluginUpdates, select: { key in
         if key == "dismissSectionsNotice" {
             s.settingsSectionsNoticeDismissed = true
         }
@@ -474,6 +489,7 @@ func dgRootSectionPage(_ key: String) -> DGSettingsPage? {
     case "media": return .media
     case "downloads": return .downloads
     case "adsAndGifts": return .adsAndGifts
+    case "plugins": return .plugins
     case "about": return .about
     default: return nil
     }

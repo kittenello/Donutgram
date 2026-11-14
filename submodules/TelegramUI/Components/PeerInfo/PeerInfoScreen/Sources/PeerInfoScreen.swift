@@ -1,4 +1,5 @@
 import Foundation
+import DGPluginHost
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -385,6 +386,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let sourceMessageId: EngineMessage.Id?
     var canDeleteReaction = false
     var dataDisposable: Disposable?
+    private var pluginViewObserver: UUID?
+    private var pluginProfileTransformState: DGPluginViewTransformState?
     private var donutgramSettingsObserver: NSObjectProtocol?
     
     let activeActionDisposable = MetaDisposable()
@@ -2586,6 +2589,16 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             reactionSourceMessage = .single(nil)
         }
 
+        // Rebuild only when a profile transform appears, disappears or its cached results change,
+        // not on every plugin-manager update.
+        self.pluginViewObserver = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).observe { [weak self] in
+            guard let self else { return }
+            let state = DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).viewTransformState(slot: "profile")
+            let changed = state.requiresUpdate(from: self.pluginProfileTransformState)
+            self.pluginProfileTransformState = state
+            guard changed, let data = self.data else { return }
+            self.updateData(data)
+        }
         self.dataDisposable = combineLatest(
             queue: Queue.mainQueue(),
             screenData,
@@ -2758,6 +2771,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
     
     deinit {
+        if let observer = self.pluginViewObserver { DGPluginManager.shared(accountKey: String(self.context.account.id.int64)).removeObserver(observer) }
         if let donutgramSettingsObserver = self.donutgramSettingsObserver {
             NotificationCenter.default.removeObserver(donutgramSettingsObserver)
         }
@@ -2863,6 +2877,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     private var didPreloadShareTheme = false
 
     private func updateData(_ data: PeerInfoScreenData) {
+        data.applyPluginProfilePanes(context: self.context, isSettings: self.isSettings, update: { [weak self] in
+            guard let self, let data = self.data else { return }
+            self.updateData(data)
+        })
         let previousData = self.data
         if !self.didPreloadShareTheme, let peer = data.peer, peer.id != self.context.account.peerId, let addressName = peer.addressName, !addressName.isEmpty {
             self.didPreloadShareTheme = true

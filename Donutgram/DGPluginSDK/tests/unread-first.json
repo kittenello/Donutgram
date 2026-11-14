@@ -1,0 +1,13 @@
+{
+  "settings": {"hideRead": true},
+  "transforms": [{
+    "id": "unread-first",
+    "input": {"items": [
+      {"handle": "pin", "title": "pinned", "unread": 0, "pinned": true},
+      {"handle": "read", "title": "alpha", "unread": 0, "pinned": false},
+      {"handle": "z", "title": "zulu", "unread": 1, "pinned": false},
+      {"handle": "a", "title": "alpha", "unread": 2, "pinned": false}
+    ]},
+    "expectedPatch": {"order": ["a", "z", "read"], "hidden": ["read"]}
+  }]
+}

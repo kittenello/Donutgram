@@ -1,0 +1,1 @@
+{"selection": {"text": "hello world", "source": "message", "entities": [], "entitiesComplete": false}, "commands": ["text-statistics"], "expectedToasts": ["слов: 2, символов: 11"]}

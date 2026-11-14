@@ -312,6 +312,8 @@ public struct ChatListNodeState: Equatable {
     public var selectedPeerMap: [EnginePeer.Id: EnginePeer]
     public var selectedThreadIds: Set<Int64>
     public var archiveStoryState: StoryState?
+    /// Donutgram: bumped when a plugin's chat-list transform needs the entries rebuilt.
+    public var pluginTransformRevision: Int = 0
     
     public init(
         presentationData: ChatListPresentationData,
@@ -347,6 +349,9 @@ public struct ChatListNodeState: Equatable {
     
     public static func ==(lhs: ChatListNodeState, rhs: ChatListNodeState) -> Bool {
         if lhs.presentationData !== rhs.presentationData {
+            return false
+        }
+        if lhs.pluginTransformRevision != rhs.pluginTransformRevision {
             return false
         }
         if lhs.editing != rhs.editing {
@@ -1233,6 +1238,7 @@ public final class ChatListNode: ListViewImpl {
     private let context: AccountContext
     private let location: ChatListControllerLocation
     private let mode: ChatListNodeMode
+    private let pluginViewAdapter: DGPluginChatListViewAdapter
     private let animationCache: AnimationCache
     private let animationRenderer: MultiAnimationRenderer
     
@@ -1431,6 +1437,7 @@ public final class ChatListNode: ListViewImpl {
     
     public init(context: AccountContext, location: ChatListControllerLocation, chatListFilter: ChatListFilter? = nil, previewing: Bool, fillPreloadItems: Bool, mode: ChatListNodeMode, isPeerEnabled: ((EnginePeer) -> Bool)? = nil, theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, disableAnimations: Bool, isInlineMode: Bool, isSideList: Bool = false, autoSetReady: Bool, isMainTab: Bool?) {
         self.context = context
+        self.pluginViewAdapter = DGPluginChatListViewAdapter(accountKey: String(context.account.id.int64))
         self.location = location
         self.isSideList = isSideList
         self.chatListFilter = chatListFilter
@@ -1458,6 +1465,15 @@ public final class ChatListNode: ListViewImpl {
         self.scrollHeightTopInset = ChatListNavigationBar.searchScrollHeight
         
         super.init()
+        // A new revision re-runs the entries pipeline with the same presentation data, so rows the plugin did not
+        // move stay equal and are not re-laid out (a new ChatListPresentationData made every row an update).
+        self.pluginViewAdapter.didChange = { [weak self] in
+            self?.updateState { state in
+                var state = state
+                state.pluginTransformRevision &+= 1
+                return state
+            }
+        }
         
         if case .internal = context.sharedContext.applicationBindings.appBuildType {
             //self.useMainQueueTransactions = true
@@ -1976,6 +1992,7 @@ public final class ChatListNode: ListViewImpl {
         }
         
         let viewProcessingQueue = self.viewProcessingQueue
+        let pluginViewAdapter = self.pluginViewAdapter
         
         let shouldLoadCanMessagePeer: Bool
         if case .peers = mode {
@@ -2568,6 +2585,9 @@ public final class ChatListNode: ListViewImpl {
             if isEmpty {
                 entries = [.HeaderEntry]
             }
+            if innerIsMainTab, filter == nil, !isSideList, !state.editing, !isLoading, update.scrollPosition == nil, case .chatList = mode {
+                entries = pluginViewAdapter.apply(entries)
+            }
             
             let processedView = ChatListNodeView(originalList: update.list, filteredEntries: entries, isLoading: isLoading, filter: filter)
             let previousView = previousView.swap(processedView)
@@ -2767,10 +2787,23 @@ public final class ChatListNode: ListViewImpl {
             if let strongSelf = self, let chatListView = (transactionOpaqueState as? ChatListOpaqueTransactionState)?.chatListView {
                 let originalList = chatListView.originalList
                 if let range = range.loadedRange {
+                    var nativeFirstIndex = range.firstIndex
+                    var nativeLastIndex = range.lastIndex
+                    if chatListView.filteredEntries.contains(where: { if case let .PeerEntry(row) = $0 { return row.pluginLocalRank != nil }; return false }) {
+                        var nativeIndices: [Int] = []
+                        let filteredCount = chatListView.filteredEntries.count
+                        let upper = max(0, min(filteredCount, range.lastIndex))
+                        for displayIndex in min(upper, max(0, range.firstIndex))..<upper {
+                            guard case let .PeerEntry(row) = chatListView.filteredEntries[filteredCount - displayIndex - 1], let sourceIndex = originalList.items.firstIndex(where: { $0.index == row.index }) else { continue }
+                            nativeIndices.append(originalList.items.count - sourceIndex - 1)
+                        }
+                        nativeFirstIndex = nativeIndices.min() ?? nativeFirstIndex
+                        nativeLastIndex = nativeIndices.max().map { $0 + 1 } ?? nativeLastIndex
+                    }
                     var location: ChatListNodeLocation?
-                    if range.firstIndex < 5, let lastItem = originalList.items.last, originalList.hasLater {
+                    if nativeFirstIndex < 5, let lastItem = originalList.items.last, originalList.hasLater {
                         location = .navigation(index: lastItem.index, filter: strongSelf.chatListFilter)
-                    } else if range.firstIndex >= 5, range.lastIndex >= originalList.items.count - 5, originalList.hasEarlier, let firstItem = originalList.items.first {
+                    } else if nativeFirstIndex >= 5, nativeLastIndex >= originalList.items.count - 5, originalList.hasEarlier, let firstItem = originalList.items.first {
                         location = .navigation(index: firstItem.index, filter: strongSelf.chatListFilter)
                     }
                     
@@ -2785,11 +2818,13 @@ public final class ChatListNode: ListViewImpl {
                 var isHiddenItemVisible = false
                 if let range = range.visibleRange {
                     let entryCount = chatListView.filteredEntries.count
+                    var pluginVisibleEntries: [ChatListNodeEntry] = []
                     for i in max(0, range.firstIndex - 1) ..< range.lastIndex {
                         if i < 0 || i >= entryCount {
                             assertionFailure()
                             continue
                         }
+                        if pluginVisibleEntries.count < 40 { pluginVisibleEntries.append(chatListView.filteredEntries[entryCount - i - 1]) }
                         switch chatListView.filteredEntries[entryCount - i - 1] {
                             case let .PeerEntry(peerEntry):
                                 let threadInfo = peerEntry.threadInfo
@@ -2809,6 +2844,7 @@ public final class ChatListNode: ListViewImpl {
                                 break
                         }
                     }
+                    strongSelf.pluginViewAdapter.updateVisible(pluginVisibleEntries)
                 }
                 if !isHiddenItemVisible && strongSelf.currentState.hiddenItemShouldBeTemporaryRevealed {
                     strongSelf.updateState { state in

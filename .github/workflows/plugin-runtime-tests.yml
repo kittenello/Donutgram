@@ -1,0 +1,22 @@
+name: Plugin runtime tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'Donutgram/DGPluginRuntime/**'
+      - 'third-party/quickjs-ng/**'
+      - '.github/workflows/plugin-runtime-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the QuickJS plugin host and run its hostile-input scenarios
+        run: python3 Donutgram/DGPluginRuntime/Tests/run_tests.py

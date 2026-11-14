@@ -303,6 +303,8 @@ private let dgEnglishStrings: [String: String] = [
     "Загрузки и сеть": "Downloads and Network",
     "Реклама и подарки": "Ads and Gifts",
     "Локальный профиль": "Local Profile",
+    "Плагины": "Plugins",
+    "Расширения": "Extensions",
     "О Donutgram": "About Donutgram",
     "Поведение": "Behavior",
     "Заголовок": "Title",

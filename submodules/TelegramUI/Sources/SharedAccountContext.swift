@@ -20,6 +20,8 @@ import ChatListUI
 import PeerInfoUI
 import SettingsUI
 import DGSettingsUI
+import DGPluginsUI
+import DGPluginHost
 import PasscodeUI
 import UrlHandling
 import LegacyMediaPickerUI
@@ -290,6 +292,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public private(set) var energyUsageSettings: EnergyUsageSettings {
         didSet {
             updateEnhancedPowerSaving(self.energyUsageSettings.enhancedPowerSaving)
+            if let primary = self.activeAccountsValue?.primary {
+                DGPluginManager.shared(accountKey: String(primary.account.id.int64)).setPowerSaving(self.energyUsageSettings.enhancedPowerSaving)
+            }
         }
     }
     
@@ -840,7 +845,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     hadUpdates = true
                     self.activeAccountsValue!.primary?.account.postbox.clearCaches()
                     self.activeAccountsValue!.primary?.account.resetCachedData()
+                    DGPluginManager.activateAccount(key: primary.map { String($0.account.id.int64) })
                     self.activeAccountsValue!.primary = primary
+                    if let primary { dgBindPluginAccount(context: primary) }
                 }
                 if self.activeAccountsValue!.currentAuth?.id != authRecord?.0 {
                     hadUpdates = true

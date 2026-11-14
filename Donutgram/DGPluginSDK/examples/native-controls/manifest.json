@@ -1,0 +1,27 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.native-controls",
+  "name": "нативные элементы",
+  "version": "1.0.0",
+  "description": "пример ограниченной нативной страницы с собственными настройками и локальным изображением",
+  "apiVersion": "^1.0.0",
+  "entry": "main.js",
+  "profile": "localPrivate",
+  "permissions": [
+    {"capability": "ui.contribute", "scope": "settings", "reason": "показать собственную страницу и элементы управления"},
+    {"capability": "theme.contribute", "scope": "localTokens", "reason": "выбрать локальный акцент только своей страницы"}
+  ],
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "title": "включено", "default": true},
+      "label": {"type": "string", "title": "подпись", "default": "пример", "maxLength": 200},
+      "note": {"type": "string", "title": "заметка", "default": "первая строка\nвторая строка", "maxLength": 4096},
+      "level": {"type": "number", "title": "уровень", "default": 0.5, "minimum": 0, "maximum": 1},
+      "count": {"type": "integer", "title": "количество", "default": 2, "minimum": 0, "maximum": 10},
+      "mode": {"type": "string", "title": "режим", "default": "compact", "enum": ["compact", "comfortable"]},
+      "accent": {"type": "string", "title": "акцент своей страницы", "default": "purple", "enum": ["blue", "green", "purple", "orange"]}
+    }
+  }
+}

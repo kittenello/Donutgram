@@ -587,6 +587,8 @@ JS_EXTERN void JS_SetMemoryLimitFunc(JSRuntime *rt, JSMemoryLimitFunc *func, voi
    once. It cannot be undone. It allocates nothing, so a host may call it from its interrupt handler or its
    memory-limit hook. JS_IsUncatchableError, which sees only a value, still answers for the value alone. */
 JS_EXTERN void JS_SetStopped(JSRuntime *rt);
+JS_EXTERN bool JS_IsStopped(JSRuntime *rt);
+JS_EXTERN void JS_SetNativeWorkLimit(JSRuntime *rt, uint64_t limit);
 
 JS_EXTERN JSValue JS_GetFunctionProto(JSContext *ctx);
 
@@ -596,6 +598,7 @@ JS_EXTERN JSContext *JS_NewContextRaw(JSRuntime *rt);
 JS_EXTERN int JS_AddIntrinsicBaseObjects(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicDate(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicEval(JSContext *ctx);
+JS_EXTERN void JS_SetDynamicCompilationAllowed(JSContext *ctx, bool allowed);
 JS_EXTERN void JS_AddIntrinsicRegExpCompiler(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicRegExp(JSContext *ctx);
 JS_EXTERN int JS_AddIntrinsicJSON(JSContext *ctx);

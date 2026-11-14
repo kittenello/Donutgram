@@ -1015,6 +1015,10 @@ extension ChatControllerImpl {
             }, messageCorrelationId)
         }
         
+        self.chatDisplayNode.dgInterceptOutgoingSend = { [weak self] resume in
+            guard let self else { return false }
+            return self.dgPluginInterceptOutgoingSend(resume: resume)
+        }
         self.chatDisplayNode.sendMessages = { [weak self] messages, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone in
             guard let strongSelf = self else {
                 return
@@ -2105,6 +2109,7 @@ extension ChatControllerImpl {
                 if !strongSelf.presentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
                     strongSelf.silentPostTooltipController?.dismiss()
                 }
+                strongSelf.dgPluginComposerChanged()
             }
         }, updateInputModeAndDismissedButtonKeyboardMessageId: { [weak self] f in
             if let strongSelf = self {

@@ -1,4 +1,5 @@
 import Foundation
+import DGPluginsUI
 import UIKit
 import AsyncDisplayKit
 import SwiftSignalKit
@@ -228,6 +229,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     private var statusGlassView: StaticGlassBackgroundView?
     private var streamingCacheStatusFrame: CGRect?
     private var fileIconImage: UIImage?
+    private var pluginIconImage: UIImage?
+    private let pluginIconDisposable = MetaDisposable()
     private var viewOnceIconImage: UIImage?
     
     public var audioTranscriptionState: AudioTranscriptionButtonComponent.TranscriptionState = .collapsed
@@ -310,6 +313,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     }
     
     deinit {
+        self.pluginIconDisposable.dispose()
         self.statusDisposable.dispose()
         self.playbackStatusDisposable.dispose()
         self.fetchDisposable.dispose()
@@ -630,6 +634,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     
     public func asyncLayout() -> (Arguments) -> (CGFloat, (CGSize) -> (CGFloat, (CGFloat) -> (CGSize, (Bool, ListViewItemUpdateAnimation, ListViewItemApply?) -> Void))) {
         let currentFile = self.file
+        let currentPluginIcon = self.pluginIconImage
         
         let titleAsyncLayout = TextNode.asyncLayout(self.titleNode)
         let descriptionAsyncLayout = TextNode.asyncLayout(self.descriptionNode)
@@ -668,13 +673,14 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 
                 var hasThumbnail = (!arguments.file.previewRepresentations.isEmpty || arguments.file.immediateThumbnailData != nil) && !arguments.file.isMusic && !arguments.file.isVoice && !arguments.file.isInstantVideo
                 var hasThumbnailImage = !arguments.file.previewRepresentations.isEmpty || arguments.file.immediateThumbnailData != nil
+                let pluginIcon = arguments.file == currentFile ? currentPluginIcon : nil
+                if pluginIcon != nil { hasThumbnail = true; hasThumbnailImage = true }
                 if case let .update(media) = arguments.attributes.updatingMedia?.media, let file = media.media as? TelegramMediaFile {
                     hasThumbnail = largestImageRepresentation(file.previewRepresentations) != nil || file.immediateThumbnailData != nil || file.mimeType.hasPrefix("image/")
                     hasThumbnailImage = hasThumbnail
                 }
-                // Without bubbles a file with a preview is a row like any other file, its preview the size of the round
-                // icon, so the names of a run of files line up and every row is as tall.
-                let isCompactThumbnail = hasThumbnail && arguments.bubbleStyle == .bubbleless && !arguments.isAttachedContentBlock
+                let isPluginDocument = dgIsPluginDocument(fileName: arguments.file.fileName ?? "") && !arguments.file.isMusic && !arguments.file.isVoice && !arguments.file.isInstantVideo
+                let isCompactThumbnail = hasThumbnail && (isPluginDocument || (arguments.bubbleStyle == .bubbleless && !arguments.isAttachedContentBlock))
                 
                 if mediaUpdated {
                     if hasThumbnailImage {
@@ -687,6 +693,17 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         }
                     }, cancel: {
                         messageMediaFileCancelInteractiveFetch(context: arguments.context, messageId: arguments.message.id, file: arguments.file)
+                    })
+                }
+                if let pluginIcon, let image = pluginIcon.cgImage {
+                    updateImageSignal = .single({ imageArguments in
+                        guard let drawing = DrawingContext(size: imageArguments.drawingSize, scale: imageArguments.scale ?? 0.0, clear: true) else { return nil }
+                        drawing.withFlippedContext { context in
+                            context.interpolationQuality = .high
+                            context.draw(image, in: imageArguments.drawingRect)
+                        }
+                        addCorners(drawing, arguments: imageArguments)
+                        return drawing
                     })
                 }
                 
@@ -1167,6 +1184,15 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             strongSelf.message = arguments.message
                             strongSelf.arguments = arguments
                             strongSelf.file = arguments.file
+                            if mediaUpdated {
+                                strongSelf.pluginIconImage = nil
+                                strongSelf.pluginIconDisposable.set((dgPluginDocumentIcon(context: arguments.context, file: arguments.file)
+                                |> deliverOnMainQueue).start(next: { [weak strongSelf] image in
+                                    guard let strongSelf, strongSelf.file == arguments.file, let image else { return }
+                                    strongSelf.pluginIconImage = image
+                                    strongSelf.requestUpdateLayout(false)
+                                }))
+                            }
                             
                             let _ = titleApply()
                             let _ = descriptionApply()

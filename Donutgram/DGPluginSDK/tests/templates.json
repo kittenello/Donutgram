@@ -1,0 +1,1 @@
+{"draft": {"handle": "draft-1", "revision": "fixture-revision-1", "text": "hello old world", "selection": {"start": 6, "end": 9}, "entities": [], "entitiesComplete": false, "plainTextComplete": false}, "settings": {"template": "new"}, "commands": ["insert-template"], "expectedText": "hello new world"}

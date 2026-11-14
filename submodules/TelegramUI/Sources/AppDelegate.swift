@@ -55,6 +55,7 @@ import WalletSendScreen
 import PasscodeCore
 import LiquidGlassShapes
 import MTProtoRustEngine
+import DGPluginViewAdapters
 
 #if DEBUG
 import AlertComponent
@@ -3310,6 +3311,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         if notification.request.content.userInfo[CallUnlockVideoNotificationState.userInfoKey] != nil {
             completionHandler([])
+            return
+        }
+        // A plugin schedules its notifications only while the app is open, and they belong to no account.
+        if DGPluginNotificationStore.isPluginNotification(notification.request.identifier) {
+            completionHandler([.banner, .list])
             return
         }
         

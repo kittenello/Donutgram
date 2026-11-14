@@ -296,3 +296,26 @@ Re-apply these after upgrading; `git diff 55b3934a98 -- third-party/quickjs-ng/q
     - Pinned by `tests/quickjs_host_test.c`, `test_dumps_never_follow_ndebug`: in the suite's default build (no
       `NDEBUG`) `JS_SetDumpFlags(rt, ~0)` keeps nothing and `JS_GetDumpFlags` answers 0, which is what both do with the
       dumps compiled out. Before the change it answered the 24 bits of the flags field (the RED run).
+13. **Bounded native work and no run-time compilation for plugin runtimes** (2026-11-08, the JavaScript plugins,
+    `docs/plugins/runtime-hardening.md`).
+    - What: three host calls, all opt-in per runtime or context.
+      - `JS_SetNativeWorkLimit(rt, limit)` gives a runtime an allowance of native work units for its current
+        operation (the plugin host grants eight million per operation). Zero, the default every widget runtime keeps,
+        leaves every changed site as upstream's. Charged: property and length traversal, string buffer writes, sort
+        comparisons (`js_native_sort`), string search and trim, BigInt multiplication, division and conversion,
+        source and JSON tokenization, unicode normalization and final-sigma scans, and the regexp timeout callback. Sparse huge lengths and quadratic estimates are
+        refused before the native operation starts. Entering a C function polls the interrupt handler, and so does
+        every 1,024th charged unit. Running out stops the runtime through change 10's latch; resetting the allowance
+        never clears it.
+      - `JS_IsStopped(rt)` reads that latch for the host.
+      - `JS_SetDynamicCompilationAllowed(ctx, false)` refuses direct and indirect `eval` and every Function
+        constructor (plain, async, generator, async generator) in that context.
+      - In every runtime, `String.prototype.repeat` now fails on a string buffer error instead of ignoring it.
+    - Why: a plugin's per-operation budget is read in the interrupt handler, which a single native builtin never
+      reaches: a 2^40-element `join`, a quadratic `replaceAll` or a huge sort ran to completion first. The allowance
+      makes such calls stop within bounded work. Plugin code must not compile new code at run time.
+    - Pinned by `Donutgram/DGPluginRuntime/Tests/NativeWorkTests.cpp`, one process per scenario under
+      `run_watchdog.py`: hostile builtins, parser interruption, cancellation during native work, CPU windows. Its
+      `default_policy` scenario runs a join above the allowance and `Function` on a default runtime, so widgets keep
+      unlimited native work and dynamic compilation. `Tests/run_tests.py` and the "Plugin runtime tests" workflow run
+      it with this fork's smoke and host suites.

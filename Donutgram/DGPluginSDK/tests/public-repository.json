@@ -1,0 +1,9 @@
+{
+  "commands": ["repository-summary"],
+  "responses": {
+    "https://api.github.com/repos/madler/zlib": {"url": "https://api.github.com/repos/madler/zlib", "status": 200, "headers": {"content-type": "application/json"}, "body": "{\"full_name\":\"madler/zlib\",\"description\":\"compression library\",\"stargazers_count\":123}"}
+  },
+  "expectedNetworkCalls": [{"url": "https://api.github.com/repos/madler/zlib", "method": "GET"}],
+  "expectedPages": ["repository"],
+  "expectedPageNodes": {"name": "madler/zlib", "description": "compression library", "stars": "звёзд на github: 123"}
+}
