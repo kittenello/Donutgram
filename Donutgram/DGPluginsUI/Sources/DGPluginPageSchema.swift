@@ -203,3 +203,23 @@ final class DGPluginRenderedState {
 
     func supersede() { self.active = false; self.onClose = nil }
 }
+
+func dgPluginSettingDraftValue(_ text: String, schema: DGPluginJSON?) throws -> DGPluginJSON {
+    let type = schema?.objectValue?["type"]?.stringValue
+    if type == "number" || type == "integer" {
+        guard let number = Double(text), number.isFinite, type != "integer" || number.rounded() == number else {
+            throw DGPluginError(code: "invalid_argument", message: "invalid numeric setting")
+        }
+        return .number(number)
+    }
+    return .string(text)
+}
+
+func dgPluginTextWithinLimit(_ text: String, limit: Int, unicodeScalars: Bool) -> Bool {
+    return unicodeScalars ? text.unicodeScalars.count <= limit : text.utf16.count <= limit
+}
+
+func dgPluginSettingDisplayedDraft(_ draft: String?, savedValue: DGPluginJSON?, currentValue: DGPluginJSON) -> String? {
+    guard savedValue == nil || savedValue == currentValue else { return nil }
+    return draft
+}

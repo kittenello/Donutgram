@@ -66,7 +66,12 @@ extension ChatControllerImpl {
             case .success(nil):
                 break
             case let .success(replacement?):
-                let expected = replacement == text ? draft : draft.replacingFlatRange(NSRange(location: 0, length: (text as NSString).length), with: replacement)
+                let edit = DGPluginOutgoingMessage.replacementEdit(original: text, replacement: replacement)
+                let expected = replacement == text ? draft : draft.replacingFlatRange(edit.range, with: edit.text)
+                guard expected.content.plainText == replacement, replacement == text || DGPluginOutgoingMessage.replacementPreservesAttributes(draft.inputText, range: edit.range) else {
+                    self.dgPresentPluginNotice(title: pluginName ?? self.dgPluginText("Плагин", "Plugin"), text: self.dgPluginText("Сообщение не отправлено: замену невозможно применить к форматированию.", "The message was not sent: the replacement cannot be applied to this formatting."))
+                    return
+                }
                 if replacement != text {
                     var applied = false
                     self.interfaceInteraction?.updateTextInputStateAndMode { current, mode in

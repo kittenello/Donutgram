@@ -64,7 +64,7 @@ private struct DGPluginRow: ItemListNodeEntry {
         case .input:
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: self.key == "search" ? "" : self.title), text: self.detail, placeholder: self.title, type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: input, shouldUpdateText: { $0.utf16.count <= self.maxText }, action: {})
         case .multiline:
-            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .multiline(self.title, self.detail, self.maxText), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, textUpdated: input)
+            return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .multiline(self.title, self.detail, self.maxText, self.key.hasPrefix("setting:")), scale: presentationData.fontSize.itemListBaseFontSize / 17, accentColor: page.renderedAccent, textUpdated: input)
         case .markdown:
             return DGPluginNativeItem(theme: presentationData.theme, sectionId: self.section, content: .markdown(self.title), scale: presentationData.fontSize.itemListBaseFontSize / 17)
         case .card:
@@ -126,6 +126,8 @@ private final class DGPluginPage {
     /// Text typed into a string setting, by setting key, shown until its delayed save completes: a snapshot published for
     /// an older keystroke must not replace what the user has typed since.
     private var settingDrafts: [String: String] = [:]
+    private var settingDraftRevisions: [String: UUID] = [:]
+    private var settingDraftCommittedValues: [String: DGPluginJSON] = [:]
     private var settingDraftSaves: [String: DispatchWorkItem] = [:]
 
     init(context: AccountContext, mode: DGPluginPageMode) {
@@ -138,10 +140,12 @@ private final class DGPluginPage {
 
     deinit {
         // Text still waiting for its delayed save is saved now; nothing created here may capture `self`.
-        if case let .settings(id) = self.mode, let digest = self.manager.installations.first(where: { $0.id == id })?.digest {
+        if case let .settings(id) = self.mode, let item = self.manager.installations.first(where: { $0.id == id }) {
             for (setting, save) in self.settingDraftSaves {
                 save.cancel()
-                if let text = self.settingDrafts[setting] { self.manager.updateSetting(id: id, key: setting, value: .string(text), reviewedDigest: digest) { _ in } }
+                if let text = self.settingDrafts[setting], let value = try? dgPluginSettingDraftValue(text, schema: item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue?[setting]) {
+                    self.manager.updateSetting(id: id, key: setting, value: value, reviewedDigest: item.digest) { _ in }
+                }
             }
         }
         if case let .settings(id) = self.mode { self.manager.closeSettings(id: id, owner: self.settingsOwner) }
@@ -354,10 +358,14 @@ private final class DGPluginPage {
                     let minimum = integer ? ceil(schema["minimum"]?.uiNumberValue ?? -1000000) : (schema["minimum"]?.uiNumberValue ?? -1000000)
                     let maximum = integer ? floor(schema["maximum"]?.uiNumberValue ?? 1000000) : (schema["maximum"]?.uiNumberValue ?? 1000000)
                     let number = value.uiNumberValue ?? max(minimum, min(maximum, 0))
+                    if dgPluginSettingDisplayedDraft(self.settingDrafts[key], savedValue: self.settingDraftCommittedValues[key], currentValue: value) == nil {
+                        self.settingDrafts.removeValue(forKey: key)
+                        self.settingDraftCommittedValues.removeValue(forKey: key)
+                    }
                     let step = integer ? 1.0 : 0.1
-                    if minimum.isFinite, maximum.isFinite, abs(minimum) <= 1e9, abs(maximum) <= 1e9, minimum < maximum, maximum - minimum >= step, number >= minimum, number <= maximum {
+                    if integer, minimum.isFinite, maximum.isFinite, abs(minimum) <= 1e9, abs(maximum) <= 1e9, minimum < maximum, maximum - minimum >= step, number >= minimum, number <= maximum {
                         rows.append(DGPluginRow(index: Int32(rows.count), section: section, kind: .stepper, key: "setting:" + key, title: title, number: number, minimum: minimum, maximum: maximum, step: step))
-                    } else { add(section, .input, "setting:" + key, title, detail: self.settingText(value)) }
+                    } else { add(section, .input, "setting:" + key, title, detail: self.settingDrafts[key] ?? self.settingText(value)) }
                 default:
                     add(section, .text, "", title + ": " + self.tr("этот тип настройки пока недоступен", "this setting type is unavailable"))
                 }
@@ -542,34 +550,38 @@ private final class DGPluginPage {
     func input(_ key: String, _ value: String) {
         if key.hasPrefix("render:"), case let .rendered(state) = self.mode, let node = state.node(String(key.dropFirst(7))), node.type == "input" || node.type == "multiline" { state.invoke(node, value: .string(String(value.prefix(4096)))); return }
         if key == "search" { self.query = String(value.prefix(128)); self.refresh(); return }
-        guard key.hasPrefix("setting:"), case let .settings(id) = self.mode, let item = self.installation(id) else { return }
+        guard key.hasPrefix("setting:"), case .settings = self.mode else { return }
         let setting = String(key.dropFirst(8))
-        let schema = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue?[setting]?.objectValue
-        let updated: DGPluginJSON
-        switch schema?["type"]?.stringValue {
-        case "number", "integer":
-            guard let number = Double(value), number.isFinite else { return }
-            if schema?["type"]?.stringValue == "integer" && number.rounded() != number { return }
-            updated = .number(number)
-        default:
-            // Text is saved 0.4 s after the last keystroke, not with a full state write per keystroke.
-            self.settingDrafts[setting] = String(value.prefix(4096))
-            self.settingDraftSaves[setting]?.cancel()
-            let save = DispatchWorkItem { [weak self] in self?.saveSettingDraft(setting) }
-            self.settingDraftSaves[setting] = save
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: save)
-            return
-        }
-        self.manager.updateSetting(id: id, key: setting, value: updated, reviewedDigest: item.digest) { [weak self] result in self?.complete(result) }
+        self.settingDraftCommittedValues.removeValue(forKey: setting)
+        self.settingDraftRevisions[setting] = UUID()
+        self.settingDrafts[setting] = String(String.UnicodeScalarView(value.unicodeScalars.prefix(4096)))
+        self.settingDraftSaves[setting]?.cancel()
+        let save = DispatchWorkItem { [weak self] in self?.saveSettingDraft(setting) }
+        self.settingDraftSaves[setting] = save
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: save)
     }
 
     private func saveSettingDraft(_ setting: String) {
         self.settingDraftSaves.removeValue(forKey: setting)
         guard case let .settings(id) = self.mode, let item = self.installation(id), let text = self.settingDrafts[setting] else { return }
-        self.manager.updateSetting(id: id, key: setting, value: .string(text), reviewedDigest: item.digest) { [weak self] result in
+        let revision = self.settingDraftRevisions[setting]
+        let schema = item.manifest.settingsSchema?.objectValue?["properties"]?.objectValue?[setting]
+        let value: DGPluginJSON
+        do { value = try dgPluginSettingDraftValue(text, schema: schema) }
+        catch {
+            self.complete(.failure(error as? DGPluginError ?? DGPluginError(code: "invalid_argument", message: "invalid numeric setting")))
+            return
+        }
+        self.manager.updateSetting(id: id, key: setting, value: value, reviewedDigest: item.digest) { [weak self] result in
             guard let self else { return }
             // A newer draft typed while this one was saving stays shown.
-            if self.settingDrafts[setting] == text { self.settingDrafts.removeValue(forKey: setting) }
+            if case .success = result, self.settingDrafts[setting] == text, self.settingDraftRevisions[setting] == revision {
+                if schema?.objectValue?["type"]?.stringValue == "string" {
+                    self.settingDrafts.removeValue(forKey: setting)
+                } else {
+                    self.settingDraftCommittedValues[setting] = value
+                }
+            }
             self.complete(result)
         }
     }

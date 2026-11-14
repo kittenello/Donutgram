@@ -34,6 +34,41 @@ struct DGPluginPageSchemaTests {
     }
 
     static func main() throws {
+        guard dgPluginSettingDisplayedDraft("0.", savedValue: .number(0), currentValue: .number(0)) == "0.",
+              dgPluginSettingDisplayedDraft("0.", savedValue: .number(0), currentValue: .number(2)) == nil,
+              dgPluginSettingDisplayedDraft("0.05", savedValue: nil, currentValue: .number(0)) == "0.05",
+              dgPluginSettingDisplayedDraft("-", savedValue: nil, currentValue: .number(2)) == "-",
+              dgPluginSettingDisplayedDraft("0.05", savedValue: .number(0.05), currentValue: .number(0.1)) == nil else {
+            throw DGPluginError(code: "test_failure", message: "numeric draft hides an external update or interrupts typing")
+        }
+
+        let astral = String(repeating: "\u{1f600}", count: 4096)
+        guard dgPluginTextWithinLimit(astral, limit: 4096, unicodeScalars: true),
+              !dgPluginTextWithinLimit(astral, limit: 4096, unicodeScalars: false),
+              !dgPluginTextWithinLimit(astral + "x", limit: 4096, unicodeScalars: true),
+              !dgPluginTextWithinLimit("e\u{301}", limit: 1, unicodeScalars: true) else {
+            throw DGPluginError(code: "test_failure", message: "setting text limit does not count unicode scalars")
+        }
+
+        let number: DGPluginJSON = .object(["type": .string("number")])
+        let integer: DGPluginJSON = .object(["type": .string("integer")])
+        guard try dgPluginSettingDraftValue("0.05", schema: number) == .number(0.05),
+              try dgPluginSettingDraftValue("0.", schema: number) == .number(0),
+              try dgPluginSettingDraftValue("-2", schema: integer) == .number(-2),
+              try dgPluginSettingDraftValue("text", schema: nil) == .string("text") else {
+            throw DGPluginError(code: "test_failure", message: "draft flush used the wrong setting type")
+        }
+        for text in ["-", "", "0..5", "inf", "nan"] {
+            do {
+                _ = try dgPluginSettingDraftValue(text, schema: number)
+                throw DGPluginError(code: "test_failure", message: "invalid numeric draft accepted")
+            } catch let error as DGPluginError where error.code == "invalid_argument" {}
+        }
+        do {
+            _ = try dgPluginSettingDraftValue("0.05", schema: integer)
+            throw DGPluginError(code: "test_failure", message: "fractional integer draft accepted")
+        } catch let error as DGPluginError where error.code == "invalid_argument" {}
+
         for (minimum, maximum, step) in [(0.0, 1.0, 0.3), (-2.0, 0.0, 0.3), (0.0, 1.0, 0.1)] {
             for index in 0...1000 {
                 let raw = minimum + Double(index) / 1000 * (maximum - minimum)

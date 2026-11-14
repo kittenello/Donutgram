@@ -10,7 +10,7 @@ final class DGPluginNativeItem: ListViewItem, ItemListItem {
     enum Content {
         case card(UIImage, String, String, String)
         case number(String, Double, Double, Double, Double, Bool)
-        case multiline(String, String, Int)
+        case multiline(String, String, Int, Bool)
         case image(UIImage, String)
         case markdown(String)
     }
@@ -71,7 +71,7 @@ final class DGPluginNativeItem: ListViewItem, ItemListItem {
             let titleHeight = Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 16 * self.scale)]), width: max(1, inner - (slider ? 0 : 112)))
             let valueHeight = Self.textHeight(NSAttributedString(string: String(format: "%g", value), attributes: [.font: UIFont.systemFont(ofSize: 15 * self.scale)]), width: inner)
             return max(72, titleHeight + valueHeight + (slider ? 72 : 30))
-        case let .multiline(title, _, _): return 156 + Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 16 * self.scale)]), width: inner)
+        case let .multiline(title, _, _, _): return 156 + Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 16 * self.scale)]), width: inner)
         case let .image(image, title):
             let aspect = image.size.width > 0 ? image.size.height / image.size.width : 1
             let titleHeight = title.isEmpty ? 0 : Self.textHeight(NSAttributedString(string: title, attributes: [.font: UIFont.systemFont(ofSize: 15 * self.scale)]), width: inner) + 8
@@ -205,7 +205,7 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
                 self.stepper.accessibilityLabel = title
                 self.stepper.accessibilityValue = String(format: "%g", value)
             }
-        case let .multiline(title, text, _):
+        case let .multiline(title, text, _, _):
             let titleEnd = label(self.titleLabel, title, y: 12)
             self.textView.isHidden = false
             self.textView.textColor = item.theme.list.itemPrimaryTextColor
@@ -242,13 +242,11 @@ private final class DGPluginNativeItemNode: ListViewItemNode, UITextViewDelegate
     }
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        guard let item, case let .multiline(_, _, limit) = item.content else { return false }
+        guard let item, case let .multiline(_, _, limit, scalarLimit) = item.content else { return false }
         let current = textView.text as NSString
         guard range.location >= 0 && range.length >= 0 && range.location <= current.length && range.length <= current.length - range.location else { return false }
-        // A setting passes its schema's maxLength, which is validated in Unicode scalars; a page drawn by a plugin passes
-        // 4096, validated in UTF-16 units.
         let updated = current.replacingCharacters(in: range, with: text)
-        return updated.unicodeScalars.count <= limit && updated.utf16.count <= 4096
+        return dgPluginTextWithinLimit(updated, limit: limit, unicodeScalars: scalarLimit)
     }
 
     func textViewDidChange(_ textView: UITextView) { self.item?.textUpdated(textView.text) }

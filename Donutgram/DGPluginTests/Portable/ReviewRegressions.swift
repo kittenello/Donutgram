@@ -280,6 +280,29 @@ private enum DGPluginReviewRegressions {
 }
 
 func runPluginReviewRegressionTests() throws {
+    let styled = NSMutableAttributedString(string: "plain bold tail")
+    styled.addAttribute(NSAttributedString.Key("bold"), value: true, range: NSRange(location: 6, length: 4))
+    guard DGPluginOutgoingMessage.replacementPreservesAttributes(styled, range: NSRange(location: 0, length: 5)),
+          !DGPluginOutgoingMessage.replacementPreservesAttributes(styled, range: NSRange(location: 0, length: 14)),
+          !DGPluginOutgoingMessage.replacementPreservesAttributes(styled, range: NSRange(location: 7, length: 1)),
+          !DGPluginOutgoingMessage.replacementPreservesAttributes(styled, range: NSRange(location: 6, length: 0)),
+          !DGPluginOutgoingMessage.replacementPreservesAttributes(styled, range: NSRange(location: 10, length: 0)),
+          DGPluginOutgoingMessage.replacementPreservesAttributes(styled, range: NSRange(location: 15, length: 0)) else {
+        throw DGPluginError(code: "test_failure", message: "outgoing replacement would discard formatting")
+    }
+    for (original, replacement, location, length, inserted) in [
+        ("bold text", "bold text!", 9, 0, "!"),
+        ("before link after", "before url after", 7, 4, "url"),
+        ("a\u{1f600}z", "a\u{1f601}z", 1, 2, "\u{1f601}"),
+        ("unchanged", "unchanged", 9, 0, ""),
+        ("abc", "xyz", 0, 3, "xyz")
+    ] {
+        let edit = DGPluginOutgoingMessage.replacementEdit(original: original, replacement: replacement)
+        guard edit.range == NSRange(location: location, length: length), edit.text == inserted,
+              (original as NSString).replacingCharacters(in: edit.range, with: edit.text) == replacement else {
+            throw DGPluginError(code: "test_failure", message: "outgoing replacement edit lost its unchanged text")
+        }
+    }
     try DGPluginReviewRegressions.cacheProbe()
     try DGPluginReviewRegressions.callbacksProbe()
     try DGPluginReviewRegressions.transformInvalidationDrainProbe()
