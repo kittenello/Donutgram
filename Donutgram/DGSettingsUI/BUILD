@@ -10,6 +10,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGPluginsUI:DGPluginsUI",
+        "//Donutgram/DGPluginHost:DGPluginHost",
         "//submodules/UIKitRuntimeUtils",
         "//submodules/TelegramUI/Components/TabBarComponent:TabBarComponent",
         "//submodules/ComponentFlow:ComponentFlow",

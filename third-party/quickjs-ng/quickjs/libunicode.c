@@ -973,22 +973,29 @@ static int unicode_get_cc(uint32_t c)
     }
 }
 
-static void sort_cc(int *buf, int len)
+static int sort_cc(int *buf, int len, void *opaque,
+                   int (*work_func)(void *, uint64_t))
 {
     int i, j, k, cc, cc1, start, ch1;
 
     for(i = 0; i < len; i++) {
+        if (work_func && work_func(opaque, 1))
+            return -1;
         cc = unicode_get_cc(buf[i]);
         if (cc != 0) {
             start = i;
             j = i + 1;
             while (j < len) {
+                if (work_func && work_func(opaque, 1))
+                    return -1;
                 ch1 = buf[j];
                 cc1 = unicode_get_cc(ch1);
                 if (cc1 == 0)
                     break;
                 k = j - 1;
                 while (k >= start) {
+                    if (work_func && work_func(opaque, 1))
+                        return -1;
                     if (unicode_get_cc(buf[k]) <= cc1)
                         break;
                     buf[k + 1] = buf[k];
@@ -1000,16 +1007,20 @@ static void sort_cc(int *buf, int len)
             i = j;
         }
     }
+    return 0;
 }
 
-static void to_nfd_rec(DynBuf *dbuf,
-                       const int *src, int src_len, int is_compat)
+static int to_nfd_rec(DynBuf *dbuf,
+                      const int *src, int src_len, int is_compat,
+                      int (*work_func)(void *, uint64_t))
 {
     uint32_t c, v;
     int i, l;
     uint32_t res[UNICODE_DECOMP_LEN_MAX];
 
     for(i = 0; i < src_len; i++) {
+        if (dbuf_error(dbuf) || (work_func && work_func(dbuf->opaque, 1)))
+            return -1;
         c = src[i];
         if (c >= 0xac00 && c < 0xd7a4) {
             /* Hangul decomposition */
@@ -1022,12 +1033,14 @@ static void to_nfd_rec(DynBuf *dbuf,
         } else {
             l = unicode_decomp_char(res, c, is_compat);
             if (l) {
-                to_nfd_rec(dbuf, (int *)res, l, is_compat);
+                if (to_nfd_rec(dbuf, (int *)res, l, is_compat, work_func))
+                    return -1;
             } else {
                 dbuf_put_u32(dbuf, c);
             }
         }
     }
+    return dbuf_error(dbuf) ? -1 : 0;
 }
 
 /* return 0 if not found */
@@ -1048,7 +1061,8 @@ static int compose_pair(uint32_t c0, uint32_t c1)
 
 int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
                       UnicodeNormalizationEnum n_type,
-                      void *opaque, DynBufReallocFunc *realloc_func)
+                      void *opaque, DynBufReallocFunc *realloc_func,
+                      int (*work_func)(void *, uint64_t))
 {
     int *buf, buf_len, i, p, starter_pos, cc, last_cc, out_len;
     bool is_compat;
@@ -1068,6 +1082,8 @@ int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
     /* common case: latin1 is unaffected by NFC */
     if (n_type == UNICODE_NFC) {
         for(i = 0; i < src_len; i++) {
+            if (work_func && work_func(opaque, 1))
+                goto fail;
             if (src[i] >= 0x100)
                 goto not_latin1;
         }
@@ -1078,16 +1094,13 @@ int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
     not_latin1: ;
     }
 
-    to_nfd_rec(dbuf, (const int *)src, src_len, is_compat);
-    if (dbuf_error(dbuf)) {
-    fail:
-        *pdst = NULL;
-        return -1;
-    }
+    if (to_nfd_rec(dbuf, (const int *)src, src_len, is_compat, work_func))
+        goto fail;
     buf = (int *)dbuf->buf;
     buf_len = dbuf->size / sizeof(int);
 
-    sort_cc(buf, buf_len);
+    if (sort_cc(buf, buf_len, opaque, work_func))
+        goto fail;
 
     if (buf_len <= 1 || (n_type & 1) != 0) {
         /* NFD / NFKD */
@@ -1098,11 +1111,15 @@ int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
     i = 1;
     out_len = 1;
     while (i < buf_len) {
+        if (work_func && work_func(opaque, 1))
+            goto fail;
         /* find the starter character and test if it is blocked from
            the character at 'i' */
         last_cc = unicode_get_cc(buf[i]);
         starter_pos = out_len - 1;
         while (starter_pos >= 0) {
+            if (work_func && work_func(opaque, 1))
+                goto fail;
             cc = unicode_get_cc(buf[starter_pos]);
             if (cc == 0)
                 break;
@@ -1122,6 +1139,10 @@ int unicode_normalize(uint32_t **pdst, const uint32_t *src, int src_len,
     }
     *pdst = (uint32_t *)buf;
     return out_len;
+ fail:
+    dbuf_free(dbuf);
+    *pdst = NULL;
+    return -1;
 }
 
 /* char ranges for various unicode properties */

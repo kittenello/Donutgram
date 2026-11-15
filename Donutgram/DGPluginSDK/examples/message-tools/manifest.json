@@ -1,0 +1,18 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.message-tools",
+  "name": "message tools",
+  "version": "1.0.0",
+  "description": "replace .testdonut before sending and run explicit message actions",
+  "apiVersion": "^1.0.0",
+  "profile": "localPrivate",
+  "permissions": [
+    {"capability": "messages.intercept", "scope": "activeComposer", "reason": "replace .testdonut before it is sent"},
+    {"capability": "messages.send", "scope": "chosenRecipient", "reason": "send a test text in the current chat without another confirmation"},
+    {"capability": "messages.edit", "scope": "selectedMessages", "reason": "replace the selected message with the example text"},
+    {"capability": "messages.delete", "scope": "selectedMessages", "reason": "delete the selected message for everyone when Telegram permits it"},
+    {"capability": "ui.contribute", "scope": "composer", "reason": "show the test-send command"},
+    {"capability": "ui.contribute", "scope": "messageMenu", "reason": "show clearly named edit and delete commands"}
+  ]
+}

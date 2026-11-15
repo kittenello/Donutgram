@@ -1,0 +1,24 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.selected-text",
+  "name": "статистика текста",
+  "version": "1.0.0",
+  "description": "показывает количество слов и символов выделенного текста",
+  "apiVersion": "^1.0.0",
+  "minClientVersion": "13.2",
+  "entry": "main.js",
+  "profile": "localPrivate",
+  "permissions": [
+    {
+      "capability": "ui.contribute",
+      "scope": "selection",
+      "reason": "показать действие для выделения"
+    },
+    {
+      "capability": "messages.selection.read",
+      "scope": "activeSelection",
+      "reason": "посчитать символы выбранного фрагмента"
+    }
+  ]
+}

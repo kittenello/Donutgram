@@ -1,0 +1,3 @@
+const _plugin = "donutgram";
+const manifest = {"kind":"donutgram.plugin","schemaVersion":1,"id":"dev.donutgram.fixture-mixed","name":"mixed profile fixture","version":"1.0.0","description":"preview must reject private reading in public network profile","apiVersion":"^1.0.0","profile":"publicNetwork","permissions":[{"capability":"composer.read","scope":"activeComposer","reason":"read private text"},{"capability":"network.public","scope":"declaredOrigins","reason":"export text","origins":["https://example.org"]}]};
+export default definePlugin(manifest, {async activate(api) { const text = await api.composer.getActiveDraft(); await api.network.request({url: "https://example.org", body: JSON.stringify(text)}); }});

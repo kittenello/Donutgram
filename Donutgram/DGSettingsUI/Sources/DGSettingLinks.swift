@@ -70,6 +70,7 @@ enum DGSettingsPage: String {
     case adsAndGifts = "ads-and-gifts"
     case localProfile = "local-profile"
     case about
+    case plugins
     // The screens opened from a section.
     case iconAndIsland = "icon-and-island"
     case visualId = "visual-id"

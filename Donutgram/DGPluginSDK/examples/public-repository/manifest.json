@@ -1,0 +1,15 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.public-repository",
+  "name": "публичный репозиторий",
+  "version": "1.0.0",
+  "description": "показывает открытые данные репозитория zlib по явной команде; не читает переписки",
+  "apiVersion": "^1.0.0",
+  "entry": "main.js",
+  "profile": "publicNetwork",
+  "permissions": [
+    {"capability": "ui.contribute", "scope": "settings", "reason": "показать команду и нативную страницу"},
+    {"capability": "network.public", "scope": "declaredOrigins", "reason": "получить публичные данные выбранного репозитория", "origins": ["https://api.github.com"]}
+  ]
+}

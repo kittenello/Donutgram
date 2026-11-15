@@ -1,0 +1,13 @@
+{
+  "kind": "donutgram.plugin",
+  "schemaVersion": 1,
+  "id": "dev.donutgram.unread-first",
+  "name": "непрочитанные сначала",
+  "version": "1.0.0",
+  "description": "локально сортирует разрешённую модель списка, сохраняя закреплённые чаты; серверные папки не меняет",
+  "apiVersion": "^1.0.0",
+  "entry": "main.js",
+  "profile": "localPrivate",
+  "permissions": [{"capability": "ui.transform", "scope": "chatList", "reason": "сортировать и фильтровать разрешённые локальные строки чатов"}],
+  "settingsSchema": {"type": "object", "properties": {"hideRead": {"type": "boolean", "title": "скрыть прочитанные незакреплённые", "default": false}}}
+}
