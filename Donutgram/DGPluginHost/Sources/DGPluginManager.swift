@@ -484,7 +484,6 @@ public final class DGPluginManager {
         coordinator.queue.async {
             guard self.coordinator.powerSaving != enabled else { return }
             self.coordinator.powerSaving = enabled
-            self.environment["lowPowerMode"] = .bool(enabled)
             self.coordinator.stopAll()
             if !enabled { for manager in Self.allManagers() { manager.reconcile() } }
             self.coordinator.publishAll()
@@ -1236,6 +1235,7 @@ public final class DGPluginManager {
             if !execution.settingsOnly { try coordinator.markRunning(DGPluginRunningMarker(account: accountKey, installation: id)) }
             executions[id] = execution
             var runtimeEnvironment = environment
+            runtimeEnvironment["lowPowerMode"] = .bool(coordinator.powerSaving)
             runtimeEnvironment["executionMode"] = .string(execution.settingsOnly ? "settings" : "normal")
             let environmentJSON = String(data: try JSONEncoder().encode(DGPluginJSON.object(runtimeEnvironment)), encoding: .utf8) ?? "{}"
             let runtime = try DGPluginRuntime(files: package.files, entry: package.manifest.entry, environmentJSON: environmentJSON, request: { [weak self, weak execution] request, reply in
@@ -1503,6 +1503,7 @@ public final class DGPluginManager {
         switch method {
         case "environment.get":
             var currentEnvironment = environment
+            currentEnvironment["lowPowerMode"] = .bool(coordinator.powerSaving)
             currentEnvironment["executionMode"] = .string(execution.settingsOnly ? "settings" : "normal")
             return .object(currentEnvironment)
         case "settings.get": return .object(account.settings)

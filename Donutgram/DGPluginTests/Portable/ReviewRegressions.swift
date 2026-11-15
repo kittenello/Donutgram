@@ -238,6 +238,22 @@ private enum DGPluginReviewRegressions {
         log("environment passed")
         try result { m.remove(id:id,completion:$0) }
     }
+    static func accountPowerSavingProbe() throws {
+        let first = manager("power-first")
+        let id = try install(first, package("await api.commands.register({id:'check',title:'check',placement:'settings',run:async()=>{if((await api.environment.get()).lowPowerMode!==false)throw Error('stale power mode')}});", permissions:[ui]))
+        first.setPowerSaving(true)
+        let stoppedDeadline = Date().addingTimeInterval(8)
+        while first.commands.contains(where: { $0.installationId == id }) && Date() < stoppedDeadline { Thread.sleep(forTimeInterval: 0.05) }
+        guard !first.commands.contains(where: { $0.installationId == id }) else { throw DGPluginError(code:"test_timeout",message:"power saving did not stop plugin") }
+        let second = manager("power-second")
+        second.setPowerSaving(false)
+        first.setAccountActive(true)
+        let deadline = Date().addingTimeInterval(8)
+        while !first.commands.contains(where: { $0.installationId == id && $0.id == "check" }) && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+        try result { first.runCommand(installationId:id,commandId:"check",completion:$0) }
+        try result { first.remove(id:id,completion:$0) }
+        log("account power saving environment passed")
+    }
     static func packageCacheProbe() throws {
         let m = manager("packages")
         func cachedPackages() -> Int {
@@ -313,6 +329,7 @@ func runPluginReviewRegressionTests() throws {
     try DGPluginReviewRegressions.undecodableRequestProbe()
     try DGPluginReviewRegressions.defaultsProbe()
     try DGPluginReviewRegressions.environmentProbe()
+    try DGPluginReviewRegressions.accountPowerSavingProbe()
     try DGPluginReviewRegressions.packageCacheProbe()
     try DGPluginReviewRegressions.quotaProbe()
     try runMissingAccountQuotaRegression()

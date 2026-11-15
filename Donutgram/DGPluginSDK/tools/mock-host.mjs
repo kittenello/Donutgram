@@ -143,7 +143,17 @@ function host(method, params) {
   if (method === 'storage.remove') { storage.delete(params.key); return null; }
   if (method === 'storage.keys') return [...storage.keys()];
   if (method === 'capabilities.has') return grants.some((grant) => grant.capability === params.capability && (grant.capability !== 'ui.transform' || ['profile', 'chatList'].includes(grant.scope)));
-  if (method === 'capabilities.list') return Object.fromEntries(Object.keys(rules).map((name) => [name, !(fixture.unavailable || []).includes(name)]));
+  if (method === 'capabilities.list') {
+    const methods = {...rules,
+      'capabilities.has': [null], 'capabilities.list': [null], 'environment.get': [null], 'settings.get': [null], 'settings.set': [null],
+      'events.subscribe': [null], 'events.unsubscribe': [null],
+      'ui.command.register': ['ui.contribute'], 'ui.command.unregister': ['ui.contribute'], 'ui.toast': ['ui.contribute'],
+      'ui.transform.register': ['ui.transform'], 'ui.transform.unregister': ['ui.transform'], 'ui.transform.result': ['ui.transform']
+    };
+    return Object.fromEntries(Object.entries(methods).map(([name, [capability]]) => [name,
+      !(fixture.unavailable || []).includes(name) && (capability === null || grants.some((grant) => grant.capability === capability && (capability !== 'ui.transform' || ['profile', 'chatList'].includes(grant.scope))))
+    ]));
+  }
   if (method === 'theme.get') return {appearance: 'light'};
   if (method === 'events.subscribe') { requireHost(eventNames.has(params.name), 'feature_unavailable'); return null; }
   if (method === 'events.unsubscribe') return null;

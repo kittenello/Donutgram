@@ -91,7 +91,11 @@ def token(text, offset, literal):
     while offset < len(text) and text[offset] in " \t\r\n":
         offset += 1
     require(text.startswith(literal, offset), "invalid static plugin header")
-    return offset + len(literal)
+    end = offset + len(literal)
+    if literal[-1].isascii() and literal[-1].isalpha() and end < len(text):
+        next_character = text[end]
+        require(not (next_character.isascii() and (next_character.isalnum() or next_character in "_$")), "invalid static plugin header")
+    return end
 
 def marker(text):
     offset = 0
@@ -295,7 +299,7 @@ def validate_files(files, metadata):
         names.add(name.lower())
         require(len(data) <= 1024 * 1024 and Path(name).suffix.lower() in {".js", ".json", ".png", ".jpg", ".jpeg", ".webp"}, "unsupported or oversized resource")
         require(not data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"\x1f\x8b", b"7z\xbc\xaf\x27\x1c", b"Rar!", b"\xfd7zXZ\x00", b"BZh")), "nested archives are unsupported")
-        if name.endswith(".js"):
+        if name.lower().endswith(".js"):
             try:
                 text = data.decode("utf-8")
             except UnicodeError as error:

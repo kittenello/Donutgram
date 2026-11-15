@@ -61,6 +61,33 @@ class SDKTests(unittest.TestCase):
     def base_files(self):
         return [("manifest.json", json.dumps(self.manifest)), ("main.js", 'const _plugin = "donutgram"; definePlugin({activate(){}});')]
 
+    def test_static_header_requires_identifier_boundaries(self):
+        for source in ['const_plugin="donutgram";', 'const _plugin="donutgram";constmanifest={};']:
+            with self.subTest(source=source), self.assertRaises(tool.ValidationError):
+                tool.single_manifest(source)
+        with self.assertRaises(tool.ValidationError):
+            tool.read_package(self.zip([("manifest.json", json.dumps(self.manifest)), ("main.js", 'const_plugin="donutgram";')]))
+
+    def test_uppercase_javascript_extension_requires_utf8(self):
+        for invalid in [b'\xff', b'bad\x00source']:
+            with self.subTest(invalid=invalid), self.assertRaises(tool.ValidationError):
+                tool.read_package(self.zip(self.base_files() + [("broken.JS", invalid)]))
+
+    def test_mock_capability_list_matches_grants_and_availability(self):
+        target = self.directory / "capabilities"
+        target.mkdir()
+        metadata = copy.deepcopy(self.manifest)
+        metadata["permissions"] = [{"capability": "storage.local", "scope": "pluginAccount", "reason": "test"}]
+        (target / "manifest.json").write_text(json.dumps(metadata), encoding="utf-8")
+        (target / "main.js").write_text('const _plugin="donutgram"; definePlugin({async activate(api){const list=await api.capabilities.list(); if(!list["storage.get"]||list["messages.send"]||list["network.request"]||list["theme.get"]||!list["settings.get"]||!list["capabilities.list"]||await api.capabilities.has("messages.send")) throw Error("wrong capabilities");}});', encoding="utf-8")
+        fixture = self.directory / "capabilities.json"
+        fixture.write_text(json.dumps({"unavailable": ["theme.get"]}), encoding="utf-8")
+        self.assertTrue(tool.mock_test(target, fixture)["passed"])
+        source = target / "main.js"
+        source.write_text(source.read_text(encoding="utf-8").replace('!list["storage.get"]', 'list["storage.get"]'), encoding="utf-8")
+        fixture.write_text(json.dumps({"unavailable": ["storage.get"]}), encoding="utf-8")
+        self.assertTrue(tool.mock_test(target, fixture)["passed"])
+
     def test_examples_and_mock_host(self):
         for name in ["quiet-links", "templates", "selected-text", "public-repository", "native-controls", "profile-empty", "unread-first", "message-tools"]:
             with self.subTest(example=name):
