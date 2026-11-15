@@ -22,7 +22,7 @@ permissions:
 jobs:
   build:
     name: Build iOS IPA
-    runs-on: avrea-macos-27-8-vcpu
+    runs-on: xcode-27
     timeout-minutes: 360
     outputs:
       app_version: ${{ steps.build.outputs.app_version }}
