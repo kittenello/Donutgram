@@ -670,6 +670,18 @@ public final class DGSimpleSettings {
         return string(accountKey("visualProfileId", accountId: accountId))
     }
 
+    public func visualWalletBalanceText(accountId: Int64) -> String {
+        return string(accountKey("visualWalletBalance", accountId: accountId))
+    }
+
+    public func visualWalletBalance(accountId: Int64) -> Int64? {
+        return donutgramParseVisualWalletBalance(self.visualWalletBalanceText(accountId: accountId))
+    }
+
+    public func setVisualWalletBalanceText(_ text: String, accountId: Int64) {
+        setString(text, accountKey("visualWalletBalance", accountId: accountId))
+    }
+
     public func setVisualProfileId(_ value: String, accountId: Int64) {
         setString(value.trimmingCharacters(in: .whitespacesAndNewlines), accountKey("visualProfileId", accountId: accountId))
     }

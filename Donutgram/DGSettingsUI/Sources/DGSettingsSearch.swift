@@ -204,6 +204,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("visualId", "ID профиля", "ВИДНО ТОЛЬКО ВАМ"),
         ("visualLabel", "Метка", "ВИДНО ТОЛЬКО ВАМ"),
         ("localVerification", "Локальная верификация", "ВИДНО ТОЛЬКО ВАМ"),
+        ("visualWalletBalance", "Баланс GRAM", "ВИДНО ТОЛЬКО ВАМ"),
         ("localPremium", "Локальный Telegram Premium", "PREMIUM")
     ])
     // «ID профиля» and «NFT-юзернеймы» hold only the field their row names, so the row is their result.

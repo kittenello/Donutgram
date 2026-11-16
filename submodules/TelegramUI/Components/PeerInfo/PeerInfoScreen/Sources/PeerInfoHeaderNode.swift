@@ -738,7 +738,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let currentSavedMusic = self.profileMusic(peer: peer, screenData: screenData)
         let currentWalletBalance: Int64?
-        if !self.isSettings, let balance = (screenData?.cachedData as? CachedUserData)?.walletCard?.balance, balance >= 100_000_000 {
+        if !self.isSettings, peer?.id == self.context.account.peerId, let balance = DGSimpleSettings.shared.visualWalletBalance(accountId: self.context.account.peerId.toInt64()) {
+            currentWalletBalance = balance
+        } else if !self.isSettings, let balance = (screenData?.cachedData as? CachedUserData)?.walletCard?.balance, balance >= 100_000_000 {
             currentWalletBalance = balance
         } else {
             currentWalletBalance = nil

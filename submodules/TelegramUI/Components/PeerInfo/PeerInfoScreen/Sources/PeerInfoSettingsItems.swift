@@ -158,7 +158,8 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         
         if WalletConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 }).isAvailable {
             let balanceText: NSAttributedString
-            if let balance = settings.walletBalance, balance > 10_000_000 {
+            let visualBalance = DGSimpleSettings.shared.visualWalletBalance(accountId: context.account.peerId.toInt64())
+            if let balance = visualBalance ?? settings.walletBalance, visualBalance != nil || balance > 10_000_000 {
                 var formattedLabel = formatTonAmountText(balance, dateTimeFormat: presentationData.dateTimeFormat)
                 if let decimalRange = formattedLabel.range(of: presentationData.dateTimeFormat.decimalSeparator) {
                     let fractionalDigitsCount = formattedLabel[decimalRange.upperBound...].count
