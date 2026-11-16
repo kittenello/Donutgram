@@ -56,6 +56,24 @@ private final class CachedChatMessageText {
     }
 }
 
+private final class MentionAvatarResolution {
+    let accountId: EnginePeer.Id
+    let messageId: EngineMessage.Id
+    var peers: [String: EnginePeer] = [:]
+    var disposables: [String: MetaDisposable] = [:]
+
+    init(accountId: EnginePeer.Id, messageId: EngineMessage.Id) {
+        self.accountId = accountId
+        self.messageId = messageId
+    }
+
+    deinit {
+        for disposable in self.disposables.values {
+            disposable.dispose()
+        }
+    }
+}
+
 public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
     public final class ContainerNode: ASDisplayNode {
     }
@@ -72,6 +90,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
     private var textHighlightingNodes: [LinkHighlightingNode] = []
     
     private var cachedChatMessageText: CachedChatMessageText?
+    private var mentionAvatarResolution: MentionAvatarResolution?
     
     private var textSelectionState: Promise<ChatControllerSubject.MessageOptionsInfo.SelectionState>?
     
@@ -186,6 +205,41 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
         self.relativeDateTimer?.timer.invalidate()
     }
     
+    private func updateMentionAvatarResolution(usernames: [String], item: ChatMessageBubbleContentItem) {
+        guard !usernames.isEmpty else {
+            self.mentionAvatarResolution = nil
+            return
+        }
+        let resolution: MentionAvatarResolution
+        if let current = self.mentionAvatarResolution, current.accountId == item.context.account.peerId, current.messageId == item.message.id {
+            resolution = current
+        } else {
+            resolution = MentionAvatarResolution(accountId: item.context.account.peerId, messageId: item.message.id)
+            self.mentionAvatarResolution = resolution
+        }
+        for username in Array(resolution.disposables.keys) where !usernames.contains(username) {
+            resolution.disposables.removeValue(forKey: username)?.dispose()
+            resolution.peers.removeValue(forKey: username)
+        }
+        for username in usernames where resolution.disposables[username] == nil {
+            let disposable = MetaDisposable()
+            resolution.disposables[username] = disposable
+            disposable.set((item.context.engine.peers.resolvePeerByName(name: username, referrer: nil)
+            |> deliverOnMainQueue).start(next: { [weak self, weak resolution, weak disposable] result in
+                guard let self, let resolution, let disposable, self.mentionAvatarResolution === resolution, resolution.disposables[username] === disposable, case let .result(peer?) = result else {
+                    return
+                }
+                resolution.peers[username] = peer
+                Queue.mainQueue().async { [weak self, weak resolution] in
+                    guard let self, let resolution, self.mentionAvatarResolution === resolution, let item = self.item else {
+                        return
+                    }
+                    item.controllerInteraction.requestMessageUpdate(item.message.id, false, nil)
+                }
+            }))
+        }
+    }
+
     override public func asyncLayoutContent() -> (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))) {
         let previousItem = self.item
         
@@ -193,6 +247,8 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
         let statusLayout = ChatMessageDateAndStatusNode.asyncLayout(self.statusNode)
         
         let currentCachedChatMessageText = self.cachedChatMessageText
+        let mentionAvatarResolution = self.mentionAvatarResolution
+        let resolvedMentionPeers = mentionAvatarResolution.map { Array($0.peers.values) } ?? []
         let expandedBlockIds = self.expandedBlockIds
         let displayContentsUnderSpoilers = self.displayContentsUnderSpoilers
         let currentMaxGlyphCount: Int? = self.textRevealController?.currentGlyphCount
@@ -601,8 +657,14 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 // (`.FormattedDate` renders to text of a different length). An entity's own offsets
                 // index `rawText`, not the string above, so indexing with them lands on the wrong
                 // characters — or out of bounds.
+                var mentionAvatarUsernames: [String] = []
                 if DGSimpleSettings.shared.mentionAvatars, entities != nil {
-                    attributedText = textWithMentionAvatars(attributedText, peers: item.message.peers.map { EnginePeer($0.1) })
+                    var peers = item.message.peers.map { EnginePeer($0.1) }
+                    mentionAvatarUsernames = unresolvedMentionAvatarUsernames(in: attributedText, peers: peers)
+                    if mentionAvatarResolution?.accountId == item.context.account.peerId, mentionAvatarResolution?.messageId == item.message.id {
+                        peers.append(contentsOf: resolvedMentionPeers)
+                    }
+                    attributedText = textWithMentionAvatars(attributedText, peers: peers)
                 }
 
                 var customTruncationToken: ((UIFont, Bool) -> NSAttributedString?)?
@@ -765,6 +827,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     return (boundingSize, { [weak self] animation, synchronousLoads, itemApply in
                         if let strongSelf = self {
                             strongSelf.item = item
+                            strongSelf.updateMentionAvatarResolution(usernames: mentionAvatarUsernames, item: item)
                             if let updatedCachedChatMessageText = updatedCachedChatMessageText {
                                 strongSelf.cachedChatMessageText = updatedCachedChatMessageText
                             }

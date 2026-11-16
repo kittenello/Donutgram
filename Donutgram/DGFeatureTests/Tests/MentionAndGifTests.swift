@@ -45,11 +45,63 @@ final class MentionAndGifTests: XCTestCase {
         return TelegramGroup(id: PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(1)), title: "Test", photo: [], participantCount: 2, role: role, membership: .Member, flags: [], defaultBannedRights: TelegramChatBannedRights(flags: rights, untilDate: Int32.max), migrationReference: nil, creationDate: 0, version: 1)
     }
 
+    private func user(_ username: String, id: Int64 = 10, usernames: [TelegramPeerUsername] = []) -> EnginePeer {
+        return EnginePeer(TelegramUser(id: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id)), accessHash: nil, firstName: username, lastName: nil, username: username, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: usernames, storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil))
+    }
+
+    func testUnresolvedUsernameKeepsNativeTextWithoutAvatarOrSpacing() {
+        let source = self.rendered("@available", [MessageTextEntity(range: 0 ..< 10, type: .Mention)])
+        let result = textWithMentionAvatars(source, peers: [])
+        XCTAssertEqual(result, source)
+        XCTAssertEqual(self.avatarLocations(result), [])
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), ["available"])
+    }
+
+    func testOnlyResolvedUsernameReceivesAvatar() {
+        let source = self.rendered("@alice @available", [MessageTextEntity(range: 0 ..< 6, type: .Mention), MessageTextEntity(range: 7 ..< 17, type: .Mention)])
+        let peers = [self.user("alice")]
+        let result = textWithMentionAvatars(source, peers: peers)
+        XCTAssertEqual(self.avatarLocations(result), [0])
+        XCTAssertEqual(result.length, source.length + 2)
+        XCTAssertEqual(self.originalText(result), source.string)
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: peers), ["available"])
+    }
+
+    func testUsernameReceivesAvatarAfterResolution() {
+        let source = self.rendered("@Alice", [MessageTextEntity(range: 0 ..< 6, type: .Mention)])
+        XCTAssertEqual(textWithMentionAvatars(source, peers: []), source)
+        let peers = [self.user("alice")]
+        XCTAssertEqual(self.avatarLocations(textWithMentionAvatars(source, peers: peers)), [0])
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: peers), [])
+    }
+
+    func testOnlyActiveUsernameAliasesReceiveAvatars() {
+        let peers = [self.user("alice", usernames: [TelegramPeerUsername(flags: [.isActive], username: "alias"), TelegramPeerUsername(flags: [], username: "unused")])]
+        let source = self.rendered("@alias @unused", [MessageTextEntity(range: 0 ..< 6, type: .Mention), MessageTextEntity(range: 7 ..< 14, type: .Mention)])
+        XCTAssertEqual(self.avatarLocations(textWithMentionAvatars(source, peers: peers)), [0])
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: peers), ["unused"])
+    }
+
+    func testUsernameResolutionIsDeduplicatedAndBounded() {
+        let names = ["Alice", "ALICE"] + (0 ..< 50).map { "user\($0)" }
+        let raw = names.map { "@\($0)" }.joined(separator: " ")
+        var offset = 0
+        let entities = names.map { name -> MessageTextEntity in
+            let length = name.utf16.count + 1
+            defer { offset += length + 1 }
+            return MessageTextEntity(range: offset ..< offset + length, type: .Mention)
+        }
+        let usernames = unresolvedMentionAvatarUsernames(in: self.rendered(raw, entities), peers: [])
+        XCTAssertEqual(usernames.count, 40)
+        XCTAssertEqual(usernames.first, "alice")
+        XCTAssertEqual(Set(usernames).count, usernames.count)
+    }
+
     func testMentionPreservesTextAndUTF16OffsetsAfterEmoji() {
         let raw = "🙂 @alice, ссылка"
         let range = (raw as NSString).range(of: "@alice")
         let source = self.rendered(raw, [MessageTextEntity(range: range.location ..< NSMaxRange(range), type: .Mention)])
-        let result = textWithMentionAvatars(source, peers: [])
+        let result = textWithMentionAvatars(source, peers: [self.user("alice")])
         XCTAssertEqual(self.originalText(result), source.string)
         XCTAssertEqual(result.length, source.length + 2)
         XCTAssertEqual(self.avatarLocations(result), [range.location])
@@ -71,6 +123,12 @@ final class MentionAndGifTests: XCTestCase {
         }
     }
 
+    func testUnresolvedNamedMentionKeepsNativeText() {
+        let source = self.rendered("Анна", [MessageTextEntity(range: 0 ..< 4, type: .TextMention(peerId: self.group().id))])
+        XCTAssertEqual(textWithMentionAvatars(source, peers: []), source)
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), [])
+    }
+
     func testMentionAfterRenderedDateGetsItsOwnAvatar() {
         // A formatted date is shown as the date, so the text before a mention can be longer or
         // shorter than in the message's raw text, which the entities' offsets index. Only the
@@ -83,8 +141,9 @@ final class MentionAndGifTests: XCTestCase {
         source.replaceCharacters(in: NSRange(location: 0, length: 16), with: "1 января 2026 г. в 12:00")
         let mention = (source.string as NSString).range(of: "@alice")
         XCTAssertNotEqual(mention.location, 17)
-        let result = textWithMentionAvatars(source, peers: [])
+        let result = textWithMentionAvatars(source, peers: [self.user("alice")])
         XCTAssertEqual(self.avatarLocations(result), [mention.location])
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), ["alice"])
     }
 
     func testSpoilersAndCodeDoNotResolveMentionAvatars() {
@@ -96,8 +155,9 @@ final class MentionAndGifTests: XCTestCase {
             MessageTextEntity(range: 12 ..< 18, type: .Mention),
             MessageTextEntity(range: 12 ..< 18, type: .Pre(language: nil))
         ])
-        let result = textWithMentionAvatars(source, peers: [])
+        let result = textWithMentionAvatars(source, peers: [self.user("alice"), self.user("bob", id: 11), self.user("carol", id: 12)])
         XCTAssertEqual(self.avatarLocations(result), [])
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), [])
     }
 
     func testTextWithoutMentionsIsUntouched() {
@@ -108,7 +168,7 @@ final class MentionAndGifTests: XCTestCase {
 
     func testMentionLinksAndFollowingTextSurviveAvatarInsertion() {
         let source = self.rendered("@alice и @bob", [MessageTextEntity(range: 0 ..< 6, type: .Mention), MessageTextEntity(range: 9 ..< 13, type: .Mention)])
-        let result = textWithMentionAvatars(source, peers: [])
+        let result = textWithMentionAvatars(source, peers: [self.user("alice"), self.user("bob", id: 11)])
         XCTAssertEqual(self.originalText(result), source.string)
         for index in 2 ..< 8 {
             XCTAssertEqual(result.attribute(NSAttributedString.Key(TelegramTextAttributes.PeerTextMention), at: index, effectiveRange: nil) as? String, "@alice")
@@ -122,7 +182,7 @@ final class MentionAndGifTests: XCTestCase {
             let font = UIFont.italicSystemFont(ofSize: fontSize)
             let source = NSMutableAttributedString(attributedString: self.rendered("@alice", [MessageTextEntity(range: 0 ..< 6, type: .Mention)]))
             source.addAttribute(.font, value: font, range: NSRange(location: 0, length: source.length))
-            let result = textWithMentionAvatars(source, peers: [])
+            let result = textWithMentionAvatars(source, peers: [self.user("alice")])
             let line = CTLineCreateWithAttributedString(result)
             let avatarWidth = CTLineGetOffsetForStringIndex(line, 1, nil)
             XCTAssertEqual(avatarWidth, ceil(fontSize) + 3.0, accuracy: 0.01)
@@ -139,7 +199,7 @@ final class MentionAndGifTests: XCTestCase {
             let range = (raw as NSString).range(of: name)
             return MessageTextEntity(range: range.location ..< NSMaxRange(range), type: .Mention)
         }
-        let text = textWithMentionAvatars(self.rendered(raw, entities), peers: [])
+        let text = textWithMentionAvatars(self.rendered(raw, entities), peers: [self.user("alice"), self.user("bob", id: 11)])
         for width in [CGFloat(100.0), 240.0] {
             let layout = InteractiveTextNode.asyncLayout(nil)(InteractiveTextNodeLayoutArguments(attributedString: text, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width, height: 1000.0))).0
             let items = layout.segments.flatMap(\.embeddedItems)

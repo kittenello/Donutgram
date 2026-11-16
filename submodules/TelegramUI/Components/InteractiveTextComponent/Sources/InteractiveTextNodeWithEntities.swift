@@ -12,7 +12,6 @@ import MultiAnimationRenderer
 import TelegramCore
 import EmojiTextAttachmentView
 import AvatarNode
-import SwiftSignalKit
 
 private final class InlineStickerItem: Hashable {
     let emoji: ChatTextInputTextCustomEmojiAttribute
@@ -59,15 +58,13 @@ private final class RunDelegateData {
 private final class MentionAvatarItem: Hashable {
     static let spacing: CGFloat = 3.0
 
-    let peer: EnginePeer?
-    let username: String?
+    let peer: EnginePeer
     let font: UIFont
     let avatarSize: CGFloat
     let width: CGFloat
 
-    init(peer: EnginePeer?, username: String?, font: UIFont) {
+    init(peer: EnginePeer, font: UIFont) {
         self.peer = peer
-        self.username = username
         self.font = font
         self.avatarSize = ceil(font.pointSize)
         self.width = self.avatarSize + MentionAvatarItem.spacing
@@ -80,12 +77,11 @@ private final class MentionAvatarItem: Hashable {
     }
 
     static func == (lhs: MentionAvatarItem, rhs: MentionAvatarItem) -> Bool {
-        return lhs.peer == rhs.peer && lhs.username == rhs.username && lhs.font == rhs.font
+        return lhs.peer == rhs.peer && lhs.font == rhs.font
     }
 
     func hash(into hasher: inout Hasher) {
-        hasher.combine(self.peer?.id)
-        hasher.combine(self.username)
+        hasher.combine(self.peer.id)
         hasher.combine(self.font.fontName)
         hasher.combine(self.font.pointSize)
     }
@@ -133,6 +129,29 @@ private func isMentionInSpoilerOrCode(_ text: NSAttributedString, range: NSRange
     return result
 }
 
+private func mentionPeer(named username: String, peers: [EnginePeer]) -> EnginePeer? {
+    return peers.first(where: { peer in
+        peer.addressName?.lowercased() == username.lowercased() || peer.usernames.contains(where: { $0.flags.contains(.isActive) && $0.username.lowercased() == username.lowercased() })
+    })
+}
+
+public func unresolvedMentionAvatarUsernames(in text: NSAttributedString, peers: [EnginePeer]) -> [String] {
+    let string = text.string as NSString
+    var usernames: [String] = []
+    for mention in renderedMentions(text) {
+        guard usernames.count < 40, mention.peerId == nil, !isMentionInSpoilerOrCode(text, range: mention.range) else {
+            continue
+        }
+        let mentionText = string.substring(with: mention.range)
+        guard mentionText.hasPrefix("@") else { continue }
+        let username = String(mentionText.dropFirst()).lowercased()
+        if !username.isEmpty && !usernames.contains(username) && mentionPeer(named: username, peers: peers) == nil {
+            usernames.append(username)
+        }
+    }
+    return usernames
+}
+
 public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePeer]) -> NSAttributedString {
     let result = NSMutableAttributedString(attributedString: text)
     let string = text.string as NSString
@@ -144,26 +163,21 @@ public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePee
         }
         let mentionRange = mention.range
         let peer: EnginePeer?
-        let username: String?
         if let peerId = mention.peerId {
             peer = peers.first(where: { $0.id == peerId })
-            username = nil
-            guard peer != nil else { continue }
         } else {
             let mentionText = string.substring(with: mentionRange)
             guard mentionText.hasPrefix("@") else { continue }
             let name = String(mentionText.dropFirst())
             guard !name.isEmpty else { continue }
-            username = name
-            peer = peers.first(where: { peer in
-                peer.addressName?.lowercased() == name.lowercased() || peer.usernames.contains(where: { $0.flags.contains(.isActive) && $0.username.lowercased() == name.lowercased() })
-            })
+            peer = mentionPeer(named: name, peers: peers)
         }
+        guard let peer else { continue }
         let range = string.rangeOfComposedCharacterSequence(at: mentionRange.location)
         guard NSMaxRange(range) <= NSMaxRange(mentionRange), result.attribute(NSAttributedString.Key("Attribute__EmbeddedItem"), at: range.location, effectiveRange: nil) == nil, result.attribute(ChatTextInputAttributes.customEmoji, at: range.location, effectiveRange: nil) == nil, let font = result.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont else {
             continue
         }
-        let item = MentionAvatarItem(peer: peer, username: username, font: font)
+        let item = MentionAvatarItem(peer: peer, font: font)
         let metrics = RunDelegateData(ascent: max(font.ascender, item.avatarCenterAboveBaseline + item.avatarSize * 0.5), descent: max(-font.descender, item.avatarSize * 0.5 - item.avatarCenterAboveBaseline), width: item.width)
         var callbacks = CTRunDelegateCallbacks(version: kCTRunDelegateCurrentVersion, dealloc: { pointer in
             Unmanaged<RunDelegateData>.fromOpaque(pointer).release()
@@ -198,9 +212,7 @@ public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePee
 }
 
 private final class MentionAvatarView: UIView {
-    private static var resolvedPeers: [String: EnginePeer] = [:]
     private let avatarNode: AvatarNode
-    private let disposable = MetaDisposable()
     private let item: MentionAvatarItem
     private var baseline: CGFloat = 0.0
     private var textOriginX: CGFloat = 0.0
@@ -213,37 +225,11 @@ private final class MentionAvatarView: UIView {
         self.avatarNode.clipsToBounds = true
         self.avatarNode.cornerRadius = item.avatarSize * 0.5
         self.addSubview(self.avatarNode.view)
-        let setPeer: (EnginePeer) -> Void = { [weak self] peer in
-            guard let self else { return }
-            self.avatarNode.setPeer(context: context, theme: context.sharedContext.currentPresentationData.with { $0 }.theme, peer: peer, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: item.avatarSize, height: item.avatarSize))
-        }
-        if let peer = item.peer {
-            setPeer(peer)
-        } else if let username = item.username {
-            let key = "\(context.account.peerId.toInt64()):\(username.lowercased())"
-            if let cached = Self.resolvedPeers[key] {
-                setPeer(cached)
-            } else {
-                self.avatarNode.setCustomLetters([String(username.prefix(1)).uppercased()])
-                self.disposable.set((context.engine.peers.resolvePeerByName(name: username, referrer: nil)
-                |> deliverOnMainQueue).start(next: { result in
-                    guard case let .result(peer?) = result else { return }
-                    if Self.resolvedPeers.count >= 256 {
-                        Self.resolvedPeers.removeAll()
-                    }
-                    Self.resolvedPeers[key] = peer
-                    setPeer(peer)
-                }))
-            }
-        }
+        self.avatarNode.setPeer(context: context, theme: context.sharedContext.currentPresentationData.with { $0 }.theme, peer: item.peer, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: item.avatarSize, height: item.avatarSize))
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        self.disposable.dispose()
     }
 
     /// `baseline` and `textOriginX` place the item on its line, as `InteractiveTextNodeLayout.EmbeddedItem`
