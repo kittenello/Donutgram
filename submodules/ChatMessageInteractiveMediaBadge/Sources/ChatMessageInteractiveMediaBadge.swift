@@ -47,6 +47,7 @@ public final class ChatMessageInteractiveMediaBadge: ASDisplayNode {
     private var mediaDownloadState: ChatMessageInteractiveMediaDownloadState?
     
     private var previousContentSize: CGSize?
+    private var previousMaximumWidth: CGFloat?
     private var backgroundNodeColor: UIColor?
     private var foregroundColor: UIColor?
     private var iconName: String?
@@ -72,6 +73,7 @@ public final class ChatMessageInteractiveMediaBadge: ASDisplayNode {
         self.backgroundNode = ASImageNode()
         self.backgroundNode.clipsToBounds = true
         self.durationNode = ASTextNode()
+        self.durationNode.maximumNumberOfLines = 3
         self.measureNode = ASTextNode()
         
         super.init()
@@ -124,13 +126,14 @@ public final class ChatMessageInteractiveMediaBadge: ASDisplayNode {
         return self.measureNode.measure(CGSize(width: 240.0, height: 160.0)).width
     }
     
-    public func update(theme: PresentationTheme?, content: ChatMessageInteractiveMediaBadgeContent?, mediaDownloadState: ChatMessageInteractiveMediaDownloadState?, alignment: NSTextAlignment = .left, animated: Bool, badgeAnimated: Bool = true) {
+    public func update(theme: PresentationTheme?, content: ChatMessageInteractiveMediaBadgeContent?, mediaDownloadState: ChatMessageInteractiveMediaDownloadState?, alignment: NSTextAlignment = .left, animated: Bool, badgeAnimated: Bool = true, maximumWidth: CGFloat = 160.0) {
         var transition: ContainedViewLayoutTransition = animated ? .animated(duration: 0.2, curve: .easeInOut) : .immediate
         
         let previousContentSize = self.previousContentSize
         var contentSize: CGSize?
         
-        if self.content != content {
+        if self.content != content || self.previousMaximumWidth != maximumWidth {
+            self.previousMaximumWidth = maximumWidth
             let previousContent = self.content
             self.content = content
             var currentContentSize = CGSize()
@@ -162,9 +165,13 @@ public final class ChatMessageInteractiveMediaBadge: ASDisplayNode {
                             }
                         }
                         self.durationNode.attributedText = convertedText
-                        let durationSize = self.durationNode.measure(CGSize(width: 160.0, height: 160.0))
+                        let textWidth = text.string.contains("\n") ? max(1.0, maximumWidth - 14.0 - inset) : 160.0
+                        let durationSize = self.durationNode.measure(CGSize(width: textWidth, height: 160.0))
                         self.durationNode.frame = CGRect(x: 7.0 + inset, y: 2.0 + UIScreenPixel, width: durationSize.width, height: durationSize.height)
                         currentContentSize = CGSize(width: widthForString(text.string) + 14.0 + inset, height: 18.0)
+                        if text.string.contains("\n") {
+                            currentContentSize = CGSize(width: durationSize.width + 14.0 + inset, height: max(18.0, durationSize.height + 4.0))
+                        }
                     
                         if let iconName {
                             let iconNode: ASImageNode

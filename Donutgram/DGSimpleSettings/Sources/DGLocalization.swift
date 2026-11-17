@@ -113,6 +113,7 @@ private let dgEnglishStrings: [String: String] = [
     "Premium включён локально для этого аккаунта. Цвета папок и теги чатов настраиваются в разделе «Папки с чатами» и сохраняются только на этом устройстве. Сервер Telegram по-прежнему проверяет подписку для платных возможностей.": "Premium is enabled locally for this account. Folder colors and chat tags are set up in Chat Folders and are saved on this device only. Telegram still checks your subscription for paid features.",
     "ID профиля": "Profile ID",
     "Баланс GRAM": "GRAM Balance",
+    "Обработка видео": "Processing video",
     "Количество GRAM": "GRAM Amount",
     "Пустое поле — обычный баланс. Сумма в выбранной валюте пересчитывается автоматически. Видно только вам.": "Leave empty to show the regular balance. The selected currency amount is recalculated automatically. Only visible to you.",
     "Введите число от 0 до 9223372036,854775807, до 9 знаков после запятой.": "Enter a number from 0 to 9223372036.854775807, with up to 9 decimal places.",

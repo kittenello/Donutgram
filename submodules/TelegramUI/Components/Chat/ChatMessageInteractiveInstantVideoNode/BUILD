@@ -11,6 +11,7 @@ swift_library(
         #"-Xfrontend", "-debug-time-function-bodies"
     ],
     deps = [
+        "//Donutgram/DGMediaTransferUI",
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/Media/LocalAudioTranscription",
         "//submodules/AsyncDisplayKit",

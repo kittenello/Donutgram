@@ -482,6 +482,14 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
     private var showSensitiveContent: Bool = false
     
     private let statusDisposable = MetaDisposable()
+    private let pendingTransferDisposable = MetaDisposable()
+    private var pendingTransferMessageId: EngineMessage.Id?
+    private var pendingTransferStatus: PendingMessageStatus?
+    private var transferRate = DGMediaTransferRate()
+    private var transferUpdateTimer: SwiftSignalKit.Timer?
+    private let transferSizeDisposable = MetaDisposable()
+    private var transferResourceId: String?
+    private var transferResourceSize: Int64?
     private let fetchControls = Atomic<FetchControls?>(value: nil)
     private var fetchStatus: EngineMediaResourceStatus?
     private var actualFetchStatus: EngineMediaResourceStatus?
@@ -511,6 +519,12 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
     public var visibility: Bool = false {
         didSet {
             self.updateVisibility()
+            if self.visibility {
+                self.updateStatus(animated: false)
+            } else {
+                self.transferUpdateTimer?.invalidate()
+                self.transferUpdateTimer = nil
+            }
         }
     }
     
@@ -654,6 +668,9 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
     
     deinit {
         self.statusDisposable.dispose()
+        self.pendingTransferDisposable.dispose()
+        self.transferUpdateTimer?.invalidate()
+        self.transferSizeDisposable.dispose()
         self.videoNodeReadyDisposable.dispose()
         self.playerStatusDisposable.dispose()
         self.fetchDisposable.dispose()
@@ -1929,6 +1946,40 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                             strongSelf.automaticDownload = automaticDownload
                             strongSelf.preferredStoryHighQuality = associatedData.preferredStoryHighQuality
                             strongSelf.showSensitiveContent = associatedData.showSensitiveContent
+                            let transferMedia = engineMedia._asMedia()
+                            let transferResource = (transferMedia as? TelegramMediaFile)?.resource ?? (transferMedia as? TelegramMediaImage).flatMap { largestImageRepresentation($0.representations)?.resource }
+                            let transferResourceId = transferResource?.id.stringRepresentation
+                            if strongSelf.transferResourceId != transferResourceId {
+                                strongSelf.transferResourceId = transferResourceId
+                                strongSelf.transferResourceSize = nil
+                                strongSelf.transferRate.reset()
+                                strongSelf.transferSizeDisposable.set(nil)
+                                if let transferResource, transferResource.size == nil {
+                                    strongSelf.transferSizeDisposable.set((context.account.postbox.mediaBox.resourceData(transferResource)
+                                    |> filter { $0.complete }
+                                    |> take(1)
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] data in
+                                        guard let strongSelf, strongSelf.transferResourceId == transferResourceId else { return }
+                                        strongSelf.transferResourceSize = data.size
+                                        strongSelf.updateStatus(animated: false)
+                                    }))
+                                }
+                            }
+                            let pendingTransferId = message.flags.isSending ? message.id : nil
+                            if strongSelf.pendingTransferMessageId != pendingTransferId {
+                                strongSelf.pendingTransferMessageId = pendingTransferId
+                                strongSelf.pendingTransferStatus = nil
+                                strongSelf.transferRate.reset()
+                                strongSelf.pendingTransferDisposable.set(nil)
+                                if let pendingTransferId {
+                                    strongSelf.pendingTransferDisposable.set((context.account.pendingMessageManager.pendingMessageStatus(pendingTransferId)
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] status, _ in
+                                        guard let strongSelf, strongSelf.pendingTransferMessageId == pendingTransferId else { return }
+                                        strongSelf.pendingTransferStatus = status
+                                        strongSelf.updateStatus(animated: false)
+                                    }))
+                                }
+                            }
                             
                             #if DEBUG && false
                             if strongSelf.testDeferHLSMedia && maybeRestoreHLSMedia && strongSelf.deferHLSMediaTimer == nil {
@@ -3163,6 +3214,49 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
         } else if self.statusGlassView != nil {
             self.updateStatusGlass(statusNode: nil)
         }
+        var isTransferring = false
+        if !isPreview, !isSecretMedia, let media = self.media?._asMedia(), let fetchStatus = self.fetchStatus, case let .Fetching(isActive, progress) = fetchStatus {
+            isTransferring = isActive
+            if !isActive { self.transferRate.reset() }
+            let formatting = DataSizeStringFormatting(strings: strings, decimalSeparator: decimalSeparator)
+            let file = media as? TelegramMediaFile
+            let image = media as? TelegramMediaImage
+            let representation = image.flatMap { largestImageRepresentation($0.representations) }
+            let resource = file?.resource ?? representation?.resource
+            let size = file?.size ?? resource?.size ?? self.transferResourceSize
+            let pending = message.flags.isSending ? self.pendingTransferStatus?.progress : nil
+            let progress = min(1.0, max(0.0, pending?.phaseProgress ?? progress))
+            let transferText: String
+            if pending?.phase == .processing {
+                self.transferRate.reset()
+                transferText = dgLocalized("Обработка видео", languageCode: strings.baseLanguageCode) + " · \(Int(progress * 100.0))%"
+            } else if let size, size > 0, size != .max, !(file.map { NativeVideoContent.isHLSVideo(file: $0) } ?? false) {
+                let bytes = DGMediaTransferRate.transferredBytes(total: size, progress: progress)
+                let resourceKey = resource?.id.stringRepresentation ?? ""
+                let rate = self.transferRate.update(key: "\(message.id)-\(resourceKey)-\(message.flags.isSending)", bytes: bytes, timestamp: CACurrentMediaTime())
+                let speed = rate.map { dataSizeString($0, forceDecimal: true, formatting: formatting) } ?? "—"
+                transferText = "\(dataSizeString(bytes, forceDecimal: true, formatting: formatting)) / \(dataSizeString(size, forceDecimal: true, formatting: formatting))\n\(speed)/s"
+            } else {
+                transferText = "\(Int(progress * 100.0))% · —/s"
+            }
+            let duration = file?.duration.map { stringForDuration(Int32($0)) + "\n" } ?? ""
+            badgeContent = .text(inset: 0.0, backgroundColor: messageTheme.mediaDateAndStatusFillColor, foregroundColor: messageTheme.mediaDateAndStatusTextColor, text: NSAttributedString(string: duration + transferText), iconName: nil)
+            mediaDownloadState = nil
+        } else {
+            self.transferRate.reset()
+        }
+        if isTransferring && self.visibility {
+            if self.transferUpdateTimer == nil {
+                let timer = SwiftSignalKit.Timer(timeout: 0.25, repeat: true, completion: { [weak self] in
+                    self?.updateStatus(animated: false)
+                }, queue: .mainQueue())
+                self.transferUpdateTimer = timer
+                timer.start()
+            }
+        } else {
+            self.transferUpdateTimer?.invalidate()
+            self.transferUpdateTimer = nil
+        }
         if var badgeContent = badgeContent {
             if self.badgeNode == nil {
                 let badgeNode = ChatMessageInteractiveMediaBadge()
@@ -3200,7 +3294,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                 }
             }
             self.badgeNode?.isGlass = self.isBubblelessGlassPlates
-            self.badgeNode?.update(theme: theme, content: badgeContent, mediaDownloadState: mediaDownloadState, animated: animated)
+            self.badgeNode?.update(theme: theme, content: badgeContent, mediaDownloadState: mediaDownloadState, animated: animated, maximumWidth: max(1.0, self.imageNode.bounds.width - 12.0))
         } else if let badgeNode = self.badgeNode {
             self.badgeNode = nil
             badgeNode.removeFromSupernode()

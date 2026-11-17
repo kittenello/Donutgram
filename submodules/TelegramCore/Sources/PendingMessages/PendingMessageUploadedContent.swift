@@ -26,7 +26,7 @@ struct PendingMessageUploadedContentAndReuploadInfo {
 }
 
 struct PendingMessageUploadedContentProgress {
-    enum Phase {
+    enum Phase: Equatable {
         case processing
         case uploading
     }
@@ -34,11 +34,13 @@ struct PendingMessageUploadedContentProgress {
     let progress: Float
     let mediaProgress: [MediaId: Float]
     let phase: Phase
+    let phaseProgress: Float
     
-    init(progress: Float, mediaProgress: [MediaId: Float] = [:], phase: Phase = .uploading) {
+    init(progress: Float, mediaProgress: [MediaId: Float] = [:], phase: Phase = .uploading, phaseProgress: Float? = nil) {
         self.progress = progress
         self.mediaProgress = mediaProgress
         self.phase = phase
+        self.phaseProgress = phaseProgress ?? progress
     }
 }
 
@@ -1527,17 +1529,18 @@ private func uploadedMediaFileContent(network: Network, postbox: Postbox, auxili
         |> mapToSignal { content, fileAndThumbnailResult, resourceStatus -> Signal<PendingMessageUploadedContentResult, PendingMessageUploadError> in
             guard let content = content else {
                 if let resourceStatus = resourceStatus, case let .Fetching(_, progress) = resourceStatus {
-                    return .single(.progress(PendingMessageUploadedContentProgress(progress: progress * 0.33, phase: .processing)))
+                    return .single(.progress(PendingMessageUploadedContentProgress(progress: progress * 0.33, phase: .processing, phaseProgress: progress)))
                 }
                 return .complete()
             }
             switch content {
                 case let .progress(progress):
+                    let phaseProgress = progress
                     var progress = progress
                     if passFetchProgress {
                         progress = 0.33 + progress * 0.67
                     }
-                    return .single(.progress(PendingMessageUploadedContentProgress(progress: progress)))
+                    return .single(.progress(PendingMessageUploadedContentProgress(progress: progress, phaseProgress: phaseProgress)))
                 case let .inputFile(inputFile):
                     if case let .done(file, thumbnail, videoCover) = fileAndThumbnailResult {
                         var flags: Int32 = 0

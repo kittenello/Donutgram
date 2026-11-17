@@ -30,6 +30,7 @@ import WallpaperBackgroundNode
 import TelegramStringFormatting
 import InvisibleInkDustNode
 import DGSimpleSettings
+import DGMediaTransferUI
 import LocalAudioTranscription
 import StaticGlassBackground
 
@@ -116,6 +117,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
     private var imageScale: CGFloat = 1.0
     
     private var item: ChatMessageBubbleContentItem?
+    private let transferStatusNode = DGMediaTransferStatusNode()
     private var automaticDownload: Bool?
     public var media: TelegramMediaFile?
     public var appliedForwardInfo: ChatMessageAppliedForwardInfo?
@@ -166,6 +168,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
     public var visibility: Bool = false {
         didSet {
             if self.visibility != oldValue {
+                self.transferStatusNode.isTransferVisible = self.visibility
                 self.videoNode?.canAttachContent = self.shouldAcquireVideoContext
             }
         }
@@ -1293,6 +1296,15 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         guard let file = selectedMedia else {
             return
         }
+        if self.transferStatusNode.supernode == nil {
+            self.addSubnode(self.transferStatusNode)
+        }
+        self.transferStatusNode.isTransferVisible = self.visibility
+        self.transferStatusNode.sizeUpdated = { [weak self] size in
+            guard let self, let frame = self.videoFrame else { return }
+            self.transferStatusNode.frame = CGRect(origin: CGPoint(x: frame.midX - size.width * 0.5, y: frame.midY + 32.0), size: size)
+        }
+        self.transferStatusNode.update(context: item.context, message: EngineMessage(item.message), file: file, presentationData: item.presentationData, width: videoFrame.width - 32.0)
         
         var displayMute: Bool
         switch status.mediaStatus {

@@ -146,17 +146,28 @@ private func donutgramPseudoReplyThreadRootId(peer: Peer, threadId: Int64?) -> I
 
 public struct PendingMessageStatus: Equatable {
     public struct Progress: Equatable {
+        public enum Phase: Equatable {
+            case processing
+            case uploading
+        }
+
         public let progress: Float
         public let mediaProgress: [MediaId: Float]
+        public let phase: Phase
+        public let phaseProgress: Float
         
-        public init(progress: Float, mediaProgress: [MediaId: Float] = [:]) {
+        public init(progress: Float, mediaProgress: [MediaId: Float] = [:], phase: Phase = .uploading, phaseProgress: Float? = nil) {
             self.progress = progress
             self.mediaProgress = mediaProgress
+            self.phase = phase
+            self.phaseProgress = phaseProgress ?? progress
         }
         
         init(_ contentProgress: PendingMessageUploadedContentProgress) {
             self.progress = contentProgress.progress
             self.mediaProgress = contentProgress.mediaProgress
+            self.phase = contentProgress.phase == .processing ? .processing : .uploading
+            self.phaseProgress = contentProgress.phaseProgress
         }
     }
     
