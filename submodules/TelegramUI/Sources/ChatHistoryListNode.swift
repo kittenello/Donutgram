@@ -858,6 +858,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     private var donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
     private var donutgramHidePremiumReplyEmoji = DGSimpleSettings.shared.hidePremiumReplyEmoji
     private var donutgramBlurMessages = DGSimpleSettings.shared.blurMessages
+    private var donutgramMediaTransferDisplay = (DGSimpleSettings.shared.showMediaTransferSpeed, DGSimpleSettings.shared.showVideoProcessingProgress)
     
     private var visibleMessageRange = Atomic<VisibleMessageRange?>(value: nil)
     
@@ -1410,7 +1411,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             let premiumReplyEmojiChanged = self.donutgramHidePremiumReplyEmoji != DGSimpleSettings.shared.hidePremiumReplyEmoji
             let mentionAvatarsChanged = self.donutgramMentionAvatars != DGSimpleSettings.shared.mentionAvatars
             let blurMessagesChanged = self.donutgramBlurMessages != DGSimpleSettings.shared.blurMessages
-            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || premiumReplyEmojiChanged || hideAIFeaturesChanged || blurMessagesChanged {
+            let mediaTransferDisplay = (DGSimpleSettings.shared.showMediaTransferSpeed, DGSimpleSettings.shared.showVideoProcessingProgress)
+            let mediaTransferDisplayChanged = self.donutgramMediaTransferDisplay != mediaTransferDisplay
+            if self.donutgramTranscriptionBackend != transcriptionBackend || stickerAppearanceChanged || forwardCountChanged || mentionAvatarsChanged || wideChannelPostsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || premiumReplyEmojiChanged || hideAIFeaturesChanged || blurMessagesChanged || mediaTransferDisplayChanged {
                 self.donutgramTranscriptionBackend = transcriptionBackend
                 self.donutgramStickerAppearance = stickerAppearance
                 self.donutgramShowChannelForwardCount = showChannelForwardCount
@@ -1422,7 +1425,8 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 self.donutgramMentionAvatars = DGSimpleSettings.shared.mentionAvatars
                 self.donutgramHidePremiumReplyEmoji = DGSimpleSettings.shared.hidePremiumReplyEmoji
                 self.donutgramBlurMessages = DGSimpleSettings.shared.blurMessages
-                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || hideAIFeaturesChanged || premiumReplyEmojiChanged || blurMessagesChanged)
+                self.donutgramMediaTransferDisplay = mediaTransferDisplay
+                self.updateLoadedMessageItems(includeChannelPosts: forwardCountChanged || wideChannelPostsChanged, includeStickers: stickerAppearanceChanged, includeAllMessages: stickerRepliesChanged || mentionAvatarsChanged || forwardDateChanged || hidePaidReactionsChanged || hideViaBotChanged || hideAIFeaturesChanged || premiumReplyEmojiChanged || blurMessagesChanged || mediaTransferDisplayChanged)
             }
         })
 

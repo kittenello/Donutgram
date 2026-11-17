@@ -3215,7 +3215,8 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
             self.updateStatusGlass(statusNode: nil)
         }
         var isTransferring = false
-        if !isPreview, !isSecretMedia, let media = self.media?._asMedia(), let fetchStatus = self.fetchStatus, case let .Fetching(isActive, progress) = fetchStatus {
+        let isProcessing = message.flags.isSending && self.pendingTransferStatus?.progress.phase == .processing
+        if DGSimpleSettings.shared.shouldShowMediaTransferDetails(isProcessing: isProcessing), !isPreview, !isSecretMedia, let media = self.media?._asMedia(), let fetchStatus = self.fetchStatus, case let .Fetching(isActive, progress) = fetchStatus {
             isTransferring = isActive
             if !isActive { self.transferRate.reset() }
             let formatting = DataSizeStringFormatting(strings: strings, decimalSeparator: decimalSeparator)

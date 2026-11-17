@@ -11,6 +11,14 @@ let settings = DGSimpleSettings(defaults: defaults)
 
 if mode == "write" {
     defaults.removePersistentDomain(forName: suiteName)
+    check(settings.showMediaTransferSpeed && settings.showVideoProcessingProgress, "media transfer indicators start enabled")
+    settings.showMediaTransferSpeed = false
+    check(!settings.shouldShowMediaTransferDetails(isProcessing: false) && settings.shouldShowMediaTransferDetails(isProcessing: true), "hiding transfer speed keeps video processing progress")
+    settings.showVideoProcessingProgress = false
+    check(!settings.shouldShowMediaTransferDetails(isProcessing: false) && !settings.shouldShowMediaTransferDetails(isProcessing: true), "both indicators can be disabled")
+    settings.showMediaTransferSpeed = true
+    check(settings.shouldShowMediaTransferDetails(isProcessing: false) && !settings.shouldShowMediaTransferDetails(isProcessing: true), "speed can be shown without video processing progress")
+    settings.showMediaTransferSpeed = false
     var transferRate = DGMediaTransferRate()
     check(transferRate.update(key: "small-photo", bytes: 0, timestamp: 0.0) == nil, "speed needs two real progress samples")
     check(transferRate.update(key: "small-photo", bytes: 128, timestamp: 0.25) == 512, "small photos have no speed threshold")
@@ -111,6 +119,9 @@ if mode == "write" {
     defaults.synchronize()
     print("settings behavior checks passed")
 } else if mode == "read" {
+    check(!settings.showMediaTransferSpeed && !settings.showVideoProcessingProgress, "disabled transfer indicators survive process restart")
+    settings.showVideoProcessingProgress = true
+    check(!settings.shouldShowMediaTransferDetails(isProcessing: false) && settings.shouldShowMediaTransferDetails(isProcessing: true), "processing progress can be enabled independently after restart")
     check(settings.visualWalletBalance(accountId: 1001) == 123_456_789_012, "visual wallet balance survives process restart")
     check(settings.visualWalletBalance(accountId: 1002) == 0, "zero visual balance survives independently")
     settings.setVisualWalletBalanceText("", accountId: 1001)

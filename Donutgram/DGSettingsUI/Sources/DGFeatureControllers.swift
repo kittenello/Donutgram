@@ -803,6 +803,9 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             .menu(61, 6, "transcription", "Сервис расшифровки", dgTranscriptionBackendTitle(s.transcriptionBackend)),
             .header(70, 7, "МУЗЫКА В ПРОФИЛЕ"),
             .toggle(71, 7, "disableProfileMusicAutoplay", "Не включать музыку автоматически", s.disableProfileMusicAutoplay, true),
+            .header(80, 9, "ЗАГРУЗКА И ОБРАБОТКА"),
+            .toggle(81, 9, "showMediaTransferSpeed", "Скорость загрузки и выгрузки", s.showMediaTransferSpeed, true),
+            .toggle(82, 9, "showVideoProcessingProgress", "Прогресс обработки видео", s.showVideoProcessingProgress, true),
         ])
         return result
     }, toggle: { key, value in
@@ -821,6 +824,8 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
         case "builtInMic": s.forceBuiltInMicrophone = value
         case "disableProfileMusicAutoplay": s.disableProfileMusicAutoplay = value
         case "gifScrubber": s.gifScrubber = value
+        case "showMediaTransferSpeed": s.showMediaTransferSpeed = value
+        case "showVideoProcessingProgress": s.showVideoProcessingProgress = value
         case "autoPause": s.autoPause = value
         case "autoPauseVideo": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 1, isOn: value)
         case "autoPauseVoice": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 2, isOn: value)

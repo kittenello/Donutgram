@@ -90,6 +90,10 @@ public final class DGMediaTransferStatusNode: ASDisplayNode {
             self.hide()
             return
         }
+        guard DGSimpleSettings.shared.shouldShowMediaTransferDetails(isProcessing: self.pending?.progress.phase == .processing) else {
+            self.hide()
+            return
+        }
         progress = progress.isFinite ? min(1.0, max(0.0, progress)) : 0.0
         if !isActive { self.rate.reset() }
         let text: String

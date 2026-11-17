@@ -1842,7 +1842,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             transferStatus = status
         }
         var isTransferring = false
-        if !isViewOnceMessage, case let .Fetching(isActive, progress) = transferStatus {
+        let isProcessing = isSending && self.pendingTransferStatus?.progress.phase == .processing
+        if DGSimpleSettings.shared.shouldShowMediaTransferDetails(isProcessing: isProcessing), !isViewOnceMessage, case let .Fetching(isActive, progress) = transferStatus {
             isTransferring = isActive
             if !isActive { self.transferRate.reset() }
             let pending = isSending ? self.pendingTransferStatus?.progress : nil
