@@ -29,6 +29,7 @@ import PasscodeCore
 import QrCodeUI
 import UndoUI
 import TelegramUIPreferences
+import DGSimpleSettings
 
 private enum WalletSendAmountSource: Equatable {
     case manual
@@ -2457,9 +2458,10 @@ private final class WalletSendScreenComponent: Component {
             self.previousFeeDisplayState = feeDisplayState
             let hasPositiveBalance = self.walletBalance.map { $0 > 0 } == true
             let hasZeroBalance = self.walletBalance == 0
+            let visualBalance = DGSimpleSettings.shared.visualWalletBalance(accountId: component.context.account.peerId.toInt64())
             let sendButtonY = usableBottom - 68.0
             let showSendButton = hasAmount || component.peer != nil || !component.initialAddress.isEmpty
-            let showBalance = (hasAmount || hasPositiveBalance) && !hasZeroBalance
+            let showBalance = visualBalance != nil || ((hasAmount || hasPositiveBalance) && !hasZeroBalance)
             let balanceSlotY = sendButtonY - (showFees ? 58.0 : 36.0)
             
             var centralContentLayouts: [(view: UIView, frame: CGRect, transition: ComponentTransition)] = []
@@ -2773,7 +2775,7 @@ private final class WalletSendScreenComponent: Component {
             }
 
             let formattedBalance: String
-            if let balance = self.walletBalance {
+            if let balance = visualBalance ?? self.walletBalance {
                 formattedBalance = formatTonAmountText(
                     balance,
                     dateTimeFormat: environment.dateTimeFormat,

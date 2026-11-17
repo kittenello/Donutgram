@@ -34,6 +34,7 @@ swift_library(
     ],
     data = [":WalletSendAmountMetalSourcesBundle"],
     deps = [
+        "//Donutgram/DGSimpleSettings",
         "//submodules/AccountContext",
         "//submodules/AppBundle",
         "//submodules/AttachmentUI",
