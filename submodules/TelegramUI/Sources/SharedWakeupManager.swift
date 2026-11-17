@@ -149,6 +149,9 @@ public final class SharedWakeupManager {
                 return
             }
             strongSelf.inForeground = value
+            if !value && !strongSelf.pendingMediaUploadsByKey.isEmpty {
+                strongSelf.allowBackgroundTimeExtension(timeout: 30.0, extendNow: true)
+            }
             if value {
                 strongSelf.activeExplicitExtensionTimer?.invalidate()
                 strongSelf.activeExplicitExtensionTimer = nil
