@@ -57,6 +57,29 @@ final class MentionAndGifTests: XCTestCase {
         XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), ["available"])
     }
 
+    func testLiteralUsernamePlaceholderHasNoAvatarOrResolution() {
+        for mention in ["@username", "@UserName", "@USERNAME"] {
+            let source = self.rendered(mention, [MessageTextEntity(range: 0 ..< mention.utf16.count, type: .Mention)])
+            let peers = [self.user("username")]
+            XCTAssertEqual(textWithMentionAvatars(source, peers: peers), source)
+            XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), [])
+        }
+    }
+
+    func testUsernamePlaceholderExclusionDoesNotMatchOtherUsernames() {
+        let raw = "@username1 @myusername"
+        let names = ["username1", "myusername"]
+        let entities = names.map { name -> MessageTextEntity in
+            let range = (raw as NSString).range(of: "@" + name)
+            return MessageTextEntity(range: range.location ..< NSMaxRange(range), type: .Mention)
+        }
+        let source = self.rendered(raw, entities)
+        let result = textWithMentionAvatars(source, peers: [self.user("username1"), self.user("myusername", id: 11)])
+        XCTAssertEqual(self.avatarLocations(result), [0, 13])
+        XCTAssertEqual(self.originalText(result), raw)
+        XCTAssertEqual(unresolvedMentionAvatarUsernames(in: source, peers: []), names)
+    }
+
     func testOnlyResolvedUsernameReceivesAvatar() {
         let source = self.rendered("@alice @available", [MessageTextEntity(range: 0 ..< 6, type: .Mention), MessageTextEntity(range: 7 ..< 17, type: .Mention)])
         let peers = [self.user("alice")]

@@ -28,7 +28,7 @@
 - hide reply-only drafts in the chat list while keeping the selected reply.
 - remove bubble tails, show seconds in timestamps, and replace the edited label with an icon.
 - disable colored replies and custom chat backgrounds or hide premium emoji in replies.
-- show avatars in resolved mentions without clipping the text; free usernames get no avatar or extra spacing. insert a comma after a mention, and treat mentions as ordinary messages.
+- show avatars in resolved mentions without clipping the text; free usernames and the literal @username placeholder get no avatar or extra spacing. insert a comma after a mention, and treat mentions as ordinary messages.
 - show the original date of forwarded messages and send links without preview cards.
 - hide via bot labels, automation banners, service messages, greeting stickers, ai controls, and phone numbers in chat titles.
 - hiding a greeting sticker also removes the business greeting footer and its help button.

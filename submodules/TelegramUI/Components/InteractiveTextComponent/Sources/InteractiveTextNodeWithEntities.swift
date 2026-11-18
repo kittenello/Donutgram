@@ -110,7 +110,10 @@ private func renderedMentions(_ text: NSAttributedString) -> [RenderedMention] {
             mentions.append(RenderedMention(range: range, peerId: nil))
         }
     }
-    return mentions.sorted(by: { $0.range.location < $1.range.location })
+    let string = text.string as NSString
+    return mentions.filter {
+        string.substring(with: $0.range).lowercased() != "@username"
+    }.sorted(by: { $0.range.location < $1.range.location })
 }
 
 /// Mentions in spoilers, inline code and code blocks get no avatar.
