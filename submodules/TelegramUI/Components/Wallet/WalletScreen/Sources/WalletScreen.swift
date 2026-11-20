@@ -798,6 +798,7 @@ private final class WalletScreenComponent: Component {
         private var transferApplicationInForeground = UIApplication.shared.applicationState != .background
         private let transferForegroundDisposable = MetaDisposable()
         private var transferMotionObserver: NSObjectProtocol?
+        private var visualBalanceObserver: NSObjectProtocol?
         private var isUpdatingTransferAnimations = false
 
         private let collectiblesSection = WalletCollectiblesGridView()
@@ -943,6 +944,9 @@ private final class WalletScreenComponent: Component {
             self.transferMotionObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.reduceMotionStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
                 self?.updatePendingTransferAnimations()
             }
+            self.visualBalanceObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.componentState?.updated(transition: .immediate)
+            }
             self.collectiblesSection.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
         }
 
@@ -984,6 +988,7 @@ private final class WalletScreenComponent: Component {
             self.transferDisplayLink?.invalidate()
             self.transferForegroundDisposable.dispose()
             if let observer = self.transferMotionObserver { NotificationCenter.default.removeObserver(observer) }
+            if let observer = self.visualBalanceObserver { NotificationCenter.default.removeObserver(observer) }
             self.restorationSession?.invalidate()
             (self.card.view as? WalletCardComponent.View)?.setBalanceTransitionContainer(nil)
             self.walletStateDisposable?.dispose()
@@ -1607,6 +1612,9 @@ private final class WalletScreenComponent: Component {
         }
 
         private var displayBalance: Int64? {
+            if let component = self.component, let balance = DGSimpleSettings.shared.visualWalletBalance(accountId: component.context.account.peerId.toInt64()) {
+                return balance
+            }
             guard let balance = self.walletState?.balance.currentValue else {
                 return nil
             }

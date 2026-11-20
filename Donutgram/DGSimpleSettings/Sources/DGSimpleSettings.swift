@@ -300,6 +300,8 @@ public final class DGSimpleSettings {
         static let jumpToStartInChatMenu = "donutgram.chats.jumpToStartInChatMenu"
         static let downloadAcceleration = "donutgram.network.downloadAcceleration"
         static let accelerateUpload = "donutgram.network.accelerateUpload"
+        static let showMediaTransferSpeed = "donutgram.media.showTransferSpeed"
+        static let showVideoProcessingProgress = "donutgram.media.showVideoProcessingProgress"
     }
 
     private let defaults: UserDefaults
@@ -668,6 +670,18 @@ public final class DGSimpleSettings {
 
     public func visualProfileId(accountId: Int64) -> String {
         return string(accountKey("visualProfileId", accountId: accountId))
+    }
+
+    public func visualWalletBalanceText(accountId: Int64) -> String {
+        return string(accountKey("visualWalletBalance", accountId: accountId))
+    }
+
+    public func visualWalletBalance(accountId: Int64) -> Int64? {
+        return donutgramParseVisualWalletBalance(self.visualWalletBalanceText(accountId: accountId))
+    }
+
+    public func setVisualWalletBalanceText(_ text: String, accountId: Int64) {
+        setString(text, accountKey("visualWalletBalance", accountId: accountId))
     }
 
     public func setVisualProfileId(_ value: String, accountId: Int64) {
@@ -1405,6 +1419,18 @@ public final class DGSimpleSettings {
     /// 0: standard, 1: fast, 2: ultra. Values outside this range fall back to standard.
     public var downloadAcceleration: Int { get { min(max(integer(Key.downloadAcceleration), 0), 2) } set { setInteger(min(max(newValue, 0), 2), Key.downloadAcceleration) } }
     public var accelerateUpload: Bool { get { bool(Key.accelerateUpload) } set { setBool(newValue, Key.accelerateUpload) } }
+    public var showMediaTransferSpeed: Bool {
+        get { self.defaults.object(forKey: Key.showMediaTransferSpeed) == nil ? true : bool(Key.showMediaTransferSpeed) }
+        set { setBool(newValue, Key.showMediaTransferSpeed) }
+    }
+    public var showVideoProcessingProgress: Bool {
+        get { self.defaults.object(forKey: Key.showVideoProcessingProgress) == nil ? true : bool(Key.showVideoProcessingProgress) }
+        set { setBool(newValue, Key.showVideoProcessingProgress) }
+    }
+
+    public func shouldShowMediaTransferDetails(isProcessing: Bool) -> Bool {
+        return isProcessing ? self.showVideoProcessingProgress : self.showMediaTransferSpeed
+    }
     public var transcriptionBackend: TranscriptionBackend {
         get { TranscriptionBackend(rawValue: string(Key.transcriptionBackend)) ?? .auto }
         set { setString(newValue.rawValue, Key.transcriptionBackend) }

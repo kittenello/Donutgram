@@ -1,5 +1,6 @@
 import Foundation
 import DGSimpleSettings
+import DGMediaTransferUI
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -84,6 +85,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
     private var shareButtonNode: ChatMessageShareButton?
 
     public var telegramFile: TelegramMediaFile?
+    private let transferStatusNode = DGMediaTransferStatusNode()
     private let fetchDisposable = MetaDisposable()
     
     private var suggestedPostInfoNode: ChatMessageSuggestedPostInfoNode?
@@ -124,6 +126,7 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
         didSet {
             let wasVisible = oldValue != .none
             let isVisible = self.visibility != .none
+            self.transferStatusNode.isTransferVisible = isVisible
             
             if wasVisible != isVisible {
                 self.visibilityStatus = isVisible
@@ -1118,6 +1121,16 @@ public class ChatMessageStickerItemNode: ChatMessageItemView {
                     strongSelf.updateAttachedDateHeader(hasDate: dateHeaderAtBottom.hasDate, hasPeer: dateHeaderAtBottom.hasTopic)
                     
                     transition.updateFrame(node: strongSelf.imageNode, frame: updatedImageFrame)
+                    if strongSelf.transferStatusNode.supernode == nil {
+                        strongSelf.contextSourceNode.contentNode.addSubnode(strongSelf.transferStatusNode)
+                    }
+                    strongSelf.transferStatusNode.isTransferVisible = strongSelf.visibility != .none
+                    strongSelf.transferStatusNode.sizeUpdated = { [weak strongSelf] size in
+                        guard let strongSelf else { return }
+                        let frame = strongSelf.imageNode.frame
+                        strongSelf.transferStatusNode.frame = CGRect(origin: CGPoint(x: frame.minX + 6.0, y: frame.minY + 6.0), size: size)
+                    }
+                    strongSelf.transferStatusNode.update(context: item.context, message: EngineMessage(item.message), file: strongSelf.telegramFile, presentationData: item.presentationData, width: updatedImageFrame.width - 12.0)
                     
                     if let bubblelessHeader {
                         let headerNode = bubblelessHeader.apply()

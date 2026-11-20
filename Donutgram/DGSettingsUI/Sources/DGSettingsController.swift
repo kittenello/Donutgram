@@ -163,7 +163,8 @@ enum DGListEntry: ItemListNodeEntry {
                 let title = dgSettingsSearchIcon(font: Font.regular(presentationData.fontSize.itemListBaseFontSize), color: presentationData.theme.list.itemSecondaryTextColor)
                 return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: title, text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), returnKeyType: .search, spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: { arguments.open("dismissSearchKeyboard") })
             }
-            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: key == "level" ? .number : .regular(capitalization: false, autocorrection: false), clearType: .always, tag: DGSettingItemTag(key: key, title: placeholder), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
+            let inputType: ItemListSingleLineInputItemType = key == "visualWalletBalance" ? .decimal : (key == "level" ? .number : .regular(capitalization: false, autocorrection: false))
+            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: placeholder, type: inputType, clearType: .always, tag: DGSettingItemTag(key: key, title: placeholder), sectionId: self.section, textUpdated: { arguments.textUpdated(key, $0) }, action: {})
         case let .messagePreview(_, _, _, emoji):
             return donutgramMessagePreviewItem(context: arguments.context, sectionId: self.section, emoji: emoji)
         case let .chatListPreview(_, _, snow, hideEmojiStatus, centerTitle, hideSearch, titleMode):
@@ -415,6 +416,7 @@ public func dgSettingsController(context: AccountContext, focusKey: String? = ni
         localProfile = localProfile || s.visualRatingLevel(accountId: accountId) != nil || !s.visualUsernames(accountId: accountId).isEmpty
         localProfile = localProfile || !s.visualProfileId(accountId: accountId).isEmpty || s.visualLabel(accountId: accountId) != DGVisualLabel.none
         localProfile = localProfile || s.localVerification(accountId: accountId) != .none
+        localProfile = localProfile || s.visualWalletBalance(accountId: accountId) != nil
         let appIcon = DGSimpleSettings.appMarks[DGSimpleSettings.appMarkIndex(iconName: bindings.getAlternateIconName())].title
 
         var entries: [DGListEntry] = []
