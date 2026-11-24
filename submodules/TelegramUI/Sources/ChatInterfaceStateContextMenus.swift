@@ -50,6 +50,7 @@ private struct MessageContextMenuData {
     let canPin: Bool
     let canEdit: Bool
     let canSelect: Bool
+    let isMusicSaved: Bool
     let resourceStatus: EngineMediaResource.FetchStatus?
     let messageActions: ChatAvailableMessageActions
 }
@@ -819,7 +820,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
-    if !canSendMessagesToChat(chatPresentationInterfaceState) && (chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()) {
+    let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
+    if !canSendMessagesToChat(chatPresentationInterfaceState) && isCopyProtected {
         canReply = false
     }
     
@@ -902,6 +904,25 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     
     let isScheduled = chatPresentationInterfaceState.subject == .scheduledMessages
     
+    let musicFile = message.effectiveMedia.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile
+    let profileMusicFile: TelegramMediaFile?
+    if !isCopyProtected, !message.containsSecretMedia, !isDonutgramDeleted,
+       message.id.namespace == Namespaces.Message.Cloud,
+       let musicFile, musicFile.isMusic, musicFile.resource is CloudDocumentMediaResource {
+        profileMusicFile = musicFile
+    } else {
+        profileMusicFile = nil
+    }
+
+    let isMusicSavedSignal: Signal<Bool, NoError>
+    if let profileMusicFile {
+        isMusicSavedSignal = context.engine.peers.savedMusicIds()
+        |> take(1)
+        |> map { $0?.contains(profileMusicFile.fileId.id) == true }
+    } else {
+        isMusicSavedSignal = .single(false)
+    }
+
     let dataSignal: Signal<(MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?), NoError> = combineLatest(
         loadLimits,
         loadStickerSaveStatusSignal,
@@ -915,9 +936,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         context.engine.stickers.availableReactions(),
         context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.translationSettings, SharedDataKeys.loggingSettings]) |> take(1),
         context.engine.peers.notificationSoundList() |> take(1),
-        context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+        context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)),
+        isMusicSavedSignal
     )
-    |> map { limitsAndAppConfig, stickerSaveStatus, resourceStatus, messageActions, updatingMessageMedia, infoSummaryData, isMessageRead, messageViewsPrivacyTips, availableReactions, sharedData, notificationSoundList, accountPeer -> (MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?) in
+    |> map { limitsAndAppConfig, stickerSaveStatus, resourceStatus, messageActions, updatingMessageMedia, infoSummaryData, isMessageRead, messageViewsPrivacyTips, availableReactions, sharedData, notificationSoundList, accountPeer, isMusicSaved -> (MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?) in
         let (limitsConfiguration, appConfig) = limitsAndAppConfig
         var canEdit = false
         if !isAction {
@@ -961,6 +983,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             canPin: canPin && !isEmbeddedMode,
             canEdit: canEdit && !isEmbeddedMode,
             canSelect: canSelect && !isEmbeddedMode,
+            isMusicSaved: isMusicSaved,
             resourceStatus: resourceStatus,
             messageActions: messageActions
         )
@@ -1365,7 +1388,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
@@ -1565,19 +1587,48 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        if !isCopyProtected {
-            for media in message.effectiveMedia {
-                if let file = media as? TelegramMediaFile {
-                    if file.isMusic {
-                        actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_SaveToFiles, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.actionSheet.primaryTextColor)
-                        }, action: { _, f in
-                            controllerInteraction.saveMediaToFiles(message.id)
-                            f(.default)
-                        })))
-                    }
-                    break
-                }
+        if !isCopyProtected, let musicFile, musicFile.isMusic {
+            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_SaveToFiles, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                controllerInteraction.saveMediaToFiles(message.id)
+                f(.default)
+            })))
+
+            if let profileMusicFile, !data.isMusicSaved, !data.messageActions.isCopyProtected {
+                actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.MediaPlayer_SavedMusic_AddToProfile, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddMusic"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    f(.default)
+                    let fileReference: FileMediaReference = .message(message: MessageReference(message), media: profileMusicFile)
+                    let _ = (context.engine.peers.addSavedMusic(file: fileReference)
+                    |> deliverOnMainQueue).startStandalone(error: { [weak controllerInteraction] _ in
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        controllerInteraction?.presentController(textAlertController(
+                            context: context,
+                            title: nil,
+                            text: presentationData.strings.Login_UnknownError,
+                            actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+                        ), nil)
+                    }, completed: { [weak controllerInteraction] in
+                        guard let icon = generateTintedImage(image: UIImage(bundleImageName: "Peer Info/SavedMusic"), color: .white) else {
+                            return
+                        }
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        controllerInteraction?.presentControllerInCurrent(UndoOverlayController(
+                            presentationData: presentationData,
+                            content: .universalImage(
+                                image: icon,
+                                size: nil,
+                                title: nil,
+                                text: presentationData.strings.MediaPlayer_SavedMusic_AddedToProfile,
+                                customUndoText: nil,
+                                timeout: 3.0
+                            ),
+                            action: { _ in return false }
+                        ), nil)
+                    })
+                })))
             }
         }
         
