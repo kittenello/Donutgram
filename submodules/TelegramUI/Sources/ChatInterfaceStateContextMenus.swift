@@ -906,7 +906,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     
     let musicFile = message.effectiveMedia.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile
     let profileMusicFile: TelegramMediaFile?
-    if !isCopyProtected, !message.containsSecretMedia, !isDonutgramDeleted,
+    if !chatPresentationInterfaceState.copyProtectionEnabled, !message.isCopyProtectedIgnoringDonutgramSetting(),
+       !message.containsSecretMedia, !isDonutgramDeleted,
        message.id.namespace == Namespaces.Message.Cloud,
        let musicFile, musicFile.isMusic, musicFile.resource is CloudDocumentMediaResource {
         profileMusicFile = musicFile
