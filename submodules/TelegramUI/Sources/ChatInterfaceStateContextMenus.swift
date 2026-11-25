@@ -1599,11 +1599,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             if let profileMusicFile, !data.isMusicSaved, !data.messageActions.isCopyProtected {
                 actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.MediaPlayer_SavedMusic_AddToProfile, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/AddMusic"), color: theme.actionSheet.primaryTextColor)
-                }, action: { _, f in
+                }, action: { [weak controllerInteraction = controllerInteraction] _, f in
                     f(.default)
                     let fileReference: FileMediaReference = .message(message: MessageReference(message), media: profileMusicFile)
                     let _ = (context.engine.peers.addSavedMusic(file: fileReference)
-                    |> deliverOnMainQueue).startStandalone(error: { [weak controllerInteraction] _ in
+                    |> deliverOnMainQueue).startStandalone(error: { _ in
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                         controllerInteraction?.presentController(textAlertController(
                             context: context,
@@ -1611,7 +1611,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                             text: presentationData.strings.Login_UnknownError,
                             actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
                         ), nil)
-                    }, completed: { [weak controllerInteraction] in
+                    }, completed: {
                         guard let icon = generateTintedImage(image: UIImage(bundleImageName: "Peer Info/SavedMusic"), color: .white) else {
                             return
                         }
