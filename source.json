@@ -1,0 +1,38 @@
+{
+  "name": "Donutgram",
+  "identifier": "com.kittenello.donutgram.source",
+  "subtitle": "Сборки Пончика с master",
+  "description": "Каждая сборка master публикуется сюда автоматически.",
+  "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+  "website": "https://github.com/kittenello/Donutgram",
+  "tintColor": "#E8508C",
+  "apps": [
+    {
+      "name": "Donutgram",
+      "bundleIdentifier": "com.kittenello.donutgram",
+      "developerName": "kittenello",
+      "subtitle": "Telegram с пончиком",
+      "localizedDescription": "Неофициальный клиент Telegram на основе Telegram iOS.",
+      "iconURL": "https://raw.githubusercontent.com/kittenello/Donutgram/master/Telegram/Telegram-iOS/DgDonut3D.alticon/DgDonut3D@3x.png",
+      "tintColor": "#E8508C",
+      "category": "social",
+      "versions": [
+        {
+          "version": "13.2.37006",
+          "buildVersion": "37006",
+          "date": "2026-11-25T10:46:24Z",
+          "localizedDescription": "feat(ui): добавить визуальный баланс и прогресс медиа (#132)\nдобавлен визуальный баланс gram, скорость передачи медиа, прогресс обработки видео и сохранение музыки в профиль из меню сообщения.\nисправлены отступы premium-стикеров, аватарки упоминаний, подпись приветствия, панель тегов избранного и расположение плашек профиля. обновлены ссылка в readme и runner сборки.",
+          "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-37006.ipa",
+          "size": 85058240,
+          "minOSVersion": "15.0"
+        }
+      ],
+      "version": "13.2.37006",
+      "versionDate": "2026-11-25T10:46:24Z",
+      "versionDescription": "feat(ui): добавить визуальный баланс и прогресс медиа (#132)\nдобавлен визуальный баланс gram, скорость передачи медиа, прогресс обработки видео и сохранение музыки в профиль из меню сообщения.\nисправлены отступы premium-стикеров, аватарки упоминаний, подпись приветствия, панель тегов избранного и расположение плашек профиля. обновлены ссылка в readme и runner сборки.",
+      "downloadURL": "https://raw.githubusercontent.com/kittenello/Donutgram/ipa/Donutgram-37006.ipa",
+      "size": 85058240
+    }
+  ],
+  "news": []
+}
