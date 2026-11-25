@@ -2,6 +2,7 @@ import Foundation
 import Display
 import AccountContext
 import DGSimpleSettings
+import DGPluginsUI
 import Postbox
 import SwiftSignalKit
 import TelegramUIPreferences
@@ -1030,7 +1031,7 @@ private func dgCurrentRowLocation(page: DGSettingsPage, key: String) -> (DGSetti
         return (.mainScreen, key)
     case .media where key == "rememberCamera":
         return (.media, "camera")
-    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .savedDeleted:
+    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .plugins, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .savedDeleted:
         return (page, key)
     }
 }
@@ -1129,6 +1130,7 @@ func dgPageController(_ page: DGSettingsPage, context: AccountContext, focusKey:
     case .security: return dgSecuritySettingsController(context: context, focusKey: focusKey)
     case .adsAndGifts: return dgAdsAndGiftsSettingsController(context: context, focusKey: focusKey)
     case .localProfile: return dgLocalProfileSettingsController(context: context, focusKey: focusKey)
+    case .plugins: return dgPluginsController(context: context)
     case .about: return dgAboutController(context: context, focusKey: focusKey)
     case .iconAndIsland: return dgIconAndIslandController(context: context, focusKey: focusKey)
     case .visualId: return dgVisualIdController(context: context, focusKey: focusKey)

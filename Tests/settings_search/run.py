@@ -27,9 +27,12 @@ def prepare():
     controller = (UI / "DGSettingsController.swift").read_text(encoding="utf-8")
     pages = dict(re.findall(r'case (\w+) = "([^"]+)"', links))
     catalog = {}
-    for page, title, rows in re.findall(r'    add\("([^"]+)", "([^"]+)", \[(.*?)\n    \](?:, parent: "[^"]+")?\)', search, re.S):
+    for page, title, rows in re.findall(r'    add\("([^"]+)", "([^"]+)", \[(.*?)\](?:, parent: "[^"]+")?\)', search, re.S):
         assert page not in catalog, page
-        catalog[page] = dict(re.findall(r'\("([^"]+)", "([^"]+)", "[^"]*"\)', rows))
+        entries = re.findall(r'\("([^"]*)", "([^"]+)", "[^"]*"\)', rows)
+        assert all(key for key, _ in entries), (page, "empty row key duplicates the section route")
+        assert len(dict(entries)) == len(entries), (page, "duplicate row keys")
+        catalog[page] = dict(entries)
     # Entries drawn by their own items report a fixed key, such as the speed slider's.
     fixed_keys = dict(re.findall(r'case \.(\w+): return DGSettingItemTag\(key: "([^"]+)"\)', controller))
     page_keys = {}
@@ -54,10 +57,18 @@ def prepare():
     assert 'listEntries.insert(.input(-3, -2, "settingsSearch", state.searchQuery' in controller
     assert 'dgSettingsControllerForLink(context: context, page: item.page, key: item.key)' in controller
     assert 'state.searchQuery = value' in controller
+    # Every section of the root names one of Telegram's settings glyphs: a name with no image draws an empty tile.
+    glyphs = re.findall(r'\.rootRow\(.*, "(\w+)", 0x[0-9A-Fa-f]{6}\)\)', controller)
+    assert len(glyphs) == controller.count("entries.append(.rootRow("), glyphs
+    icons = ROOT / "submodules/TelegramUI/Images.xcassets/Item List/Icons"
+    missing = sorted(set(glyphs) - {path.name[:-len(".imageset")] for path in icons.glob("*.imageset")})
+    assert not missing, missing
     enum = block(links, "enum DGSettingsPage:")
     shown_row = block(features, "private func dgShownRow(").replace("DGSimpleSettings.shared", "testSettings")
+    current_row = block(features, "private func dgCurrentRowLocation(")
+    moved_row = block(features, "private func dgMovedRowLocation(")
     fixture = Path(__file__).with_name("fixtures.swift").read_text(encoding="utf-8")
-    return search.replace("import DGSimpleSettings\n", "") + "\n" + enum + "\n" + shown_row + "\n" + fixture
+    return search.replace("import DGSimpleSettings\n", "") + "\n" + enum + "\n" + shown_row + "\n" + current_row + "\n" + moved_row + "\n" + fixture
 
 
 def main():

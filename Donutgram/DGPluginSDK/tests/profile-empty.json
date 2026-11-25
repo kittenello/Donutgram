@@ -1,0 +1,7 @@
+{
+  "transforms": [{
+    "id": "hide-empty-panes",
+    "input": {"panes": [{"id": "media", "empty": false}, {"id": "files", "empty": true}, {"id": "links", "empty": true}]},
+    "expectedPatch": {"hide": ["files", "links"]}
+  }]
+}

@@ -1,4 +1,5 @@
 import Foundation
+import DGPluginViewAdapters
 import UIKit
 import TelegramCore
 import SwiftSignalKit
@@ -423,7 +424,9 @@ final class PeerInfoScreenData {
     let peerNotificationSettings: TelegramPeerNotificationSettings?
     let threadNotificationSettings: TelegramPeerNotificationSettings?
     let globalNotificationSettings: EngineGlobalNotificationSettings?
-    let availablePanes: [PeerInfoPaneKey]
+    let nativeAvailablePanes: [PeerInfoPaneKey]
+    private(set) var availablePanes: [PeerInfoPaneKey]
+    let pluginKnownEmptyPanes: Set<PeerInfoPaneKey>
     let groupsInCommon: GroupsInCommonContext?
     let linkedDiscussionPeer: EnginePeer?
     let linkedMonoforumPeer: EnginePeer?
@@ -528,7 +531,8 @@ final class PeerInfoScreenData {
         sharedMediaPeer: EnginePeer? = nil,
         walletBalance: Int64? = nil,
         agentSettingsContext: AgentSettingsContext? = nil,
-        agentState: AgentSettingsContext.State? = nil
+        agentState: AgentSettingsContext.State? = nil,
+        pluginKnownEmptyPanes: Set<PeerInfoPaneKey> = []
     ) {
         self.peer = peer
         self.chatPeer = chatPeer
@@ -541,6 +545,8 @@ final class PeerInfoScreenData {
         self.globalNotificationSettings = globalNotificationSettings
         self._isContact = isContact
         self.availablePanes = availablePanes
+        self.nativeAvailablePanes = availablePanes
+        self.pluginKnownEmptyPanes = pluginKnownEmptyPanes
         self.groupsInCommon = groupsInCommon
         self.linkedDiscussionPeer = linkedDiscussionPeer
         self.linkedMonoforumPeer = linkedMonoforumPeer
@@ -580,6 +586,11 @@ final class PeerInfoScreenData {
         self.sharedMediaPeer = sharedMediaPeer
         self.agentSettingsContext = agentSettingsContext
         self.agentState = agentState
+    }
+
+    func applyPluginAvailablePanes(_ panes: Set<PeerInfoPaneKey>) {
+        let keep = Set(DGPluginEmptyPaneProjection.ids(source: self.nativeAvailablePanes.map { String(describing: $0) }, knownEmpty: Set(self.pluginKnownEmptyPanes.map { String(describing: $0) }), requested: Set(panes.map { String(describing: $0) })))
+        self.availablePanes = self.nativeAvailablePanes.filter { keep.contains(String(describing: $0)) }
     }
 }
 
@@ -1897,7 +1908,8 @@ func peerInfoScreenData(
                         sharedMediaPeer: sharedMediaPeer,
                         walletBalance: walletBalance,
                         agentSettingsContext: agentSettingsContext,
-                        agentState: agentState
+                        agentState: agentState,
+                        pluginKnownEmptyPanes: isMyProfile && hasStories == false ? [.stories] : []
                     )
                 }
             }

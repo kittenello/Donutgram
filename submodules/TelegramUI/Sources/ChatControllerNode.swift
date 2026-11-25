@@ -350,6 +350,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     var requestUpdateChatInterfaceState: (ContainedViewLayoutTransition, Bool, (ChatInterfaceState) -> ChatInterfaceState) -> Void = { _, _, _ in }
     var requestUpdateInterfaceState: (ContainedViewLayoutTransition, Bool, (ChatPresentationInterfaceState) -> ChatPresentationInterfaceState) -> Void = { _, _, _ in }
     var sendMessages: ([EnqueueMessage], Bool?, Int32?, Int32?, Bool, Bool) -> Void = { _, _, _, _, _, _ in }
+    /// Donutgram plugins: returns true when it took the send over; it then calls the closure only to resume sending.
+    var dgInterceptOutgoingSend: ((@escaping () -> Void) -> Bool)?
     var displayAttachmentMenu: () -> Void = { }
     var paste: (ChatTextInputPanelPasteData) -> Void = { _ in }
     var updateTypingActivity: (Bool) -> Void = { _ in }
@@ -5190,15 +5192,23 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
 
-    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, completion: @escaping () -> Void = {}) {
+    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, bypassPluginInterception: Bool = false, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
-        self.historyNode.justSentTextMessage = true
-        
         if let richTextInputNode = textInputPanelNode.richTextInputNode, richTextInputNode.isInputFirstResponder {
             richTextInputNode.applyAutocorrection()
         }
+
+        // `completion` runs only after a real send: for a scheduled send it clears the composer and opens the
+        // scheduled messages, so a plugin that cancels or fails must not call it.
+        if !bypassPluginInterception, let intercept = self.dgInterceptOutgoingSend, intercept({ [weak self] in
+            self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, bypassPluginInterception: true, completion: completion)
+        }) {
+            return
+        }
+
+        self.historyNode.justSentTextMessage = true
         
         var effectivePresentationInterfaceState = self.chatPresentationInterfaceState
         

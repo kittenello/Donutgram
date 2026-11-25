@@ -1,0 +1,7 @@
+# security and integration fixtures
+
+`//Donutgram/DGPluginTests:DGPluginTests` tests real policy and manager methods. manager tests install reviewed fixture bytes, grant exact permissions, activate the real runtime, and exercise broker denial, storage isolation, scope enforcement, blocked profile-changing updates and cancellation of pending native reads. manager tests explicitly skip when the distribution compiles execution out. fake native adapters only replace the platform screen; authorization and lifecycle remain production code. run on a disposable test/simulator application container. tests create and remove their own installation ids, without using production account identifiers.
+
+`hostile-fixtures` contains actual `.donut.js` inputs. getter, duplicate-key and mixed-profile fixtures must fail static preview without execution. loop, microtask, heap and constructor fixtures pass preview but must fail bounded activation. forged-logout passes preview, then the real native broker must reject the forged method despite identity fields. `generate_archives.py <scratch-dir>` creates reproducible archive inputs for traversal, symlink, header mismatch, expansion, entry count and nested archive checks, plus one valid deflate package. generated fixtures belong in scratch storage, not the repository.
+
+the apple-host swift tests have not been run merely because a windows syntax parse succeeds. c-runtime tests alone do not verify manager, installer, account scopes or ui. recorded simulator checks remain separate requirements.

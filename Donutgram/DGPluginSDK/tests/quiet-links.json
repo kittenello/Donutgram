@@ -1,0 +1,1 @@
+{"draft": {"handle": "draft-1", "revision": "fixture-revision-1", "text": "https://example.com/page?utm_source=mail&keep=1#part", "selection": {"start": 0, "end": 52}, "entities": [], "entitiesComplete": false, "plainTextComplete": false}, "commands": ["clean-selected-link"], "expectedText": "https://example.com/page?keep=1#part"}
