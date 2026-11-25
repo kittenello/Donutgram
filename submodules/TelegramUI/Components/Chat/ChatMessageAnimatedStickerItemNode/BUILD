@@ -10,6 +10,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//Donutgram/DGMediaTransferUI",
         "//Donutgram/DGSimpleSettings:DGSimpleSettings",
         "//submodules/TelegramUI/Components/StaticGlassBackground",
         "//submodules/AsyncDisplayKit",

@@ -12,7 +12,7 @@ a multifunctional ios client with deeper customization
 
 [swiftgram](https://github.com/Swiftgram/Telegram-iOS) ·
 [ayugram](https://github.com/AyuGram/AyuGramDesktop) ·
-[exteragram](https://t.me/exteraGram) ·
+[exteragram](https://github.com/exterasquad/exteragram) ·
 [inugram](https://github.com/teidesu/inugram)
 
 </div>

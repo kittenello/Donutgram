@@ -1791,7 +1791,7 @@ public final class ChatEmptyNode: ASDisplayNode {
         transition.updateFrame(node: self.backgroundNode, frame: contentFrame)
         self.backgroundNode.update(size: self.backgroundNode.bounds.size, cornerRadius: min(20.0, self.backgroundNode.bounds.height / 2.0), transition: transition)
         
-        if displayAttachedDescription, let peer = interfaceState.renderedPeer?.chatOrMonoforumMainPeer {
+        if displayAttachedDescription, !DGSimpleSettings.shared.hideGreetingSticker, let peer = interfaceState.renderedPeer?.chatOrMonoforumMainPeer {
             let isPremium = interfaceState.isPremium
             let attachedDescriptionNode: EmptyAttachedDescriptionNode
             if let current = self.attachedDescriptionNode {

@@ -15,6 +15,7 @@ import PlainButtonComponent
 import WalletContext
 import WalletCardComponent
 import WalletGiftStickerMediaComponent
+import DGSimpleSettings
 
 private final class PeerWalletTransitionSource {
     weak var view: UIView?
@@ -50,8 +51,14 @@ private final class PeerWalletOverlayComponent: Component {
 
     final class State: ComponentState {
         var peer: EnginePeer
+        private let accountPeerId: EnginePeer.Id
         private(set) var card: WalletCard?
-        var balance: Int64? { self.card?.balance }
+        var balance: Int64? {
+            if self.peer.id == self.accountPeerId, let balance = DGSimpleSettings.shared.visualWalletBalance(accountId: self.accountPeerId.toInt64()) {
+                return balance
+            }
+            return self.card?.balance
+        }
         var address: String? { self.card?.address }
         var stickers: [WalletContext.CardSticker] = []
         var stickerMedia: [String: WalletGiftStickerMedia] = [:]
@@ -59,12 +66,17 @@ private final class PeerWalletOverlayComponent: Component {
         var fiatRate: WalletContext.FiatRate?
         var hasOwnWallet: Bool
         private let disposables = DisposableSet()
+        private var visualBalanceObserver: NSObjectProtocol?
 
         init(context: AccountContext, peer: EnginePeer, card: WalletCard?) {
             self.peer = peer
+            self.accountPeerId = context.account.peerId
             self.card = nil
             self.hasOwnWallet = context.walletContext?.stateValue.walletAddress != nil
             super.init()
+            self.visualBalanceObserver = NotificationCenter.default.addObserver(forName: DGSimpleSettings.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.updated(transition: .immediate)
+            }
             self.updateCard(card, context: context)
 
             self.disposables.add((context.engine.data.subscribe(
@@ -120,6 +132,7 @@ private final class PeerWalletOverlayComponent: Component {
         }
 
         deinit {
+            if let observer = self.visualBalanceObserver { NotificationCenter.default.removeObserver(observer) }
             self.disposables.dispose()
         }
     }

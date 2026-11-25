@@ -6,6 +6,7 @@ swift_library(
     srcs = glob(["Sources/**/*.swift"]),
     copts = ["-warnings-as-errors"],
     deps = [
+        "//Donutgram/DGSimpleSettings",
         "//submodules/AccountContext",
         "//submodules/ComponentFlow",
         "//submodules/Components/ViewControllerComponent",

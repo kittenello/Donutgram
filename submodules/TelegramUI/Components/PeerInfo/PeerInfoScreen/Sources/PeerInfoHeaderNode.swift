@@ -738,7 +738,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let currentSavedMusic = self.profileMusic(peer: peer, screenData: screenData)
         let currentWalletBalance: Int64?
-        if !self.isSettings, let balance = (screenData?.cachedData as? CachedUserData)?.walletCard?.balance, balance >= 100_000_000 {
+        if !self.isSettings, peer?.id == self.context.account.peerId, let balance = DGSimpleSettings.shared.visualWalletBalance(accountId: self.context.account.peerId.toInt64()) {
+            currentWalletBalance = balance
+        } else if !self.isSettings, let balance = (screenData?.cachedData as? CachedUserData)?.walletCard?.balance, balance >= 100_000_000 {
             currentWalletBalance = balance
         } else {
             currentWalletBalance = nil
@@ -2750,7 +2752,25 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         
         let compactHeaderLayout = PeerInfoCompactHeaderLayout(width: width, leftInset: stripLeft, rightInset: stripRight, top: max(subtitleFrame.maxY, usernameFrame.maxY) + titleOffset + 8.0)
-        var compactBalanceWidth: CGFloat = 0.0
+        let statusPillAlpha = backgroundBannerAlpha * (1.0 - titleCollapseFraction)
+        var compactBalance: (view: UIView, size: CGSize)?
+        var compactMusic: (view: UIView, size: CGSize)?
+
+        func updatePill(view: UIView, frame: CGRect, frameTransition: ContainedViewLayoutTransition, alpha: CGFloat) {
+            if view.superview == nil {
+                ContainedViewLayoutTransition.immediate.updateFrame(view: view, frame: frame)
+                self.regularContentNode.view.addSubview(view)
+                if transition.isAnimated {
+                    view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                }
+            } else if additive {
+                frameTransition.updateFrameAdditiveToCenter(view: view, frame: frame)
+            } else {
+                frameTransition.updateFrame(view: view, frame: frame)
+            }
+            ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: view.layer, alpha: alpha)
+        }
+
         if let currentWalletBalance {
             let balance = self.walletBalance ?? {
                 let componentView = ComponentView<Empty>()
@@ -2817,39 +2837,28 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 environment: {},
                 containerSize: CGSize(width: maximumBalanceWidth, height: 20.0)
             )
-            let balanceFrame: CGRect
-            if compactMusicAndBalance {
-                compactBalanceWidth = balanceSize.width
-                balanceFrame = compactHeaderLayout.balanceFrame(size: balanceSize, hasMusic: currentSavedMusic != nil)
-            } else if self.isAvatarExpanded {
-                let lastRowFrame = usernameFrame.maxY > subtitleFrame.maxY ? usernameFrame : subtitleFrame
-                balanceFrame = CGRect(origin: CGPoint(
-                    x: width - stripRight - 16.0 - balanceSize.width,
-                    y: floor(lastRowFrame.midY + titleOffset - balanceSize.height * 0.5)
-                ), size: balanceSize)
-            } else {
-                balanceFrame = CGRect(origin: CGPoint(
-                    x: stripLeft + floor((width - stripLeft - stripRight - balanceSize.width) * 0.5),
-                    y: max(subtitleFrame.maxY, usernameFrame.maxY) + titleOffset + 8.0
-                ), size: balanceSize)
-            }
             if let balanceView = balance.view {
                 balanceView.isAccessibilityElement = true
                 balanceView.accessibilityLabel = presentationData.strings.Wallet_Send_Balance(formattedBalance).string
                 balanceView.accessibilityTraits = .button
-                if balanceView.superview == nil {
-                    // Newly loaded balance fades in at its final position.
-                    ContainedViewLayoutTransition.immediate.updateFrame(view: balanceView, frame: balanceFrame)
-                    self.regularContentNode.view.addSubview(balanceView)
-                    if transition.isAnimated {
-                        balanceView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                    }
-                } else if additive {
-                    transition.updateFrameAdditiveToCenter(view: balanceView, frame: balanceFrame)
+                if compactMusicAndBalance {
+                    compactBalance = (balanceView, balanceSize)
                 } else {
-                    transition.updateFrame(view: balanceView, frame: balanceFrame)
+                    let balanceFrame: CGRect
+                    if self.isAvatarExpanded {
+                        let lastRowFrame = usernameFrame.maxY > subtitleFrame.maxY ? usernameFrame : subtitleFrame
+                        balanceFrame = CGRect(origin: CGPoint(
+                            x: width - stripRight - 16.0 - balanceSize.width,
+                            y: floor(lastRowFrame.midY + titleOffset - balanceSize.height * 0.5)
+                        ), size: balanceSize)
+                    } else {
+                        balanceFrame = CGRect(origin: CGPoint(
+                            x: stripLeft + floor((width - stripLeft - stripRight - balanceSize.width) * 0.5),
+                            y: max(subtitleFrame.maxY, usernameFrame.maxY) + titleOffset + 8.0
+                        ), size: balanceSize)
+                    }
+                    updatePill(view: balanceView, frame: balanceFrame, frameTransition: transition, alpha: statusPillAlpha)
                 }
-                ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: balanceView.layer, alpha: backgroundBannerAlpha * (1.0 - titleCollapseFraction))
             }
         }
 
@@ -2885,7 +2894,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
             let isOverlay = self.isAvatarExpanded || hasBackground
             let stripSecondaryColor = hasCoverColor ? navigationContentsSecondaryColor.mixedWith(.white, alpha: 0.45) : navigationContentsSecondaryColor
-            let musicBandWidth = compactMusicAndBalance ? compactHeaderLayout.musicWidth(balanceWidth: compactBalanceWidth) : max(0.0, backgroundFrame.width - stripLeft - stripRight)
+            let musicBandWidth = compactMusicAndBalance ? compactHeaderLayout.musicWidth(balanceWidth: compactBalance?.size.width ?? 0.0) : max(0.0, backgroundFrame.width - stripLeft - stripRight)
             if let currentSavedMusic {
                 var artist = presentationData.strings.MediaPlayer_UnknownArtist
                 var track: String?
@@ -2954,23 +2963,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     environment: {},
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
                 )
-                let musicFrame = compactMusicAndBalance ? compactHeaderLayout.musicFrame(size: musicSize, hasBalance: currentWalletBalance != nil) : CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
                 if let musicView = music.view {
                     self.regularContentNode.accessibilityTrailingView = musicView
-                    if musicView.superview == nil {
-                        // A newly loaded strip item fades in at its final position.
-                        ContainedViewLayoutTransition.immediate.updateFrame(view: musicView, frame: musicFrame)
-                        self.regularContentNode.view.addSubview(musicView)
-                        if transition.isAnimated {
-                            musicView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                        }
-                    } else if additive {
-                        musicTransition.updateFrameAdditiveToCenter(view: musicView, frame: musicFrame)
+                    if compactMusicAndBalance {
+                        compactMusic = (musicView, musicSize)
                     } else {
-                        musicTransition.updateFrame(view: musicView, frame: musicFrame)
+                        let musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
+                        updatePill(view: musicView, frame: musicFrame, frameTransition: musicTransition, alpha: backgroundBannerAlpha)
                     }
-
-                    ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: musicView.layer, alpha: backgroundBannerAlpha * (compactMusicAndBalance ? 1.0 - titleCollapseFraction : 1.0))
                 }
             }
         } else {
@@ -2985,6 +2985,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 }
             }
         }
+        if compactMusicAndBalance {
+            let frames = compactHeaderLayout.frames(musicSize: compactMusic?.size, balanceSize: compactBalance?.size)
+            if let compactBalance, let frame = frames.balance {
+                updatePill(view: compactBalance.view, frame: frame, frameTransition: transition, alpha: statusPillAlpha)
+            }
+            if let compactMusic, let frame = frames.music {
+                updatePill(view: compactMusic.view, frame: frame, frameTransition: transition, alpha: statusPillAlpha)
+            }
+        }
+
         if currentSavedMusic == nil {
             if let music = self.music {
                 self.music = nil

@@ -201,6 +201,10 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             
             if !self.visibility {
                 self.playbackAudioLevelNode?.stopAnimating()
+                self.transferUpdateTimer?.invalidate()
+                self.transferUpdateTimer = nil
+            } else {
+                self.updateStatus(animated: false)
             }
         }
     }
@@ -209,6 +213,11 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     private var resourceStatus: FileMediaResourceStatus?
     private var actualFetchStatus: EngineMediaResourceStatus?
     private let fetchDisposable = MetaDisposable()
+    private let pendingTransferDisposable = MetaDisposable()
+    private var pendingTransferMessageId: EngineMessage.Id?
+    private var pendingTransferStatus: PendingMessageStatus?
+    private var transferRate = DGMediaTransferRate()
+    private var transferUpdateTimer: SwiftSignalKit.Timer?
     
     public var toggleSelection: (Bool) -> Void = { _ in }
     public var activateLocalContent: () -> Void = { }
@@ -311,6 +320,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
     
     deinit {
         self.statusDisposable.dispose()
+        self.pendingTransferDisposable.dispose()
+        self.transferUpdateTimer?.invalidate()
         self.playbackStatusDisposable.dispose()
         self.fetchDisposable.dispose()
         self.audioLevelEventsDisposable.dispose()
@@ -1167,6 +1178,21 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             strongSelf.message = arguments.message
                             strongSelf.arguments = arguments
                             strongSelf.file = arguments.file
+                            let pendingTransferId = arguments.message.flags.isSending ? arguments.message.id : nil
+                            if strongSelf.pendingTransferMessageId != pendingTransferId {
+                                strongSelf.pendingTransferMessageId = pendingTransferId
+                                strongSelf.pendingTransferStatus = nil
+                                strongSelf.transferRate.reset()
+                                strongSelf.pendingTransferDisposable.set(nil)
+                                if let pendingTransferId {
+                                    strongSelf.pendingTransferDisposable.set((arguments.context.account.pendingMessageManager.pendingMessageStatus(pendingTransferId)
+                                    |> deliverOnMainQueue).start(next: { [weak strongSelf] status, _ in
+                                        guard let strongSelf, strongSelf.pendingTransferMessageId == pendingTransferId else { return }
+                                        strongSelf.pendingTransferStatus = status
+                                        strongSelf.updateStatus(animated: false)
+                                    }))
+                                }
+                            }
                             
                             let _ = titleApply()
                             let _ = descriptionApply()
@@ -1811,6 +1837,48 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             }
         }
         
+        var transferStatus = resourceStatus.fetchStatus
+        if case let .fetchStatus(status) = resourceStatus.mediaStatus {
+            transferStatus = status
+        }
+        var isTransferring = false
+        let isProcessing = isSending && self.pendingTransferStatus?.progress.phase == .processing
+        if DGSimpleSettings.shared.shouldShowMediaTransferDetails(isProcessing: isProcessing), !isViewOnceMessage, case let .Fetching(isActive, progress) = transferStatus {
+            isTransferring = isActive
+            if !isActive { self.transferRate.reset() }
+            let pending = isSending ? self.pendingTransferStatus?.progress : nil
+            let progress = min(1.0, max(0.0, pending?.phaseProgress ?? progress))
+            let formatting = DataSizeStringFormatting(chatPresentationData: presentationData)
+            let font = Font.with(size: floor(presentationData.fontSize.baseDisplaySize * 13.0 / 17.0), design: .regular, weight: .regular, traits: [.monospacedNumbers])
+            if pending?.phase == .processing {
+                self.transferRate.reset()
+                let text = dgLocalized("Обработка видео", languageCode: presentationData.strings.baseLanguageCode) + " · \(Int(progress * 100.0))%"
+                downloadingStrings = (text, text, font)
+            } else if let size = file.size, size > 0, size != .max {
+                let bytes = DGMediaTransferRate.transferredBytes(total: size, progress: progress)
+                let rate = self.transferRate.update(key: "\(message.id)-\(file.resource.id.stringRepresentation)-\(isSending)", bytes: bytes, timestamp: CACurrentMediaTime())
+                let speed = (rate.map { dataSizeString($0, forceDecimal: true, formatting: formatting) } ?? "—") + "/s"
+                let compact = "\(Int(progress * 100.0))% · \(speed)"
+                downloadingStrings = ("\(dataSizeString(bytes, forceDecimal: true, formatting: formatting)) / \(dataSizeString(size, forceDecimal: true, formatting: formatting)) · \(speed)", compact, font)
+            } else {
+                let text = "\(Int(progress * 100.0))% · —/s"
+                downloadingStrings = (text, text, font)
+            }
+        } else {
+            self.transferRate.reset()
+        }
+        if isTransferring && self.visibility {
+            if self.transferUpdateTimer == nil {
+                let timer = SwiftSignalKit.Timer(timeout: 0.25, repeat: true, completion: { [weak self] in
+                    self?.updateStatus(animated: false)
+                }, queue: .mainQueue())
+                self.transferUpdateTimer = timer
+                timer.start()
+            }
+        } else {
+            self.transferUpdateTimer?.invalidate()
+            self.transferUpdateTimer = nil
+        }
         if let updatingMedia = arguments.attributes.updatingMedia, case .update = updatingMedia.media {
             let adjustedProgress = max(CGFloat(updatingMedia.progress), 0.027)
             state = .progress(value: CGFloat(adjustedProgress), cancelEnabled: true, appearance: nil, animateRotation: true)
@@ -2122,7 +2190,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             self.fetchingCompactTextNode.attributedText = nil
         }
         
-        let maxFetchingStatusWidth = max(self.titleNode.frame.width, self.descriptionMeasuringNode.frame.width) + 2.0
+        let maxFetchingStatusWidth = max(max(self.titleNode.frame.width, self.descriptionMeasuringNode.frame.width) + 2.0, self.bounds.width - self.descriptionNode.frame.minX - 8.0)
         let fetchingInfo = self.fetchingTextNode.updateLayoutInfo(CGSize(width: maxFetchingStatusWidth, height: CGFloat.greatestFiniteMagnitude))
         let fetchingCompactSize = self.fetchingCompactTextNode.updateLayout(CGSize(width: maxFetchingStatusWidth, height: CGFloat.greatestFiniteMagnitude))
         let countSize = self.countNode.updateLayout(size: CGSize(width: maxFetchingStatusWidth, height: CGFloat.greatestFiniteMagnitude), animated: true)

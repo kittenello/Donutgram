@@ -153,7 +153,7 @@ public final class ChatShareMessageTagView: UIView, UndoOverlayControllerAdditio
     }
     
     private func update(params: Params, transition: ContainedViewLayoutTransition) {
-        guard let reactionContextNode = self.reactionContextNode else {
+        guard params.size.width > 0.0, params.size.height > 0.0, let reactionContextNode = self.reactionContextNode else {
             return
         }
         
@@ -165,7 +165,7 @@ public final class ChatShareMessageTagView: UIView, UndoOverlayControllerAdditio
         reactionContextNode.updateLayout(size: params.size, insets: UIEdgeInsets(), anchorRect: reactionsAnchorRect, centerAligned: true, isCoveredByInput: false, isAnimatingOut: false, transition: transition)
         reactionContextNode.updateIsIntersectingContent(isIntersectingContent: true, transition: .immediate)
         if isFirstTime {
-            reactionContextNode.animateIn(from: reactionsAnchorRect)
+            reactionContextNode.showImmediately()
         }
     }
 }

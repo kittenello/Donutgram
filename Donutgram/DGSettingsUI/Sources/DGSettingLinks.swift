@@ -76,6 +76,7 @@ enum DGSettingsPage: String {
     case visualRating = "visual-rating"
     case visualUsernames = "visual-usernames"
     case visualPhone = "visual-phone"
+    case visualWalletBalance = "visual-wallet-balance"
     case visualLabel = "visual-label"
     case savedDeleted = "saved-deleted"
     // Pages that are gone: their rows moved into the sections, and the one-choice pages became menus in a row.

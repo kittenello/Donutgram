@@ -28,9 +28,10 @@
 - hide reply-only drafts in the chat list while keeping the selected reply.
 - remove bubble tails, show seconds in timestamps, and replace the edited label with an icon.
 - disable colored replies and custom chat backgrounds or hide premium emoji in replies.
-- show avatars in mentions, insert a comma after a mention, and treat mentions as ordinary messages.
+- show avatars in resolved mentions without clipping the text; free usernames and the literal @username placeholder get no avatar or extra spacing. insert a comma after a mention, and treat mentions as ordinary messages.
 - show the original date of forwarded messages and send links without preview cards.
 - hide via bot labels, automation banners, service messages, greeting stickers, ai controls, and phone numbers in chat titles.
+- hiding a greeting sticker also removes the business greeting footer and its help button.
 - view poll results before voting when the poll lets you retract a vote.
 - widen channel posts, show forward counts, and choose whether the bottom channel button opens discussion, controls sound, or stays hidden.
 - jump to the beginning of a chat from the avatar menu.
@@ -48,6 +49,7 @@
 - hide phone numbers, premium statuses, and third-party verification badges.
 - show pinned music and balance in compact pills below the profile status.
 - customize your displayed phone number, id, rating, collectible usernames, label, verification badge, and premium status locally. these changes are visible on your client.
+- set a local gram balance separately for each account. it appears in settings, your profile, wallet cards, and the send-money screen, with wallet-card fiat values converted using the selected currency rate. clear the field to restore the regular balance.
 - add up to 500 accounts, with an add account button above the profile.
 - start round video messages with the front, rear, or last-used camera, or ask before recording.
 - use the 0.5× ultrawide camera on supported devices, use the zoom slider, and optionally retain pinch zoom.
@@ -62,6 +64,9 @@
 - open photos and videos from bot info cards with standard gallery actions.
 - download tiktok videos and photo or youtube shorts when sending a link. optionally add a downloaded-from caption.
 - configure download and upload acceleration.
+- optionally show download and upload speed for photos, videos, files, voice messages, round videos, and stickers, including small media. speed is shown once enough progress samples and the media size are available.
+- separately toggle video processing percentages before upload. both transfer indicators are enabled by default under recording and playback settings.
+- request ios background time for pending media uploads when leaving the app. uploads can continue while that time is available; force-quitting the app stops background work.
 - automatically switch proxies with an adjustable timeout, disable proxies by network type, and force tcp for calls.
 - hide ads, proxy sponsors, the gift button, and birthday notifications.
 - control whether selling a gift opens the stars screen, and toggle telegram statistics separately.

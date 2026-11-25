@@ -22,8 +22,8 @@ def main():
     fixture = fixture.replace("        fatalError(\"production layout\")", layout)
     fixture += "\n" + Path(__file__).with_name("compact_fixtures.swift").read_text(encoding="utf-8")
     assert "DGSimpleSettings.shared.compactProfileMusicAndBalance && !self.isSettings && !self.isAvatarExpanded" in source
-    assert "compactHeaderLayout.balanceFrame(size: balanceSize, hasMusic: currentSavedMusic != nil)" in source
-    assert "compactHeaderLayout.musicFrame(size: musicSize, hasBalance: currentWalletBalance != nil)" in source
+    assert "compactHeaderLayout.frames(musicSize: compactMusic?.size, balanceSize: compactBalance?.size)" in source
+    assert "compactHeaderLayout.musicWidth(balanceWidth: compactBalance?.size.width ?? 0.0)" in source
     assert COMPACT_SOURCE.is_file()
     if args.source_only:
         print("profile header and compact layout integration checks passed; Swift behavior was not executed")

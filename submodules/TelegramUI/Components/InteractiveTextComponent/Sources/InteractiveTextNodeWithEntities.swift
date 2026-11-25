@@ -12,7 +12,6 @@ import MultiAnimationRenderer
 import TelegramCore
 import EmojiTextAttachmentView
 import AvatarNode
-import SwiftSignalKit
 
 private final class InlineStickerItem: Hashable {
     let emoji: ChatTextInputTextCustomEmojiAttribute
@@ -59,46 +58,16 @@ private final class RunDelegateData {
 private final class MentionAvatarItem: Hashable {
     static let spacing: CGFloat = 3.0
 
-    let peer: EnginePeer?
-    let username: String?
-    let glyph: NSAttributedString
+    let peer: EnginePeer
     let font: UIFont
     let avatarSize: CGFloat
-    /// The mention's first character, drawn by the avatar view: the text node does not draw a
-    /// character that carries an embedded item.
-    let glyphLine: CTLine
-    let glyphWidth: CGFloat
-    /// The text node would underline (or strike through) the whole run, avatar included, so the
-    /// run carries neither and the avatar view draws them under the character alone.
-    let underlineColor: UIColor?
-    let strikethroughColor: UIColor?
     let width: CGFloat
 
-    init(peer: EnginePeer?, username: String?, glyph: NSAttributedString, font: UIFont) {
+    init(peer: EnginePeer, font: UIFont) {
         self.peer = peer
-        self.username = username
-        self.glyph = glyph
         self.font = font
         self.avatarSize = ceil(font.pointSize)
-        let textColor = glyph.length == 0 ? nil : glyph.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
-        if glyph.length != 0, let style = glyph.attribute(.underlineStyle, at: 0, effectiveRange: nil) as? Int, style != 0 {
-            self.underlineColor = (glyph.attribute(.underlineColor, at: 0, effectiveRange: nil) as? UIColor) ?? textColor ?? .black
-        } else {
-            self.underlineColor = nil
-        }
-        if glyph.length != 0, let style = glyph.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int, style != 0 {
-            self.strikethroughColor = (glyph.attribute(.strikethroughColor, at: 0, effectiveRange: nil) as? UIColor) ?? textColor ?? .black
-        } else {
-            self.strikethroughColor = nil
-        }
-        let drawnGlyph = NSMutableAttributedString(attributedString: glyph)
-        let glyphRange = NSRange(location: 0, length: drawnGlyph.length)
-        drawnGlyph.removeAttribute(.underlineStyle, range: glyphRange)
-        drawnGlyph.removeAttribute(.strikethroughStyle, range: glyphRange)
-        self.glyphLine = CTLineCreateWithAttributedString(drawnGlyph)
-        // The exact advance, so the next character starts where it would without the avatar.
-        self.glyphWidth = CGFloat(CTLineGetTypographicBounds(self.glyphLine, nil, nil, nil))
-        self.width = self.avatarSize + MentionAvatarItem.spacing + self.glyphWidth
+        self.width = self.avatarSize + MentionAvatarItem.spacing
     }
 
     /// The avatar's centre sits on the middle of the capitals, as an inline symbol does, measured
@@ -108,13 +77,11 @@ private final class MentionAvatarItem: Hashable {
     }
 
     static func == (lhs: MentionAvatarItem, rhs: MentionAvatarItem) -> Bool {
-        return lhs.peer == rhs.peer && lhs.username == rhs.username && lhs.glyph.isEqual(to: rhs.glyph) && lhs.font == rhs.font
+        return lhs.peer == rhs.peer && lhs.font == rhs.font
     }
 
     func hash(into hasher: inout Hasher) {
-        hasher.combine(self.peer?.id)
-        hasher.combine(self.username)
-        hasher.combine(self.glyph.string)
+        hasher.combine(self.peer.id)
         hasher.combine(self.font.fontName)
         hasher.combine(self.font.pointSize)
     }
@@ -143,7 +110,10 @@ private func renderedMentions(_ text: NSAttributedString) -> [RenderedMention] {
             mentions.append(RenderedMention(range: range, peerId: nil))
         }
     }
-    return mentions.sorted(by: { $0.range.location < $1.range.location })
+    let string = text.string as NSString
+    return mentions.filter {
+        string.substring(with: $0.range).lowercased() != "@username"
+    }.sorted(by: { $0.range.location < $1.range.location })
 }
 
 /// Mentions in spoilers, inline code and code blocks get no avatar.
@@ -162,38 +132,55 @@ private func isMentionInSpoilerOrCode(_ text: NSAttributedString, range: NSRange
     return result
 }
 
-/// Reserves room for an avatar in front of each mention in `text`, the message text as
-/// `stringWithAppliedEntities` rendered it, without changing the text.
+private func mentionPeer(named username: String, peers: [EnginePeer]) -> EnginePeer? {
+    return peers.first(where: { peer in
+        peer.addressName?.lowercased() == username.lowercased() || peer.usernames.contains(where: { $0.flags.contains(.isActive) && $0.username.lowercased() == username.lowercased() })
+    })
+}
+
+public func unresolvedMentionAvatarUsernames(in text: NSAttributedString, peers: [EnginePeer]) -> [String] {
+    let string = text.string as NSString
+    var usernames: [String] = []
+    for mention in renderedMentions(text) {
+        guard usernames.count < 40, mention.peerId == nil, !isMentionInSpoilerOrCode(text, range: mention.range) else {
+            continue
+        }
+        let mentionText = string.substring(with: mention.range)
+        guard mentionText.hasPrefix("@") else { continue }
+        let username = String(mentionText.dropFirst()).lowercased()
+        if !username.isEmpty && !usernames.contains(username) && mentionPeer(named: username, peers: peers) == nil {
+            usernames.append(username)
+        }
+    }
+    return usernames
+}
+
 public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePeer]) -> NSAttributedString {
     let result = NSMutableAttributedString(attributedString: text)
     let string = text.string as NSString
     var count = 0
+    var replacements: [(NSRange, NSAttributedString)] = []
     for mention in renderedMentions(text) {
         guard count < 40, !isMentionInSpoilerOrCode(text, range: mention.range) else {
             continue
         }
         let mentionRange = mention.range
         let peer: EnginePeer?
-        let username: String?
         if let peerId = mention.peerId {
             peer = peers.first(where: { $0.id == peerId })
-            username = nil
-            guard peer != nil else { continue }
         } else {
             let mentionText = string.substring(with: mentionRange)
             guard mentionText.hasPrefix("@") else { continue }
             let name = String(mentionText.dropFirst())
             guard !name.isEmpty else { continue }
-            username = name
-            peer = peers.first(where: { peer in
-                peer.addressName?.lowercased() == name.lowercased() || peer.usernames.contains(where: { $0.flags.contains(.isActive) && $0.username.lowercased() == name.lowercased() })
-            })
+            peer = mentionPeer(named: name, peers: peers)
         }
+        guard let peer else { continue }
         let range = string.rangeOfComposedCharacterSequence(at: mentionRange.location)
         guard NSMaxRange(range) <= NSMaxRange(mentionRange), result.attribute(NSAttributedString.Key("Attribute__EmbeddedItem"), at: range.location, effectiveRange: nil) == nil, result.attribute(ChatTextInputAttributes.customEmoji, at: range.location, effectiveRange: nil) == nil, let font = result.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont else {
             continue
         }
-        let item = MentionAvatarItem(peer: peer, username: username, glyph: result.attributedSubstring(from: range), font: font)
+        let item = MentionAvatarItem(peer: peer, font: font)
         let metrics = RunDelegateData(ascent: max(font.ascender, item.avatarCenterAboveBaseline + item.avatarSize * 0.5), descent: max(-font.descender, item.avatarSize * 0.5 - item.avatarCenterAboveBaseline), width: item.width)
         var callbacks = CTRunDelegateCallbacks(version: kCTRunDelegateCurrentVersion, dealloc: { pointer in
             Unmanaged<RunDelegateData>.fromOpaque(pointer).release()
@@ -206,77 +193,29 @@ public func textWithMentionAvatars(_ text: NSAttributedString, peers: [EnginePee
         })
         let retainedMetrics = Unmanaged.passRetained(metrics)
         if let delegate = CTRunDelegateCreate(&callbacks, retainedMetrics.toOpaque()) {
-            result.addAttribute(NSAttributedString.Key(kCTRunDelegateAttributeName as String), value: delegate, range: range)
-            result.addAttribute(NSAttributedString.Key("Attribute__EmbeddedItem"), value: AnyHashable(item), range: range)
-            result.removeAttribute(.underlineStyle, range: range)
-            result.removeAttribute(.strikethroughStyle, range: range)
+            let replacement = NSMutableAttributedString(attributedString: text.attributedSubstring(from: range))
+            let placeholder = NSMutableAttributedString(string: "\u{fffc}\u{2060}", attributes: text.attributes(at: range.location, effectiveRange: nil))
+            let placeholderRange = NSRange(location: 0, length: 1)
+            placeholder.addAttribute(NSAttributedString.Key(kCTRunDelegateAttributeName as String), value: delegate, range: placeholderRange)
+            placeholder.addAttribute(NSAttributedString.Key("Attribute__EmbeddedItem"), value: AnyHashable(item), range: placeholderRange)
+            placeholder.removeAttribute(.underlineStyle, range: NSRange(location: 0, length: placeholder.length))
+            placeholder.removeAttribute(.strikethroughStyle, range: NSRange(location: 0, length: placeholder.length))
+            replacement.insert(placeholder, at: 0)
+            replacement.addAttribute(originalTextAttributeKey, value: OriginalTextAttribute(id: -count - 1, string: text.attributedSubstring(from: range).string), range: NSRange(location: 0, length: replacement.length))
+            replacements.append((range, replacement))
             count += 1
         } else {
             retainedMetrics.release()
         }
     }
+    for (range, replacement) in replacements.reversed() {
+        result.replaceCharacters(in: range, with: replacement)
+    }
     return result
 }
 
-private final class MentionGlyphView: UIView {
-    /// Room on both sides for a glyph that draws past its advance (italics).
-    static let padding: CGFloat = 2.0
-
-    private let line: CTLine
-    private let width: CGFloat
-    private let underlineColor: UIColor?
-    private let strikethroughColor: UIColor?
-    var baseline: CGFloat = 0.0 {
-        didSet {
-            if self.baseline != oldValue {
-                self.setNeedsDisplay()
-            }
-        }
-    }
-
-    init(line: CTLine, width: CGFloat, underlineColor: UIColor?, strikethroughColor: UIColor?) {
-        self.line = line
-        self.width = width
-        self.underlineColor = underlineColor
-        self.strikethroughColor = strikethroughColor
-        super.init(frame: .zero)
-        self.isOpaque = false
-        self.backgroundColor = nil
-        self.contentMode = .redraw
-        self.isUserInteractionEnabled = false
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func draw(_ rect: CGRect) {
-        guard let context = UIGraphicsGetCurrentContext() else {
-            return
-        }
-        // Drawn as the text node draws its lines, so the character keeps the line's baseline.
-        context.saveGState()
-        context.textMatrix = CGAffineTransform(scaleX: 1.0, y: -1.0)
-        context.textPosition = CGPoint(x: MentionGlyphView.padding, y: self.baseline)
-        CTLineDraw(self.line, context)
-        context.restoreGState()
-        // At the offsets the text node uses for the rest of the mention: the view is as tall as the line.
-        if let underlineColor = self.underlineColor {
-            context.setFillColor(underlineColor.cgColor)
-            context.fill(CGRect(x: MentionGlyphView.padding, y: self.bounds.height - 2.0, width: self.width + 0.5, height: 1.0))
-        }
-        if let strikethroughColor = self.strikethroughColor {
-            context.setFillColor(strikethroughColor.cgColor)
-            context.fill(CGRect(x: MentionGlyphView.padding, y: self.bounds.midY, width: self.width + 0.5, height: 1.0))
-        }
-    }
-}
-
 private final class MentionAvatarView: UIView {
-    private static var resolvedPeers: [String: EnginePeer] = [:]
     private let avatarNode: AvatarNode
-    private let glyphView: MentionGlyphView
-    private let disposable = MetaDisposable()
     private let item: MentionAvatarItem
     private var baseline: CGFloat = 0.0
     private var textOriginX: CGFloat = 0.0
@@ -284,42 +223,16 @@ private final class MentionAvatarView: UIView {
     init(context: AccountContext, item: MentionAvatarItem, synchronousLoad: Bool) {
         self.item = item
         self.avatarNode = AvatarNode(font: Font.regular(max(8.0, item.avatarSize * 0.5)))
-        self.glyphView = MentionGlyphView(line: item.glyphLine, width: item.glyphWidth, underlineColor: item.underlineColor, strikethroughColor: item.strikethroughColor)
         super.init(frame: .zero)
         self.isUserInteractionEnabled = false
+        self.avatarNode.clipsToBounds = true
+        self.avatarNode.cornerRadius = item.avatarSize * 0.5
         self.addSubview(self.avatarNode.view)
-        self.addSubview(self.glyphView)
-        let setPeer: (EnginePeer) -> Void = { [weak self] peer in
-            guard let self else { return }
-            self.avatarNode.setPeer(context: context, theme: context.sharedContext.currentPresentationData.with { $0 }.theme, peer: peer, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: item.avatarSize, height: item.avatarSize))
-        }
-        if let peer = item.peer {
-            setPeer(peer)
-        } else if let username = item.username {
-            let key = "\(context.account.peerId.toInt64()):\(username.lowercased())"
-            if let cached = Self.resolvedPeers[key] {
-                setPeer(cached)
-            } else {
-                self.avatarNode.setCustomLetters([String(username.prefix(1)).uppercased()])
-                self.disposable.set((context.engine.peers.resolvePeerByName(name: username, referrer: nil)
-                |> deliverOnMainQueue).start(next: { result in
-                    guard case let .result(peer?) = result else { return }
-                    if Self.resolvedPeers.count >= 256 {
-                        Self.resolvedPeers.removeAll()
-                    }
-                    Self.resolvedPeers[key] = peer
-                    setPeer(peer)
-                }))
-            }
-        }
+        self.avatarNode.setPeer(context: context, theme: context.sharedContext.currentPresentationData.with { $0 }.theme, peer: item.peer, synchronousLoad: synchronousLoad, displayDimensions: CGSize(width: item.avatarSize, height: item.avatarSize))
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        self.disposable.dispose()
     }
 
     /// `baseline` and `textOriginX` place the item on its line, as `InteractiveTextNodeLayout.EmbeddedItem`
@@ -338,9 +251,6 @@ private final class MentionAvatarView: UIView {
         let avatarSize = self.item.avatarSize
         let avatarY = floorToScreenPixels(self.baseline - self.item.avatarCenterAboveBaseline - avatarSize * 0.5)
         self.avatarNode.frame = CGRect(x: floorToScreenPixels(self.textOriginX), y: avatarY, width: avatarSize, height: avatarSize)
-        let glyphX = self.textOriginX + avatarSize + MentionAvatarItem.spacing
-        self.glyphView.frame = CGRect(x: glyphX - MentionGlyphView.padding, y: 0.0, width: ceil(self.item.glyphWidth) + MentionGlyphView.padding * 2.0, height: self.bounds.height)
-        self.glyphView.baseline = self.baseline
     }
 }
 

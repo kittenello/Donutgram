@@ -2518,6 +2518,13 @@ public final class ReactionContextNode: ASDisplayNode, ASScrollViewDelegate {
         )
     }
     
+    public func showImmediately() {
+        self.didAnimateIn = true
+        for itemNode in self.visibleItemNodes.values {
+            itemNode.appear(animated: false)
+        }
+    }
+
     public func animateIn(from sourceAnchorRect: CGRect) {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
         
@@ -2577,12 +2584,7 @@ public final class ReactionContextNode: ASDisplayNode, ASScrollViewDelegate {
                 expandItemView.tintView.layer.animateSpring(from: 0.01 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.4, delay: itemDelay)
             }
         } else {
-            for i in 0 ..< self.items.count {
-                guard let itemNode = self.visibleItemNodes[i] else {
-                    continue
-                }
-                itemNode.appear(animated: false)
-            }
+            self.showImmediately()
         }
     }
     

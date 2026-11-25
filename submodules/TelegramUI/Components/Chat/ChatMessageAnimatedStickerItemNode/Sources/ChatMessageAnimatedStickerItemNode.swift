@@ -1,5 +1,6 @@
 import Foundation
 import DGSimpleSettings
+import DGMediaTransferUI
 import UIKit
 import AVFoundation
 import AsyncDisplayKit
@@ -183,6 +184,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
     private var didChangeFromPendingToSent: Bool = false
     
     private var fetchEffectDisposable: Disposable?
+    private let transferStatusNode = DGMediaTransferStatusNode()
     
     private var suggestedPostInfoNode: ChatMessageSuggestedPostInfoNode?
     /// Without bubbles: the author's name and time over the first sticker of a run.
@@ -399,6 +401,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
         didSet {
             let wasVisible = oldValue != .none
             let isVisible = self.visibility != .none
+            self.transferStatusNode.isTransferVisible = isVisible
             
             if wasVisible != isVisible {
                 self.visibilityStatus = isVisible
@@ -899,7 +902,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             var imageHorizontalOffset: CGFloat = 0.0
             if !(telegramFile?.videoThumbnails.isEmpty ?? true) {
                 displaySize = CGSize(width: 240.0, height: 240.0)
-                imageVerticalInset = -20.0
                 imageHorizontalOffset = 12.0
             }
             
@@ -1791,6 +1793,16 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     }
                     
                     animation.animator.updateFrame(layer: strongSelf.imageNode.layer, frame: updatedContentFrame, completion: nil)
+                    if strongSelf.transferStatusNode.supernode == nil {
+                        strongSelf.contextSourceNode.contentNode.addSubnode(strongSelf.transferStatusNode)
+                    }
+                    strongSelf.transferStatusNode.isTransferVisible = strongSelf.visibility != .none
+                    strongSelf.transferStatusNode.sizeUpdated = { [weak strongSelf] size in
+                        guard let strongSelf else { return }
+                        let frame = strongSelf.imageNode.frame
+                        strongSelf.transferStatusNode.frame = CGRect(origin: CGPoint(x: frame.minX + 6.0, y: frame.minY + 6.0), size: size)
+                    }
+                    strongSelf.transferStatusNode.update(context: item.context, message: EngineMessage(item.message), file: strongSelf.telegramFile, presentationData: item.presentationData, width: updatedContentFrame.width - 12.0)
                     let stickerCornerRadius = telegramFile?.isSticker == true && !isEmoji ? CGFloat(DGSimpleSettings.shared.stickerCornerRadius) : 0.0
                     strongSelf.imageNode.layer.cornerRadius = stickerCornerRadius
                     strongSelf.imageNode.clipsToBounds = stickerCornerRadius > 0.0
@@ -1802,10 +1814,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     strongSelf.contextSourceNode.contentRect = contextContentFrame
                     strongSelf.containerNode.targetNodeForActivationProgressContentRect = strongSelf.contextSourceNode.contentRect
                     
-                    var animationNodeFrame = updatedContentFrame.insetBy(dx: imageInset, dy: imageInset)
-                    if let telegramFile, telegramFile.isPremiumSticker {
-                        animationNodeFrame = animationNodeFrame.offsetBy(dx: 0.0, dy: 20.0)
-                    }
+                    let animationNodeFrame = updatedContentFrame.insetBy(dx: imageInset, dy: imageInset)
                     
                     var file: TelegramMediaFile?
                     if let emojiFile = emojiFile {

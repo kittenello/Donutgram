@@ -204,6 +204,7 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("visualId", "ID профиля", "ВИДНО ТОЛЬКО ВАМ"),
         ("visualLabel", "Метка", "ВИДНО ТОЛЬКО ВАМ"),
         ("localVerification", "Локальная верификация", "ВИДНО ТОЛЬКО ВАМ"),
+        ("visualWalletBalance", "Баланс GRAM", "ВИДНО ТОЛЬКО ВАМ"),
         ("localPremium", "Локальный Telegram Premium", "PREMIUM")
     ])
     // «ID профиля» and «NFT-юзернеймы» hold only the field their row names, so the row is their result.
@@ -224,6 +225,8 @@ let dgSettingsSearchCatalog: [DGSettingsSearchItem] = {
         ("pauseMusicVoicePlayback", "При прослушивании голосовых", "ПАУЗА МУЗЫКИ"),
         ("doubleTapSeek", "Перемотка", "ВИДЕО"),
         ("gifScrubber", "Перемотка GIF", "GIF"),
+        ("showMediaTransferSpeed", "Скорость загрузки и выгрузки", "ЗАГРУЗКА И ОБРАБОТКА"),
+        ("showVideoProcessingProgress", "Прогресс обработки видео", "ЗАГРУЗКА И ОБРАБОТКА"),
         ("disableProfileMusicAutoplay", "Не включать музыку автоматически", "МУЗЫКА В ПРОФИЛЕ"),
         ("autoPause", "Пауза при сворачивании", "АВТОПАУЗА"),
         ("autoPauseVideo", "Видео", "АВТОПАУЗА"),

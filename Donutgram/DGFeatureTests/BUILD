@@ -9,6 +9,7 @@ swift_library(
     deps = [
         "//Donutgram/DGSimpleSettings",
         "//submodules/Postbox",
+        "//submodules/Display",
         "//submodules/TelegramCore",
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/InteractiveTextComponent",

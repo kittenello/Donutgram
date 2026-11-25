@@ -586,6 +586,7 @@ func dgLocalProfileSettingsController(context: AccountContext, focusKey: String?
             .disclosure(4, 0, "visualId", "ID профиля", profileId.isEmpty ? "Выкл" : profileId),
             .menu(5, 0, "visualLabel", "Метка", s.visualLabel(accountId: accountId).title),
             .menu(6, 0, "localVerification", "Локальная верификация", s.localVerification(accountId: accountId).title),
+            .disclosure(7, 0, "visualWalletBalance", "Баланс GRAM", s.visualWalletBalance(accountId: accountId) != nil ? s.visualWalletBalanceText(accountId: accountId) : "Выкл"),
             .header(10, 1, "PREMIUM"),
             .toggle(11, 1, "localPremium", "Локальный Telegram Premium", premium, true)
         ]
@@ -616,8 +617,25 @@ func dgLocalProfileSettingsController(context: AccountContext, focusKey: String?
         case "visualRating": return dgVisualRatingController(context: context)
         case "visualUsernames": return dgVisualUsernamesController(context: context)
         case "visualId": return dgVisualIdController(context: context)
+        case "visualWalletBalance": return dgVisualWalletBalanceController(context: context)
         default: return nil
         }
+    })
+}
+
+private func dgVisualWalletBalanceController(context: AccountContext, focusKey: String? = nil) -> ViewController {
+    let settings = DGSimpleSettings.shared
+    let accountId = context.account.peerId.toInt64()
+    return dgController(context: context, page: .visualWalletBalance, title: "Баланс GRAM", focusKey: focusKey, entries: {
+        let text = settings.visualWalletBalanceText(accountId: accountId)
+        let isValid = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || settings.visualWalletBalance(accountId: accountId) != nil
+        return [
+            .header(0, 0, "GRAM"),
+            .input(1, 0, "visualWalletBalance", text, "Количество GRAM"),
+            .info(2, 0, isValid ? "Пустое поле — обычный баланс. Сумма в выбранной валюте пересчитывается автоматически. Видно только вам." : "Введите число от 0 до 9223372036,854775807, до 9 знаков после запятой.")
+        ]
+    }, textUpdated: { key, value in
+        if key == "visualWalletBalance" { settings.setVisualWalletBalanceText(value, accountId: accountId) }
     })
 }
 
@@ -785,6 +803,9 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
             .menu(61, 6, "transcription", "Сервис расшифровки", dgTranscriptionBackendTitle(s.transcriptionBackend)),
             .header(70, 7, "МУЗЫКА В ПРОФИЛЕ"),
             .toggle(71, 7, "disableProfileMusicAutoplay", "Не включать музыку автоматически", s.disableProfileMusicAutoplay, true),
+            .header(80, 9, "ЗАГРУЗКА И ОБРАБОТКА"),
+            .toggle(81, 9, "showMediaTransferSpeed", "Скорость загрузки и выгрузки", s.showMediaTransferSpeed, true),
+            .toggle(82, 9, "showVideoProcessingProgress", "Прогресс обработки видео", s.showVideoProcessingProgress, true),
         ])
         return result
     }, toggle: { key, value in
@@ -803,6 +824,8 @@ func dgMediaSettingsController(context: AccountContext, focusKey: String? = nil)
         case "builtInMic": s.forceBuiltInMicrophone = value
         case "disableProfileMusicAutoplay": s.disableProfileMusicAutoplay = value
         case "gifScrubber": s.gifScrubber = value
+        case "showMediaTransferSpeed": s.showMediaTransferSpeed = value
+        case "showVideoProcessingProgress": s.showVideoProcessingProgress = value
         case "autoPause": s.autoPause = value
         case "autoPauseVideo": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 1, isOn: value)
         case "autoPauseVoice": s.autoPauseMedia = dgUpdatedMask(s.autoPauseMedia, bit: 2, isOn: value)
@@ -1030,7 +1053,7 @@ private func dgCurrentRowLocation(page: DGSettingsPage, key: String) -> (DGSetti
         return (.mainScreen, key)
     case .media where key == "rememberCamera":
         return (.media, "camera")
-    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .savedDeleted:
+    case .saving, .bypass, .shadowBan, .mainScreen, .messages, .stickers, .profiles, .media, .downloads, .security, .adsAndGifts, .localProfile, .about, .iconAndIsland, .visualId, .visualRating, .visualUsernames, .visualPhone, .visualWalletBalance, .savedDeleted:
         return (page, key)
     }
 }
@@ -1082,7 +1105,7 @@ private func dgMovedRowLocation(key: String) -> (DGSettingsPage, String) {
         return (.security, key)
     case "disableAds", "hideGiftButton", "hideBirthdayNotifications", "disableGiftStarsRedirect":
         return (.adsAndGifts, key)
-    case "visualPhone", "visualRating", "visualUsernames", "visualId", "visualLabel", "localPremium":
+    case "visualPhone", "visualRating", "visualUsernames", "visualId", "visualLabel", "visualWalletBalance", "localPremium":
         return (.localProfile, key)
     default:
         return (.root, key)
@@ -1135,6 +1158,7 @@ func dgPageController(_ page: DGSettingsPage, context: AccountContext, focusKey:
     case .visualRating: return dgVisualRatingController(context: context, focusKey: focusKey)
     case .visualUsernames: return dgVisualUsernamesController(context: context, focusKey: focusKey)
     case .visualPhone: return dgVisualPhoneController(context: context, focusKey: focusKey)
+    case .visualWalletBalance: return dgVisualWalletBalanceController(context: context, focusKey: focusKey)
     case .savedDeleted: return dgSavedDeletedMessagesController(context: context, focusKey: focusKey)
     case .general, .ghostOptions, .silent, .appearance, .dialogId, .chats, .channelBottomButton, .glow, .stickerReplies, .chatListAppearance, .chatListTitle, .doubleTapSeek, .camera, .autoplayMedia, .autoPause, .musicPlaybackExceptions, .transcription, .reactions, .support, .iconAndEffects, .visualLabel:
         // dgCurrentRowLocation never leads to a page that is gone.

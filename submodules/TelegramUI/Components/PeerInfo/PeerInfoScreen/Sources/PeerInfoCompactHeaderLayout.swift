@@ -17,11 +17,14 @@ struct PeerInfoCompactHeaderLayout {
         return max(1.0, self.row.width - balanceWidth - (balanceWidth > 0.0 ? self.spacing : 0.0))
     }
 
-    func balanceFrame(size: CGSize, hasMusic: Bool) -> CGRect {
-        return CGRect(origin: CGPoint(x: hasMusic ? self.row.maxX - size.width : self.row.midX - size.width * 0.5, y: self.row.minY), size: size)
-    }
-
-    func musicFrame(size: CGSize, hasBalance: Bool) -> CGRect {
-        return CGRect(origin: CGPoint(x: hasBalance ? self.row.minX : self.row.midX - size.width * 0.5, y: self.row.minY), size: size)
+    func frames(musicSize: CGSize?, balanceSize: CGSize?) -> (music: CGRect?, balance: CGRect?) {
+        let musicWidth = musicSize?.width ?? 0.0
+        let balanceWidth = balanceSize?.width ?? 0.0
+        let spacing = musicSize != nil && balanceSize != nil ? self.spacing : 0.0
+        let startX = self.row.midX - (musicWidth + spacing + balanceWidth) * 0.5
+        let centerY = self.row.minY + max(musicSize?.height ?? 0.0, balanceSize?.height ?? 0.0) * 0.5
+        let music = musicSize.map { CGRect(x: startX, y: centerY - $0.height * 0.5, width: $0.width, height: $0.height) }
+        let balance = balanceSize.map { CGRect(x: startX + musicWidth + spacing, y: centerY - $0.height * 0.5, width: $0.width, height: $0.height) }
+        return (music, balance)
     }
 }
